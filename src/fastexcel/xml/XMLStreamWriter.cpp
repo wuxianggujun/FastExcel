@@ -15,6 +15,11 @@ XMLStreamWriter::XMLStreamWriter() {
 }
 
 XMLStreamWriter::~XMLStreamWriter() {
+    // 如果缓冲区中有数据且用户没有处理，记录警告
+    if (buffer_pos_ > 0 && !direct_file_mode_) {
+        LOG_WARN("XMLStreamWriter destroyed with {} bytes of unwritten data in buffer", buffer_pos_);
+    }
+    
     clear();
     if (output_file_ && owns_file_) {
         fclose(output_file_);
@@ -38,8 +43,10 @@ void XMLStreamWriter::setBufferedMode() {
 }
 
 void XMLStreamWriter::flushBuffer() {
-    if (buffer_pos_ > 0 && output_file_) {
-        fwrite(buffer_, 1, buffer_pos_, output_file_);
+    if (buffer_pos_ > 0) {
+        if (output_file_) {
+            fwrite(buffer_, 1, buffer_pos_, output_file_);
+        }
         buffer_pos_ = 0;
     }
 }
@@ -63,7 +70,8 @@ void XMLStreamWriter::startElement(const char* name) {
     }
     
     writeRawDirect("<", 1);
-    writeRawDirect(name, strlen(name));
+    size_t name_len = strlen(name);
+    writeRawDirect(name, name_len);
     element_stack_.push(name);
     in_element_ = true;
 }
@@ -74,7 +82,7 @@ void XMLStreamWriter::endElement() {
         return;
     }
     
-    std::string name = element_stack_.top();
+    const char* name = element_stack_.top();
     element_stack_.pop();
     
     if (in_element_) {
@@ -82,7 +90,7 @@ void XMLStreamWriter::endElement() {
         in_element_ = false;
     } else {
         writeRawDirect("</", 2);
-        writeRawDirect(name.c_str(), name.length());
+        writeRawDirect(name, strlen(name));
         writeRawDirect(">", 1);
     }
 }
@@ -94,7 +102,8 @@ void XMLStreamWriter::writeEmptyElement(const char* name) {
     }
     
     writeRawDirect("<", 1);
-    writeRawDirect(name, strlen(name));
+    size_t name_len = strlen(name);
+    writeRawDirect(name, name_len);
     writeRawDirect("/>", 2);
 }
 
@@ -105,7 +114,8 @@ void XMLStreamWriter::writeAttribute(const char* name, const char* value) {
     }
     
     writeRawDirect(" ", 1);
-    writeRawDirect(name, strlen(name));
+    size_t name_len = strlen(name);
+    writeRawDirect(name, name_len);
     writeRawDirect("=\"", 2);
     
     size_t value_len = strlen(value);
@@ -222,28 +232,54 @@ bool XMLStreamWriter::setOutputFile(FILE* file, bool take_ownership) {
 }
 
 void XMLStreamWriter::startAttributeBatch() {
-    // 批处理模式的实现可以在这里添加
+    // 开始批处理模式，暂存属性直到endAttributeBatch调用
+    // 这里我们只是设置一个标志，实际属性会暂存在pending_attributes_中
+    // 这个方法主要是为了API完整性，实际优化在endAttributeBatch中
 }
 
 void XMLStreamWriter::endAttributeBatch() {
-    // 批处理模式的实现可以在这里添加
+    // 结束批处理模式，将所有暂存的属性一次性写入
+    if (!pending_attributes_.empty()) {
+        for (const auto& attr : pending_attributes_) {
+            writeRawDirect(" ", 1);
+            writeRawDirect(attr.key.c_str(), attr.key.length());
+            writeRawDirect("=\"", 2);
+            
+            size_t value_len = attr.value.length();
+            if (needsAttributeEscaping(attr.value.c_str(), value_len)) {
+                if (direct_file_mode_ && output_file_) {
+                    escapeAttributesToFile(attr.value.c_str(), value_len);
+                } else {
+                    escapeAttributesToBuffer(attr.value.c_str(), value_len);
+                }
+            } else {
+                writeRawDirect(attr.value.c_str(), value_len);
+            }
+            
+            writeRawDirect("\"", 1);
+        }
+        pending_attributes_.clear();
+    }
 }
 
 // 内部实现方法
 
 void XMLStreamWriter::writeRawToBuffer(const char* data, size_t length) {
-    if (buffer_pos_ + length > BUFFER_SIZE) {
-        flushBuffer();
+    // 如果数据太大，分批处理
+    while (length > 0) {
+        size_t available_space = BUFFER_SIZE - buffer_pos_;
         
-        // 如果数据仍然大于缓冲区，直接写入文件
-        if (length > BUFFER_SIZE && output_file_) {
-            fwrite(data, 1, length, output_file_);
-            return;
+        if (available_space == 0) {
+            flushBuffer();
+            available_space = BUFFER_SIZE;
         }
+        
+        size_t chunk_size = std::min(length, available_space);
+        memcpy(buffer_ + buffer_pos_, data, chunk_size);
+        buffer_pos_ += chunk_size;
+        data += chunk_size;
+        length -= chunk_size;
     }
-    
-    memcpy(buffer_ + buffer_pos_, data, length);
-    buffer_pos_ += length;
 }
 
 void XMLStreamWriter::writeRawToFile(const char* data, size_t length) {

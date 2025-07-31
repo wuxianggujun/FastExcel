@@ -41,8 +41,8 @@ add_subdirectory(third_party/googletest)
 
 # FastExcel库源文件
 file(GLOB_RECURSE FASTEXCEL_SOURCES
-    "src/fastexcel/*.cpp"
-    "src/fastexcel/*.c"
+        "src/fastexcel/*.cpp"
+        "src/fastexcel/*.c"
 )
 
 # 创建静态库
@@ -50,78 +50,39 @@ add_library(fastexcel STATIC ${FASTEXCEL_SOURCES})
 
 # 包含目录
 target_include_directories(fastexcel PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/src
-    ${CMAKE_CURRENT_SOURCE_DIR}/third_party/libexpat/expat/lib
-    ${CMAKE_CURRENT_SOURCE_DIR}/third_party/spdlog/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/third_party/minizip-ng
-    ${CMAKE_CURRENT_SOURCE_DIR}/third_party/zlib-ng
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/third_party/libexpat/expat/lib
+        ${CMAKE_CURRENT_SOURCE_DIR}/third_party/spdlog/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/third_party/minizip-ng
+        ${CMAKE_CURRENT_SOURCE_DIR}/third_party/zlib-ng
 )
 
 # 链接库
 target_link_libraries(fastexcel PUBLIC
-    spdlog::spdlog
-    expat::expat
-    zlib
-    MINIZIP::minizip
+        spdlog::spdlog
+        expat::expat
+        zlib
+        MINIZIP::minizip
 )
 
 # 示例程序
 add_executable(${PROJECT_NAME} src/main.cpp)
 target_link_libraries(${PROJECT_NAME} PRIVATE fastexcel)
 
-# 添加测试构建选项
-option(ENABLE_TESTS "Enable building of all tests" OFF)
-option(ENABLE_UNIT_TESTS "Enable building of unit tests" OFF)
+# 添加构建选项
+option(ENABLE_EXAMPLES "Enable building of examples" OFF)
+option(ENABLE_TESTS "Enable building of all tests" ON)
+option(ENABLE_UNIT_TESTS "Enable building of unit tests" ON)
 option(ENABLE_INTEGRATION_TESTS "Enable building of integration tests" OFF)
 
-# 如果总开关开启，则所有测试都开启
-if(ENABLE_TESTS)
-    set(ENABLE_UNIT_TESTS ON)
-    set(ENABLE_INTEGRATION_TESTS ON)
-endif()
+# 添加examples子目录
+if (ENABLE_EXAMPLES)
+    add_subdirectory(examples)
+endif ()
 
-if(ENABLE_UNIT_TESTS OR ENABLE_INTEGRATION_TESTS)
-    # 启用测试
-    enable_testing()
 
-    # 添加测试支持
-    include(GoogleTest)
+# 如果总开关开启，则所有子开关都开启
+if (ENABLE_TESTS)
+    add_subdirectory(test)
+endif ()
 
-    # 收集单元测试文件
-    file(GLOB_RECURSE UNIT_TEST_SOURCES
-        "test/unit/*.cpp"
-    )
-
-    # 收集集成测试文件
-    file(GLOB_RECURSE INTEGRATION_TEST_SOURCES
-        "test/integration/*.cpp"
-    )
-
-    # 创建单元测试可执行文件
-    if(ENABLE_UNIT_TESTS AND UNIT_TEST_SOURCES)
-        add_executable(unit_tests ${UNIT_TEST_SOURCES})
-        target_link_libraries(unit_tests PRIVATE
-            fastexcel
-            gtest
-            gtest_main
-        )
-        target_include_directories(unit_tests PRIVATE
-            ${CMAKE_CURRENT_SOURCE_DIR}/src
-        )
-        gtest_discover_tests(unit_tests)
-    endif()
-
-    # 创建集成测试可执行文件
-    if(ENABLE_INTEGRATION_TESTS AND INTEGRATION_TEST_SOURCES)
-        add_executable(integration_tests ${INTEGRATION_TEST_SOURCES})
-        target_link_libraries(integration_tests PRIVATE
-            fastexcel
-            gtest
-            gtest_main
-        )
-        target_include_directories(integration_tests PRIVATE
-            ${CMAKE_CURRENT_SOURCE_DIR}/src
-        )
-        gtest_discover_tests(integration_tests)
-    endif()
-endif()

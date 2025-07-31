@@ -25,43 +25,28 @@ namespace xml {
  */
 class XMLStreamWriter {
 private:
-    // 预定义的XML转义字符串和长度，参考libxlsxwriter
-    static constexpr char AMP_ESCAPE[] = "&";
-    static constexpr size_t AMP_ESCAPE_LEN = 1;
-    
-    static constexpr char LT_ESCAPE[] = "<";
-    static constexpr size_t LT_ESCAPE_LEN = 1;
-    
-    static constexpr char GT_ESCAPE[] = ">";
-    static constexpr size_t GT_ESCAPE_LEN = 1;
-    
-    static constexpr char QUOT_ESCAPE[] = "\"";
-    static constexpr size_t QUOT_ESCAPE_LEN = 1;
-    
-    static constexpr char APOS_ESCAPE[] = "'";
-    static constexpr size_t APOS_ESCAPE_LEN = 1;
-    
-    static constexpr char NL_ESCAPE[] = "\n";
-    static constexpr size_t NL_ESCAPE_LEN = 1;
-    
-    // 转义后的字符串
-    static constexpr char AMP_REPLACEMENT[] = "&";
-    static constexpr size_t AMP_REPLACEMENT_LEN = 5;
-    
-    static constexpr char LT_REPLACEMENT[] = "<";
-    static constexpr size_t LT_REPLACEMENT_LEN = 4;
-    
-    static constexpr char GT_REPLACEMENT[] = ">";
-    static constexpr size_t GT_REPLACEMENT_LEN = 4;
-    
-    static constexpr char QUOT_REPLACEMENT[] = "\"";
-    static constexpr size_t QUOT_REPLACEMENT_LEN = 6;
-    
-    static constexpr char APOS_REPLACEMENT[] = "'";
-    static constexpr size_t APOS_REPLACEMENT_LEN = 6;
-    
-    static constexpr char NL_REPLACEMENT[] = "&#xA;";
-    static constexpr size_t NL_REPLACEMENT_LEN = 5;
+    //------------------------------------------------------------------------------
+    //  XML 转义常量（已修正）
+    //  说明：所有长度宏均排除了结尾 '\0'，可直接用于 memcpy / fwrite 等场景。
+    //------------------------------------------------------------------------------
+
+    static constexpr char  AMP_REPLACEMENT[]  = "&amp;";   // &  → &amp;
+    static constexpr size_t AMP_REPLACEMENT_LEN  = sizeof(AMP_REPLACEMENT) - 1;
+
+    static constexpr char  LT_REPLACEMENT[]   = "&lt;";    // <  → &lt;
+    static constexpr size_t LT_REPLACEMENT_LEN   = sizeof(LT_REPLACEMENT) - 1;
+
+    static constexpr char  GT_REPLACEMENT[]   = "&gt;";    // >  → &gt;
+    static constexpr size_t GT_REPLACEMENT_LEN   = sizeof(GT_REPLACEMENT) - 1;
+
+    static constexpr char  QUOT_REPLACEMENT[] = "&quot;";  // "  → &quot;
+    static constexpr size_t QUOT_REPLACEMENT_LEN = sizeof(QUOT_REPLACEMENT) - 1;
+
+    static constexpr char  APOS_REPLACEMENT[] = "&apos;";  // '  → &apos;
+    static constexpr size_t APOS_REPLACEMENT_LEN = sizeof(APOS_REPLACEMENT) - 1;
+
+    static constexpr char  NL_REPLACEMENT[] = "&#xA;";    // \n → &#xA;
+    static constexpr size_t NL_REPLACEMENT_LEN = sizeof(NL_REPLACEMENT) - 1;
     
     // 固定大小缓冲区，避免动态内存分配
     static constexpr size_t BUFFER_SIZE = 8192;
@@ -69,7 +54,7 @@ private:
     size_t buffer_pos_ = 0;
     
     // 元素栈用于跟踪嵌套的XML元素
-    std::stack<std::string> element_stack_;
+    std::stack<const char*> element_stack_;
     bool in_element_ = false;
     
     // 文件输出支持
@@ -137,13 +122,8 @@ public:
     // 文本操作
     void writeText(const char* text);
     
-    // 便捷方法，支持std::string
-    void startElement(const std::string& name) { startElement(name.c_str()); }
-    void writeEmptyElement(const std::string& name) { writeEmptyElement(name.c_str()); }
-    void writeAttribute(const std::string& name, const std::string& value) { writeAttribute(name.c_str(), value.c_str()); }
-    void writeAttribute(const std::string& name, int value) { writeAttribute(name.c_str(), value); }
-    void writeAttribute(const std::string& name, double value) { writeAttribute(name.c_str(), value); }
-    void writeText(const std::string& text) { writeText(text.c_str()); }
+    // 注意：为避免指针悬空，已删除std::string重载
+    // 请使用 const char* 或字符串字面量
     
     // 获取结果（仅在缓冲模式下有效）
     std::string toString() const;
