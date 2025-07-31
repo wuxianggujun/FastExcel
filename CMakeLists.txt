@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.10)
 project(FastExcel)
 
 # 设置C++标准
-set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # 禁用第三方库的测试功能
@@ -36,6 +36,8 @@ file(GLOB_RECURSE SOURCES "src/*.cpp" "src/*.c")
 
 # 创建可执行文件
 add_executable(${PROJECT_NAME} ${SOURCES})
+
+target_include_directories(${PROJECT_NAME} PUBLIC "include")
 
 # 链接third_party库
 target_link_libraries(${PROJECT_NAME}

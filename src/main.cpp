@@ -1,5 +1,5 @@
+#include "Logger.hpp"
 #include <iostream>
-#include "Logger.h"
 
 int main()
 {
@@ -28,5 +28,9 @@ int main()
     fastexcel::Logger::getInstance().flush();
     
     std::cout << "日志测试完成，请查看控制台输出和日志文件！" << std::endl;
+    
+    // 显式关闭日志系统，避免析构顺序问题
+    fastexcel::Logger::getInstance().shutdown();
+    
     return 0;
 }

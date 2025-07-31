@@ -1,7 +1,11 @@
-#include "Logger.h"
-#include <spdlog/async.h>
+#include "Logger.hpp"
 #include <filesystem>
 #include <iostream>
+#include <spdlog/async.h>
+
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 namespace fastexcel {
 
