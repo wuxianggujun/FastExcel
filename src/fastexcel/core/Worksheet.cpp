@@ -122,7 +122,8 @@ std::string Worksheet::generateXML() const {
             
             if (has_data_in_row) {
                 writer.startElement("row");
-                writer.writeAttribute("r", std::to_string(row + 1));
+                std::string row_str = std::to_string(row + 1);
+                writer.writeAttribute("r", row_str.c_str());
                 
                 for (int col = 0; col <= max_col; ++col) {
                     auto it = cells_.find(std::make_pair(row, col));
@@ -130,23 +131,27 @@ std::string Worksheet::generateXML() const {
                         const auto& cell = it->second;
                         
                         writer.startElement("c");
-                        writer.writeAttribute("r", cellReference(row, col));
+                        std::string cell_ref = cellReference(row, col);
+                        writer.writeAttribute("r", cell_ref.c_str());
                         
                         // 如果有格式，添加样式ID
                         if (cell.getFormat()) {
-                            writer.writeAttribute("s", std::to_string(cell.getFormat()->getFormatId()));
+                            std::string format_id = std::to_string(cell.getFormat()->getFormatId());
+                            writer.writeAttribute("s", format_id.c_str());
                         }
                         
                         if (cell.isString()) {
                             writer.writeAttribute("t", "inlineStr");
                             writer.startElement("is");
                             writer.startElement("t");
-                            writer.writeText(cell.getStringValue());
+                            std::string str_value = cell.getStringValue();
+                            writer.writeText(str_value.c_str());
                             writer.endElement(); // t
                             writer.endElement(); // is
                         } else if (cell.isNumber()) {
                             writer.startElement("v");
-                            writer.writeText(std::to_string(cell.getNumberValue()));
+                            std::string num_value = std::to_string(cell.getNumberValue());
+                            writer.writeText(num_value.c_str());
                             writer.endElement(); // v
                         } else if (cell.isBoolean()) {
                             writer.writeAttribute("t", "b");
@@ -156,7 +161,8 @@ std::string Worksheet::generateXML() const {
                         } else if (cell.isFormula()) {
                             writer.writeAttribute("t", "str");
                             writer.startElement("f");
-                            writer.writeText(cell.getFormula());
+                            std::string formula = cell.getFormula();
+                            writer.writeText(formula.c_str());
                             writer.endElement(); // f
                         }
                         

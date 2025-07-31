@@ -191,9 +191,11 @@ std::string Workbook::generateWorkbookXML() const {
     writer.startElement("sheets");
     for (size_t i = 0; i < worksheets_.size(); ++i) {
         writer.writeEmptyElement("sheet");
-        writer.writeAttribute("name", worksheets_[i]->getName());
-        writer.writeAttribute("sheetId", std::to_string(worksheets_[i]->getSheetId()));
-        writer.writeAttribute("r:id", "rId" + std::to_string(i + 1));
+        writer.writeAttribute("name", worksheets_[i]->getName().c_str());
+        std::string sheet_id = std::to_string(worksheets_[i]->getSheetId());
+        writer.writeAttribute("sheetId", sheet_id.c_str());
+        std::string r_id = "rId" + std::to_string(i + 1);
+        writer.writeAttribute("r:id", r_id.c_str());
     }
     writer.endElement(); // sheets
     

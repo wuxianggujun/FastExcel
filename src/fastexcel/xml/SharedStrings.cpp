@@ -36,13 +36,15 @@ std::string SharedStrings::generate() const {
     writer.startDocument();
     writer.startElement("sst");
     writer.writeAttribute("xmlns", "http://schemas.openxmlformats.org/spreadsheetml/2006/main");
-    writer.writeAttribute("count", std::to_string(strings_.size()));
-    writer.writeAttribute("uniqueCount", std::to_string(strings_.size()));
+    std::string count_str = std::to_string(strings_.size());
+    writer.writeAttribute("count", count_str.c_str());
+    std::string unique_count_str = std::to_string(strings_.size());
+    writer.writeAttribute("uniqueCount", unique_count_str.c_str());
     
     for (const auto& str : strings_) {
         writer.startElement("si");
         writer.startElement("t");
-        writer.writeText(str);
+        writer.writeText(str.c_str());
         writer.endElement(); // t
         writer.endElement(); // si
     }

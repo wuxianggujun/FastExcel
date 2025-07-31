@@ -20,15 +20,15 @@ std::string ContentTypes::generate() const {
     // 写入默认类型
     for (const auto& def : default_types_) {
         writer.writeEmptyElement("Default");
-        writer.writeAttribute("Extension", def.extension);
-        writer.writeAttribute("ContentType", def.content_type);
+        writer.writeAttribute("Extension", def.extension.c_str());
+        writer.writeAttribute("ContentType", def.content_type.c_str());
     }
     
     // 写入覆盖类型
     for (const auto& override : override_types_) {
         writer.writeEmptyElement("Override");
-        writer.writeAttribute("PartName", override.part_name);
-        writer.writeAttribute("ContentType", override.content_type);
+        writer.writeAttribute("PartName", override.part_name.c_str());
+        writer.writeAttribute("ContentType", override.content_type.c_str());
     }
     
     writer.endElement(); // Types
