@@ -76,11 +76,11 @@ TEST_F(XMLStreamWriterTest, CharacterEscaping) {
     EXPECT_NE(result.find("<test"), std::string::npos);
     
     // 验证字符转义
-    EXPECT_NE(result.find("&lt;"), std::string::npos);  // < 转义为 <
-    EXPECT_NE(result.find("&gt;"), std::string::npos);  // > 转义为 >
-    EXPECT_NE(result.find("&amp;"), std::string::npos); // & 转义为 &
-    EXPECT_NE(result.find("&quot;"), std::string::npos); // " 转义为 "
-    EXPECT_NE(result.find("&apos;"), std::string::npos); // ' 转义为 '
+    EXPECT_NE(result.find("&lt;"), std::string::npos);  // < 转义为 &lt;
+    EXPECT_NE(result.find("&gt;"), std::string::npos);  // > 转义为 &gt;
+    EXPECT_NE(result.find("&amp;"), std::string::npos); // & 转义为 &amp;
+    EXPECT_NE(result.find("&quot;"), std::string::npos); // " 转义为 &quot;
+    EXPECT_NE(result.find("&apos;"), std::string::npos); // ' 转义为 &apos;
     EXPECT_NE(result.find("&#xA;"), std::string::npos); // \n 转义为 &#xA;
     
     // 保存到文件并验证
