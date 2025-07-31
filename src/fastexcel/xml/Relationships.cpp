@@ -13,7 +13,7 @@ void Relationships::addRelationship(const std::string& id, const std::string& ty
 }
 
 std::string Relationships::generate() const {
-    XMLWriter writer;
+    XMLStreamWriter writer;
     writer.startDocument();
     writer.startElement("Relationships");
     writer.writeAttribute("xmlns", "http://schemas.openxmlformats.org/package/2006/relationships");

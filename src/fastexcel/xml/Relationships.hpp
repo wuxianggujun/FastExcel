@@ -1,6 +1,6 @@
 #pragma once
 
-#include "fastexcel/xml/XMLWriter.hpp"
+#include "fastexcel/xml/XMLStreamWriter.hpp"
 #include <string>
 #include <vector>
 

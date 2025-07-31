@@ -12,7 +12,7 @@ void ContentTypes::addOverride(const std::string& part_name, const std::string& 
 }
 
 std::string ContentTypes::generate() const {
-    XMLWriter writer;
+    XMLStreamWriter writer;
     writer.startDocument();
     writer.startElement("Types");
     writer.writeAttribute("xmlns", "http://schemas.openxmlformats.org/package/2006/content-types");

@@ -32,7 +32,7 @@ std::string SharedStrings::getString(int index) const {
 }
 
 std::string SharedStrings::generate() const {
-    XMLWriter writer;
+    XMLStreamWriter writer;
     writer.startDocument();
     writer.startElement("sst");
     writer.writeAttribute("xmlns", "http://schemas.openxmlformats.org/spreadsheetml/2006/main");

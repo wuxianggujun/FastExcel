@@ -1,5 +1,5 @@
 #include "fastexcel/core/Workbook.hpp"
-#include "fastexcel/xml/XMLWriter.hpp"
+#include "fastexcel/xml/XMLStreamWriter.hpp"
 #include "fastexcel/xml/Relationships.hpp"
 #include "fastexcel/xml/SharedStrings.hpp"
 #include "fastexcel/utils/Logger.hpp"
@@ -172,7 +172,7 @@ bool Workbook::generateExcelStructure() {
 }
 
 std::string Workbook::generateWorkbookXML() const {
-    xml::XMLWriter writer;
+    xml::XMLStreamWriter writer;
     writer.startDocument();
     writer.startElement("workbook");
     writer.writeAttribute("xmlns", "http://schemas.openxmlformats.org/spreadsheetml/2006/main");
@@ -204,7 +204,7 @@ std::string Workbook::generateWorkbookXML() const {
 }
 
 std::string Workbook::generateStylesXML() const {
-    xml::XMLWriter writer;
+    xml::XMLStreamWriter writer;
     writer.startDocument();
     writer.startElement("styleSheet");
     writer.writeAttribute("xmlns", "http://schemas.openxmlformats.org/spreadsheetml/2006/main");

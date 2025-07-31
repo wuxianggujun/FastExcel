@@ -1,6 +1,6 @@
 #include "fastexcel/core/Worksheet.hpp"
 #include "fastexcel/core/Workbook.hpp"
-#include "fastexcel/xml/XMLWriter.hpp"
+#include "fastexcel/xml/XMLStreamWriter.hpp"
 #include "fastexcel/xml/SharedStrings.hpp"
 #include "fastexcel/utils/Logger.hpp"
 #include <sstream>
@@ -95,7 +95,7 @@ std::pair<int, int> Worksheet::getUsedRange() const {
 }
 
 std::string Worksheet::generateXML() const {
-    xml::XMLWriter writer;
+    xml::XMLStreamWriter writer;
     writer.startDocument();
     writer.startElement("worksheet");
     writer.writeAttribute("xmlns", "http://schemas.openxmlformats.org/spreadsheetml/2006/main");
