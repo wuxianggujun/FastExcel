@@ -31,6 +31,13 @@ if(ENABLE_UNIT_TESTS)
             FOLDER "Tests"
         )
         
+        # 设置运行时库为动态链接Debug版本
+        if(MSVC)
+            set_target_properties(unit_tests PROPERTIES
+                MSVC_RUNTIME_LIBRARY "MultiThreadedDebugDLL"
+            )
+        endif()
+        
         # 发现并注册测试
         gtest_discover_tests(unit_tests)
     endif()
@@ -60,6 +67,13 @@ if(ENABLE_INTEGRATION_TESTS)
             RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin/test
             FOLDER "Tests"
         )
+        
+        # 设置运行时库为动态链接Debug版本
+        if(MSVC)
+            set_target_properties(integration_tests PROPERTIES
+                MSVC_RUNTIME_LIBRARY "MultiThreadedDebugDLL"
+            )
+        endif()
         
         # 发现并注册测试
         gtest_discover_tests(integration_tests)

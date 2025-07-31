@@ -16,6 +16,9 @@ set(gtest_build_tests OFF CACHE BOOL "" FORCE)
 set(gtest_build_samples OFF CACHE BOOL "" FORCE)
 set(gtest_disable_pthreads ON CACHE BOOL "" FORCE)
 
+# 强制 Gtest 使用共享运行时库
+set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+
 add_subdirectory(third_party/spdlog)
 add_subdirectory(third_party/libexpat/expat)
 add_subdirectory(third_party/zlib-ng)
