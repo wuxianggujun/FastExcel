@@ -1,9 +1,11 @@
 #include "fastexcel/archive/ZipArchive.hpp"
 #include "fastexcel/utils/Logger.hpp"
-#include <minizip-ng/mz.h>
-#include <minizip-ng/mz_zip.h>
-#include <minizip-ng/mz_zip_rw.h>
+#include <mz.h>
+#include <mz_zip.h>
+#include <mz_strm.h>
+#include <mz_zip_rw.h>
 #include <cstring>
+#include <cstdio>
 
 namespace fastexcel {
 namespace archive {
@@ -52,12 +54,12 @@ bool ZipArchive::addFile(const std::string& internal_path, const void* data, siz
     file_info.filename = internal_path.c_str();
     file_info.uncompressed_size = size;
     file_info.compression_method = MZ_COMPRESS_METHOD_DEFLATE;
-    file_info.version_madeby = MZ_VERSION_MADEBY;
-    file_info.version_needed = MZ_VERSION_NEEDED;
+    file_info.version_madeby = 0;
+    file_info.version_needed = 20;
     
-    int32_t result = mz_zip_writer_add_buffer(zip_handle_, 
-                                           data, 
-                                           size, 
+    int32_t result = mz_zip_writer_add_buffer(zip_handle_,
+                                           const_cast<void*>(data),
+                                           static_cast<int32_t>(size),
                                            &file_info);
     
     if (result != MZ_OK) {
@@ -85,13 +87,13 @@ bool ZipArchive::extractFile(const std::string& internal_path, std::vector<uint8
         return false;
     }
     
-    int32_t result = mz_zip_locate_entry(unzip_handle_, internal_path.c_str(), true);
+    int32_t result = mz_zip_reader_locate_entry(unzip_handle_, internal_path.c_str(), true);
     if (result != MZ_OK) {
         LOG_ERROR("File {} not found in zip archive", internal_path);
         return false;
     }
     
-    result = mz_zip_entry_read_open(unzip_handle_, 0, nullptr);
+    result = mz_zip_reader_entry_open(unzip_handle_);
     if (result != MZ_OK) {
         LOG_ERROR("Failed to open file {} in zip archive", internal_path);
         return false;
@@ -99,18 +101,18 @@ bool ZipArchive::extractFile(const std::string& internal_path, std::vector<uint8
     
     // 获取文件大小
     mz_zip_file* file_info = nullptr;
-    result = mz_zip_entry_get_info(unzip_handle_, &file_info);
+    result = mz_zip_reader_entry_get_info(unzip_handle_, &file_info);
     if (result != MZ_OK || !file_info) {
         LOG_ERROR("Failed to get file info for {}", internal_path);
-        mz_zip_entry_close(unzip_handle_);
+        mz_zip_reader_entry_close(unzip_handle_);
         return false;
     }
     
     // 读取文件内容
     data.resize(file_info->uncompressed_size);
-    int32_t bytes_read = mz_zip_entry_read(unzip_handle_, data.data(), file_info->uncompressed_size);
+    int32_t bytes_read = mz_zip_reader_entry_read(unzip_handle_, data.data(), static_cast<int32_t>(file_info->uncompressed_size));
     
-    mz_zip_entry_close(unzip_handle_);
+    mz_zip_reader_entry_close(unzip_handle_);
     
     if (bytes_read != static_cast<int32_t>(file_info->uncompressed_size)) {
         LOG_ERROR("Failed to read complete file {} from zip", internal_path);
@@ -126,7 +128,7 @@ bool ZipArchive::fileExists(const std::string& internal_path) const {
         return false;
     }
     
-    int32_t result = mz_zip_locate_entry(unzip_handle_, internal_path.c_str(), true);
+    int32_t result = mz_zip_reader_locate_entry(unzip_handle_, internal_path.c_str(), true);
     return result == MZ_OK;
 }
 
@@ -138,15 +140,15 @@ std::vector<std::string> ZipArchive::listFiles() const {
     }
     
     // 回到第一个文件
-    mz_zip_goto_first_entry(unzip_handle_);
+    mz_zip_reader_goto_first_entry(unzip_handle_);
     
     mz_zip_file* file_info = nullptr;
-    while (mz_zip_entry_get_info(unzip_handle_, &file_info) == MZ_OK && file_info) {
+    while (mz_zip_reader_entry_get_info(unzip_handle_, &file_info) == MZ_OK && file_info) {
         if (file_info->filename && file_info->filename[0] != '\0') {
             files.push_back(file_info->filename);
         }
         
-        if (mz_zip_goto_next_entry(unzip_handle_) != MZ_OK) {
+        if (mz_zip_reader_goto_next_entry(unzip_handle_) != MZ_OK) {
             break;
         }
     }
@@ -162,8 +164,8 @@ void ZipArchive::cleanup() {
     }
     
     if (unzip_handle_) {
-        mz_zip_close(unzip_handle_);
-        mz_zip_delete(&unzip_handle_);
+        mz_zip_reader_close(unzip_handle_);
+        mz_zip_reader_delete(&unzip_handle_);
         unzip_handle_ = nullptr;
     }
     
@@ -196,16 +198,16 @@ bool ZipArchive::initForWriting() {
 }
 
 bool ZipArchive::initForReading() {
-    unzip_handle_ = mz_zip_create();
+    unzip_handle_ = mz_zip_reader_create();
     if (!unzip_handle_) {
         LOG_ERROR("Failed to create zip reader");
         return false;
     }
     
-    int32_t result = mz_zip_open_file(unzip_handle_, filename_.c_str());
+    int32_t result = mz_zip_reader_open_file(unzip_handle_, filename_.c_str());
     if (result != MZ_OK) {
         LOG_ERROR("Failed to open zip file for reading: {}, error: {}", filename_, result);
-        mz_zip_delete(&unzip_handle_);
+        mz_zip_reader_delete(&unzip_handle_);
         unzip_handle_ = nullptr;
         return false;
     }

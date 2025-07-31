@@ -67,7 +67,7 @@ void Worksheet::writeFormula(int row, int col, const std::string& formula, std::
 void Worksheet::writeRange(int start_row, int start_col, const std::vector<std::vector<std::string>>& data) {
     for (size_t row = 0; row < data.size(); ++row) {
         for (size_t col = 0; col < data[row].size(); ++col) {
-            writeString(start_row + row, start_col + col, data[row][col]);
+            writeString(static_cast<int>(start_row + row), static_cast<int>(start_col + col), data[row][col]);
         }
     }
 }
@@ -75,7 +75,7 @@ void Worksheet::writeRange(int start_row, int start_col, const std::vector<std::
 void Worksheet::writeRange(int start_row, int start_col, const std::vector<std::vector<double>>& data) {
     for (size_t row = 0; row < data.size(); ++row) {
         for (size_t col = 0; col < data[row].size(); ++col) {
-            writeNumber(start_row + row, start_col + col, data[row][col]);
+            writeNumber(static_cast<int>(start_row + row), static_cast<int>(start_col + col), data[row][col]);
         }
     }
 }

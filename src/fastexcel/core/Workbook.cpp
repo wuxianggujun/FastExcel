@@ -100,6 +100,26 @@ std::shared_ptr<Worksheet> Workbook::getWorksheet(size_t index) {
     return nullptr;
 }
 
+std::shared_ptr<const Worksheet> Workbook::getWorksheet(const std::string& name) const {
+    auto it = std::find_if(worksheets_.begin(), worksheets_.end(),
+                          [&name](const std::shared_ptr<Worksheet>& ws) {
+                              return ws->getName() == name;
+                          });
+    
+    if (it != worksheets_.end()) {
+        return *it;
+    }
+    
+    return nullptr;
+}
+
+std::shared_ptr<const Worksheet> Workbook::getWorksheet(size_t index) const {
+    if (index < worksheets_.size()) {
+        return worksheets_[index];
+    }
+    return nullptr;
+}
+
 std::shared_ptr<Format> Workbook::createFormat() {
     auto format = std::make_shared<Format>();
     format->setFormatId(next_format_id_++);

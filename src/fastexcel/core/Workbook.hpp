@@ -1,8 +1,8 @@
 #pragma once
 
-#include "Worksheet.h"
-#include "Format.h"
-#include "../archive/FileManager.h"
+#include "fastexcel/core/Worksheet.hpp"
+#include "fastexcel/core/Format.hpp"
+#include "fastexcel/archive/FileManager.hpp"
 #include <string>
 #include <vector>
 #include <map>
@@ -11,7 +11,7 @@
 namespace fastexcel {
 namespace core {
 
-class Workbook {
+class Workbook : public std::enable_shared_from_this<Workbook> {
 private:
     std::string filename_;
     std::vector<std::shared_ptr<Worksheet>> worksheets_;
@@ -34,6 +34,8 @@ public:
     std::shared_ptr<Worksheet> addWorksheet(const std::string& name = "");
     std::shared_ptr<Worksheet> getWorksheet(const std::string& name);
     std::shared_ptr<Worksheet> getWorksheet(size_t index);
+    std::shared_ptr<const Worksheet> getWorksheet(const std::string& name) const;
+    std::shared_ptr<const Worksheet> getWorksheet(size_t index) const;
     size_t getWorksheetCount() const { return worksheets_.size(); }
     
     // 格式管理

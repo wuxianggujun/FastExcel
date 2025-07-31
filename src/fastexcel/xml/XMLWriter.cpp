@@ -124,13 +124,13 @@ void XMLWriter::escapeAttribute(std::string& text) const {
     
     size_t pos = 0;
     while ((pos = text.find('\"', pos)) != std::string::npos) {
-        text.replace(pos, 1, """);
+        text.replace(pos, 1, "&quot;");
         pos += 6;
     }
     
     pos = 0;
     while ((pos = text.find('\'', pos)) != std::string::npos) {
-        text.replace(pos, 1, "'");
+        text.replace(pos, 1, "&apos;");
         pos += 6;
     }
 }

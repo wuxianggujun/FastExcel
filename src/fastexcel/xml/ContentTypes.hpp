@@ -1,6 +1,6 @@
 #pragma once
 
-#include "XMLWriter.h"
+#include "fastexcel/xml/XMLWriter.hpp"
 #include <string>
 #include <vector>
 
@@ -24,6 +24,9 @@ public:
     // 清空内容
     void clear();
     
+    // 添加默认的Excel内容类型
+    void addExcelDefaults();
+    
 private:
     struct DefaultType {
         std::string extension;
@@ -37,9 +40,6 @@ private:
     
     std::vector<DefaultType> default_types_;
     std::vector<OverrideType> override_types_;
-    
-    // 添加默认的Excel内容类型
-    void addExcelDefaults();
 };
 
 }} // namespace fastexcel::xml

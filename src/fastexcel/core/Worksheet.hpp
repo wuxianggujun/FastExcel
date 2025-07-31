@@ -1,7 +1,7 @@
 #pragma once
 
-#include "Cell.h"
-#include "Format.h"
+#include "fastexcel/core/Cell.hpp"
+#include "fastexcel/core/Format.hpp"
 #include <string>
 #include <vector>
 #include <map>
