@@ -4,9 +4,12 @@
 #include <mz_zip.h>
 #include <mz_strm.h>
 #include <mz_zip_rw.h>
+#include <mz_crypt.h>
+#include <mz_os.h>
 #include <cstring>
 #include <cstdio>
 #include <filesystem>
+#include <ctime>
 
 namespace fastexcel {
 namespace archive {
@@ -51,21 +54,34 @@ bool ZipArchive::addFile(const std::string& internal_path, const void* data, siz
         return false;
     }
     
+    // 初始化文件信息结构 - 只设置必要的字段，让 minizip 自动计算 CRC 和大小
     mz_zip_file file_info = {};
     file_info.filename = internal_path.c_str();
-    file_info.uncompressed_size = size;
-    file_info.compression_method = MZ_COMPRESS_METHOD_DEFLATE;
-    file_info.version_madeby = 0;
-    file_info.version_needed = 20;
+    file_info.modified_date = time(nullptr);
+    file_info.flag = MZ_ZIP_FLAG_UTF8 | MZ_ZIP_FLAG_DATA_DESCRIPTOR;
     
-    // 使用 mz_zip_writer_add_buffer 函数添加文件
-    int32_t result = mz_zip_writer_add_buffer(zip_handle_,
-                                            const_cast<void*>(data),
-                                            static_cast<int32_t>(size),
-                                            &file_info);
-    
+    // 打开条目
+    int32_t result = mz_zip_writer_entry_open(zip_handle_, &file_info);
     if (result != MZ_OK) {
-        LOG_ERROR("Failed to add file {} to zip, error: {}", internal_path, result);
+        LOG_ERROR("Failed to open entry for file {} in zip, error: {}", internal_path, result);
+        return false;
+    }
+    
+    // 写入数据
+    if (size > 0) {
+        int32_t bytes_written = mz_zip_writer_entry_write(zip_handle_, data, static_cast<int32_t>(size));
+        if (bytes_written != static_cast<int32_t>(size)) {
+            LOG_ERROR("Failed to write complete data for file {} to zip, written: {} bytes, expected: {} bytes",
+                     internal_path, bytes_written, size);
+            mz_zip_writer_entry_close(zip_handle_);
+            return false;
+        }
+    }
+    
+    // 关闭条目 - 这将让 minizip 自动计算并写入 CRC 和大小信息
+    result = mz_zip_writer_entry_close(zip_handle_);
+    if (result != MZ_OK) {
+        LOG_ERROR("Failed to close entry for file {} in zip, error: {}", internal_path, result);
         return false;
     }
     
@@ -160,6 +176,7 @@ std::vector<std::string> ZipArchive::listFiles() const {
 
 void ZipArchive::cleanup() {
     if (zip_handle_) {
+        // 确保所有数据都被写入磁盘
         mz_zip_writer_close(zip_handle_);
         mz_zip_writer_delete(&zip_handle_);
         zip_handle_ = nullptr;
@@ -182,10 +199,11 @@ bool ZipArchive::initForWriting() {
         return false;
     }
     
-    // 设置压缩级别
+    // 设置压缩级别和方法
     mz_zip_writer_set_compress_level(zip_handle_, MZ_COMPRESS_LEVEL_DEFAULT);
     mz_zip_writer_set_compress_method(zip_handle_, MZ_COMPRESS_METHOD_DEFLATE);
     
+    // 打开文件进行写入，如果文件已存在则覆盖
     int32_t result = mz_zip_writer_open_file(zip_handle_, filename_.c_str(), 0, 0);
     if (result != MZ_OK) {
         LOG_ERROR("Failed to open zip file for writing: {}, error: {}", filename_, result);
