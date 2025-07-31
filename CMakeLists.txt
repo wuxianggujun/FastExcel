@@ -11,6 +11,11 @@ set(SPDLOG_BUILD_TESTS_HO OFF CACHE BOOL "" FORCE)
 set(EXPAT_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(ZLIB_ENABLE_TESTS OFF CACHE BOOL "" FORCE)
 
+# 禁用 Gtest 自身测试
+set(gtest_build_tests OFF CACHE BOOL "" FORCE)
+set(gtest_build_samples OFF CACHE BOOL "" FORCE)
+set(gtest_disable_pthreads ON CACHE BOOL "" FORCE)
+
 add_subdirectory(third_party/spdlog)
 add_subdirectory(third_party/libexpat/expat)
 add_subdirectory(third_party/zlib-ng)
@@ -30,6 +35,9 @@ set(ZLIB-NG_INCLUDE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/third_party/zlib-ng ${CMAKE
 set(ZLIB-NG_LIBRARY_DIRS ${CMAKE_CURRENT_BINARY_DIR}/third_party/zlib-ng)
 
 add_subdirectory(third_party/minizip-ng)
+
+# 添加 Gtest 支持
+add_subdirectory(third_party/googletest)
 
 # FastExcel库源文件
 file(GLOB_RECURSE FASTEXCEL_SOURCES
@@ -60,3 +68,60 @@ target_link_libraries(fastexcel PUBLIC
 # 示例程序
 add_executable(${PROJECT_NAME} src/main.cpp)
 target_link_libraries(${PROJECT_NAME} PRIVATE fastexcel)
+
+# 添加测试构建选项
+option(ENABLE_TESTS "Enable building of all tests" OFF)
+option(ENABLE_UNIT_TESTS "Enable building of unit tests" OFF)
+option(ENABLE_INTEGRATION_TESTS "Enable building of integration tests" OFF)
+
+# 如果总开关开启，则所有测试都开启
+if(ENABLE_TESTS)
+    set(ENABLE_UNIT_TESTS ON)
+    set(ENABLE_INTEGRATION_TESTS ON)
+endif()
+
+if(ENABLE_UNIT_TESTS OR ENABLE_INTEGRATION_TESTS)
+    # 启用测试
+    enable_testing()
+
+    # 添加测试支持
+    include(GoogleTest)
+
+    # 收集单元测试文件
+    file(GLOB_RECURSE UNIT_TEST_SOURCES
+        "test/unit/*.cpp"
+    )
+
+    # 收集集成测试文件
+    file(GLOB_RECURSE INTEGRATION_TEST_SOURCES
+        "test/integration/*.cpp"
+    )
+
+    # 创建单元测试可执行文件
+    if(ENABLE_UNIT_TESTS AND UNIT_TEST_SOURCES)
+        add_executable(unit_tests ${UNIT_TEST_SOURCES})
+        target_link_libraries(unit_tests PRIVATE
+            fastexcel
+            gtest
+            gtest_main
+        )
+        target_include_directories(unit_tests PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/src
+        )
+        gtest_discover_tests(unit_tests)
+    endif()
+
+    # 创建集成测试可执行文件
+    if(ENABLE_INTEGRATION_TESTS AND INTEGRATION_TEST_SOURCES)
+        add_executable(integration_tests ${INTEGRATION_TEST_SOURCES})
+        target_link_libraries(integration_tests PRIVATE
+            fastexcel
+            gtest
+            gtest_main
+        )
+        target_include_directories(integration_tests PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/src
+        )
+        gtest_discover_tests(integration_tests)
+    endif()
+endif()

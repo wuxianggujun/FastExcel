@@ -346,40 +346,113 @@ for (int i = 0; i < 1000; ++i) {
 
 ## 7. 测试规范
 
-### 7.1 单元测试
+### 7.1 测试框架
+
+- **必须使用 Gtest 测试框架**
+- 禁止使用 Catch2 或其他测试框架
+- 所有测试文件必须放在 `test/` 目录下：
+  - `test/unit/` - 单元测试
+  - `test/integration/` - 集成测试
+- 禁止 Gtest 框架自身的测试构建选项：
+  ```cmake
+  set(gtest_build_tests OFF CACHE BOOL "" FORCE)
+  set(gtest_build_samples OFF CACHE BOOL "" FORCE)
+  set(gtest_disable_pthreads ON CACHE BOOL "" FORCE)
+  ```
+- 使用以下选项控制测试构建：
+  ```cmake
+  option(ENABLE_TESTS "Enable building of all tests" OFF)
+  option(ENABLE_UNIT_TESTS "Enable building of unit tests" OFF)
+  option(ENABLE_INTEGRATION_TESTS "Enable building of integration tests" OFF)
+  ```
+  - `ENABLE_TESTS` 是总开关，开启后会自动启用所有测试类型
+  - `ENABLE_UNIT_TESTS` 和 `ENABLE_INTEGRATION_TESTS` 可以单独控制特定类型的测试
+  - 当 `ENABLE_TESTS=ON` 时，会自动设置 `ENABLE_UNIT_TESTS=ON` 和 `ENABLE_INTEGRATION_TESTS=ON`
+
+### 7.2 单元测试
 
 - 每个类都应该有对应的单元测试
 - 测试文件命名：`ClassName_test.cpp`
-- 测试函数命名：`TEST_CASE("功能描述", "[模块名]")`
+- 测试类命名：`ClassNameTest`
+- 测试函数命名：`TEST_F(ClassNameTest, 功能描述)`
+- 使用 Gtest 的断言宏：`EXPECT_EQ`, `ASSERT_TRUE`, 等
 
 #### 示例：
 ```cpp
 // Cell_test.cpp
 #include "fastexcel/core/Cell.hpp"
-#include <catch2/catch.hpp>
+#include <gtest/gtest.h>
 
-TEST_CASE("Cell basic functionality", "[core][cell]") {
-    fastexcel::core::Cell cell;
-    
-    SECTION("String value") {
-        cell.setValue("Hello");
-        REQUIRE(cell.getType() == fastexcel::core::CellType::String);
-        REQUIRE(cell.getStringValue() == "Hello");
+namespace fastexcel {
+namespace core {
+
+class CellTest : public ::testing::Test {
+protected:
+    void SetUp() override {
+        cell = std::make_unique<Cell>();
     }
-    
-    SECTION("Number value") {
-        cell.setValue(42.0);
-        REQUIRE(cell.getType() == fastexcel::core::CellType::Number);
-        REQUIRE(cell.getNumberValue() == 42.0);
+
+    void TearDown() override {
+        cell.reset();
     }
+
+    std::unique_ptr<Cell> cell;
+};
+
+TEST_F(CellTest, StringValue) {
+    cell->setValue("Hello");
+    EXPECT_EQ(cell->getType(), CellType::String);
+    EXPECT_EQ(cell->getStringValue(), "Hello");
 }
+
+TEST_F(CellTest, NumberValue) {
+    cell->setValue(42.0);
+    EXPECT_EQ(cell->getType(), CellType::Number);
+    EXPECT_DOUBLE_EQ(cell->getNumberValue(), 42.0);
+}
+
+}} // namespace fastexcel::core
 ```
 
-### 7.2 集成测试
+### 7.3 集成测试
 
 - 测试模块间的交互
-- 测试文件放在 `tests/integration/` 目录
+- 测试文件放在 `test/integration/` 目录
+- 测试文件命名：`ModuleIntegration_test.cpp`
 - 测试完整的业务流程
+- 使用 Gtest 的测试夹具（Test Fixtures）管理测试资源
+
+#### 示例：
+```cpp
+// WorkbookIntegration_test.cpp
+#include "fastexcel/core/Workbook.hpp"
+#include "fastexcel/core/Worksheet.hpp"
+#include <gtest/gtest.h>
+
+namespace fastexcel {
+namespace core {
+
+class WorkbookIntegrationTest : public ::testing::Test {
+protected:
+    void SetUp() override {
+        workbook = std::make_unique<Workbook>("test_workbook.xlsx");
+    }
+
+    void TearDown() override {
+        workbook.reset();
+    }
+
+    std::unique_ptr<Workbook> workbook;
+};
+
+TEST_F(WorkbookIntegrationTest, CreateWorkbookAndAddWorksheet) {
+    auto worksheet = workbook->addWorksheet("Sheet1");
+    EXPECT_NE(worksheet, nullptr);
+    EXPECT_EQ(worksheet->getName(), "Sheet1");
+}
+
+}} // namespace fastexcel::core
+```
 
 ## 8. 文档规范
 
@@ -474,7 +547,133 @@ target_link_libraries(fastexcel PUBLIC
 - 使用标准 C++ 特性
 - 避免编译器特定扩展
 
-## 13. 总结
+## 13. 终端命令规范
+
+### 13.1 PowerShell 命令规则
+
+- **必须使用 PowerShell 命令**，禁止使用 cmd 命令
+- 所有终端命令示例必须使用 PowerShell 语法
+- 使用 PowerShell 的标准 cmdlet 和参数格式
+
+#### 基本命令规范
+
+##### 目录操作
+```powershell
+# 创建目录
+New-Item -ItemType Directory -Path "test\unit"
+
+# 删除目录
+Remove-Item -Path "build" -Recurse -Force
+
+# 复制目录
+Copy-Item -Path "src" -Destination "backup" -Recurse
+
+# 移动目录
+Move-Item -Path "old_folder" -Destination "new_folder"
+```
+
+##### 文件操作
+```powershell
+# 创建文件
+New-Item -ItemType File -Path "test\unit\Cell_test.cpp"
+
+# 删除文件
+Remove-Item -Path "*.tmp" -Force
+
+# 复制文件
+Copy-Item -Path "config.json" -Destination "backup\"
+
+# 移动文件
+Move-Item -Path "old_name.cpp" -Destination "new_name.cpp"
+```
+
+##### 构建命令
+```powershell
+# 创建构建目录
+New-Item -ItemType Directory -Path "build"
+
+# 进入构建目录
+Set-Location -Path "build"
+
+# 配置 CMake
+cmake .. -G "Visual Studio 17 2022" -A x64
+
+# 构建项目
+cmake --build . --config Release
+
+# 运行测试
+ctest -C Release -V
+
+# 返回根目录
+Set-Location -Path ".."
+```
+
+##### Git 操作
+```powershell
+# 克隆仓库
+git clone https://github.com/username/repository.git
+
+# 添加文件
+git add .
+
+# 提交更改
+git commit -m "Commit message"
+
+# 推送到远程仓库
+git push origin main
+
+# 拉取最新更改
+git pull origin main
+```
+
+##### 环境变量操作
+```powershell
+# 设置环境变量
+$env:PATH += ";C:\path\to\directory"
+
+# 获取环境变量
+$env:PATH
+
+# 永久设置环境变量
+[Environment]::SetEnvironmentVariable("PATH", $env:PATH, "User")
+```
+
+##### 进程管理
+```powershell
+# 查看进程
+Get-Process
+
+# 停止进程
+Stop-Process -Name "notepad" -Force
+
+# 启动进程
+Start-Process -FilePath "notepad.exe"
+```
+
+### 13.2 命令注释规范
+
+- 所有复杂的 PowerShell 命令必须包含注释
+- 注释使用 `#` 符号
+- 注释应该解释命令的目的和重要参数
+
+#### 示例：
+```powershell
+# 创建测试目录结构
+New-Item -ItemType Directory -Path "test\unit" -Force
+New-Item -ItemType Directory -Path "test\integration" -Force
+
+# 配置 CMake 项目，禁用不必要的测试
+cmake .. -G "Visual Studio 17 2022" -A x64 `
+    -DSPDLOG_BUILD_TESTS=OFF `
+    -DEXPAT_BUILD_TESTS=OFF `
+    -Dgtest_build_tests=OFF
+
+# 构建项目并运行测试
+cmake --build . --config Release
+ctest -C Release -V --output-on-failure
+```
+
+## 14. 总结
 
 本规范涵盖了 FastExcel 项目的各个方面，确保 AI 生成的代码符合项目的技术要求和代码风格。所有 AI 参与代码生成时，必须严格遵守本规范。
 
@@ -490,5 +689,7 @@ target_link_libraries(fastexcel PUBLIC
 8. **错误处理**：使用异常处理和日志记录
 9. **性能考虑**：关注算法复杂度和资源使用
 10. **测试覆盖**：确保单元测试和集成测试的完整性
+11. **测试框架**：必须使用 Gtest，禁止使用 Catch2
+12. **终端命令**：必须使用 PowerShell，禁止使用 cmd
 
 遵循这些规范将确保 FastExcel 项目的高质量、可维护性和一致性。
