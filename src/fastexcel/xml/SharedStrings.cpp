@@ -66,19 +66,19 @@ std::string SharedStrings::escapeString(const std::string& str) const {
     // 转义XML特殊字符
     size_t pos = 0;
     while ((pos = result.find('&', pos)) != std::string::npos) {
-        result.replace(pos, 1, "&");
+        result.replace(pos, 1, "&amp;");
         pos += 5;
     }
     
     pos = 0;
     while ((pos = result.find('<', pos)) != std::string::npos) {
-        result.replace(pos, 1, "<");
+        result.replace(pos, 1, "&lt;");
         pos += 4;
     }
     
     pos = 0;
     while ((pos = result.find('>', pos)) != std::string::npos) {
-        result.replace(pos, 1, ">");
+        result.replace(pos, 1, "&gt;");
         pos += 4;
     }
     

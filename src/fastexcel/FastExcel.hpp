@@ -13,7 +13,7 @@
 #include "xml/ContentTypes.hpp"
 #include "xml/Relationships.hpp"
 #include "xml/SharedStrings.hpp"
-#include "xml/XMLWriter.hpp"
+#include "xml/XMLStreamWriter.hpp"
 
 // 压缩归档层
 #include "archive/FileManager.hpp"

@@ -1,4 +1,4 @@
-#include "fastexcel/FastExcel.h"
+#include "fastexcel/FastExcel.hpp"
 #include <iostream>
 
 int main() {
