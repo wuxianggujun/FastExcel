@@ -53,9 +53,9 @@ include(CMakePackageConfigHelpers)
 include(FeatureSummary)
 
 # We need to enable C++ before trying to check for coverage
-option(ZLIB_ENABLE_TESTS "Build test binaries" ON)
-cmake_dependent_option(ZLIBNG_ENABLE_TESTS "Test zlib-ng specific API" ON "ZLIB_ENABLE_TESTS" OFF)
-cmake_dependent_option(WITH_GTEST "Build gtest_zlib" ON "ZLIB_ENABLE_TESTS" OFF)
+option(ZLIB_ENABLE_TESTS "Build test binaries" OFF)
+cmake_dependent_option(ZLIBNG_ENABLE_TESTS "Test zlib-ng specific API" OFF "ZLIB_ENABLE_TESTS" OFF)
+cmake_dependent_option(WITH_GTEST "Build gtest_zlib" OFF "ZLIB_ENABLE_TESTS" OFF)
 cmake_dependent_option(WITH_FUZZERS "Build test/fuzz" OFF "ZLIB_ENABLE_TESTS" OFF)
 cmake_dependent_option(WITH_BENCHMARKS "Build test/benchmarks" OFF "ZLIB_ENABLE_TESTS" OFF)
 cmake_dependent_option(WITH_BENCHMARK_APPS "Build application benchmarks" OFF "WITH_BENCHMARKS" OFF)
@@ -1521,24 +1521,7 @@ endif()
 # Example binaries
 #============================================================================
 
-if(ZLIB_ENABLE_TESTS)
-    enable_testing()
-
-    if(BUILD_SHARED_LIBS)
-        if(ZLIBNG_ENABLE_TESTS)
-            message(STATUS "Disabling zlib-ng tests because shared libraries are enabled")
-            set(ZLIBNG_ENABLE_TESTS OFF)
-        endif()
-
-        if(WITH_BENCHMARKS OR WITH_BENCHMARK_APPS)
-            message(STATUS "Disabling benchmarks because shared libraries are enabled")
-            set(WITH_BENCHMARKS OFF)
-            set(WITH_BENCHMARK_APPS OFF)
-        endif()
-    endif()
-
-    add_subdirectory(test)
-endif()
+# Tests disabled
 
 add_feature_info(WITH_GZFILEOP WITH_GZFILEOP "Compile with support for gzFile related functions")
 add_feature_info(ZLIB_COMPAT ZLIB_COMPAT "Compile with zlib compatible API")

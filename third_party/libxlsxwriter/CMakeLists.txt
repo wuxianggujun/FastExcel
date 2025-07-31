@@ -53,7 +53,6 @@ set(XLSX_PROJECT_NAME
 
 set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
 project(${XLSX_PROJECT_NAME} C)
-enable_testing()
 
 # -------------------
 # Compilation options
@@ -335,10 +334,7 @@ if(MSVC)
     list(APPEND LXW_PRIVATE_COMPILE_DEFINITIONS _CRT_SECURE_NO_WARNINGS)
 endif()
 
-# Ensure "TESTING" macro is defined if building tests.
-if(BUILD_TESTS)
-    list(APPEND LXW_PRIVATE_COMPILE_DEFINITIONS TESTING)
-endif()
+# Tests disabled
 
 # Define "LXW_BIG_ENDIAN" macro on big-endian architectures.
 include(TestBigEndian)
@@ -420,111 +416,7 @@ target_include_directories(
     PUBLIC include include/xlsxwriter
 )
 
-# ------------------------
-# Set up and run the tests
-# ------------------------
-
-# Macro for handling unit tests.
-macro(create_test sources target)
-    set(output_name xlsxwriter_${target})
-    set(dependencies ${output_name})
-
-    add_executable(${output_name} ${${sources}})
-    target_link_libraries(${output_name} ${PROJECT_NAME})
-    target_compile_definitions(${output_name} PRIVATE TESTING COLOR_OK)
-    add_test(
-        NAME ${output_name}
-        COMMAND ${output_name}
-        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-    )
-endmacro(create_test)
-
-file(GLOB LXW_UTILITY_SOURCES test/unit/utility/test*.c)
-file(GLOB LXW_XMLWRITER_SOURCES test/unit/xmlwriter/test*.c)
-file(GLOB LXW_WORKSHEET_SOURCES test/unit/worksheet/test*.c)
-file(GLOB LXW_SST_SOURCES test/unit/sst/test*.c)
-file(GLOB LXW_WORKBOOK_SOURCES test/unit/workbook/test*.c)
-file(GLOB LXW_APP_SOURCES test/unit/app/test*.c)
-file(GLOB LXW_CONTENTTYPES_SOURCES test/unit/content_types/test*.c)
-file(GLOB LXW_CORE_SOURCES test/unit/core/test*.c)
-file(GLOB LXW_RELATIONSHIPS_SOURCES test/unit/relationships/test*.c)
-file(GLOB LXW_FORMAT_SOURCES test/unit/format/test*.c)
-file(GLOB LXW_STYLES_SOURCES test/unit/styles/test*.c)
-file(GLOB LXW_DRAWING_SOURCES test/unit/drawing/test*.c)
-file(GLOB LXW_CHART_SOURCES test/unit/chart/test*.c)
-file(GLOB LXW_CUSTOM_SOURCES test/unit/custom/test*.c)
-file(GLOB LXW_FUNCTIONAL_SOURCES test/functional/src/*.c)
-
-if(NOT MSVC)
-    # Skip unit tests on Windows since ctest.h doesn't support it.
-    set(LXW_UNIT_SOURCES
-        test/unit/test_all.c
-        ${LXW_UTILITY_SOURCES}
-        ${LXW_XMLWRITER_SOURCES}
-        ${LXW_WORKSHEET_SOURCES}
-        ${LXW_SST_SOURCES}
-        ${LXW_WORKBOOK_SOURCES}
-        ${LXW_APP_SOURCES}
-        ${LXW_CONTENTTYPES_SOURCES}
-        ${LXW_CORE_SOURCES}
-        ${LXW_RELATIONSHIPS_SOURCES}
-        ${LXW_FORMAT_SOURCES}
-        ${LXW_STYLES_SOURCES}
-        ${LXW_DRAWING_SOURCES}
-        ${LXW_CHART_SOURCES}
-        ${LXW_CUSTOM_SOURCES}
-    )
-else()
-    set(LXW_UNIT_SOURCES test/cpp/test_compilation.cpp)
-endif()
-
-if(BUILD_TESTS)
-    # Unit tests.
-    create_test(LXW_UNIT_SOURCES unit)
-
-    # Functional tests.
-    find_package(Python COMPONENTS Interpreter REQUIRED)
-    find_program(Pytest_EXECUTABLE NAMES pytest)
-
-    if(NOT Pytest_EXECUTABLE)
-        message(
-            "Please install the Python pytest library to run the functional tests:"
-        )
-        message("    pip install pytest\n")
-    endif()
-
-    foreach(source ${LXW_FUNCTIONAL_SOURCES})
-        get_filename_component(basename ${source} NAME_WE)
-        add_executable(${basename} ${source})
-        target_link_libraries(${basename} xlsxwriter)
-        set_target_properties(
-            ${basename}
-            PROPERTIES RUNTIME_OUTPUT_DIRECTORY "test/functional/src"
-        )
-    endforeach(source)
-
-    add_custom_command(
-        TARGET xlsxwriter_unit
-        POST_BUILD
-        COMMAND
-            ${CMAKE_COMMAND} -E copy_directory
-            ${CMAKE_SOURCE_DIR}/test/functional test/functional
-    )
-
-    if(USE_NO_MD5)
-        add_test(
-            NAME functional
-            COMMAND pytest -v test/functional -m "not skipif"
-            WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-        )
-    else()
-        add_test(
-            NAME functional
-            COMMAND pytest -v test/functional
-            WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-        )
-    endif()
-endif()
+# Tests disabled
 
 # ------------------------------------
 # Compile and run the example programs

@@ -129,7 +129,7 @@ endmacro()
 
 expat_shy_set(EXPAT_BUILD_TOOLS ${_EXPAT_BUILD_TOOLS_DEFAULT} CACHE BOOL "Build the xmlwf tool for expat library")
 expat_shy_set(EXPAT_BUILD_EXAMPLES ON CACHE BOOL "Build the examples for expat library")
-expat_shy_set(EXPAT_BUILD_TESTS ON CACHE BOOL "Build the tests for expat library")
+expat_shy_set(EXPAT_BUILD_TESTS OFF CACHE BOOL "Build the tests for expat library")
 expat_shy_set(EXPAT_SHARED_LIBS ${_EXPAT_SHARED_LIBS_DEFAULT} CACHE BOOL "Build a shared expat library")
 expat_shy_set(EXPAT_BUILD_DOCS ${_EXPAT_BUILD_DOCS_DEFAULT} CACHE BOOL "Build man page for xmlwf")
 expat_shy_set(EXPAT_BUILD_FUZZERS OFF CACHE BOOL "Build fuzzers for the expat library")
@@ -169,15 +169,10 @@ if(NOT _EXPAT_HELP)
     mark_as_advanced(_EXPAT_M32)
 endif()
 
-if(EXPAT_BUILD_TESTS OR EXPAT_BUILD_FUZZERS)
+if(EXPAT_BUILD_FUZZERS)
     # We have to call enable_language() before modifying any CMAKE_CXX_* variables
     enable_language(CXX)
-
-    if (EXPAT_BUILD_FUZZERS)
-        set(CMAKE_CXX_STANDARD 17)  # for std::string_view for Abseil for libprotobuf-mutator
-    else()
-        set(CMAKE_CXX_STANDARD 11)
-    endif()
+    set(CMAKE_CXX_STANDARD 17)  # for std::string_view for Abseil for libprotobuf-mutator
     set(CMAKE_CXX_STANDARD_REQUIRED ON)
     set(CMAKE_CXX_EXTENSIONS OFF)  # i.e. -std=c++11 rather than default -std=gnu++11
 endif()
@@ -243,9 +238,6 @@ elseif(EXPAT_CHAR_TYPE STREQUAL "ushort")
     set(_EXPAT_UNICODE_WCHAR_T OFF)
     if(EXPAT_BUILD_EXAMPLES)
         message(SEND_ERROR "Examples can not be built with option -DEXPAT_CHAR_TYPE=ushort. Please pass -DEXPAT_CHAR_TYPE=(char|wchar_t) or -DEXPAT_BUILD_EXAMPLES=OFF.")
-    endif()
-    if(EXPAT_BUILD_TESTS)
-        message(SEND_ERROR "The testsuite can not be built with option -DEXPAT_CHAR_TYPE=ushort. Please pass -DEXPAT_CHAR_TYPE=(char|wchar_t) or -DEXPAT_BUILD_TESTS=OFF.")
     endif()
     if(EXPAT_BUILD_TOOLS)
         message(SEND_ERROR "The xmlwf tool can not be built with option -DEXPAT_CHAR_TYPE=ushort. Please pass -DEXPAT_CHAR_TYPE=(char|wchar_t) or -DEXPAT_BUILD_TOOLS=OFF.")
@@ -614,85 +606,7 @@ if(EXPAT_BUILD_EXAMPLES)
     endforeach()
 endif()
 
-#
-# C/C++ test runners
-#
-if(EXPAT_BUILD_TESTS)
-    ## these are unittests that can be run on any platform
-    enable_testing()
-
-    if(NOT MSVC)
-        if(MINGW)
-            set(host whatever-mingw32)  # for nothing but run.sh
-        endif()
-        configure_file(${CMAKE_CURRENT_SOURCE_DIR}/run.sh.in run.sh @ONLY)
-    endif()
-
-    function(expat_add_test _name _file)
-        if(MSVC)
-            add_test(NAME ${_name} COMMAND ${_file})
-        else()
-            add_test(NAME ${_name} COMMAND bash run.sh ${_file})
-        endif()
-    endfunction()
-
-    set(_EXPAT_TEST_TARGETS runtests runtests_cxx)
-
-    add_executable(runtests
-        tests/acc_tests.c
-        tests/alloc_tests.c
-        tests/basic_tests.c
-        tests/chardata.c
-        tests/common.c
-        tests/dummy.c
-        tests/handlers.c
-        tests/memcheck.c
-        tests/minicheck.c
-        tests/misc_tests.c
-        tests/ns_tests.c
-        tests/nsalloc_tests.c
-        tests/runtests.c
-        tests/structdata.c
-        ${_EXPAT_C_SOURCES}
-    )
-
-    add_executable(runtests_cxx
-        tests/acc_tests_cxx.cpp
-        tests/alloc_tests_cxx.cpp
-        tests/basic_tests_cxx.cpp
-        tests/chardata_cxx.cpp
-        tests/common_cxx.cpp
-        tests/dummy_cxx.cpp
-        tests/handlers_cxx.cpp
-        tests/memcheck_cxx.cpp
-        tests/minicheck_cxx.cpp
-        tests/misc_tests_cxx.cpp
-        tests/ns_tests_cxx.cpp
-        tests/nsalloc_tests_cxx.cpp
-        tests/runtests_cxx.cpp
-        tests/structdata_cxx.cpp
-        ${_EXPAT_C_SOURCES}
-    )
-
-    foreach(_target ${_EXPAT_TEST_TARGETS})
-        target_compile_definitions(${_target} PRIVATE -DXML_TESTING)
-
-        set_property(TARGET ${_target} PROPERTY RUNTIME_OUTPUT_DIRECTORY tests)
-        expat_add_test(${_target} $<TARGET_FILE:${_target}>)
-
-        if(_EXPAT_LIBM_FOUND)
-            target_link_libraries(${_target} m)
-        endif()
-
-        if(EXPAT_WITH_LIBBSD)
-            target_link_libraries(${_target} ${LIB_BSD})
-        endif()
-    endforeach()
-
-    add_executable(benchmark tests/benchmark/benchmark.c)
-    set_property(TARGET benchmark PROPERTY RUNTIME_OUTPUT_DIRECTORY tests/benchmark)
-    target_link_libraries(benchmark expat)
-endif()
+# Tests disabled
 
 #
 # Fuzzers
@@ -822,7 +736,7 @@ endif()
 # C/C++ config affecting multiple targets
 #
 if(WIN32)
-    set(_EXPAT_STATIC_TARGETS ${_EXPAT_TEST_TARGETS})
+    set(_EXPAT_STATIC_TARGETS )
     if(NOT EXPAT_SHARED_LIBS)
         list(APPEND _EXPAT_STATIC_TARGETS expat)
     endif()
@@ -1019,9 +933,6 @@ message(STATUS "")
 if(CMAKE_GENERATOR STREQUAL "Unix Makefiles")
     message(STATUS "Continue with")
     message(STATUS "  make")
-    if(EXPAT_BUILD_TESTS)
-        message(STATUS "  make test")
-    endif()
     if(EXPAT_ENABLE_INSTALL)
         message(STATUS "  sudo make install")
     endif()

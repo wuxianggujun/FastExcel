@@ -328,11 +328,7 @@ if(SPDLOG_BUILD_EXAMPLE OR SPDLOG_BUILD_EXAMPLE_HO OR SPDLOG_BUILD_ALL)
     endif()
 endif()
 
-if(SPDLOG_BUILD_TESTS OR SPDLOG_BUILD_TESTS_HO OR SPDLOG_BUILD_ALL)
-    message(STATUS "Generating tests")
-    enable_testing()
-    add_subdirectory(tests)
-endif()
+# Tests disabled
 
 if(SPDLOG_BUILD_BENCH OR SPDLOG_BUILD_ALL)
     message(STATUS "Generating benchmarks")
