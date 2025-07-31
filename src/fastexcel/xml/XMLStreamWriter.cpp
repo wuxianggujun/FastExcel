@@ -16,8 +16,8 @@ XMLStreamWriter::XMLStreamWriter() {
 
 XMLStreamWriter::~XMLStreamWriter() {
     // 如果缓冲区中有数据且用户没有处理，记录警告
-    if (buffer_pos_ > 0 && !direct_file_mode_) {
-        LOG_WARN("XMLStreamWriter destroyed with {} bytes of unwritten data in buffer", buffer_pos_);
+    if ((buffer_pos_ > 0 || !whole_.empty()) && !direct_file_mode_) {
+        LOG_WARN("XMLStreamWriter destroyed with {} bytes in buffer and {} bytes in whole_", buffer_pos_, whole_.size());
     }
     
     clear();
@@ -43,24 +43,32 @@ void XMLStreamWriter::setBufferedMode() {
 }
 
 void XMLStreamWriter::flushBuffer() {
-    if (buffer_pos_ > 0) {
-        if (output_file_) {
-            fwrite(buffer_, 1, buffer_pos_, output_file_);
-        }
-        buffer_pos_ = 0;
+    if (buffer_pos_ == 0) return;
+
+    if (direct_file_mode_ && output_file_) {
+        fwrite(buffer_, 1, buffer_pos_, output_file_);
+    } else {
+        // 缓冲模式：把数据拼到 whole_，避免丢失
+        whole_.append(buffer_, buffer_pos_);
     }
+    buffer_pos_ = 0;
 }
 
 void XMLStreamWriter::startDocument() {
     buffer_pos_ = 0;
-    writeRawDirect("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n", 48);
+    whole_.clear();  // 清空累积的缓冲区，确保每次开始新文档时都是干净的
+    const char* xml_decl = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n";
+    size_t xml_decl_len = strlen(xml_decl);
+    writeRawDirect(xml_decl, xml_decl_len);
 }
 
 void XMLStreamWriter::endDocument() {
     while (!element_stack_.empty()) {
         endElement();
     }
-    flushBuffer();
+    
+    // 确保所有数据都被写入
+    flushBuffer();     // 现在缓冲模式也安全
 }
 
 void XMLStreamWriter::startElement(const char* name) {
@@ -175,12 +183,20 @@ void XMLStreamWriter::writeText(const char* text) {
 std::string XMLStreamWriter::toString() const {
     if (direct_file_mode_) {
         LOG_WARN("toString() called in direct file mode, result may be incomplete");
+        return std::string();
     }
-    return std::string(buffer_, buffer_pos_);
+    
+    // 在缓冲模式下，返回 whole_ + buffer_ 的完整内容
+    std::string result;
+    result.reserve(whole_.size() + buffer_pos_);
+    result.append(whole_);
+    result.append(buffer_, buffer_pos_);
+    return result;
 }
 
 void XMLStreamWriter::clear() {
     buffer_pos_ = 0;
+    whole_.clear();
     while (!element_stack_.empty()) {
         element_stack_.pop();
     }
@@ -270,8 +286,14 @@ void XMLStreamWriter::writeRawToBuffer(const char* data, size_t length) {
         size_t available_space = BUFFER_SIZE - buffer_pos_;
         
         if (available_space == 0) {
+            // 缓冲区已满，需要刷新
             flushBuffer();
-            available_space = BUFFER_SIZE;
+            available_space = BUFFER_SIZE - buffer_pos_;
+            
+            // 如果刷新后仍然没有可用空间，直接返回
+            if (available_space == 0) {
+                return;
+            }
         }
         
         size_t chunk_size = std::min(length, available_space);
@@ -310,6 +332,9 @@ void XMLStreamWriter::escapeAttributesToBuffer(const char* text, size_t length) 
                 break;
             case '\"':
                 writeRawToBuffer(QUOT_REPLACEMENT, QUOT_REPLACEMENT_LEN);
+                break;
+            case '\'':
+                writeRawToBuffer(APOS_REPLACEMENT, APOS_REPLACEMENT_LEN);
                 break;
             case '\n':
                 writeRawToBuffer(NL_REPLACEMENT, NL_REPLACEMENT_LEN);
@@ -355,6 +380,9 @@ void XMLStreamWriter::escapeAttributesToFile(const char* text, size_t length) {
             case '\"':
                 fwrite(QUOT_REPLACEMENT, 1, QUOT_REPLACEMENT_LEN, output_file_);
                 break;
+            case '\'':
+                fwrite(APOS_REPLACEMENT, 1, APOS_REPLACEMENT_LEN, output_file_);
+                break;
             case '\n':
                 fwrite(NL_REPLACEMENT, 1, NL_REPLACEMENT_LEN, output_file_);
                 break;
@@ -388,6 +416,7 @@ bool XMLStreamWriter::needsAttributeEscaping(const char* text, size_t length) co
     for (size_t i = 0; i < length; i++) {
         switch (text[i]) {
             case '&':
+            case '\'':
             case '<':
             case '>':
             case '\"':

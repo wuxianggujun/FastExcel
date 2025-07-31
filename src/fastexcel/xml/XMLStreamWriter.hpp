@@ -62,6 +62,9 @@ private:
     bool owns_file_ = false;
     bool direct_file_mode_ = false;  // 直接文件写入模式
     
+    // 缓冲模式下累积全部输出
+    std::string whole_;  // 新增：仅在缓冲模式下累积全部输出
+    
     // 属性批处理
     struct XMLAttribute {
         std::string key;
