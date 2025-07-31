@@ -36,7 +36,7 @@ protected:
         }
         
         // 清理测试文件
-        std::filesystem::remove_all(test_dir_);
+        // std::filesystem::remove_all(test_dir_);
         
         // 关闭日志系统
         fastexcel::Logger::getInstance().shutdown();

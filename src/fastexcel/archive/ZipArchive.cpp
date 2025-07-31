@@ -104,40 +104,42 @@ bool ZipArchive::extractFile(const std::string& internal_path, std::vector<uint8
         LOG_ERROR("Zip archive not opened for reading");
         return false;
     }
-    
-    int32_t result = mz_zip_reader_locate_entry(unzip_handle_, internal_path.c_str(), true);
-    if (result != MZ_OK) {
+
+    // 先跳到第一个条目
+    if (mz_zip_reader_goto_first_entry(unzip_handle_) != MZ_OK)
+        return false;
+
+    std::vector<uint8_t> latest;   // 保存最后一次匹配到的内容
+    bool found = false;            // 标记是否找到匹配的文件
+    do {
+        mz_zip_file* info = nullptr;
+        if (mz_zip_reader_entry_get_info(unzip_handle_, &info) != MZ_OK || !info)
+            break;
+
+        if (info->filename && internal_path == info->filename) {
+            // 读取当前条目，结果放进 latest
+            if (mz_zip_reader_entry_open(unzip_handle_) == MZ_OK) {
+                std::vector<uint8_t> buf(info->uncompressed_size);
+                int32_t read = info->uncompressed_size > 0
+                                ? mz_zip_reader_entry_read(unzip_handle_,
+                                                           buf.data(),
+                                                           static_cast<int32_t>(info->uncompressed_size))
+                                : 0;
+                mz_zip_reader_entry_close(unzip_handle_);
+                if (read == static_cast<int32_t>(info->uncompressed_size)) {
+                    latest.swap(buf);               // 覆盖为"最后一次"
+                    found = true;                   // 标记已找到
+                }
+            }
+        }
+    } while (mz_zip_reader_goto_next_entry(unzip_handle_) == MZ_OK);
+
+    if (!found) {                                    // 没找到
         LOG_ERROR("File {} not found in zip archive", internal_path);
         return false;
     }
-    
-    result = mz_zip_reader_entry_open(unzip_handle_);
-    if (result != MZ_OK) {
-        LOG_ERROR("Failed to open file {} in zip archive", internal_path);
-        return false;
-    }
-    
-    // 获取文件大小
-    mz_zip_file* file_info = nullptr;
-    result = mz_zip_reader_entry_get_info(unzip_handle_, &file_info);
-    if (result != MZ_OK || !file_info) {
-        LOG_ERROR("Failed to get file info for {}", internal_path);
-        mz_zip_reader_entry_close(unzip_handle_);
-        return false;
-    }
-    
-    // 读取文件内容
-    data.resize(file_info->uncompressed_size);
-    int32_t bytes_read = mz_zip_reader_entry_read(unzip_handle_, data.data(), static_cast<int32_t>(file_info->uncompressed_size));
-    
-    mz_zip_reader_entry_close(unzip_handle_);
-    
-    if (bytes_read != static_cast<int32_t>(file_info->uncompressed_size)) {
-        LOG_ERROR("Failed to read complete file {} from zip", internal_path);
-        return false;
-    }
-    
-    LOG_DEBUG("Extracted file {} from zip, size: {} bytes", internal_path, bytes_read);
+    data.swap(latest);
+    LOG_DEBUG("Extracted file {} from zip, size: {} bytes", internal_path, data.size());
     return true;
 }
 
@@ -203,8 +205,17 @@ bool ZipArchive::initForWriting() {
     mz_zip_writer_set_compress_level(zip_handle_, MZ_COMPRESS_LEVEL_DEFAULT);
     mz_zip_writer_set_compress_method(zip_handle_, MZ_COMPRESS_METHOD_DEFLATE);
     
-    // 打开文件进行写入，如果文件已存在则覆盖
-    int32_t result = mz_zip_writer_open_file(zip_handle_, filename_.c_str(), 0, 0);
+    // 设置覆盖回调函数，总是覆盖已存在的文件
+    mz_zip_writer_set_overwrite_cb(zip_handle_, this, [](void* handle, void* userdata, const char* filename) -> int32_t {
+        // 总是覆盖已存在的文件
+        return MZ_OK;
+    });
+    
+    // 检查文件是否存在
+    bool file_exists = std::filesystem::exists(filename_);
+    
+    // 打开文件进行写入，如果文件已存在则追加，否则创建
+    int32_t result = mz_zip_writer_open_file(zip_handle_, filename_.c_str(), 0, file_exists ? 1 : 0);
     if (result != MZ_OK) {
         LOG_ERROR("Failed to open zip file for writing: {}, error: {}", filename_, result);
         mz_zip_writer_delete(&zip_handle_);
