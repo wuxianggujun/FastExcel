@@ -119,8 +119,9 @@ int main() {
     // 测试4: 直接文件写入模式
     std::cout << "\n4. 测试直接文件写入模式..." << std::endl;
     {
-        FILE* file = fopen("test_direct.xml", "wb");
-        if (!file) {
+        FILE* file = nullptr;
+        errno_t err = fopen_s(&file, "test_direct.xml", "wb");
+        if (err != 0 || !file) {
             std::cerr << "无法创建文件" << std::endl;
             return 1;
         }
@@ -186,8 +187,9 @@ int main() {
     // 测试6: 大文件测试
     std::cout << "\n6. 大文件测试..." << std::endl;
     {
-        FILE* file = fopen("test_large.xml", "wb");
-        if (!file) {
+        FILE* file = nullptr;
+        errno_t err = fopen_s(&file, "test_large.xml", "wb");
+        if (err != 0 || !file) {
             std::cerr << "无法创建文件" << std::endl;
             return 1;
         }

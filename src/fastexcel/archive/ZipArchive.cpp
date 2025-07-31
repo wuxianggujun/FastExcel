@@ -6,6 +6,7 @@
 #include <mz_zip_rw.h>
 #include <cstring>
 #include <cstdio>
+#include <filesystem>
 
 namespace fastexcel {
 namespace archive {
@@ -57,10 +58,11 @@ bool ZipArchive::addFile(const std::string& internal_path, const void* data, siz
     file_info.version_madeby = 0;
     file_info.version_needed = 20;
     
+    // 使用 mz_zip_writer_add_buffer 函数添加文件
     int32_t result = mz_zip_writer_add_buffer(zip_handle_,
-                                           const_cast<void*>(data),
-                                           static_cast<int32_t>(size),
-                                           &file_info);
+                                            const_cast<void*>(data),
+                                            static_cast<int32_t>(size),
+                                            &file_info);
     
     if (result != MZ_OK) {
         LOG_ERROR("Failed to add file {} to zip, error: {}", internal_path, result);

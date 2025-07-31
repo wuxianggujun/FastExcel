@@ -116,5 +116,3 @@ FASTEXCEL_API bool initialize(const std::string& log_file_path = "logs/fastexcel
 FASTEXCEL_API void cleanup();
 
 } // namespace fastexcel
-
-#endif // FASTEXCEL_FASTEXCEL_H

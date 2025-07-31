@@ -205,8 +205,9 @@ void XMLStreamWriter::clear() {
 }
 
 bool XMLStreamWriter::writeToFile(const std::string& filename) {
-    FILE* file = fopen(filename.c_str(), "wb");
-    if (!file) {
+    FILE* file = nullptr;
+    errno_t err = fopen_s(&file, filename.c_str(), "wb");
+    if (err != 0 || !file) {
         LOG_ERROR("Failed to open file '{}' for writing", filename);
         return false;
     }
