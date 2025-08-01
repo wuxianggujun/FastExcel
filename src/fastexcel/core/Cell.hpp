@@ -12,14 +12,14 @@ class Format;
 
 enum class CellType : uint8_t {
     Empty = 0,
-    Number,
-    String,
-    InlineString,    // 短字符串内联存储
-    Boolean,
-    Formula,
-    Date,
-    Error,
-    Hyperlink
+    Number = 1,
+    String = 2,
+    Boolean = 3,
+    Formula = 4,
+    Date = 5,
+    Error = 6,
+    Hyperlink = 7,
+    InlineString = 8    // 短字符串内联存储（内部使用）
 };
 
 class Cell {
