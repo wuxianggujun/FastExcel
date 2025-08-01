@@ -141,7 +141,7 @@ try {
 
 ## Workbook 类
 
-工作簿是 Excel 文件的主容器，管理所有工作表和全局设置。
+工作簿是 Excel 文件的主容器，管理所有工作表和全局设置。提供智能工作表命名、格式索引管理和完善的异常处理。
 
 ### 类定义
 
@@ -200,6 +200,54 @@ public:
     std::string generateRelsXML() const;
 };
 }
+```
+
+### 新增功能和改进
+
+#### 1. 智能工作表命名
+```cpp
+// 自动生成唯一工作表名称
+auto sheet1 = workbook->addWorksheet();        // 自动命名为 "Sheet1"
+auto sheet2 = workbook->addWorksheet();        // 自动命名为 "Sheet2"
+auto sheet3 = workbook->addWorksheet("Data");  // 指定名称 "Data"
+auto sheet4 = workbook->addWorksheet("Data");  // 自动处理重复，命名为 "Data1"
+```
+
+#### 2. 格式索引管理
+```cpp
+// 格式索引从0开始，符合Excel标准
+auto format1 = workbook->createFormat();  // 索引 0
+auto format2 = workbook->createFormat();  // 索引 1
+auto format3 = workbook->createFormat();  // 索引 2
+```
+
+#### 3. 完善的异常处理
+```cpp
+try {
+    auto workbook = Workbook::create("test.xlsx");
+    workbook->open();
+    
+    // 未打开工作簿时的操作会抛出异常
+    auto sheet = workbook->addWorksheet("Test");  // 如果未open()会抛出异常
+    
+    workbook->save();
+} catch (const FastExcelException& e) {
+    std::cout << "错误: " << e.what() << std::endl;
+    std::cout << "错误码: " << static_cast<int>(e.getErrorCode()) << std::endl;
+}
+```
+
+#### 4. 自定义属性类型安全
+```cpp
+// 支持多种数据类型的自定义属性
+workbook->setCustomProperty("部门", "销售部");           // 字符串
+workbook->setCustomProperty("预算", 100000.0);          // 浮点数
+workbook->setCustomProperty("员工数量", 25);            // 整数
+workbook->setCustomProperty("是否激活", true);          // 布尔值
+
+// 获取自定义属性时会保持类型
+std::string dept = workbook->getCustomProperty("部门").asString();
+double budget = workbook->getCustomProperty("预算").asDouble();
 ```
 
 ### 使用示例
@@ -560,14 +608,14 @@ worksheet->writeNumber(3, 0, 0.1234, percent_format);
 
 ## Cell 类
 
-单元格类存储单元格的数据、格式和超链接信息。
+单元格类存储单元格的数据、格式和超链接信息。支持内联字符串优化，提升短字符串处理性能。
 
 ### 类定义
 
 ```cpp
 namespace fastexcel::core {
 enum class CellType {
-    Empty, String, Number, Boolean, Date, Formula, Error
+    Empty, String, Number, Boolean, Date, Formula, Error, InlineString
 };
 
 class Cell {
@@ -588,7 +636,8 @@ public:
     void setFormula(const std::string& formula);
     
     // 获取值
-    CellType getType() const;
+    CellType getType() const;                    // 外部API统一类型
+    CellType getInternalType() const;            // 内部实际类型（用于测试）
     std::string getStringValue() const;
     double getNumberValue() const;
     bool getBooleanValue() const;
@@ -610,10 +659,33 @@ public:
     bool isBoolean() const;
     bool isFormula() const;
     
+    // 内存使用统计
+    size_t getMemoryUsage() const;
+    
     // 清空单元格
     void clear();
 };
 }
+```
+
+### 内联字符串优化
+
+FastExcel 实现了智能的内联字符串优化：
+
+- **短字符串（≤15字符）**: 直接存储在 Cell 对象内部，避免额外内存分配
+- **长字符串（>15字符）**: 使用传统的堆分配存储
+- **自动选择**: 根据字符串长度自动选择最优存储方式
+- **API透明**: 对外API保持一致，内部优化对用户透明
+
+```cpp
+// 示例：内联字符串优化
+Cell cell;
+cell.setValue("短文本");        // 内联存储，高性能
+cell.setValue("这是一个很长的字符串内容，超过15个字符"); // 堆存储
+
+// API使用完全相同
+std::string value = cell.getStringValue();
+CellType type = cell.getType(); // 始终返回 CellType::String
 ```
 
 ### 使用示例
