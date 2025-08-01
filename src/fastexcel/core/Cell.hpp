@@ -71,6 +71,7 @@ public:
     void setValue(double value);
     void setValue(bool value);
     void setValue(const std::string& value);
+    void setValue(const char* value) { setValue(std::string(value)); }  // 避免隐式转换到bool
     void setValue(int value) { setValue(static_cast<double>(value)); }
     
     // 公式设置
