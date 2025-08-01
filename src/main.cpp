@@ -3,33 +3,33 @@
 
 int main()
 {
-    // 初始化日志系统
+    // Initialize logging system
     fastexcel::Logger::getInstance().initialize("logs/fastexcel.log", 
                                                fastexcel::Logger::Level::DEBUG, 
                                                true);
     
-    // 测试不同级别的日志
-    LOG_TRACE("这是一条跟踪日志");
-    LOG_DEBUG("这是一条调试日志");
-    LOG_INFO("这是一条信息日志");
-    LOG_WARN("这是一条警告日志");
-    LOG_ERROR("这是一条错误日志");
-    LOG_CRITICAL("这是一条严重错误日志");
+    // Test different log levels
+    LOG_TRACE("This is a trace log");
+    LOG_DEBUG("This is a debug log");
+    LOG_INFO("This is an info log");
+    LOG_WARN("This is a warning log");
+    LOG_ERROR("This is an error log");
+    LOG_CRITICAL("This is a critical log");
     
-    // 测试带参数的日志
-    std::string user = "张三";
+    // Test parameterized logging
+    std::string user = "John";
     int age = 25;
-    LOG_INFO("用户信息: 姓名={}, 年龄={}", user, age);
+    LOG_INFO("User info: name={}, age={}", user, age);
     
-    // 测试中文字符
-    LOG_INFO("FastExcel 日志系统初始化完成! 支持中文输出!");
+    // Test Chinese characters
+    LOG_INFO("FastExcel logging system initialized! Supports Chinese output!");
     
-    // 刷新日志
+    // Flush logs
     fastexcel::Logger::getInstance().flush();
     
-    std::cout << "日志测试完成，请查看控制台输出和日志文件！" << std::endl;
+    std::cout << "Log test completed, please check console output and log file!" << std::endl;
     
-    // 显式关闭日志系统，避免析构顺序问题
+    // Explicitly shutdown logging system to avoid destructor order issues
     fastexcel::Logger::getInstance().shutdown();
     
     return 0;

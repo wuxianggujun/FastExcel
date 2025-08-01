@@ -1,6 +1,5 @@
 #pragma once
 
-// 防止 Windows 宏冲突
 #ifdef _WIN32
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
@@ -10,14 +9,19 @@
 #endif
 #endif
 
-#include <spdlog/spdlog.h>
-#include <spdlog/sinks/stdout_color_sinks.h>
-#include <spdlog/sinks/daily_file_sink.h>
-#include <spdlog/sinks/rotating_file_sink.h>
 #include <memory>
 #include <string>
+#include <fstream>
+#include <iostream>
+#include <mutex>
+#include <chrono>
+#include <iomanip>
+#include <sstream>
+#include <vector>
+#include <atomic>
+#include <fmt/format.h>
+#include <fmt/chrono.h>
 
-// 取消可能冲突的 Windows 宏定义
 #ifdef ERROR
 #undef ERROR
 #endif
@@ -27,13 +31,13 @@ namespace fastexcel {
 class Logger {
 public:
     enum class Level {
-        TRACE = SPDLOG_LEVEL_TRACE,
-        DEBUG = SPDLOG_LEVEL_DEBUG,
-        INFO = SPDLOG_LEVEL_INFO,
-        WARN = SPDLOG_LEVEL_WARN,
-        ERROR = SPDLOG_LEVEL_ERROR,
-        CRITICAL = SPDLOG_LEVEL_CRITICAL,
-        OFF = SPDLOG_LEVEL_OFF
+        TRACE = 0,
+        DEBUG = 1,
+        INFO = 2,
+        WARN = 3,
+        ERROR = 4,
+        CRITICAL = 5,
+        OFF = 6
     };
 
     static Logger& getInstance();
@@ -41,51 +45,82 @@ public:
     void initialize(const std::string& log_file_path = "logs/fastexcel.log", 
                    Level level = Level::INFO, 
                    bool enable_console = true,
-                   size_t max_file_size = 10 * 1024 * 1024,  // 10MB
+                   size_t max_file_size = 10 * 1024 * 1024,
                    size_t max_files = 5);
     
     void setLevel(Level level);
     Level getLevel() const;
     
+    void trace(const std::string& message);
+    void debug(const std::string& message);
+    void info(const std::string& message);
+    void warn(const std::string& message);
+    void error(const std::string& message);
+    void critical(const std::string& message);
+    
     template<typename... Args>
-    void trace(const std::string& fmt, Args&&... args) {
-        if (logger_) {
-            logger_->trace(fmt, std::forward<Args>(args)...);
+    inline void trace(const std::string& fmt_str, Args&&... args) {
+        if (should_log(Level::TRACE)) {
+            try {
+                trace(fmt::format(fmt_str, std::forward<Args>(args)...));
+            } catch (...) {
+                trace(fmt_str);
+            }
         }
     }
     
     template<typename... Args>
-    void debug(const std::string& fmt, Args&&... args) {
-        if (logger_) {
-            logger_->debug(fmt, std::forward<Args>(args)...);
+    inline void debug(const std::string& fmt_str, Args&&... args) {
+        if (should_log(Level::DEBUG)) {
+            try {
+                debug(fmt::format(fmt_str, std::forward<Args>(args)...));
+            } catch (...) {
+                debug(fmt_str);
+            }
         }
     }
     
     template<typename... Args>
-    void info(const std::string& fmt, Args&&... args) {
-        if (logger_) {
-            logger_->info(fmt, std::forward<Args>(args)...);
+    inline void info(const std::string& fmt_str, Args&&... args) {
+        if (should_log(Level::INFO)) {
+            try {
+                info(fmt::format(fmt_str, std::forward<Args>(args)...));
+            } catch (...) {
+                info(fmt_str);
+            }
         }
     }
     
     template<typename... Args>
-    void warn(const std::string& fmt, Args&&... args) {
-        if (logger_) {
-            logger_->warn(fmt, std::forward<Args>(args)...);
+    inline void warn(const std::string& fmt_str, Args&&... args) {
+        if (should_log(Level::WARN)) {
+            try {
+                warn(fmt::format(fmt_str, std::forward<Args>(args)...));
+            } catch (...) {
+                warn(fmt_str);
+            }
         }
     }
     
     template<typename... Args>
-    void error(const std::string& fmt, Args&&... args) {
-        if (logger_) {
-            logger_->error(fmt, std::forward<Args>(args)...);
+    inline void error(const std::string& fmt_str, Args&&... args) {
+        if (should_log(Level::ERROR)) {
+            try {
+                error(fmt::format(fmt_str, std::forward<Args>(args)...));
+            } catch (...) {
+                error(fmt_str);
+            }
         }
     }
     
     template<typename... Args>
-    void critical(const std::string& fmt, Args&&... args) {
-        if (logger_) {
-            logger_->critical(fmt, std::forward<Args>(args)...);
+    inline void critical(const std::string& fmt_str, Args&&... args) {
+        if (should_log(Level::CRITICAL)) {
+            try {
+                critical(fmt::format(fmt_str, std::forward<Args>(args)...));
+            } catch (...) {
+                critical(fmt_str);
+            }
         }
     }
     
@@ -98,11 +133,28 @@ private:
     Logger(const Logger&) = delete;
     Logger& operator=(const Logger&) = delete;
     
-    std::shared_ptr<spdlog::logger> logger_;
-    Level current_level_ = Level::INFO;
+    bool should_log(Level level) const;
+    void log_to_console(Level level, const std::string& message);
+    void log_to_file(const std::string& message);
+    std::string format_message(Level level, const std::string& message) const;
+    std::string level_to_string(Level level) const;
+    std::string get_timestamp() const;
+    void rotate_file_if_needed();
+    std::string get_rotated_filename(size_t index) const;
+    
+    mutable std::mutex mutex_;
+    std::atomic<Level> current_level_{Level::INFO};
+    std::atomic<bool> initialized_{false};
+    std::atomic<bool> enable_console_{true};
+    std::atomic<bool> shutting_down_{false};
+    
+    std::string log_file_path_;
+    std::ofstream file_stream_;
+    std::atomic<size_t> current_file_size_{0};
+    size_t max_file_size_ = 10 * 1024 * 1024;
+    size_t max_files_ = 5;
 };
 
-// 便捷宏定义
 #define LOG_TRACE(...)    fastexcel::Logger::getInstance().trace(__VA_ARGS__)
 #define LOG_DEBUG(...)    fastexcel::Logger::getInstance().debug(__VA_ARGS__)
 #define LOG_INFO(...)     fastexcel::Logger::getInstance().info(__VA_ARGS__)
@@ -110,4 +162,4 @@ private:
 #define LOG_ERROR(...)    fastexcel::Logger::getInstance().error(__VA_ARGS__)
 #define LOG_CRITICAL(...) fastexcel::Logger::getInstance().critical(__VA_ARGS__)
 
-} // namespace fastexcel
+}

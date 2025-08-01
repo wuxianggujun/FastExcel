@@ -4,7 +4,7 @@ project(FastExcel VERSION 1.0.0 LANGUAGES CXX C)
 # =============================================================================
 # 项目配置选项
 # =============================================================================
-option(FASTEXCEL_BUILD_SHARED_LIBS "Build FastExcel as shared library" ON)
+option(FASTEXCEL_BUILD_SHARED_LIBS "Build FastExcel as shared library" OFF)
 option(FASTEXCEL_USE_SYSTEM_LIBS "Use system libraries when available" OFF)
 option(FASTEXCEL_BUILD_EXAMPLES "Build example programs" OFF)
 option(FASTEXCEL_BUILD_TESTS "Build all tests" ON)
@@ -93,7 +93,7 @@ target_include_directories(fastexcel PRIVATE
 # 确保第三方库的头文件能被找到
 target_include_directories(fastexcel PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/third_party/libexpat/expat/lib
-    ${CMAKE_CURRENT_SOURCE_DIR}/third_party/spdlog/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/third_party/fmt/include
     ${CMAKE_CURRENT_SOURCE_DIR}/third_party/minizip-ng
 )
 
@@ -101,10 +101,17 @@ target_include_directories(fastexcel PRIVATE
 # 链接库配置
 # =============================================================================
 target_link_libraries(fastexcel PRIVATE
-    ${FASTEXCEL_SPDLOG_TARGET}
+    ${FASTEXCEL_FMT_TARGET}
     ${FASTEXCEL_EXPAT_TARGET}
-    ${FASTEXCEL_MINIZIP_TARGET}
 )
+
+# 只有当 minizip 目标存在时才链接
+if(FASTEXCEL_MINIZIP_TARGET AND NOT FASTEXCEL_MINIZIP_TARGET STREQUAL "")
+    target_link_libraries(fastexcel PRIVATE ${FASTEXCEL_MINIZIP_TARGET})
+    message(STATUS "FastExcel: Linking with minizip target: ${FASTEXCEL_MINIZIP_TARGET}")
+else()
+    message(WARNING "FastExcel: minizip target not available, ZipArchive functionality will be limited")
+endif()
 
 # =============================================================================
 # 编译器配置
@@ -125,6 +132,17 @@ endif()
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp")
     add_executable(${PROJECT_NAME} src/main.cpp)
     target_link_libraries(${PROJECT_NAME} PRIVATE fastexcel)
+    
+    # 确保主程序也能访问第三方库的头文件
+    target_include_directories(${PROJECT_NAME} PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/third_party/fmt/include
+        ${FASTEXCEL_THIRD_PARTY_INCLUDE_DIRS}
+    )
+    
+    # 为主程序添加UTF-8编译选项
+    if(MSVC)
+        target_compile_options(${PROJECT_NAME} PRIVATE /utf-8)
+    endif()
     
     set_target_properties(${PROJECT_NAME} PROPERTIES
         OUTPUT_NAME "fastexcel_demo"

@@ -1,9 +1,11 @@
 #include "fastexcel/archive/FileManager.hpp"
+#include "fastexcel/utils/Logger.hpp"
 #include "fastexcel/xml/ContentTypes.hpp"
 #include "fastexcel/xml/Relationships.hpp"
-#include "fastexcel/utils/Logger.hpp"
-#include <sstream>
+
+#include <chrono>
 #include <iomanip>
+#include <sstream>
 
 namespace fastexcel {
 namespace archive {

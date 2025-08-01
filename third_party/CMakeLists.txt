@@ -2,37 +2,35 @@
 cmake_minimum_required(VERSION 3.10)
 
 # 构建选项
-option(FASTEXCEL_BUILD_SHARED_LIBS "Build shared libraries" ON)
 option(FASTEXCEL_USE_SYSTEM_LIBS "Use system libraries when available" OFF)
 
 # 设置第三方库的构建类型
-if(FASTEXCEL_BUILD_SHARED_LIBS)
-    set(BUILD_SHARED_LIBS ON CACHE BOOL "" FORCE)
-    message(STATUS "FastExcel: Building with shared libraries")
-else()
-    set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
-    message(STATUS "FastExcel: Building with static libraries")
-endif()
+# 注意：所有第三方库强制构建为静态库以避免符号冲突和导入库问题
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+message(STATUS "FastExcel: Building third-party libraries as static")
 
 # =============================================================================
-# spdlog 配置
+# fmt 配置
 # =============================================================================
-set(SPDLOG_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-set(SPDLOG_BUILD_TESTS_HO OFF CACHE BOOL "" FORCE)
-set(SPDLOG_BUILD_EXAMPLE OFF CACHE BOOL "" FORCE)
-set(SPDLOG_BUILD_BENCH OFF CACHE BOOL "" FORCE)
+set(FMT_DOC OFF CACHE BOOL "" FORCE)
+set(FMT_TEST OFF CACHE BOOL "" FORCE)
+set(FMT_FUZZ OFF CACHE BOOL "" FORCE)
+set(FMT_CUDA_TEST OFF CACHE BOOL "" FORCE)
+set(FMT_OS ON CACHE BOOL "" FORCE)
+set(FMT_MODULE OFF CACHE BOOL "" FORCE)
+set(FMT_SYSTEM_HEADERS OFF CACHE BOOL "" FORCE)
 
 if(FASTEXCEL_USE_SYSTEM_LIBS)
-    find_package(spdlog QUIET)
+    find_package(fmt QUIET)
 endif()
 
-if(NOT spdlog_FOUND)
-    add_subdirectory(spdlog)
-    # 使用直接的目标名称而不是别名
-    set(SPDLOG_TARGET spdlog)
+if(NOT fmt_FOUND)
+    add_subdirectory(fmt)
+    # 使用直接的目标名称
+    set(FMT_TARGET fmt::fmt)
 else()
-    set(SPDLOG_TARGET spdlog::spdlog)
-    message(STATUS "FastExcel: Using system spdlog")
+    set(FMT_TARGET fmt::fmt)
+    message(STATUS "FastExcel: Using system fmt")
 endif()
 
 # =============================================================================
@@ -44,14 +42,9 @@ set(EXPAT_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(EXPAT_BUILD_DOCS OFF CACHE BOOL "" FORCE)
 set(EXPAT_BUILD_FUZZERS OFF CACHE BOOL "" FORCE)
 
-# 根据构建类型设置 expat
-if(FASTEXCEL_BUILD_SHARED_LIBS)
-    set(EXPAT_BUILD_SHARED ON CACHE BOOL "" FORCE)
-    set(EXPAT_SHARED_LIBS ON CACHE BOOL "" FORCE)
-else()
-    set(EXPAT_BUILD_SHARED OFF CACHE BOOL "" FORCE)
-    set(EXPAT_SHARED_LIBS OFF CACHE BOOL "" FORCE)
-endif()
+# 强制 expat 构建为静态库
+set(EXPAT_BUILD_SHARED OFF CACHE BOOL "" FORCE)
+set(EXPAT_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 
 if(FASTEXCEL_USE_SYSTEM_LIBS)
     find_package(expat QUIET)
@@ -96,9 +89,18 @@ set(MZ_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(MZ_BUILD_UNIT_TESTS OFF CACHE BOOL "" FORCE)
 set(MZ_BUILD_FUZZ_TESTS OFF CACHE BOOL "" FORCE)
 set(MZ_COMPAT ON CACHE BOOL "" FORCE)       # 启用兼容层
+set(MZ_PKCRYPT ON CACHE BOOL "" FORCE)      # 启用传统加密，确保有基本功能
+set(MZ_WZAES OFF CACHE BOOL "" FORCE)       # 禁用WinZIP AES加密
+set(MZ_OPENSSL OFF CACHE BOOL "" FORCE)     # 禁用OpenSSL
+set(MZ_COMPRESS_ONLY OFF CACHE BOOL "" FORCE)
+set(MZ_DECOMPRESS_ONLY OFF CACHE BOOL "" FORCE)
 
 add_subdirectory(minizip-ng)
-set(MINIZIP_TARGET MINIZIP::minizip)
+
+# 确定正确的目标名称
+set(MINIZIP_TARGET minizip)  # 由于 MZ_COMPAT=ON 且 MZ_LIB_SUFFIX=""，目标名称应该是 minizip
+
+message(STATUS "FastExcel: minizip target set to: ${MINIZIP_TARGET}")
 
 # =============================================================================
 # GoogleTest 配置 (仅在需要测试时)
@@ -127,7 +129,7 @@ endif()
 # =============================================================================
 # 导出目标变量给父项目使用
 # =============================================================================
-set(FASTEXCEL_SPDLOG_TARGET ${SPDLOG_TARGET} PARENT_SCOPE)
+set(FASTEXCEL_FMT_TARGET ${FMT_TARGET} PARENT_SCOPE)
 set(FASTEXCEL_EXPAT_TARGET ${EXPAT_TARGET} PARENT_SCOPE)
 set(FASTEXCEL_ZLIB_TARGET ${ZLIB_TARGET} PARENT_SCOPE)
 set(FASTEXCEL_MINIZIP_TARGET ${MINIZIP_TARGET} PARENT_SCOPE)
@@ -139,7 +141,7 @@ endif()
 # 导出包含目录
 set(FASTEXCEL_THIRD_PARTY_INCLUDE_DIRS
     ${CMAKE_CURRENT_SOURCE_DIR}/libexpat/expat/lib
-    ${CMAKE_CURRENT_SOURCE_DIR}/spdlog/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/fmt/include
     ${CMAKE_CURRENT_SOURCE_DIR}/minizip-ng
     PARENT_SCOPE
 )

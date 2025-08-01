@@ -1,8 +1,10 @@
-#include "fastexcel/xml/XMLStreamReader.hpp"
 #include "fastexcel/utils/Logger.hpp"
+#include "fastexcel/xml/XMLStreamReader.hpp"
+
+#include <chrono>
+#include <fstream>
 #include <gtest/gtest.h>
 #include <sstream>
-#include <fstream>
 
 namespace fastexcel {
 namespace xml {
