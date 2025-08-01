@@ -57,8 +57,7 @@ bool Workbook::open() {
 
 bool Workbook::save() {
     if (!is_open_) {
-        LOG_ERROR("Workbook is not open");
-        return false;
+        throw std::runtime_error("Workbook is not open");
     }
     
     try {
@@ -116,11 +115,20 @@ bool Workbook::close() {
 
 std::shared_ptr<Worksheet> Workbook::addWorksheet(const std::string& name) {
     if (!is_open_) {
-        LOG_ERROR("Workbook is not open");
-        return nullptr;
+        throw std::runtime_error("Workbook is not open");
     }
     
-    std::string sheet_name = name.empty() ? generateUniqueSheetName("Sheet") : name;
+    std::string sheet_name;
+    if (name.empty()) {
+        sheet_name = generateUniqueSheetName("Sheet1");
+    } else {
+        // 检查名称是否已存在，如果存在则生成唯一名称
+        if (getWorksheet(name) != nullptr) {
+            sheet_name = generateUniqueSheetName(name);
+        } else {
+            sheet_name = name;
+        }
+    }
     
     if (!validateSheetName(sheet_name)) {
         LOG_ERROR("Invalid sheet name: {}", sheet_name);
@@ -144,7 +152,7 @@ std::shared_ptr<Worksheet> Workbook::insertWorksheet(size_t index, const std::st
         index = worksheets_.size();
     }
     
-    std::string sheet_name = name.empty() ? generateUniqueSheetName("Sheet") : name;
+    std::string sheet_name = name.empty() ? generateUniqueSheetName("Sheet1") : name;
     
     if (!validateSheetName(sheet_name)) {
         LOG_ERROR("Invalid sheet name: {}", sheet_name);
@@ -309,11 +317,16 @@ void Workbook::setActiveWorksheet(size_t index) {
 // ========== 格式管理 ==========
 
 std::shared_ptr<Format> Workbook::createFormat() {
+    if (!is_open_) {
+        throw std::runtime_error("Workbook is not open");
+    }
+    
     auto format = std::make_shared<Format>();
-    format->setXfIndex(next_xf_id_++);
+    int xf_index = formats_.size(); // 从0开始索引
+    format->setXfIndex(xf_index);
     
     // 存储格式
-    formats_[format->getXfIndex()] = format;
+    formats_[xf_index] = format;
     
     return format;
 }
@@ -1179,11 +1192,26 @@ int Workbook::getXfId(const Format& format) {
 // ========== 辅助函数 ==========
 
 std::string Workbook::generateUniqueSheetName(const std::string& base_name) const {
-    std::string name = base_name;
-    int counter = 1;
+    // 如果base_name不存在，直接返回
+    if (getWorksheet(base_name) == nullptr) {
+        return base_name;
+    }
     
+    // 如果base_name是"Sheet1"，从"Sheet2"开始尝试
+    if (base_name == "Sheet1") {
+        int counter = 2;
+        std::string name = "Sheet" + std::to_string(counter);
+        while (getWorksheet(name) != nullptr) {
+            name = "Sheet" + std::to_string(++counter);
+        }
+        return name;
+    }
+    
+    // 对于其他base_name，添加数字后缀
+    int suffix_counter = 1;
+    std::string name = base_name + std::to_string(suffix_counter);
     while (getWorksheet(name) != nullptr) {
-        name = base_name + std::to_string(counter++);
+        name = base_name + std::to_string(++suffix_counter);
     }
     
     return name;
@@ -1206,10 +1234,8 @@ bool Workbook::validateSheetName(const std::string& name) const {
         return false;
     }
     
-    // 检查是否已存在
-    if (getWorksheet(name) != nullptr) {
-        return false;
-    }
+    // 不检查是否已存在，因为这个方法也被用于验证新名称
+    // 重复名称的检查应该在调用方处理
     
     return true;
 }

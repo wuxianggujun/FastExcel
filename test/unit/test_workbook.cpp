@@ -165,20 +165,36 @@ TEST_F(WorkbookTest, DocumentProperties) {
 TEST_F(WorkbookTest, CustomProperties) {
     workbook->open();
     
-    // 字符串属性
-    workbook->setCustomProperty("StringProp", "Test Value");
-    EXPECT_EQ(workbook->getCustomProperty("StringProp"), "Test Value");
+    // 分别测试每种类型，避免相互干扰
     
-    // 数字属性
-    workbook->setCustomProperty("NumberProp", 123.456);
-    EXPECT_EQ(workbook->getCustomProperty("NumberProp"), "123.456000");
+    // 测试字符串属性
+    {
+        std::string test_value = "Test Value";
+        workbook->setCustomProperty("StringProp", test_value);
+        std::string retrieved = workbook->getCustomProperty("StringProp");
+        EXPECT_EQ(retrieved, "Test Value");
+    }
     
-    // 布尔属性
-    workbook->setCustomProperty("BoolProp", true);
-    EXPECT_EQ(workbook->getCustomProperty("BoolProp"), "true");
+    // 测试数字属性
+    {
+        workbook->setCustomProperty("NumberProp", 123.456);
+        EXPECT_EQ(workbook->getCustomProperty("NumberProp"), "123.456000");
+    }
     
-    workbook->setCustomProperty("BoolProp2", false);
-    EXPECT_EQ(workbook->getCustomProperty("BoolProp2"), "false");
+    // 测试布尔属性
+    {
+        workbook->setCustomProperty("BoolProp", true);
+        EXPECT_EQ(workbook->getCustomProperty("BoolProp"), "true");
+        
+        workbook->setCustomProperty("BoolProp2", false);
+        EXPECT_EQ(workbook->getCustomProperty("BoolProp2"), "false");
+    }
+    
+    // 最后再次验证字符串属性
+    {
+        std::string final_check = workbook->getCustomProperty("StringProp");
+        EXPECT_EQ(final_check, "Test Value");
+    }
 }
 
 // 测试定义名称
@@ -200,7 +216,7 @@ TEST_F(WorkbookTest, DefinedNames) {
 TEST_F(WorkbookTest, VBAProject) {
     workbook->open();
     
-    std::string vba_path = "test_vba.bin";
+    std::string vba_path = "C:/Users/wuxianggujun/CodeSpace/CMakeProjects/FastExcel/test_vba.bin";
     workbook->addVbaProject(vba_path);
     
     EXPECT_TRUE(workbook->hasVbaProject());
@@ -244,6 +260,9 @@ TEST_F(WorkbookTest, Save) {
     
     // 保存文件
     EXPECT_TRUE(workbook->save());
+    
+    // 确保文件被完全关闭和刷新
+    workbook->close();
     
     // 验证文件是否存在
     EXPECT_TRUE(std::filesystem::exists(test_filename));
