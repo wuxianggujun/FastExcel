@@ -131,7 +131,7 @@ public:
     // 请使用 const char* 或字符串字面量
     
     // 获取结果（仅在缓冲模式下有效）
-    std::string toString() const;
+    std::string toString();
     void clear();
     
     // 文件操作

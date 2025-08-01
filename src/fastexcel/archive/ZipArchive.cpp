@@ -269,8 +269,14 @@ bool ZipArchive::initForWriting() {
     // 检查文件是否存在
     bool file_exists = std::filesystem::exists(filename_);
     
-    // 打开文件进行写入，如果文件已存在则追加，否则创建
-    int32_t result = mz_zip_writer_open_file(zip_handle_, filename_.c_str(), 0, file_exists ? 1 : 0);
+    // 如果文件已存在，先删除它以确保完全覆盖
+    if (file_exists) {
+        std::filesystem::remove(filename_);
+        LOG_DEBUG("Removed existing zip file: {}", filename_);
+    }
+    
+    // 打开文件进行写入，总是创建新文件（覆盖模式）
+    int32_t result = mz_zip_writer_open_file(zip_handle_, filename_.c_str(), 0, 0);
     if (result != MZ_OK) {
         LOG_ERROR("Failed to open zip file for writing: {}, error: {}", filename_, result);
         // 清理失败的句柄

@@ -200,7 +200,7 @@ void XMLStreamWriter::writeRaw(const std::string& data) {
     writeRawDirect(data.c_str(), data.length());
 }
 
-std::string XMLStreamWriter::toString() const {
+std::string XMLStreamWriter::toString() {
     if (direct_file_mode_) {
         LOG_WARN("toString() called in direct file mode, result may be incomplete");
         return std::string();
@@ -211,6 +211,11 @@ std::string XMLStreamWriter::toString() const {
     result.reserve(whole_.size() + buffer_pos_);
     result.append(whole_);
     result.append(buffer_, buffer_pos_);
+    
+    // 清理缓冲区，避免析构时的警告
+    buffer_pos_ = 0;
+    whole_.clear();
+    
     return result;
 }
 
