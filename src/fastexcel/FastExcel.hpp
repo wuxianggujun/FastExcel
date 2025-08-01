@@ -4,6 +4,7 @@
 // 基于minizip-ng、zlib-ng、libexpat、spdlog等依赖库实现
 
 // 核心组件
+#include "core/Color.hpp"
 #include "core/Cell.hpp"
 #include "core/Format.hpp"
 #include "core/Workbook.hpp"

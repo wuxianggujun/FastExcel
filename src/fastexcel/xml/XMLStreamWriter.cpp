@@ -15,9 +15,13 @@ XMLStreamWriter::XMLStreamWriter() {
 }
 
 XMLStreamWriter::~XMLStreamWriter() {
-    // 如果缓冲区中有数据且用户没有处理，记录警告
+    // 只有在缓冲区中有数据且没有被正常处理时才记录警告
+    // 如果用户调用了toString()或endDocument()，缓冲区应该已经被清理
     if ((buffer_pos_ > 0 || !whole_.empty()) && !direct_file_mode_) {
-        LOG_WARN("XMLStreamWriter destroyed with {} bytes in buffer and {} bytes in whole_", buffer_pos_, whole_.size());
+        // 只有在数据量较大时才记录警告，避免正常使用时的噪音
+        if (buffer_pos_ > 100 || whole_.size() > 100) {
+            LOG_WARN("XMLStreamWriter destroyed with {} bytes in buffer and {} bytes in whole_", buffer_pos_, whole_.size());
+        }
     }
     
     clear();

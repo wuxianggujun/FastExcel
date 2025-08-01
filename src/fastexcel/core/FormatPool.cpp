@@ -17,15 +17,35 @@ FormatKey::FormatKey()
 
 FormatKey::FormatKey(const Format& format) : FormatKey() {
     // 从Format对象提取属性
-    // 注意：这里需要根据实际的Format类接口来实现
-    // 暂时使用默认值，实际实现时需要调用format的getter方法
+    font_name = format.getFontName();
+    font_size = format.getFontSize();
+    bold = format.isBold();
+    italic = format.isItalic();
+    underline = (format.getUnderline() != UnderlineType::None);
+    strikethrough = format.isStrikeout();
+    font_color = format.getFontColor().getRGB();
     
-    // 示例实现（需要根据实际Format接口调整）:
-    // font_name = format.getFontName();
-    // font_size = format.getFontSize();
-    // bold = format.isBold();
-    // italic = format.isItalic();
-    // ... 其他属性
+    // 对齐属性
+    horizontal_align = static_cast<int>(format.getHorizontalAlign());
+    vertical_align = static_cast<int>(format.getVerticalAlign());
+    text_wrap = format.isTextWrap();
+    text_rotation = format.getRotation();
+    
+    // 边框属性（简化为左边框）
+    border_style = static_cast<int>(format.getLeftBorder());
+    border_color = format.getLeftBorderColor().getRGB();
+    
+    // 填充属性
+    pattern = static_cast<int>(format.getPattern());
+    bg_color = format.getBackgroundColor().getRGB();
+    fg_color = format.getForegroundColor().getRGB();
+    
+    // 数字格式
+    number_format = format.getNumberFormat();
+    
+    // 保护属性
+    locked = format.isLocked();
+    hidden = format.isHidden();
 }
 
 bool FormatKey::operator==(const FormatKey& other) const {
@@ -182,37 +202,46 @@ std::string FormatPool::generateStylesXML() const {
     writer.startElement("styleSheet");
     writer.writeAttribute("xmlns", "http://schemas.openxmlformats.org/spreadsheetml/2006/main");
     
+    // 数字格式部分
+    std::vector<std::string> custom_formats;
+    for (const auto& format : formats_) {
+        std::string numFmt = format->generateNumberFormatXML();
+        if (!numFmt.empty()) {
+            custom_formats.push_back(numFmt);
+        }
+    }
+    
+    if (!custom_formats.empty()) {
+        writer.startElement("numFmts");
+        writer.writeAttribute("count", std::to_string(custom_formats.size()).c_str());
+        for (const auto& fmt : custom_formats) {
+            writer.writeRaw(fmt);
+        }
+        writer.endElement(); // numFmts
+    }
+    
     // 字体部分
     writer.startElement("fonts");
     writer.writeAttribute("count", std::to_string(getFormatCount() + 1).c_str());
     
     // 默认字体
-    writer.startElement("font");
-    writer.startElement("sz");
-    writer.writeAttribute("val", "11");
-    writer.endElement(); // sz
-    writer.startElement("name");
-    writer.writeAttribute("val", "Calibri");
-    writer.endElement(); // name
-    writer.endElement(); // font
+    writer.writeRaw(default_format_->generateFontXML());
     
-    // 其他字体（简化实现）
+    // 其他字体
     for (const auto& format : formats_) {
-        writer.startElement("font");
-        writer.startElement("sz");
-        writer.writeAttribute("val", "11");  // 默认大小
-        writer.endElement(); // sz
-        writer.startElement("name");
-        writer.writeAttribute("val", "Calibri");  // 默认字体
-        writer.endElement(); // name
-        writer.endElement(); // font
+        std::string fontXML = format->generateFontXML();
+        if (!fontXML.empty()) {
+            writer.writeRaw(fontXML);
+        } else {
+            writer.writeRaw(default_format_->generateFontXML());
+        }
     }
     
     writer.endElement(); // fonts
     
     // 填充部分
     writer.startElement("fills");
-    writer.writeAttribute("count", "2");
+    writer.writeAttribute("count", std::to_string(getFormatCount() + 2).c_str());
     
     // 默认填充
     writer.startElement("fill");
@@ -227,12 +256,27 @@ std::string FormatPool::generateStylesXML() const {
     writer.endElement(); // patternFill
     writer.endElement(); // fill
     
+    // 其他填充
+    for (const auto& format : formats_) {
+        std::string fillXML = format->generateFillXML();
+        if (!fillXML.empty()) {
+            writer.writeRaw(fillXML);
+        } else {
+            writer.startElement("fill");
+            writer.startElement("patternFill");
+            writer.writeAttribute("patternType", "none");
+            writer.endElement(); // patternFill
+            writer.endElement(); // fill
+        }
+    }
+    
     writer.endElement(); // fills
     
     // 边框部分
     writer.startElement("borders");
-    writer.writeAttribute("count", "1");
+    writer.writeAttribute("count", std::to_string(getFormatCount() + 1).c_str());
     
+    // 默认边框
     writer.startElement("border");
     writer.startElement("left");
     writer.endElement(); // left
@@ -245,6 +289,27 @@ std::string FormatPool::generateStylesXML() const {
     writer.startElement("diagonal");
     writer.endElement(); // diagonal
     writer.endElement(); // border
+    
+    // 其他边框
+    for (const auto& format : formats_) {
+        std::string borderXML = format->generateBorderXML();
+        if (!borderXML.empty()) {
+            writer.writeRaw(borderXML);
+        } else {
+            writer.startElement("border");
+            writer.startElement("left");
+            writer.endElement(); // left
+            writer.startElement("right");
+            writer.endElement(); // right
+            writer.startElement("top");
+            writer.endElement(); // top
+            writer.startElement("bottom");
+            writer.endElement(); // bottom
+            writer.startElement("diagonal");
+            writer.endElement(); // diagonal
+            writer.endElement(); // border
+        }
+    }
     
     writer.endElement(); // borders
     
@@ -274,15 +339,16 @@ std::string FormatPool::generateStylesXML() const {
     writer.writeAttribute("xfId", "0");
     writer.endElement(); // xf
     
-    // 其他格式（简化实现）
+    // 其他格式
     for (size_t i = 0; i < formats_.size(); ++i) {
-        writer.startElement("xf");
-        writer.writeAttribute("numFmtId", "0");
-        writer.writeAttribute("fontId", std::to_string(i + 1).c_str());
-        writer.writeAttribute("fillId", "0");
-        writer.writeAttribute("borderId", "0");
-        writer.writeAttribute("xfId", "0");
-        writer.endElement(); // xf
+        const auto& format = formats_[i];
+        // 设置格式索引
+        format->setFontIndex(i + 1);
+        format->setFillIndex(i + 2);
+        format->setBorderIndex(i + 1);
+        
+        std::string xfXML = format->generateXML();
+        writer.writeRaw(xfXML);
     }
     
     writer.endElement(); // cellXfs
@@ -339,11 +405,44 @@ Format* FormatPool::createFormatFromKey(const FormatKey& key) {
     auto format = std::make_unique<Format>();
     
     // 根据key设置格式属性
-    // 注意：这里需要根据实际的Format类接口来实现
-    // format->setFontName(key.font_name);
-    // format->setFontSize(key.font_size);
-    // format->setBold(key.bold);
-    // ... 其他属性设置
+    // 字体属性
+    format->setFontName(key.font_name);
+    format->setFontSize(key.font_size);
+    format->setBold(key.bold);
+    format->setItalic(key.italic);
+    if (key.underline) {
+        format->setUnderline(UnderlineType::Single);
+    }
+    format->setStrikeout(key.strikethrough);
+    format->setFontColor(key.font_color);
+    
+    // 对齐属性
+    format->setHorizontalAlign(static_cast<HorizontalAlign>(key.horizontal_align));
+    format->setVerticalAlign(static_cast<VerticalAlign>(key.vertical_align));
+    format->setTextWrap(key.text_wrap);
+    format->setRotation(key.text_rotation);
+    
+    // 边框属性
+    if (key.border_style != 0) {
+        format->setBorder(static_cast<BorderStyle>(key.border_style));
+        format->setBorderColor(key.border_color);
+    }
+    
+    // 填充属性
+    if (key.pattern != 0) {
+        format->setPattern(static_cast<PatternType>(key.pattern));
+        format->setBackgroundColor(key.bg_color);
+        format->setForegroundColor(key.fg_color);
+    }
+    
+    // 数字格式
+    if (!key.number_format.empty() && key.number_format != "General") {
+        format->setNumberFormat(key.number_format);
+    }
+    
+    // 保护属性
+    format->setLocked(key.locked);
+    format->setHidden(key.hidden);
     
     Format* format_ptr = format.get();
     size_t index = next_index_++;

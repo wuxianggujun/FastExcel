@@ -21,7 +21,7 @@ void Format::setFontSize(double size) {
 }
 
 void Format::setFontColor(Color color) {
-    font_color_ = color & 0xFFFFFF; // 确保只有RGB部分
+    font_color_ = color;
     markFontChanged();
 }
 
@@ -189,28 +189,27 @@ void Format::setBottomBorder(BorderStyle style) {
 }
 
 void Format::setBorderColor(Color color) {
-    Color masked_color = color & 0xFFFFFF;
-    left_border_color_ = right_border_color_ = top_border_color_ = bottom_border_color_ = masked_color;
+    left_border_color_ = right_border_color_ = top_border_color_ = bottom_border_color_ = color;
     markBorderChanged();
 }
 
 void Format::setLeftBorderColor(Color color) {
-    left_border_color_ = color & 0xFFFFFF;
+    left_border_color_ = color;
     markBorderChanged();
 }
 
 void Format::setRightBorderColor(Color color) {
-    right_border_color_ = color & 0xFFFFFF;
+    right_border_color_ = color;
     markBorderChanged();
 }
 
 void Format::setTopBorderColor(Color color) {
-    top_border_color_ = color & 0xFFFFFF;
+    top_border_color_ = color;
     markBorderChanged();
 }
 
 void Format::setBottomBorderColor(Color color) {
-    bottom_border_color_ = color & 0xFFFFFF;
+    bottom_border_color_ = color;
     markBorderChanged();
 }
 
@@ -225,7 +224,7 @@ void Format::setDiagBorder(BorderStyle style) {
 }
 
 void Format::setDiagColor(Color color) {
-    diag_border_color_ = color & 0xFFFFFF;
+    diag_border_color_ = color;
     markBorderChanged();
 }
 
@@ -249,7 +248,7 @@ void Format::setPattern(PatternType pattern) {
 }
 
 void Format::setBackgroundColor(Color color) {
-    bg_color_ = color & 0xFFFFFF;
+    bg_color_ = color;
     if (pattern_ == PatternType::None) {
         pattern_ = PatternType::Solid;
     }
@@ -257,7 +256,7 @@ void Format::setBackgroundColor(Color color) {
 }
 
 void Format::setForegroundColor(Color color) {
-    fg_color_ = color & 0xFFFFFF;
+    fg_color_ = color;
     markFillChanged();
 }
 
@@ -451,8 +450,8 @@ std::string Format::generateFontXML() const {
     }
     
     // 字体颜色
-    if (font_color_ != COLOR_BLACK) {
-        oss << "<color rgb=\"" << colorToHex(font_color_) << "\"/>";
+    if (font_color_ != Color::BLACK) {
+        oss << font_color_.toXML();
     }
     
     // 字体方案
@@ -477,14 +476,14 @@ std::string Format::generateFillXML() const {
     
     if (pattern_ != PatternType::None) {
         // 前景色
-        if (fg_color_ != COLOR_BLACK || pattern_ == PatternType::Solid) {
+        if (fg_color_ != Color::BLACK || pattern_ == PatternType::Solid) {
             Color color = (pattern_ == PatternType::Solid) ? bg_color_ : fg_color_;
-            oss << "<fgColor rgb=\"" << colorToHex(color) << "\"/>";
+            oss << "<fgColor " << color.toXML().substr(7, color.toXML().length() - 9) << "/>";
         }
         
         // 背景色
-        if (bg_color_ != COLOR_WHITE && pattern_ != PatternType::Solid) {
-            oss << "<bgColor rgb=\"" << colorToHex(bg_color_) << "\"/>";
+        if (bg_color_ != Color::WHITE && pattern_ != PatternType::Solid) {
+            oss << "<bgColor " << bg_color_.toXML().substr(7, bg_color_.toXML().length() - 9) << "/>";
         }
     }
     
@@ -505,7 +504,7 @@ std::string Format::generateBorderXML() const {
     // 左边框
     if (left_border_ != BorderStyle::None) {
         oss << "<left style=\"" << borderStyleToString(left_border_) << "\">";
-        oss << "<color rgb=\"" << colorToHex(left_border_color_) << "\"/>";
+        oss << left_border_color_.toXML();
         oss << "</left>";
     } else {
         oss << "<left/>";
@@ -514,7 +513,7 @@ std::string Format::generateBorderXML() const {
     // 右边框
     if (right_border_ != BorderStyle::None) {
         oss << "<right style=\"" << borderStyleToString(right_border_) << "\">";
-        oss << "<color rgb=\"" << colorToHex(right_border_color_) << "\"/>";
+        oss << right_border_color_.toXML();
         oss << "</right>";
     } else {
         oss << "<right/>";
@@ -523,7 +522,7 @@ std::string Format::generateBorderXML() const {
     // 上边框
     if (top_border_ != BorderStyle::None) {
         oss << "<top style=\"" << borderStyleToString(top_border_) << "\">";
-        oss << "<color rgb=\"" << colorToHex(top_border_color_) << "\"/>";
+        oss << top_border_color_.toXML();
         oss << "</top>";
     } else {
         oss << "<top/>";
@@ -532,7 +531,7 @@ std::string Format::generateBorderXML() const {
     // 下边框
     if (bottom_border_ != BorderStyle::None) {
         oss << "<bottom style=\"" << borderStyleToString(bottom_border_) << "\">";
-        oss << "<color rgb=\"" << colorToHex(bottom_border_color_) << "\"/>";
+        oss << bottom_border_color_.toXML();
         oss << "</bottom>";
     } else {
         oss << "<bottom/>";
@@ -541,7 +540,7 @@ std::string Format::generateBorderXML() const {
     // 对角线边框
     if (diag_border_ != BorderStyle::None && diag_type_ != DiagonalBorderType::None) {
         oss << "<diagonal style=\"" << borderStyleToString(diag_border_) << "\">";
-        oss << "<color rgb=\"" << colorToHex(diag_border_color_) << "\"/>";
+        oss << diag_border_color_.toXML();
         oss << "</diagonal>";
     } else {
         oss << "<diagonal/>";
@@ -649,6 +648,65 @@ std::string Format::generateNumberFormatXML() const {
     return oss.str();
 }
 
+std::string Format::generateXML() const {
+    std::ostringstream oss;
+    oss << "<xf";
+    
+    // 数字格式ID
+    oss << " numFmtId=\"" << num_format_index_ << "\"";
+    
+    // 字体ID
+    oss << " fontId=\"" << font_index_ << "\"";
+    
+    // 填充ID
+    oss << " fillId=\"" << fill_index_ << "\"";
+    
+    // 边框ID
+    oss << " borderId=\"" << border_index_ << "\"";
+    
+    // 父样式ID
+    oss << " xfId=\"0\"";
+    
+    // 应用标志
+    if (has_font_) {
+        oss << " applyFont=\"1\"";
+    }
+    if (has_fill_) {
+        oss << " applyFill=\"1\"";
+    }
+    if (has_border_) {
+        oss << " applyBorder=\"1\"";
+    }
+    if (has_alignment_) {
+        oss << " applyAlignment=\"1\"";
+    }
+    if (has_protection_) {
+        oss << " applyProtection=\"1\"";
+    }
+    if (!num_format_.empty()) {
+        oss << " applyNumberFormat=\"1\"";
+    }
+    
+    // 如果有对齐或保护设置，需要添加子元素
+    if (has_alignment_ || has_protection_) {
+        oss << ">";
+        
+        if (has_alignment_) {
+            oss << generateAlignmentXML();
+        }
+        
+        if (has_protection_) {
+            oss << generateProtectionXML();
+        }
+        
+        oss << "</xf>";
+    } else {
+        oss << "/>";
+    }
+    
+    return oss.str();
+}
+
 // ========== 格式比较和哈希 ==========
 
 bool Format::equals(const Format& other) const {
@@ -691,38 +749,6 @@ size_t Format::hash() const {
     return h1 ^ (h2 << 1) ^ (h3 << 2) ^ (h4 << 3) ^ (h5 << 4);
 }
 
-// ========== 兼容性方法 ==========
-
-void Format::setBorderStyle(const std::string& style, Color color) {
-    BorderStyle border_style = BorderStyle::None;
-    
-    if (style == "thin") border_style = BorderStyle::Thin;
-    else if (style == "medium") border_style = BorderStyle::Medium;
-    else if (style == "thick") border_style = BorderStyle::Thick;
-    else if (style == "double") border_style = BorderStyle::Double;
-    else if (style == "dashed") border_style = BorderStyle::Dashed;
-    else if (style == "dotted") border_style = BorderStyle::Dotted;
-    else if (style == "hair") border_style = BorderStyle::Hair;
-    
-    setBorder(border_style);
-    setBorderColor(color);
-}
-
-void Format::setPattern(const std::string& pattern, Color color) {
-    PatternType pattern_type = PatternType::None;
-    
-    if (pattern == "solid") pattern_type = PatternType::Solid;
-    else if (pattern == "mediumGray") pattern_type = PatternType::MediumGray;
-    else if (pattern == "darkGray") pattern_type = PatternType::DarkGray;
-    else if (pattern == "lightGray") pattern_type = PatternType::LightGray;
-    
-    setPattern(pattern_type);
-    if (pattern_type == PatternType::Solid) {
-        setBackgroundColor(color);
-    } else {
-        setForegroundColor(color);
-    }
-}
 
 // ========== 内部辅助方法 ==========
 
@@ -769,10 +795,5 @@ std::string Format::patternTypeToString(PatternType pattern) const {
     }
 }
 
-std::string Format::colorToHex(Color color) const {
-    std::ostringstream oss;
-    oss << std::hex << std::uppercase << std::setw(6) << std::setfill('0') << (color & 0xFFFFFF);
-    return oss.str();
-}
 
 }} // namespace fastexcel::core

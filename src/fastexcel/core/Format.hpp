@@ -1,5 +1,6 @@
 #pragma once
 
+#include "fastexcel/core/Color.hpp"
 #include <string>
 #include <memory>
 #include <cstdint>
@@ -7,26 +8,23 @@
 namespace fastexcel {
 namespace core {
 
-// 颜色类型定义
-using Color = uint32_t;
-
-// 预定义颜色常量
-constexpr Color COLOR_BLACK   = 0x000000;
-constexpr Color COLOR_WHITE   = 0xFFFFFF;
-constexpr Color COLOR_RED     = 0xFF0000;
-constexpr Color COLOR_GREEN   = 0x008000;
-constexpr Color COLOR_BLUE    = 0x0000FF;
-constexpr Color COLOR_YELLOW  = 0xFFFF00;
-constexpr Color COLOR_MAGENTA = 0xFF00FF;
-constexpr Color COLOR_CYAN    = 0x00FFFF;
-constexpr Color COLOR_BROWN   = 0x800000;
-constexpr Color COLOR_GRAY    = 0x808080;
-constexpr Color COLOR_LIME    = 0x00FF00;
-constexpr Color COLOR_NAVY    = 0x000080;
-constexpr Color COLOR_ORANGE  = 0xFF6600;
-constexpr Color COLOR_PINK    = 0xFF00FF;
-constexpr Color COLOR_PURPLE  = 0x800080;
-constexpr Color COLOR_SILVER  = 0xC0C0C0;
+// 为了向后兼容，保留颜色常量（但使用新的Color类）
+#define COLOR_BLACK   Color::BLACK
+#define COLOR_WHITE   Color::WHITE
+#define COLOR_RED     Color::RED
+#define COLOR_GREEN   Color::GREEN
+#define COLOR_BLUE    Color::BLUE
+#define COLOR_YELLOW  Color::YELLOW
+#define COLOR_MAGENTA Color::MAGENTA
+#define COLOR_CYAN    Color::CYAN
+#define COLOR_BROWN   Color::BROWN
+#define COLOR_GRAY    Color::GRAY
+#define COLOR_LIME    Color::LIME
+#define COLOR_NAVY    Color::NAVY
+#define COLOR_ORANGE  Color::ORANGE
+#define COLOR_PINK    Color::PINK
+#define COLOR_PURPLE  Color::PURPLE
+#define COLOR_SILVER  Color::SILVER
 
 // 下划线类型
 enum class UnderlineType : uint8_t {
@@ -155,7 +153,7 @@ private:
     bool outline_ = false;
     bool shadow_ = false;
     FontScript script_ = FontScript::None;
-    Color font_color_ = COLOR_BLACK;
+    Color font_color_ = Color::BLACK;
     uint8_t font_family_ = 2;
     uint8_t font_charset_ = 1;
     bool font_condense_ = false;
@@ -181,16 +179,16 @@ private:
     BorderStyle diag_border_ = BorderStyle::None;
     DiagonalBorderType diag_type_ = DiagonalBorderType::None;
     
-    Color left_border_color_ = COLOR_BLACK;
-    Color right_border_color_ = COLOR_BLACK;
-    Color top_border_color_ = COLOR_BLACK;
-    Color bottom_border_color_ = COLOR_BLACK;
-    Color diag_border_color_ = COLOR_BLACK;
+    Color left_border_color_ = Color::BLACK;
+    Color right_border_color_ = Color::BLACK;
+    Color top_border_color_ = Color::BLACK;
+    Color bottom_border_color_ = Color::BLACK;
+    Color diag_border_color_ = Color::BLACK;
     
     // 填充属性
     PatternType pattern_ = PatternType::None;
-    Color bg_color_ = COLOR_WHITE;
-    Color fg_color_ = COLOR_BLACK;
+    Color bg_color_ = Color::WHITE;
+    Color fg_color_ = Color::BLACK;
     
     // 数字格式
     std::string num_format_;
@@ -677,8 +675,6 @@ public:
     void setWrapText(bool wrap = true) { setTextWrap(wrap); }
     void setHorizontalAlignment(HorizontalAlign align) { setHorizontalAlign(align); }
     void setVerticalAlignment(VerticalAlign align) { setVerticalAlign(align); }
-    void setBorderStyle(const std::string& style, Color color = COLOR_BLACK);
-    void setPattern(const std::string& pattern, Color color = COLOR_BLACK);
     
 private:
     // 内部辅助方法
@@ -690,7 +686,6 @@ private:
     
     std::string borderStyleToString(BorderStyle style) const;
     std::string patternTypeToString(PatternType pattern) const;
-    std::string colorToHex(Color color) const;
 };
 
 }} // namespace fastexcel::core
