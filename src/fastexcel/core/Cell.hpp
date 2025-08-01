@@ -99,7 +99,7 @@ public:
     // 状态检查
     bool isEmpty() const { return flags_.type == CellType::Empty; }
     bool isNumber() const { return flags_.type == CellType::Number; }
-    bool isString() const { return flags_.type == CellType::String || flags_.type == CellType::InlineString; }
+    bool isString() const { return flags_.type == CellType::String; }
     bool isBoolean() const { return flags_.type == CellType::Boolean; }
     bool isFormula() const { return flags_.type == CellType::Formula; }
     bool isDate() const { return flags_.type == CellType::Date; }

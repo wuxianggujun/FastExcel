@@ -32,21 +32,22 @@ void Cell::setValue(bool value) {
 
 void Cell::setValue(const std::string& value) {
     clear();
+    flags_.type = CellType::String;  // 对外始终显示为String类型
     
     // 短字符串内联存储优化 - 借鉴libxlsxwriter的思路
     if (value.length() < sizeof(value_.inline_string) - 1) {  // 留一位给\0
-        flags_.type = CellType::InlineString;
+        // 内联存储，但不修改string_id，因为它们共享内存
+        std::memset(value_.inline_string, 0, sizeof(value_.inline_string));
         std::strcpy(value_.inline_string, value.c_str());
-        value_.string_id = static_cast<int32_t>(value.length());
+        // 使用extended_来标记是否为内联字符串
+        // 如果extended_为空，说明是内联字符串
     } else {
-        flags_.type = CellType::String;
+        // 长字符串存储
         ensureExtended();
         if (!extended_->long_string) {
             extended_->long_string = new std::string();
         }
         *extended_->long_string = value;
-        // 这里可以实现SST索引逻辑，暂时设为0
-        value_.string_id = 0;
     }
 }
 
@@ -80,16 +81,14 @@ bool Cell::getBooleanValue() const {
 }
 
 std::string Cell::getStringValue() const {
-    switch (flags_.type) {
-        case CellType::InlineString:
-            return std::string(value_.inline_string, value_.string_id);
-        case CellType::String:
-            if (extended_ && extended_->long_string) {
-                return *extended_->long_string;
-            }
-            break;
-        default:
-            break;
+    if (flags_.type == CellType::String) {
+        if (extended_ && extended_->long_string) {
+            // 长字符串
+            return *extended_->long_string;
+        } else {
+            // 内联字符串（extended_为空表示内联）
+            return std::string(value_.inline_string);
+        }
     }
     return "";
 }
@@ -209,14 +208,19 @@ void Cell::clearExtended() {
     }
 }
 
-Cell::Cell(Cell&& other) noexcept {
+Cell::Cell(Cell&& other) noexcept : extended_(nullptr) {
     flags_ = other.flags_;
     value_ = other.value_;
     extended_ = other.extended_;
     format_holder_ = std::move(other.format_holder_);
     
+    // 重置源对象
     other.flags_.type = CellType::Empty;
+    other.flags_.has_format = false;
+    other.flags_.has_hyperlink = false;
+    other.flags_.has_formula_result = false;
     other.extended_ = nullptr;
+    other.format_holder_.reset();
 }
 
 Cell& Cell::operator=(Cell&& other) noexcept {
@@ -229,8 +233,13 @@ Cell& Cell::operator=(Cell&& other) noexcept {
         extended_ = other.extended_;
         format_holder_ = std::move(other.format_holder_);
         
+        // 重置源对象
         other.flags_.type = CellType::Empty;
+        other.flags_.has_format = false;
+        other.flags_.has_hyperlink = false;
+        other.flags_.has_formula_result = false;
         other.extended_ = nullptr;
+        other.format_holder_.reset();
     }
     return *this;
 }
