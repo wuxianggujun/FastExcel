@@ -14,6 +14,28 @@ foreach(SOURCE ${EXAMPLE_SOURCES})
     # 链接FastExcel库
     target_link_libraries(${EXEC_NAME} PRIVATE fastexcel)
     
+    # 确保示例程序能访问第三方库的头文件
+    target_include_directories(${EXEC_NAME} PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/fmt/include
+        ${FASTEXCEL_THIRD_PARTY_INCLUDE_DIRS}
+    )
+    
+    # 链接第三方库
+    target_link_libraries(${EXEC_NAME} PRIVATE
+        fmt::fmt
+        ${FASTEXCEL_EXPAT_TARGET}
+    )
+    
+    # 为示例程序添加编译选项
+    if(MSVC)
+        # 设置源文件和执行字符集为UTF-8，解决C4819编码警告
+        target_compile_options(${EXEC_NAME} PRIVATE /utf-8)
+        # 禁用一些不必要的警告
+        target_compile_options(${EXEC_NAME} PRIVATE /wd4251 /wd4275)
+    else()
+        target_compile_options(${EXEC_NAME} PRIVATE -Wall -Wextra)
+    endif()
+    
     # 设置输出目录
     set_target_properties(${EXEC_NAME} PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin/examples

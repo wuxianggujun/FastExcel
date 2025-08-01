@@ -6,7 +6,7 @@ project(FastExcel VERSION 1.0.0 LANGUAGES CXX C)
 # =============================================================================
 option(FASTEXCEL_BUILD_SHARED_LIBS "Build FastExcel as shared library" OFF)
 option(FASTEXCEL_USE_SYSTEM_LIBS "Use system libraries when available" OFF)
-option(FASTEXCEL_BUILD_EXAMPLES "Build example programs" OFF)
+option(FASTEXCEL_BUILD_EXAMPLES "Build example programs" ON)
 option(FASTEXCEL_BUILD_TESTS "Build all tests" ON)
 option(FASTEXCEL_BUILD_UNIT_TESTS "Build unit tests" ON)
 option(FASTEXCEL_BUILD_INTEGRATION_TESTS "Build integration tests" OFF)
@@ -101,7 +101,7 @@ target_include_directories(fastexcel PRIVATE
 # 链接库配置
 # =============================================================================
 target_link_libraries(fastexcel PRIVATE
-    ${FASTEXCEL_FMT_TARGET}
+    fmt::fmt
     ${FASTEXCEL_EXPAT_TARGET}
 )
 

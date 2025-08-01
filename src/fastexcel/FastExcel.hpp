@@ -89,10 +89,14 @@ inline std::string getVersion() {
 
 // 导出宏定义（用于Windows DLL）
 #ifdef FASTEXCEL_WINDOWS
-    #ifdef FASTEXCEL_EXPORTS
-        #define FASTEXCEL_API __declspec(dllexport)
+    #ifdef FASTEXCEL_SHARED
+        #ifdef FASTEXCEL_EXPORTS
+            #define FASTEXCEL_API __declspec(dllexport)
+        #else
+            #define FASTEXCEL_API __declspec(dllimport)
+        #endif
     #else
-        #define FASTEXCEL_API __declspec(dllimport)
+        #define FASTEXCEL_API
     #endif
 #else
     #define FASTEXCEL_API
