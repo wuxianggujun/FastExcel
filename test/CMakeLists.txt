@@ -7,7 +7,7 @@ enable_testing()
 include(GoogleTest)
 
 # 单元测试
-if(ENABLE_UNIT_TESTS)
+if(FASTEXCEL_BUILD_UNIT_TESTS)
     # 收集单元测试源文件
     file(GLOB_RECURSE UNIT_TEST_SOURCES
         "unit/*.cpp"
@@ -18,8 +18,7 @@ if(ENABLE_UNIT_TESTS)
         add_executable(unit_tests ${UNIT_TEST_SOURCES})
         target_link_libraries(unit_tests PRIVATE
             fastexcel
-            gtest
-            gtest_main
+            ${FASTEXCEL_GTEST_TARGETS}
         )
         target_include_directories(unit_tests PRIVATE
             ${CMAKE_SOURCE_DIR}/src
@@ -55,8 +54,7 @@ if(ENABLE_INTEGRATION_TESTS)
         add_executable(integration_tests ${INTEGRATION_TEST_SOURCES})
         target_link_libraries(integration_tests PRIVATE
             fastexcel
-            gtest
-            gtest_main
+            ${FASTEXCEL_GTEST_TARGETS}
         )
         target_include_directories(integration_tests PRIVATE
             ${CMAKE_SOURCE_DIR}/src
