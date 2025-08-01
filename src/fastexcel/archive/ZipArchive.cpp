@@ -120,6 +120,150 @@ ZipError ZipArchive::addFile(std::string_view internal_path, const void* data, s
     return ZipError::Ok;
 }
 
+ZipError ZipArchive::addFiles(const std::vector<FileEntry>& files) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (!is_writable_ || !zip_handle_) {
+        LOG_ERROR("Zip archive not opened for writing");
+        return ZipError::NotOpen;
+    }
+    
+    if (files.empty()) {
+        return ZipError::Ok;
+    }
+    
+    LOG_DEBUG("Starting batch write of {} files", files.size());
+    
+    // 批量写入所有文件
+    for (const auto& file : files) {
+        // 检查文件大小
+        if (file.content.size() > INT32_MAX) {
+            LOG_ERROR("File {} is too large ({} bytes), maximum size is {} bytes",
+                     file.internal_path, file.content.size(), INT32_MAX);
+            return ZipError::TooLarge;
+        }
+        
+        // 初始化文件信息结构
+        mz_zip_file file_info = {};
+        file_info.filename = file.internal_path.c_str();
+        
+        // 使用当前时间
+        time_t now = time(nullptr);
+        file_info.modified_date = static_cast<uint32_t>(now);
+        file_info.creation_date = static_cast<uint32_t>(now);
+        
+        file_info.flag = MZ_ZIP_FLAG_UTF8;
+        if (!file.content.empty()) {
+            file_info.flag |= MZ_ZIP_FLAG_DATA_DESCRIPTOR;
+        }
+        
+        // 打开条目
+        int32_t result = mz_zip_writer_entry_open(zip_handle_, &file_info);
+        if (result != MZ_OK) {
+            LOG_ERROR("Failed to open entry for file {} in zip, error: {}", file.internal_path, result);
+            return ZipError::IoFail;
+        }
+        
+        // 写入数据
+        if (!file.content.empty()) {
+            int32_t bytes_written = mz_zip_writer_entry_write(zip_handle_,
+                                                            file.content.data(),
+                                                            static_cast<int32_t>(file.content.size()));
+            if (bytes_written != static_cast<int32_t>(file.content.size())) {
+                LOG_ERROR("Failed to write complete data for file {} to zip, written: {} bytes, expected: {} bytes",
+                         file.internal_path, bytes_written, file.content.size());
+                mz_zip_writer_entry_close(zip_handle_);
+                return ZipError::IoFail;
+            }
+        }
+        
+        // 关闭条目
+        result = mz_zip_writer_entry_close(zip_handle_);
+        if (result != MZ_OK) {
+            LOG_ERROR("Failed to close entry for file {} in zip, error: {}", file.internal_path, result);
+            return ZipError::IoFail;
+        }
+        
+        LOG_DEBUG("Added file {} to zip, size: {} bytes", file.internal_path, file.content.size());
+    }
+    
+    LOG_INFO("Batch write completed successfully, {} files added", files.size());
+    return ZipError::Ok;
+}
+
+ZipError ZipArchive::addFiles(std::vector<FileEntry>&& files) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (!is_writable_ || !zip_handle_) {
+        LOG_ERROR("Zip archive not opened for writing");
+        return ZipError::NotOpen;
+    }
+    
+    if (files.empty()) {
+        return ZipError::Ok;
+    }
+    
+    LOG_DEBUG("Starting batch write of {} files (move semantics)", files.size());
+    
+    // 批量写入所有文件（移动语义版本）
+    for (auto& file : files) {
+        // 检查文件大小
+        if (file.content.size() > INT32_MAX) {
+            LOG_ERROR("File {} is too large ({} bytes), maximum size is {} bytes",
+                     file.internal_path, file.content.size(), INT32_MAX);
+            return ZipError::TooLarge;
+        }
+        
+        // 初始化文件信息结构
+        mz_zip_file file_info = {};
+        file_info.filename = file.internal_path.c_str();
+        
+        // 使用当前时间
+        time_t now = time(nullptr);
+        file_info.modified_date = static_cast<uint32_t>(now);
+        file_info.creation_date = static_cast<uint32_t>(now);
+        
+        file_info.flag = MZ_ZIP_FLAG_UTF8;
+        if (!file.content.empty()) {
+            file_info.flag |= MZ_ZIP_FLAG_DATA_DESCRIPTOR;
+        }
+        
+        // 打开条目
+        int32_t result = mz_zip_writer_entry_open(zip_handle_, &file_info);
+        if (result != MZ_OK) {
+            LOG_ERROR("Failed to open entry for file {} in zip, error: {}", file.internal_path, result);
+            return ZipError::IoFail;
+        }
+        
+        // 写入数据
+        if (!file.content.empty()) {
+            int32_t bytes_written = mz_zip_writer_entry_write(zip_handle_,
+                                                            file.content.data(),
+                                                            static_cast<int32_t>(file.content.size()));
+            if (bytes_written != static_cast<int32_t>(file.content.size())) {
+                LOG_ERROR("Failed to write complete data for file {} to zip, written: {} bytes, expected: {} bytes",
+                         file.internal_path, bytes_written, file.content.size());
+                mz_zip_writer_entry_close(zip_handle_);
+                return ZipError::IoFail;
+            }
+        }
+        
+        // 关闭条目
+        result = mz_zip_writer_entry_close(zip_handle_);
+        if (result != MZ_OK) {
+            LOG_ERROR("Failed to close entry for file {} in zip, error: {}", file.internal_path, result);
+            return ZipError::IoFail;
+        }
+        
+        LOG_DEBUG("Added file {} to zip, size: {} bytes", file.internal_path, file.content.size());
+        
+        // 清空内容以释放内存（移动语义优化）
+        file.content.clear();
+        file.content.shrink_to_fit();
+    }
+    
+    LOG_INFO("Batch write completed successfully, {} files added (move semantics)", files.size());
+    return ZipError::Ok;
+}
+
 ZipError ZipArchive::extractFile(std::string_view internal_path, std::string& content) {
     std::vector<uint8_t> data;
     ZipError result = extractFile(internal_path, data);

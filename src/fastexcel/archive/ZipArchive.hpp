@@ -37,6 +37,30 @@ constexpr bool isError(ZipError error) noexcept {
 }
 
 class ZipArchive {
+public:
+    // 批量写入的文件条目结构
+    struct FileEntry {
+        std::string internal_path;
+        std::string content;
+        
+        FileEntry() = default;
+        
+        // 移动构造函数
+        FileEntry(std::string&& path, std::string&& data)
+            : internal_path(std::move(path)), content(std::move(data)) {}
+            
+        // 拷贝构造函数
+        FileEntry(const std::string& path, const std::string& data)
+            : internal_path(path), content(data) {}
+            
+        // 混合构造函数
+        FileEntry(std::string&& path, const std::string& data)
+            : internal_path(std::move(path)), content(data) {}
+            
+        FileEntry(const std::string& path, std::string&& data)
+            : internal_path(path), content(std::move(data)) {}
+    };
+
 private:
     void* zip_handle_ = nullptr;
     void* unzip_handle_ = nullptr;
@@ -59,6 +83,10 @@ public:
     ZipError addFile(std::string_view internal_path, std::string_view content);
     ZipError addFile(std::string_view internal_path, const uint8_t* data, size_t size);
     ZipError addFile(std::string_view internal_path, const void* data, size_t size);
+    
+    // 批量写入操作 - 高性能模式
+    ZipError addFiles(const std::vector<FileEntry>& files);
+    ZipError addFiles(std::vector<FileEntry>&& files); // 移动语义版本
     
     // 流式写入操作 - 用于大文件
     ZipError openEntry(std::string_view internal_path);

@@ -25,6 +25,10 @@ public:
     bool writeFile(const std::string& internal_path, const std::string& content);
     bool writeFile(const std::string& internal_path, const std::vector<uint8_t>& data);
     
+    // 批量写入文件 - 高性能模式
+    bool writeFiles(const std::vector<std::pair<std::string, std::string>>& files);
+    bool writeFiles(std::vector<std::pair<std::string, std::string>>&& files); // 移动语义版本
+    
     // 读取文件
     bool readFile(const std::string& internal_path, std::string& content);
     bool readFile(const std::string& internal_path, std::vector<uint8_t>& data);

@@ -58,6 +58,50 @@ bool FileManager::writeFile(const std::string& internal_path, const std::vector<
     return archive_->addFile(internal_path, data.data(), data.size()) == ZipError::Ok;
 }
 
+bool FileManager::writeFiles(const std::vector<std::pair<std::string, std::string>>& files) {
+    if (!isOpen()) {
+        LOG_ERROR("Archive not open");
+        return false;
+    }
+    
+    if (files.empty()) {
+        return true;
+    }
+    
+    // 转换为ZipArchive::FileEntry格式
+    std::vector<ZipArchive::FileEntry> zip_files;
+    zip_files.reserve(files.size());
+    
+    for (const auto& [path, content] : files) {
+        zip_files.emplace_back(path, content);
+    }
+    
+    LOG_INFO("Writing {} files in batch mode", files.size());
+    return archive_->addFiles(zip_files) == ZipError::Ok;
+}
+
+bool FileManager::writeFiles(std::vector<std::pair<std::string, std::string>>&& files) {
+    if (!isOpen()) {
+        LOG_ERROR("Archive not open");
+        return false;
+    }
+    
+    if (files.empty()) {
+        return true;
+    }
+    
+    // 转换为ZipArchive::FileEntry格式（移动语义）
+    std::vector<ZipArchive::FileEntry> zip_files;
+    zip_files.reserve(files.size());
+    
+    for (auto& [path, content] : files) {
+        zip_files.emplace_back(std::move(path), std::move(content));
+    }
+    
+    LOG_INFO("Writing {} files in batch mode (move semantics)", zip_files.size());
+    return archive_->addFiles(std::move(zip_files)) == ZipError::Ok;
+}
+
 bool FileManager::readFile(const std::string& internal_path, std::string& content) {
     if (!isOpen()) {
         LOG_ERROR("Archive not open");

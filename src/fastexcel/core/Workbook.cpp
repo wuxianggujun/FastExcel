@@ -508,81 +508,64 @@ int Workbook::getSharedStringIndex(const std::string& str) const {
 // ========== 内部方法 ==========
 
 bool Workbook::generateExcelStructure() {
-    // 生成[Content_Types].xml
-    std::string content_types_xml = generateContentTypesXML();
-    if (!file_manager_->writeFile("[Content_Types].xml", content_types_xml)) {
-        return false;
-    }
+    LOG_INFO("Starting Excel structure generation with batch mode");
     
-    // 生成_rels/.rels
-    std::string rels_xml = generateRelsXML();
-    if (!file_manager_->writeFile("_rels/.rels", rels_xml)) {
-        return false;
-    }
-    
-    // 生成docProps/app.xml
-    std::string app_xml = generateDocPropsAppXML();
-    if (!file_manager_->writeFile("docProps/app.xml", app_xml)) {
-        return false;
-    }
-    
-    // 生成docProps/core.xml
-    std::string core_xml = generateDocPropsCoreXML();
-    if (!file_manager_->writeFile("docProps/core.xml", core_xml)) {
-        return false;
-    }
-    
-    // 生成自定义属性（如果有）
+    // 预估文件数量：基础文件8个 + 工作表文件 + 工作表关系文件 + 自定义属性
+    size_t estimated_files = 8 + worksheets_.size() * 2;
     if (!custom_properties_.empty()) {
-        std::string custom_xml = generateDocPropsCustomXML();
-        if (!file_manager_->writeFile("docProps/custom.xml", custom_xml)) {
-            return false;
-        }
+        estimated_files++;
     }
     
-    // 生成xl/_rels/workbook.xml.rels
-    std::string workbook_rels_xml = generateWorkbookRelsXML();
-    if (!file_manager_->writeFile("xl/_rels/workbook.xml.rels", workbook_rels_xml)) {
-        return false;
+    // 预分配空间以提高性能
+    std::vector<std::pair<std::string, std::string>> files;
+    files.reserve(estimated_files);
+    
+    // 收集所有文件内容（批量模式）
+    LOG_DEBUG("Generating XML content for {} estimated files", estimated_files);
+    
+    // 基础文件
+    files.emplace_back("[Content_Types].xml", generateContentTypesXML());
+    files.emplace_back("_rels/.rels", generateRelsXML());
+    files.emplace_back("docProps/app.xml", generateDocPropsAppXML());
+    files.emplace_back("docProps/core.xml", generateDocPropsCoreXML());
+    
+    // 自定义属性（如果有）
+    if (!custom_properties_.empty()) {
+        files.emplace_back("docProps/custom.xml", generateDocPropsCustomXML());
     }
     
-    // 生成工作簿XML
-    std::string workbook_xml = generateWorkbookXML();
-    if (!file_manager_->writeFile("xl/workbook.xml", workbook_xml)) {
-        return false;
-    }
+    // Excel核心文件
+    files.emplace_back("xl/_rels/workbook.xml.rels", generateWorkbookRelsXML());
+    files.emplace_back("xl/workbook.xml", generateWorkbookXML());
+    files.emplace_back("xl/styles.xml", generateStylesXML());
+    files.emplace_back("xl/sharedStrings.xml", generateSharedStringsXML());
     
-    // 生成样式XML
-    std::string styles_xml = generateStylesXML();
-    if (!file_manager_->writeFile("xl/styles.xml", styles_xml)) {
-        return false;
-    }
-    
-    // 生成共享字符串XML
-    std::string shared_strings_xml = generateSharedStringsXML();
-    if (!file_manager_->writeFile("xl/sharedStrings.xml", shared_strings_xml)) {
-        return false;
-    }
-    
-    // 生成工作表XML
+    // 工作表文件
     for (size_t i = 0; i < worksheets_.size(); ++i) {
         std::string worksheet_xml = generateWorksheetXML(worksheets_[i]);
         std::string worksheet_path = getWorksheetPath(static_cast<int>(i + 1));
-        if (!file_manager_->writeFile(worksheet_path, worksheet_xml)) {
-            return false;
-        }
+        files.emplace_back(std::move(worksheet_path), std::move(worksheet_xml));
         
-        // 生成工作表关系XML（如果有超链接等）
+        // 工作表关系文件（如果有超链接等）
         std::string worksheet_rels_xml = worksheets_[i]->generateRelsXML();
         if (!worksheet_rels_xml.empty()) {
             std::string rels_path = "xl/worksheets/_rels/sheet" + std::to_string(i + 1) + ".xml.rels";
-            if (!file_manager_->writeFile(rels_path, worksheet_rels_xml)) {
-                return false;
-            }
+            files.emplace_back(std::move(rels_path), std::move(worksheet_rels_xml));
         }
     }
     
-    return true;
+    LOG_INFO("Generated {} files, starting batch write to ZIP", files.size());
+    
+    // 批量写入所有文件（使用移动语义提高性能）
+    bool success = file_manager_->writeFiles(std::move(files));
+    
+    if (success) {
+        LOG_INFO("Excel structure generation completed successfully in batch mode");
+    } else {
+        LOG_ERROR("Failed to write files in batch mode");
+    }
+    
+    return success;
 }
 
 std::string Workbook::generateWorkbookXML() const {
