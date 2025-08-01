@@ -50,6 +50,8 @@ set(FASTEXCEL_SOURCES
     src/fastexcel/core/Format.cpp
     src/fastexcel/core/Workbook.cpp
     src/fastexcel/core/Worksheet.cpp
+    src/fastexcel/core/SharedStringTable.cpp
+    src/fastexcel/core/FormatPool.cpp
     src/fastexcel/utils/Logger.cpp
     src/fastexcel/xml/ContentTypes.cpp
     src/fastexcel/xml/Relationships.cpp

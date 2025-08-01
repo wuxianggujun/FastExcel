@@ -1,0 +1,148 @@
+#include "fastexcel/core/SharedStringTable.hpp"
+#include "fastexcel/xml/XMLStreamWriter.hpp"
+#include <stdexcept>
+
+namespace fastexcel {
+namespace core {
+
+SharedStringTable::SharedStringTable() : next_id_(0) {
+    // 预留一些空间以减少重新分配
+    string_to_id_.reserve(1000);
+    id_to_string_.reserve(1000);
+}
+
+int32_t SharedStringTable::addString(const std::string& str) {
+    // 检查字符串是否已存在
+    auto it = string_to_id_.find(str);
+    if (it != string_to_id_.end()) {
+        return it->second;  // 返回已存在的ID
+    }
+    
+    // 添加新字符串
+    int32_t id = next_id_++;
+    string_to_id_[str] = id;
+    id_to_string_.push_back(str);
+    
+    return id;
+}
+
+const std::string& SharedStringTable::getString(int32_t id) const {
+    if (id < 0 || static_cast<size_t>(id) >= id_to_string_.size()) {
+        throw std::out_of_range("Invalid string ID: " + std::to_string(id));
+    }
+    return id_to_string_[id];
+}
+
+bool SharedStringTable::hasString(const std::string& str) const {
+    return string_to_id_.find(str) != string_to_id_.end();
+}
+
+int32_t SharedStringTable::getStringId(const std::string& str) const {
+    auto it = string_to_id_.find(str);
+    return (it != string_to_id_.end()) ? it->second : -1;
+}
+
+void SharedStringTable::clear() {
+    string_to_id_.clear();
+    id_to_string_.clear();
+    next_id_ = 0;
+}
+
+std::string SharedStringTable::generateXML() const {
+    if (id_to_string_.empty()) {
+        return "";  // 没有字符串时不生成XML
+    }
+    
+    xml::XMLStreamWriter writer;
+    writer.startDocument();
+    writer.startElement("sst");
+    writer.writeAttribute("xmlns", "http://schemas.openxmlformats.org/spreadsheetml/2006/main");
+    writer.writeAttribute("count", std::to_string(id_to_string_.size()).c_str());
+    writer.writeAttribute("uniqueCount", std::to_string(string_to_id_.size()).c_str());
+    
+    for (const auto& str : id_to_string_) {
+        writer.startElement("si");
+        writer.startElement("t");
+        
+        // 处理特殊字符转义
+        std::string escaped_str = str;
+        // 简单的XML转义处理
+        size_t pos = 0;
+        while ((pos = escaped_str.find('&', pos)) != std::string::npos) {
+            escaped_str.replace(pos, 1, "&amp;");
+            pos += 5;
+        }
+        pos = 0;
+        while ((pos = escaped_str.find('<', pos)) != std::string::npos) {
+            escaped_str.replace(pos, 1, "&lt;");
+            pos += 4;
+        }
+        pos = 0;
+        while ((pos = escaped_str.find('>', pos)) != std::string::npos) {
+            escaped_str.replace(pos, 1, "&gt;");
+            pos += 4;
+        }
+        
+        writer.writeText(escaped_str.c_str());
+        writer.endElement(); // t
+        writer.endElement(); // si
+    }
+    
+    writer.endElement(); // sst
+    writer.endDocument();
+    
+    return writer.toString();
+}
+
+size_t SharedStringTable::getMemoryUsage() const {
+    size_t usage = sizeof(SharedStringTable);
+    
+    // 计算unordered_map的内存使用
+    usage += string_to_id_.bucket_count() * sizeof(std::pair<std::string, int32_t>);
+    for (const auto& [str, id] : string_to_id_) {
+        usage += str.capacity();
+    }
+    
+    // 计算vector的内存使用
+    usage += id_to_string_.capacity() * sizeof(std::string);
+    for (const auto& str : id_to_string_) {
+        usage += str.capacity();
+    }
+    
+    return usage;
+}
+
+SharedStringTable::CompressionStats SharedStringTable::getCompressionStats() const {
+    CompressionStats stats;
+    
+    // 计算原始大小（如果每个字符串都单独存储）
+    stats.original_size = 0;
+    std::unordered_map<std::string, size_t> string_counts;
+    
+    // 统计每个字符串的使用次数
+    for (const auto& [str, id] : string_to_id_) {
+        string_counts[str] = 1;  // 至少使用一次
+    }
+    
+    // 计算原始总大小
+    for (const auto& [str, count] : string_counts) {
+        stats.original_size += str.size() * count;
+    }
+    
+    // 计算压缩后大小（每个唯一字符串只存储一次）
+    stats.compressed_size = 0;
+    for (const auto& str : id_to_string_) {
+        stats.compressed_size += str.size();
+    }
+    
+    // 计算压缩率
+    if (stats.original_size > 0) {
+        stats.compression_ratio = 1.0 - (static_cast<double>(stats.compressed_size) / stats.original_size);
+    } else {
+        stats.compression_ratio = 0.0;
+    }
+    
+    return stats;
+}
+
+}} // namespace fastexcel::core

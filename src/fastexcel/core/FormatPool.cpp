@@ -1,0 +1,361 @@
+#include "fastexcel/core/FormatPool.hpp"
+#include "fastexcel/xml/XMLStreamWriter.hpp"
+#include <stdexcept>
+
+namespace fastexcel {
+namespace core {
+
+// FormatKey实现
+FormatKey::FormatKey() 
+    : font_size(11.0), bold(false), italic(false), underline(false), strikethrough(false),
+      font_color(0x000000), horizontal_align(0), vertical_align(0), text_wrap(false),
+      text_rotation(0), border_style(0), border_color(0x000000), pattern(0),
+      bg_color(0xFFFFFF), fg_color(0x000000), locked(true), hidden(false) {
+    font_name = "Calibri";
+    number_format = "General";
+}
+
+FormatKey::FormatKey(const Format& format) : FormatKey() {
+    // 从Format对象提取属性
+    // 注意：这里需要根据实际的Format类接口来实现
+    // 暂时使用默认值，实际实现时需要调用format的getter方法
+    
+    // 示例实现（需要根据实际Format接口调整）:
+    // font_name = format.getFontName();
+    // font_size = format.getFontSize();
+    // bold = format.isBold();
+    // italic = format.isItalic();
+    // ... 其他属性
+}
+
+bool FormatKey::operator==(const FormatKey& other) const {
+    return font_name == other.font_name &&
+           font_size == other.font_size &&
+           bold == other.bold &&
+           italic == other.italic &&
+           underline == other.underline &&
+           strikethrough == other.strikethrough &&
+           font_color == other.font_color &&
+           horizontal_align == other.horizontal_align &&
+           vertical_align == other.vertical_align &&
+           text_wrap == other.text_wrap &&
+           text_rotation == other.text_rotation &&
+           border_style == other.border_style &&
+           border_color == other.border_color &&
+           pattern == other.pattern &&
+           bg_color == other.bg_color &&
+           fg_color == other.fg_color &&
+           number_format == other.number_format &&
+           locked == other.locked &&
+           hidden == other.hidden;
+}
+
+}} // namespace fastexcel::core
+
+// std::hash特化实现
+namespace std {
+size_t hash<fastexcel::core::FormatKey>::operator()(const fastexcel::core::FormatKey& key) const {
+    size_t h1 = hash<string>{}(key.font_name);
+    size_t h2 = hash<double>{}(key.font_size);
+    size_t h3 = hash<bool>{}(key.bold);
+    size_t h4 = hash<bool>{}(key.italic);
+    size_t h5 = hash<uint32_t>{}(key.font_color);
+    size_t h6 = hash<int>{}(key.horizontal_align);
+    size_t h7 = hash<uint32_t>{}(key.bg_color);
+    size_t h8 = hash<string>{}(key.number_format);
+    
+    // 组合哈希值
+    return h1 ^ (h2 << 1) ^ (h3 << 2) ^ (h4 << 3) ^ 
+           (h5 << 4) ^ (h6 << 5) ^ (h7 << 6) ^ (h8 << 7);
+}
+}
+
+namespace fastexcel {
+namespace core {
+
+FormatPool::FormatPool() : next_index_(0), total_requests_(0), cache_hits_(0) {
+    // 创建默认格式
+    default_format_ = std::make_unique<Format>();
+    
+    // 预留空间
+    formats_.reserve(100);
+    format_cache_.reserve(100);
+    format_to_index_.reserve(100);
+    
+    // 添加默认格式到池中
+    Format* default_ptr = default_format_.get();
+    format_to_index_[default_ptr] = 0;
+    next_index_ = 1;
+}
+
+Format* FormatPool::getOrCreateFormat(const FormatKey& key) {
+    total_requests_++;
+    
+    // 检查缓存
+    auto it = format_cache_.find(key);
+    if (it != format_cache_.end()) {
+        cache_hits_++;
+        return it->second;
+    }
+    
+    // 创建新格式
+    Format* format = createFormatFromKey(key);
+    format_cache_[key] = format;
+    
+    return format;
+}
+
+Format* FormatPool::getOrCreateFormat(const Format& format) {
+    FormatKey key(format);
+    return getOrCreateFormat(key);
+}
+
+Format* FormatPool::addFormat(std::unique_ptr<Format> format) {
+    Format* format_ptr = format.get();
+    
+    // 检查是否已存在相同格式
+    FormatKey key(*format);
+    auto cache_it = format_cache_.find(key);
+    if (cache_it != format_cache_.end()) {
+        return cache_it->second;  // 返回已存在的格式
+    }
+    
+    // 添加新格式
+    size_t index = next_index_++;
+    formats_.push_back(std::move(format));
+    format_cache_[key] = format_ptr;
+    format_to_index_[format_ptr] = index;
+    
+    return format_ptr;
+}
+
+size_t FormatPool::getFormatIndex(Format* format) const {
+    if (format == default_format_.get()) {
+        return 0;  // 默认格式索引为0
+    }
+    
+    auto it = format_to_index_.find(format);
+    if (it != format_to_index_.end()) {
+        return it->second;
+    }
+    
+    throw std::invalid_argument("Format not found in pool");
+}
+
+Format* FormatPool::getFormatByIndex(size_t index) const {
+    if (index == 0) {
+        return default_format_.get();
+    }
+    
+    // 在formats_中查找对应索引的格式
+    for (const auto& [format_ptr, format_index] : format_to_index_) {
+        if (format_index == index) {
+            return format_ptr;
+        }
+    }
+    
+    throw std::out_of_range("Invalid format index: " + std::to_string(index));
+}
+
+double FormatPool::getCacheHitRate() const {
+    if (total_requests_ == 0) {
+        return 0.0;
+    }
+    return static_cast<double>(cache_hits_) / total_requests_;
+}
+
+void FormatPool::clear() {
+    formats_.clear();
+    format_cache_.clear();
+    format_to_index_.clear();
+    next_index_ = 1;  // 保留默认格式的索引0
+    total_requests_ = 0;
+    cache_hits_ = 0;
+    
+    // 重新设置默认格式
+    format_to_index_[default_format_.get()] = 0;
+}
+
+std::string FormatPool::generateStylesXML() const {
+    xml::XMLStreamWriter writer;
+    writer.startDocument();
+    writer.startElement("styleSheet");
+    writer.writeAttribute("xmlns", "http://schemas.openxmlformats.org/spreadsheetml/2006/main");
+    
+    // 字体部分
+    writer.startElement("fonts");
+    writer.writeAttribute("count", std::to_string(getFormatCount() + 1).c_str());
+    
+    // 默认字体
+    writer.startElement("font");
+    writer.startElement("sz");
+    writer.writeAttribute("val", "11");
+    writer.endElement(); // sz
+    writer.startElement("name");
+    writer.writeAttribute("val", "Calibri");
+    writer.endElement(); // name
+    writer.endElement(); // font
+    
+    // 其他字体（简化实现）
+    for (const auto& format : formats_) {
+        writer.startElement("font");
+        writer.startElement("sz");
+        writer.writeAttribute("val", "11");  // 默认大小
+        writer.endElement(); // sz
+        writer.startElement("name");
+        writer.writeAttribute("val", "Calibri");  // 默认字体
+        writer.endElement(); // name
+        writer.endElement(); // font
+    }
+    
+    writer.endElement(); // fonts
+    
+    // 填充部分
+    writer.startElement("fills");
+    writer.writeAttribute("count", "2");
+    
+    // 默认填充
+    writer.startElement("fill");
+    writer.startElement("patternFill");
+    writer.writeAttribute("patternType", "none");
+    writer.endElement(); // patternFill
+    writer.endElement(); // fill
+    
+    writer.startElement("fill");
+    writer.startElement("patternFill");
+    writer.writeAttribute("patternType", "gray125");
+    writer.endElement(); // patternFill
+    writer.endElement(); // fill
+    
+    writer.endElement(); // fills
+    
+    // 边框部分
+    writer.startElement("borders");
+    writer.writeAttribute("count", "1");
+    
+    writer.startElement("border");
+    writer.startElement("left");
+    writer.endElement(); // left
+    writer.startElement("right");
+    writer.endElement(); // right
+    writer.startElement("top");
+    writer.endElement(); // top
+    writer.startElement("bottom");
+    writer.endElement(); // bottom
+    writer.startElement("diagonal");
+    writer.endElement(); // diagonal
+    writer.endElement(); // border
+    
+    writer.endElement(); // borders
+    
+    // 单元格样式格式
+    writer.startElement("cellStyleXfs");
+    writer.writeAttribute("count", "1");
+    
+    writer.startElement("xf");
+    writer.writeAttribute("numFmtId", "0");
+    writer.writeAttribute("fontId", "0");
+    writer.writeAttribute("fillId", "0");
+    writer.writeAttribute("borderId", "0");
+    writer.endElement(); // xf
+    
+    writer.endElement(); // cellStyleXfs
+    
+    // 单元格格式
+    writer.startElement("cellXfs");
+    writer.writeAttribute("count", std::to_string(getFormatCount() + 1).c_str());
+    
+    // 默认格式
+    writer.startElement("xf");
+    writer.writeAttribute("numFmtId", "0");
+    writer.writeAttribute("fontId", "0");
+    writer.writeAttribute("fillId", "0");
+    writer.writeAttribute("borderId", "0");
+    writer.writeAttribute("xfId", "0");
+    writer.endElement(); // xf
+    
+    // 其他格式（简化实现）
+    for (size_t i = 0; i < formats_.size(); ++i) {
+        writer.startElement("xf");
+        writer.writeAttribute("numFmtId", "0");
+        writer.writeAttribute("fontId", std::to_string(i + 1).c_str());
+        writer.writeAttribute("fillId", "0");
+        writer.writeAttribute("borderId", "0");
+        writer.writeAttribute("xfId", "0");
+        writer.endElement(); // xf
+    }
+    
+    writer.endElement(); // cellXfs
+    
+    // 单元格样式
+    writer.startElement("cellStyles");
+    writer.writeAttribute("count", "1");
+    
+    writer.startElement("cellStyle");
+    writer.writeAttribute("name", "Normal");
+    writer.writeAttribute("xfId", "0");
+    writer.writeAttribute("builtinId", "0");
+    writer.endElement(); // cellStyle
+    
+    writer.endElement(); // cellStyles
+    
+    writer.endElement(); // styleSheet
+    writer.endDocument();
+    
+    return writer.toString();
+}
+
+size_t FormatPool::getMemoryUsage() const {
+    size_t usage = sizeof(FormatPool);
+    
+    // 格式对象内存
+    usage += formats_.capacity() * sizeof(std::unique_ptr<Format>);
+    for (const auto& format : formats_) {
+        usage += sizeof(Format);  // 简化计算
+    }
+    
+    // 缓存内存
+    usage += format_cache_.bucket_count() * sizeof(std::pair<FormatKey, Format*>);
+    usage += format_to_index_.bucket_count() * sizeof(std::pair<Format*, size_t>);
+    
+    return usage;
+}
+
+FormatPool::DeduplicationStats FormatPool::getDeduplicationStats() const {
+    DeduplicationStats stats;
+    stats.total_requests = total_requests_;
+    stats.unique_formats = format_cache_.size();
+    
+    if (stats.total_requests > 0) {
+        stats.deduplication_ratio = 1.0 - (static_cast<double>(stats.unique_formats) / stats.total_requests);
+    } else {
+        stats.deduplication_ratio = 0.0;
+    }
+    
+    return stats;
+}
+
+Format* FormatPool::createFormatFromKey(const FormatKey& key) {
+    auto format = std::make_unique<Format>();
+    
+    // 根据key设置格式属性
+    // 注意：这里需要根据实际的Format类接口来实现
+    // format->setFontName(key.font_name);
+    // format->setFontSize(key.font_size);
+    // format->setBold(key.bold);
+    // ... 其他属性设置
+    
+    Format* format_ptr = format.get();
+    size_t index = next_index_++;
+    
+    formats_.push_back(std::move(format));
+    format_to_index_[format_ptr] = index;
+    
+    return format_ptr;
+}
+
+void FormatPool::updateFormatIndex(Format* format, size_t index) {
+    format_to_index_[format] = index;
+}
+
+}} // namespace fastexcel::core

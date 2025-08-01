@@ -2,6 +2,8 @@
 
 #include "fastexcel/core/Cell.hpp"
 #include "fastexcel/core/Format.hpp"
+#include "fastexcel/core/SharedStringTable.hpp"
+#include "fastexcel/core/FormatPool.hpp"
 #include <string>
 #include <vector>
 #include <map>
@@ -16,6 +18,8 @@ namespace core {
 
 // 前向声明
 class Workbook;
+class SharedStringTable;
+class FormatPool;
 
 // 列信息结构
 struct ColumnInfo {
@@ -139,6 +143,31 @@ private:
     std::shared_ptr<Workbook> parent_workbook_;
     int sheet_id_;
     
+    // 优化组件
+    SharedStringTable* sst_ = nullptr;
+    FormatPool* format_pool_ = nullptr;
+    bool optimize_mode_ = false;
+    
+    // 优化模式下的行缓存
+    struct WorksheetRow {
+        int row_num;
+        std::map<int, Cell> cells;
+        double height = -1.0;
+        std::shared_ptr<Format> format;
+        bool hidden = false;
+        bool data_changed = false;
+        
+        explicit WorksheetRow(int row) : row_num(row) {}
+    };
+    std::unique_ptr<WorksheetRow> current_row_;
+    std::vector<Cell> row_buffer_;
+    
+    // 使用范围跟踪
+    int min_row_ = INT32_MAX;
+    int max_row_ = -1;
+    int min_col_ = INT32_MAX;
+    int max_col_ = -1;
+    
     // 行列信息
     std::unordered_map<int, ColumnInfo> column_info_;
     std::unordered_map<int, RowInfo> row_info_;
@@ -183,6 +212,56 @@ public:
     // 允许移动构造和赋值
     Worksheet(Worksheet&&) = default;
     Worksheet& operator=(Worksheet&&) = default;
+    
+    // ========== 优化功能 ==========
+    
+    /**
+     * @brief 设置共享字符串表
+     * @param sst 共享字符串表指针
+     */
+    void setSharedStringTable(SharedStringTable* sst) { sst_ = sst; }
+    
+    /**
+     * @brief 设置格式池
+     * @param format_pool 格式池指针
+     */
+    void setFormatPool(FormatPool* format_pool) { format_pool_ = format_pool; }
+    
+    /**
+     * @brief 启用/禁用优化模式
+     * @param enable 是否启用优化模式
+     */
+    void setOptimizeMode(bool enable);
+    
+    /**
+     * @brief 检查是否启用了优化模式
+     * @return 是否启用优化模式
+     */
+    bool isOptimizeMode() const { return optimize_mode_; }
+    
+    /**
+     * @brief 刷新当前行缓存
+     */
+    void flushCurrentRow();
+    
+    /**
+     * @brief 获取内存使用情况
+     * @return 内存使用字节数
+     */
+    size_t getMemoryUsage() const;
+    
+    /**
+     * @brief 获取性能统计信息
+     */
+    struct PerformanceStats {
+        size_t total_cells = 0;
+        size_t memory_usage = 0;
+        size_t sst_strings = 0;
+        double sst_compression_ratio = 0.0;
+        size_t unique_formats = 0;
+        double format_deduplication_ratio = 0.0;
+    };
+    PerformanceStats getPerformanceStats() const;
     
     // ========== 基本单元格操作 ==========
     
@@ -861,6 +940,12 @@ private:
     std::string rangeReference(int first_row, int first_col, int last_row, int last_col) const;
     void validateCellPosition(int row, int col) const;
     void validateRange(int first_row, int first_col, int last_row, int last_col) const;
+    
+    // 优化相关辅助方法
+    void ensureCurrentRow(int row_num);
+    void switchToNewRow(int row_num);
+    void writeOptimizedCell(int row, int col, Cell&& cell, std::shared_ptr<Format> format);
+    void updateUsedRangeOptimized(int row, int col);
     
     // XML生成辅助方法
     std::string generateSheetDataXML() const;

@@ -22,6 +22,7 @@ include_directories(${CMAKE_SOURCE_DIR}/third_party/libexpat/expat/lib)
 set(UNIT_TEST_SOURCES
     unit/test_main.cpp
     unit/test_cell.cpp
+    unit/test_cell_optimized.cpp
     unit/test_format.cpp
     unit/test_worksheet.cpp
     unit/test_workbook.cpp

@@ -1,5 +1,7 @@
 #include "fastexcel/core/Worksheet.hpp"
 #include "fastexcel/core/Workbook.hpp"
+#include "fastexcel/core/SharedStringTable.hpp"
+#include "fastexcel/core/FormatPool.hpp"
 #include "fastexcel/xml/XMLStreamWriter.hpp"
 #include "fastexcel/xml/SharedStrings.hpp"
 #include "fastexcel/utils/Logger.hpp"
@@ -35,42 +37,81 @@ const Cell& Worksheet::getCell(int row, int col) const {
 
 void Worksheet::writeString(int row, int col, const std::string& value, std::shared_ptr<Format> format) {
     validateCellPosition(row, col);
-    auto& cell = cells_[std::make_pair(row, col)];
-    cell.setValue(value);
-    if (format) {
-        cell.setFormat(format);
+    
+    Cell cell;
+    if (sst_) {
+        // 使用共享字符串表
+        int32_t string_id = sst_->addString(value);
+        // 注意：这里需要修改Cell类来支持SST ID，暂时直接设置值
+        cell.setValue(value);
+    } else {
+        cell.setValue(value);
     }
-    updateUsedRange(row, col);
+    
+    if (optimize_mode_) {
+        writeOptimizedCell(row, col, std::move(cell), format);
+    } else {
+        auto& target_cell = cells_[std::make_pair(row, col)];
+        target_cell = std::move(cell);
+        if (format) {
+            target_cell.setFormat(format);
+        }
+        updateUsedRange(row, col);
+    }
 }
 
 void Worksheet::writeNumber(int row, int col, double value, std::shared_ptr<Format> format) {
     validateCellPosition(row, col);
-    auto& cell = cells_[std::make_pair(row, col)];
+    
+    Cell cell;
     cell.setValue(value);
-    if (format) {
-        cell.setFormat(format);
+    
+    if (optimize_mode_) {
+        writeOptimizedCell(row, col, std::move(cell), format);
+    } else {
+        auto& target_cell = cells_[std::make_pair(row, col)];
+        target_cell = std::move(cell);
+        if (format) {
+            target_cell.setFormat(format);
+        }
+        updateUsedRange(row, col);
     }
-    updateUsedRange(row, col);
 }
 
 void Worksheet::writeBoolean(int row, int col, bool value, std::shared_ptr<Format> format) {
     validateCellPosition(row, col);
-    auto& cell = cells_[std::make_pair(row, col)];
+    
+    Cell cell;
     cell.setValue(value);
-    if (format) {
-        cell.setFormat(format);
+    
+    if (optimize_mode_) {
+        writeOptimizedCell(row, col, std::move(cell), format);
+    } else {
+        auto& target_cell = cells_[std::make_pair(row, col)];
+        target_cell = std::move(cell);
+        if (format) {
+            target_cell.setFormat(format);
+        }
+        updateUsedRange(row, col);
     }
-    updateUsedRange(row, col);
 }
 
 void Worksheet::writeFormula(int row, int col, const std::string& formula, std::shared_ptr<Format> format) {
     validateCellPosition(row, col);
-    auto& cell = cells_[std::make_pair(row, col)];
+    
+    Cell cell;
     cell.setFormula(formula);
-    if (format) {
-        cell.setFormat(format);
+    
+    if (optimize_mode_) {
+        writeOptimizedCell(row, col, std::move(cell), format);
+    } else {
+        auto& target_cell = cells_[std::make_pair(row, col)];
+        target_cell = std::move(cell);
+        if (format) {
+            target_cell.setFormat(format);
+        }
+        updateUsedRange(row, col);
     }
-    updateUsedRange(row, col);
 }
 
 void Worksheet::writeDateTime(int row, int col, const std::tm& datetime, std::shared_ptr<Format> format) {
@@ -1077,6 +1118,152 @@ void Worksheet::shiftCellsForColumnDeletion(int col, int count) {
             it = merge_ranges_.erase(it);
         }
     }
+}
+
+// ========== 优化功能实现 ==========
+
+void Worksheet::setOptimizeMode(bool enable) {
+    if (optimize_mode_ == enable) {
+        return;  // 状态未改变
+    }
+    
+    if (optimize_mode_ && !enable) {
+        // 从优化模式切换到标准模式
+        flushCurrentRow();
+        current_row_.reset();
+        row_buffer_.clear();
+    } else if (!optimize_mode_ && enable) {
+        // 从标准模式切换到优化模式
+        row_buffer_.reserve(16384);  // Excel最大列数
+    }
+    
+    optimize_mode_ = enable;
+}
+
+void Worksheet::flushCurrentRow() {
+    if (!optimize_mode_ || !current_row_ || !current_row_->data_changed) {
+        return;
+    }
+    
+    // 将当前行数据移动到主存储中
+    int row_num = current_row_->row_num;
+    for (auto& [col, cell] : current_row_->cells) {
+        cells_[std::make_pair(row_num, col)] = std::move(cell);
+    }
+    
+    // 更新行信息
+    if (current_row_->height > 0 || current_row_->format || current_row_->hidden) {
+        RowInfo& row_info = row_info_[row_num];
+        if (current_row_->height > 0) {
+            row_info.height = current_row_->height;
+        }
+        if (current_row_->format) {
+            row_info.format = current_row_->format;
+        }
+        if (current_row_->hidden) {
+            row_info.hidden = current_row_->hidden;
+        }
+    }
+    
+    // 重置当前行
+    current_row_.reset();
+}
+
+size_t Worksheet::getMemoryUsage() const {
+    size_t usage = sizeof(Worksheet);
+    
+    // 单元格内存
+    for (const auto& [pos, cell] : cells_) {
+        usage += sizeof(std::pair<std::pair<int, int>, Cell>);
+        usage += cell.getMemoryUsage();
+    }
+    
+    // 当前行内存（优化模式）
+    if (current_row_) {
+        usage += sizeof(WorksheetRow);
+        usage += current_row_->cells.size() * sizeof(std::pair<int, Cell>);
+        for (const auto& [col, cell] : current_row_->cells) {
+            usage += cell.getMemoryUsage();
+        }
+    }
+    
+    // 行缓冲区内存
+    usage += row_buffer_.capacity() * sizeof(Cell);
+    
+    // 行列信息内存
+    usage += column_info_.size() * sizeof(std::pair<int, ColumnInfo>);
+    usage += row_info_.size() * sizeof(std::pair<int, RowInfo>);
+    
+    // 合并单元格内存
+    usage += merge_ranges_.size() * sizeof(MergeRange);
+    
+    return usage;
+}
+
+Worksheet::PerformanceStats Worksheet::getPerformanceStats() const {
+    PerformanceStats stats;
+    stats.total_cells = getCellCount();
+    stats.memory_usage = getMemoryUsage();
+    
+    if (sst_) {
+        stats.sst_strings = sst_->getStringCount();
+        auto compression_stats = sst_->getCompressionStats();
+        stats.sst_compression_ratio = compression_stats.compression_ratio;
+    } else {
+        stats.sst_strings = 0;
+        stats.sst_compression_ratio = 0.0;
+    }
+    
+    if (format_pool_) {
+        stats.unique_formats = format_pool_->getFormatCount();
+        auto dedup_stats = format_pool_->getDeduplicationStats();
+        stats.format_deduplication_ratio = dedup_stats.deduplication_ratio;
+    } else {
+        stats.unique_formats = 0;
+        stats.format_deduplication_ratio = 0.0;
+    }
+    
+    return stats;
+}
+
+void Worksheet::ensureCurrentRow(int row_num) {
+    if (!current_row_ || current_row_->row_num != row_num) {
+        switchToNewRow(row_num);
+    }
+}
+
+void Worksheet::switchToNewRow(int row_num) {
+    // 刷新当前行
+    flushCurrentRow();
+    
+    // 创建新的当前行
+    current_row_ = std::make_unique<WorksheetRow>(row_num);
+}
+
+void Worksheet::writeOptimizedCell(int row, int col, Cell&& cell, std::shared_ptr<Format> format) {
+    updateUsedRangeOptimized(row, col);
+    
+    // 处理格式
+    if (format) {
+        if (format_pool_) {
+            // 使用格式池去重
+            size_t format_index = format_pool_->getFormatIndex(format.get());
+            cell.setFormat(format);
+        } else {
+            cell.setFormat(format);
+        }
+    }
+    
+    ensureCurrentRow(row);
+    current_row_->cells[col] = std::move(cell);
+    current_row_->data_changed = true;
+}
+
+void Worksheet::updateUsedRangeOptimized(int row, int col) {
+    min_row_ = std::min(min_row_, row);
+    max_row_ = std::max(max_row_, row);
+    min_col_ = std::min(min_col_, col);
+    max_col_ = std::max(max_col_, col);
 }
 
 }} // namespace fastexcel::core
