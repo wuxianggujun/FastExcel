@@ -296,6 +296,57 @@ enum class CellType {
 #define MAX_WORKSHEETS 255  // 避免这种方式
 ```
 
+### 5.5 枚举类型最佳实践
+
+#### 错误码枚举设计
+- 使用 `enum class` 定义错误码枚举
+- 为错误码枚举提供布尔转换操作符，便于在条件语句中使用
+- 提供辅助函数增强代码可读性
+
+#### 示例：
+```cpp
+// 错误码枚举定义
+enum class ZipError {
+    Ok,                    // 操作成功
+    NotOpen,               // ZIP 文件未打开
+    IoFail,                // I/O 操作失败
+    BadFormat,             // ZIP 格式错误
+    TooLarge,              // 文件太大
+    FileNotFound,          // 文件未找到
+    InvalidParameter,      // 无效参数
+    InternalError          // 内部错误
+};
+
+// 为 ZipError 提供 bool 转换操作符，使其可以在布尔上下文中使用
+// 只有 ZipError::Ok 被视为 true，其他所有错误都被视为 false
+constexpr bool operator!(ZipError error) noexcept {
+    return error != ZipError::Ok;
+}
+
+// 显式 bool 转换函数，用于更清晰的语义
+constexpr bool isSuccess(ZipError error) noexcept {
+    return error == ZipError::Ok;
+}
+
+constexpr bool isError(ZipError error) noexcept {
+    return error != ZipError::Ok;
+}
+```
+
+#### 在测试中使用错误码枚举
+```cpp
+// 推荐：明确比较错误码
+EXPECT_EQ(zip_archive_->fileExists(path), ZipError::Ok);
+EXPECT_EQ(zip_archive_->addFile(path, content), ZipError::Ok);
+
+// 推荐：使用辅助函数增强可读性
+EXPECT_TRUE(isSuccess(zip_archive_->fileExists(path)));
+EXPECT_FALSE(isError(zip_archive_->addFile(path, content)));
+
+// 不推荐：直接在 EXPECT_TRUE 中使用枚举（会导致编译错误）
+// EXPECT_TRUE(zip_archive_->fileExists(path));  // 编译错误
+```
+
 ## 6. 性能规范
 
 ### 6.1 字符串处理

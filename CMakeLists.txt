@@ -43,9 +43,19 @@ add_subdirectory(third_party/minizip-ng)
 add_subdirectory(third_party/googletest)
 
 # FastExcel库源文件
-file(GLOB_RECURSE FASTEXCEL_SOURCES
-        "src/fastexcel/*.cpp"
-        "src/fastexcel/*.c"
+set(FASTEXCEL_SOURCES
+    src/fastexcel/FastExcel.cpp
+    src/fastexcel/archive/ZipArchive.cpp
+    src/fastexcel/archive/FileManager.cpp
+    src/fastexcel/core/Cell.cpp
+    src/fastexcel/core/Format.cpp
+    src/fastexcel/core/Workbook.cpp
+    src/fastexcel/core/Worksheet.cpp
+    src/fastexcel/utils/Logger.cpp
+    src/fastexcel/xml/ContentTypes.cpp
+    src/fastexcel/xml/Relationships.cpp
+    src/fastexcel/xml/SharedStrings.cpp
+    src/fastexcel/xml/XMLStreamWriter.cpp
 )
 
 # 创建静态库
@@ -67,6 +77,13 @@ target_link_libraries(fastexcel PUBLIC
         zlib
         MINIZIP::minizip
 )
+
+# 添加编译器警告
+if(MSVC)
+    target_compile_options(fastexcel PRIVATE /W4)
+else()
+    target_compile_options(fastexcel PRIVATE -Wall -Wextra)
+endif()
 
 # 示例程序
 add_executable(${PROJECT_NAME} src/main.cpp)

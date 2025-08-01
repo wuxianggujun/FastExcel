@@ -14,29 +14,43 @@ class ZipArchiveTest : public ::testing::Test {
 protected:
     void SetUp() override {
         // 初始化日志系统
-        fastexcel::Logger::getInstance().initialize("logs/ZipArchive_test.log", 
-                                                   fastexcel::Logger::Level::DEBUG, 
+        fastexcel::Logger::getInstance().initialize("logs/ZipArchive_test.log",
+                                                   fastexcel::Logger::Level::DEBUG,
                                                    false);
         
         // 创建测试目录
         test_dir_ = "test_zip_archive";
         std::filesystem::create_directories(test_dir_);
         
-        // 创建测试文件路径
-        test_zip_path_ = test_dir_ + "/test.zip";
+        // 为每个测试创建唯一的文件路径，避免测试间冲突
+        static int test_counter = 0;
+        test_zip_path_ = test_dir_ + "/test_" + std::to_string(++test_counter) + ".zip";
         
         // 确保测试开始时文件不存在
-        std::filesystem::remove(test_zip_path_);
+        if (std::filesystem::exists(test_zip_path_)) {
+            std::filesystem::remove(test_zip_path_);
+        }
     }
 
     void TearDown() override {
-        // 关闭 ZIP 文件
+        // 关闭 ZIP 文件并释放资源
         if (zip_archive_) {
             zip_archive_->close();
+            zip_archive_.reset();  // 确保完全释放资源
         }
         
+        // 短暂延迟确保文件句柄完全释放
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        
         // 清理测试文件
-        // std::filesystem::remove_all(test_dir_);
+        try {
+            if (std::filesystem::exists(test_zip_path_)) {
+                std::filesystem::remove(test_zip_path_);
+            }
+        } catch (const std::exception& e) {
+            // 忽略清理错误，避免影响测试结果
+            LOG_WARN("Failed to clean up test file {}: {}", test_zip_path_, e.what());
+        }
         
         // 关闭日志系统
         fastexcel::Logger::getInstance().shutdown();
@@ -99,7 +113,7 @@ TEST_F(ZipArchiveTest, AddAndExtractStringFile) {
     std::string internal_path = "test_string.txt";
     
     // 添加文件到 ZIP
-    EXPECT_TRUE(zip_archive_->addFile(internal_path, test_content));
+    EXPECT_TRUE(zip_archive_->addFile(internal_path, test_content) == ZipError::Ok);
     
     // 关闭 ZIP 文件
     zip_archive_->close();
@@ -112,11 +126,11 @@ TEST_F(ZipArchiveTest, AddAndExtractStringFile) {
     ASSERT_TRUE(zip_archive_->open(false));
     
     // 检查文件是否存在
-    EXPECT_TRUE(zip_archive_->fileExists(internal_path));
+    EXPECT_TRUE(zip_archive_->fileExists(internal_path) == ZipError::Ok);
     
     // 提取文件内容
     std::string extracted_content;
-    EXPECT_TRUE(zip_archive_->extractFile(internal_path, extracted_content));
+    EXPECT_TRUE(zip_archive_->extractFile(internal_path, extracted_content) == ZipError::Ok);
     
     // 验证内容是否一致
     EXPECT_EQ(extracted_content, test_content);
@@ -135,7 +149,7 @@ TEST_F(ZipArchiveTest, AddAndExtractBinaryFile) {
     std::string internal_path = "test_binary.bin";
     
     // 添加文件到 ZIP
-    EXPECT_TRUE(zip_archive_->addFile(internal_path, test_data));
+    EXPECT_TRUE(zip_archive_->addFile(internal_path, test_data.data(), test_data.size()) == ZipError::Ok);
     
     // 关闭 ZIP 文件
     zip_archive_->close();
@@ -147,11 +161,11 @@ TEST_F(ZipArchiveTest, AddAndExtractBinaryFile) {
     ASSERT_TRUE(zip_archive_->open(false));
     
     // 检查文件是否存在
-    EXPECT_TRUE(zip_archive_->fileExists(internal_path));
+    EXPECT_TRUE(zip_archive_->fileExists(internal_path) == ZipError::Ok);
     
     // 提取文件内容
     std::vector<uint8_t> extracted_data;
-    EXPECT_TRUE(zip_archive_->extractFile(internal_path, extracted_data));
+    EXPECT_TRUE(zip_archive_->extractFile(internal_path, extracted_data) == ZipError::Ok);
     
     // 验证内容是否一致
     EXPECT_EQ(extracted_data.size(), test_data.size());
@@ -173,7 +187,7 @@ TEST_F(ZipArchiveTest, AddMultipleFilesAndList) {
     for (int i = 0; i < file_count; ++i) {
         std::string path = "file_" + std::to_string(i) + ".txt";
         std::string content = "Content of file " + std::to_string(i);
-        EXPECT_TRUE(zip_archive_->addFile(path, content));
+        EXPECT_TRUE(zip_archive_->addFile(path, content) == ZipError::Ok);
     }
     
     // 关闭 ZIP 文件
@@ -192,7 +206,7 @@ TEST_F(ZipArchiveTest, AddMultipleFilesAndList) {
     // 验证所有文件都存在
     for (int i = 0; i < file_count; ++i) {
         std::string path = "file_" + std::to_string(i) + ".txt";
-        EXPECT_TRUE(zip_archive_->fileExists(path));
+        EXPECT_EQ(zip_archive_->fileExists(path), ZipError::Ok);
     }
 }
 
@@ -210,7 +224,7 @@ TEST_F(ZipArchiveTest, LargeFileHandling) {
     std::string internal_path = "large_file.txt";
     
     // 添加大文件到 ZIP
-    EXPECT_TRUE(zip_archive_->addFile(internal_path, large_content));
+    EXPECT_TRUE(zip_archive_->addFile(internal_path, large_content) == ZipError::Ok);
     
     // 关闭 ZIP 文件
     zip_archive_->close();
@@ -222,11 +236,11 @@ TEST_F(ZipArchiveTest, LargeFileHandling) {
     ASSERT_TRUE(zip_archive_->open(false));
     
     // 检查文件是否存在
-    EXPECT_TRUE(zip_archive_->fileExists(internal_path));
+    EXPECT_TRUE(zip_archive_->fileExists(internal_path) == ZipError::Ok);
     
     // 提取文件内容
     std::string extracted_content;
-    EXPECT_TRUE(zip_archive_->extractFile(internal_path, extracted_content));
+    EXPECT_TRUE(zip_archive_->extractFile(internal_path, extracted_content) == ZipError::Ok);
     
     // 验证内容是否一致
     EXPECT_EQ(extracted_content.size(), large_content.size());
@@ -255,7 +269,7 @@ TEST_F(ZipArchiveTest, SpecialCharacterFilename) {
     // 添加文件
     for (const auto& filename : special_filenames) {
         std::string content = "Content for " + filename;
-        EXPECT_TRUE(zip_archive_->addFile(filename, content));
+        EXPECT_TRUE(zip_archive_->addFile(filename, content) == ZipError::Ok);
     }
     
     // 关闭 ZIP 文件
@@ -269,11 +283,11 @@ TEST_F(ZipArchiveTest, SpecialCharacterFilename) {
     
     // 验证所有文件都存在
     for (const auto& filename : special_filenames) {
-        EXPECT_TRUE(zip_archive_->fileExists(filename));
+        EXPECT_TRUE(zip_archive_->fileExists(filename) == ZipError::Ok);
         
         // 提取并验证内容
         std::string extracted_content;
-        EXPECT_TRUE(zip_archive_->extractFile(filename, extracted_content));
+        EXPECT_TRUE(zip_archive_->extractFile(filename, extracted_content) == ZipError::Ok);
         EXPECT_EQ(extracted_content, "Content for " + filename);
     }
 }
@@ -290,7 +304,7 @@ TEST_F(ZipArchiveTest, EmptyFileHandling) {
     std::string empty_content = "";
     std::string internal_path = "empty_file.txt";
     
-    EXPECT_TRUE(zip_archive_->addFile(internal_path, empty_content));
+    EXPECT_TRUE(zip_archive_->addFile(internal_path, empty_content) == ZipError::Ok);
     
     // 关闭 ZIP 文件
     zip_archive_->close();
@@ -302,11 +316,11 @@ TEST_F(ZipArchiveTest, EmptyFileHandling) {
     ASSERT_TRUE(zip_archive_->open(false));
     
     // 检查文件是否存在
-    EXPECT_TRUE(zip_archive_->fileExists(internal_path));
+    EXPECT_TRUE(zip_archive_->fileExists(internal_path) == ZipError::Ok);
     
     // 提取文件内容
     std::string extracted_content;
-    EXPECT_TRUE(zip_archive_->extractFile(internal_path, extracted_content));
+    EXPECT_TRUE(zip_archive_->extractFile(internal_path, extracted_content) == ZipError::Ok);
     
     // 验证内容是否为空
     EXPECT_EQ(extracted_content, empty_content);
@@ -323,7 +337,7 @@ TEST_F(ZipArchiveTest, NonExistentFile) {
     // 添加一个文件
     std::string internal_path = "existing_file.txt";
     std::string content = "This file exists";
-    EXPECT_TRUE(zip_archive_->addFile(internal_path, content));
+    EXPECT_TRUE(zip_archive_->addFile(internal_path, content) == ZipError::Ok);
     
     // 关闭 ZIP 文件
     zip_archive_->close();
@@ -335,14 +349,14 @@ TEST_F(ZipArchiveTest, NonExistentFile) {
     ASSERT_TRUE(zip_archive_->open(false));
     
     // 检查存在的文件
-    EXPECT_TRUE(zip_archive_->fileExists(internal_path));
+    EXPECT_TRUE(zip_archive_->fileExists(internal_path) == ZipError::Ok);
     
     // 检查不存在的文件
-    EXPECT_FALSE(zip_archive_->fileExists("non_existent_file.txt"));
+    EXPECT_TRUE(zip_archive_->fileExists("non_existent_file.txt") == ZipError::FileNotFound);
     
     // 尝试提取不存在的文件
     std::string extracted_content;
-    EXPECT_FALSE(zip_archive_->extractFile("non_existent_file.txt", extracted_content));
+    EXPECT_TRUE(zip_archive_->extractFile("non_existent_file.txt", extracted_content) == ZipError::FileNotFound);
 }
 
 // 测试9: 重复添加同名文件
@@ -358,10 +372,10 @@ TEST_F(ZipArchiveTest, DuplicateFilename) {
     std::string first_content = "First content";
     std::string second_content = "Second content";
     
-    EXPECT_TRUE(zip_archive_->addFile(internal_path, first_content));
+    EXPECT_TRUE(zip_archive_->addFile(internal_path, first_content) == ZipError::Ok);
     
     // 再次添加同名文件（应该覆盖）
-    EXPECT_TRUE(zip_archive_->addFile(internal_path, second_content));
+    EXPECT_TRUE(zip_archive_->addFile(internal_path, second_content) == ZipError::Ok);
     
     // 关闭 ZIP 文件
     zip_archive_->close();
@@ -373,11 +387,11 @@ TEST_F(ZipArchiveTest, DuplicateFilename) {
     ASSERT_TRUE(zip_archive_->open(false));
     
     // 检查文件是否存在
-    EXPECT_TRUE(zip_archive_->fileExists(internal_path));
+    EXPECT_TRUE(zip_archive_->fileExists(internal_path) == ZipError::Ok);
     
     // 提取文件内容
     std::string extracted_content;
-    EXPECT_TRUE(zip_archive_->extractFile(internal_path, extracted_content));
+    EXPECT_TRUE(zip_archive_->extractFile(internal_path, extracted_content) == ZipError::Ok);
     
     // 验证内容是第二次添加的内容
     EXPECT_EQ(extracted_content, second_content);
@@ -401,7 +415,7 @@ TEST_F(ZipArchiveTest, DirectoryStructure) {
     };
     
     for (const auto& [path, content] : files) {
-        EXPECT_TRUE(zip_archive_->addFile(path, content));
+        EXPECT_TRUE(zip_archive_->addFile(path, content) == ZipError::Ok);
     }
     
     // 关闭 ZIP 文件
@@ -415,11 +429,11 @@ TEST_F(ZipArchiveTest, DirectoryStructure) {
     
     // 验证所有文件都存在
     for (const auto& [path, content] : files) {
-        EXPECT_TRUE(zip_archive_->fileExists(path));
+        EXPECT_TRUE(zip_archive_->fileExists(path) == ZipError::Ok);
         
         // 提取并验证内容
         std::string extracted_content;
-        EXPECT_TRUE(zip_archive_->extractFile(path, extracted_content));
+        EXPECT_TRUE(zip_archive_->extractFile(path, extracted_content) == ZipError::Ok);
         EXPECT_EQ(extracted_content, content);
     }
     

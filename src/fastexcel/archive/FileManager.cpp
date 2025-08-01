@@ -47,7 +47,7 @@ bool FileManager::writeFile(const std::string& internal_path, const std::string&
         return false;
     }
     
-    return archive_->addFile(internal_path, content);
+    return archive_->addFile(internal_path, content) == ZipError::Ok;
 }
 
 bool FileManager::writeFile(const std::string& internal_path, const std::vector<uint8_t>& data) {
@@ -56,7 +56,7 @@ bool FileManager::writeFile(const std::string& internal_path, const std::vector<
         return false;
     }
     
-    return archive_->addFile(internal_path, data);
+    return archive_->addFile(internal_path, data.data(), data.size()) == ZipError::Ok;
 }
 
 bool FileManager::readFile(const std::string& internal_path, std::string& content) {
@@ -65,7 +65,7 @@ bool FileManager::readFile(const std::string& internal_path, std::string& conten
         return false;
     }
     
-    return archive_->extractFile(internal_path, content);
+    return archive_->extractFile(internal_path, content) == ZipError::Ok;
 }
 
 bool FileManager::readFile(const std::string& internal_path, std::vector<uint8_t>& data) {
@@ -74,7 +74,7 @@ bool FileManager::readFile(const std::string& internal_path, std::vector<uint8_t
         return false;
     }
     
-    return archive_->extractFile(internal_path, data);
+    return archive_->extractFile(internal_path, data) == ZipError::Ok;
 }
 
 bool FileManager::fileExists(const std::string& internal_path) const {
@@ -82,7 +82,7 @@ bool FileManager::fileExists(const std::string& internal_path) const {
         return false;
     }
     
-    return archive_->fileExists(internal_path);
+    return archive_->fileExists(internal_path) == ZipError::Ok;
 }
 
 std::vector<std::string> FileManager::listFiles() const {

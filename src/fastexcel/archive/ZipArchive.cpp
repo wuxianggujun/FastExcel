@@ -10,6 +10,9 @@
 #include <cstdio>
 #include <filesystem>
 #include <ctime>
+#include <ostream>
+#include <array>
+#include <cstddef>
 
 namespace fastexcel {
 namespace archive {
@@ -19,14 +22,19 @@ ZipArchive::ZipArchive(const std::string& filename) : filename_(filename) {
     unzip_handle_ = nullptr;
     is_writable_ = false;
     is_readable_ = false;
+    stream_entry_open_ = false;
+    compression_level_ = 6;  // 默认压缩级别
 }
 
 ZipArchive::~ZipArchive() {
-    close();
+    // 在析构函数中直接调用 cleanup()，避免获取锁
+    // 因为析构函数通常在单线程环境中调用
+    cleanup();
 }
 
 bool ZipArchive::open(bool create) {
-    close();
+    std::lock_guard<std::mutex> lock(mutex_);
+    cleanup();  // 直接调用 cleanup() 而不是 close()，避免重复获取锁
     
     if (create) {
         return initForWriting();
@@ -36,35 +44,58 @@ bool ZipArchive::open(bool create) {
 }
 
 bool ZipArchive::close() {
+    std::lock_guard<std::mutex> lock(mutex_);
     cleanup();
     return true;
 }
 
-bool ZipArchive::addFile(const std::string& internal_path, const std::string& content) {
+ZipError ZipArchive::addFile(std::string_view internal_path, std::string_view content) {
     return addFile(internal_path, content.data(), content.size());
 }
 
-bool ZipArchive::addFile(const std::string& internal_path, const std::vector<uint8_t>& data) {
-    return addFile(internal_path, data.data(), data.size());
+ZipError ZipArchive::addFile(std::string_view internal_path, const uint8_t* data, size_t size) {
+    return addFile(internal_path, reinterpret_cast<const void*>(data), size);
 }
 
-bool ZipArchive::addFile(const std::string& internal_path, const void* data, size_t size) {
+ZipError ZipArchive::addFile(std::string_view internal_path, const void* data, size_t size) {
+    std::lock_guard<std::mutex> lock(mutex_);
     if (!is_writable_ || !zip_handle_) {
         LOG_ERROR("Zip archive not opened for writing");
-        return false;
+        return ZipError::NotOpen;
+    }
+    
+    // 检查文件大小是否超过 int32_t 最大值
+    if (size > INT32_MAX) {
+        LOG_ERROR("File {} is too large ({} bytes), maximum size is {} bytes",
+                 internal_path, size, INT32_MAX);
+        return ZipError::TooLarge;
     }
     
     // 初始化文件信息结构 - 只设置必要的字段，让 minizip 自动计算 CRC 和大小
     mz_zip_file file_info = {};
-    file_info.filename = internal_path.c_str();
-    file_info.modified_date = time(nullptr);
-    file_info.flag = MZ_ZIP_FLAG_UTF8 | MZ_ZIP_FLAG_DATA_DESCRIPTOR;
+    
+    // 将 string_view 转换为 null 终止的字符串以供 minizip 使用
+    std::string path_str(internal_path);
+    file_info.filename = path_str.c_str();
+    
+    // 使用跨平台时间戳处理
+    // 使用 UTC 时间确保跨时区一致性
+    time_t now = time(nullptr);
+    file_info.modified_date = static_cast<uint32_t>(now);
+    file_info.creation_date = static_cast<uint32_t>(now);
+    
+    file_info.flag = MZ_ZIP_FLAG_UTF8;
+    
+    // 只为非零大小文件添加 DATA_DESCRIPTOR 标志
+    if (size > 0) {
+        file_info.flag |= MZ_ZIP_FLAG_DATA_DESCRIPTOR;
+    }
     
     // 打开条目
     int32_t result = mz_zip_writer_entry_open(zip_handle_, &file_info);
     if (result != MZ_OK) {
         LOG_ERROR("Failed to open entry for file {} in zip, error: {}", internal_path, result);
-        return false;
+        return ZipError::IoFail;
     }
     
     // 写入数据
@@ -74,7 +105,7 @@ bool ZipArchive::addFile(const std::string& internal_path, const void* data, siz
             LOG_ERROR("Failed to write complete data for file {} to zip, written: {} bytes, expected: {} bytes",
                      internal_path, bytes_written, size);
             mz_zip_writer_entry_close(zip_handle_);
-            return false;
+            return ZipError::IoFail;
         }
     }
     
@@ -82,35 +113,37 @@ bool ZipArchive::addFile(const std::string& internal_path, const void* data, siz
     result = mz_zip_writer_entry_close(zip_handle_);
     if (result != MZ_OK) {
         LOG_ERROR("Failed to close entry for file {} in zip, error: {}", internal_path, result);
-        return false;
+        return ZipError::IoFail;
     }
     
     LOG_DEBUG("Added file {} to zip, size: {} bytes", internal_path, size);
-    return true;
+    return ZipError::Ok;
 }
 
-bool ZipArchive::extractFile(const std::string& internal_path, std::string& content) {
+ZipError ZipArchive::extractFile(std::string_view internal_path, std::string& content) {
     std::vector<uint8_t> data;
-    if (!extractFile(internal_path, data)) {
-        return false;
+    ZipError result = extractFile(internal_path, data);
+    if (result != ZipError::Ok) {
+        return result;
     }
     
-    content.assign(data.begin(), data.end());
-    return true;
+    content.assign(reinterpret_cast<const char*>(data.data()), data.size());
+    return ZipError::Ok;
 }
 
-bool ZipArchive::extractFile(const std::string& internal_path, std::vector<uint8_t>& data) {
+ZipError ZipArchive::extractFile(std::string_view internal_path, std::vector<uint8_t>& data) {
+    std::lock_guard<std::mutex> lock(mutex_);
     if (!is_readable_ || !unzip_handle_) {
         LOG_ERROR("Zip archive not opened for reading");
-        return false;
+        return ZipError::NotOpen;
     }
 
     // 先跳到第一个条目
     if (mz_zip_reader_goto_first_entry(unzip_handle_) != MZ_OK)
-        return false;
+        return ZipError::BadFormat;
 
     std::vector<uint8_t> latest;   // 保存最后一次匹配到的内容
-    bool found = false;            // 标记是否找到匹配的文件
+    bool found = false;              // 标记是否找到匹配的文件
     do {
         mz_zip_file* info = nullptr;
         if (mz_zip_reader_entry_get_info(unzip_handle_, &info) != MZ_OK || !info)
@@ -136,31 +169,49 @@ bool ZipArchive::extractFile(const std::string& internal_path, std::vector<uint8
 
     if (!found) {                                    // 没找到
         LOG_ERROR("File {} not found in zip archive", internal_path);
-        return false;
+        return ZipError::FileNotFound;
     }
     data.swap(latest);
     LOG_DEBUG("Extracted file {} from zip, size: {} bytes", internal_path, data.size());
-    return true;
+    return ZipError::Ok;
 }
 
-bool ZipArchive::fileExists(const std::string& internal_path) const {
+ZipError ZipArchive::fileExists(std::string_view internal_path) const {
+    std::lock_guard<std::mutex> lock(mutex_);
     if (!is_readable_ || !unzip_handle_) {
-        return false;
+        return ZipError::NotOpen;
     }
     
-    int32_t result = mz_zip_reader_locate_entry(unzip_handle_, internal_path.c_str(), true);
-    return result == MZ_OK;
+    // 将 string_view 转换为 null 终止的字符串以供 minizip 使用
+    std::string path_str(internal_path);
+    int32_t result = mz_zip_reader_locate_entry(unzip_handle_, path_str.c_str(), true);
+    return result == MZ_OK ? ZipError::Ok : ZipError::FileNotFound;
 }
 
 std::vector<std::string> ZipArchive::listFiles() const {
+    std::lock_guard<std::mutex> lock(mutex_);
     std::vector<std::string> files;
     
     if (!is_readable_ || !unzip_handle_) {
         return files;
     }
     
-    // 回到第一个文件
+    // 获取文件总数，预先分配空间
+    int32_t total_entries = 0;
     mz_zip_reader_goto_first_entry(unzip_handle_);
+    while (mz_zip_reader_goto_next_entry(unzip_handle_) == MZ_OK) {
+        total_entries++;
+    }
+    mz_zip_reader_goto_first_entry(unzip_handle_);
+    
+    if (total_entries > 0) {
+        files.reserve(static_cast<size_t>(total_entries));
+    }
+    
+    // 回到第一个文件
+    if (mz_zip_reader_goto_first_entry(unzip_handle_) != MZ_OK) {
+        return files;
+    }
     
     mz_zip_file* file_info = nullptr;
     while (mz_zip_reader_entry_get_info(unzip_handle_, &file_info) == MZ_OK && file_info) {
@@ -192,6 +243,7 @@ void ZipArchive::cleanup() {
     
     is_writable_ = false;
     is_readable_ = false;
+    stream_entry_open_ = false;
 }
 
 bool ZipArchive::initForWriting() {
@@ -202,12 +254,15 @@ bool ZipArchive::initForWriting() {
     }
     
     // 设置压缩级别和方法
-    mz_zip_writer_set_compress_level(zip_handle_, MZ_COMPRESS_LEVEL_DEFAULT);
+    mz_zip_writer_set_compress_level(zip_handle_, static_cast<int16_t>(compression_level_));
     mz_zip_writer_set_compress_method(zip_handle_, MZ_COMPRESS_METHOD_DEFLATE);
     
     // 设置覆盖回调函数，总是覆盖已存在的文件
     mz_zip_writer_set_overwrite_cb(zip_handle_, this, [](void* handle, void* userdata, const char* filename) -> int32_t {
         // 总是覆盖已存在的文件
+        (void)handle;     // 避免未使用参数警告
+        (void)userdata;   // 避免未使用参数警告
+        (void)filename;   // 避免未使用参数警告
         return MZ_OK;
     });
     
@@ -218,6 +273,7 @@ bool ZipArchive::initForWriting() {
     int32_t result = mz_zip_writer_open_file(zip_handle_, filename_.c_str(), 0, file_exists ? 1 : 0);
     if (result != MZ_OK) {
         LOG_ERROR("Failed to open zip file for writing: {}, error: {}", filename_, result);
+        // 清理失败的句柄
         mz_zip_writer_delete(&zip_handle_);
         zip_handle_ = nullptr;
         return false;
@@ -238,6 +294,7 @@ bool ZipArchive::initForReading() {
     int32_t result = mz_zip_reader_open_file(unzip_handle_, filename_.c_str());
     if (result != MZ_OK) {
         LOG_ERROR("Failed to open zip file for reading: {}, error: {}", filename_, result);
+        // 清理失败的句柄
         mz_zip_reader_delete(&unzip_handle_);
         unzip_handle_ = nullptr;
         return false;
@@ -246,6 +303,186 @@ bool ZipArchive::initForReading() {
     is_readable_ = true;
     LOG_DEBUG("Zip archive opened for reading: {}", filename_);
     return true;
+}
+
+ZipError ZipArchive::openEntry(std::string_view internal_path) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (!is_writable_ || !zip_handle_) {
+        LOG_ERROR("Zip archive not opened for writing");
+        return ZipError::NotOpen;
+    }
+    
+    if (stream_entry_open_) {
+        LOG_ERROR("Another entry is already open for streaming");
+        return ZipError::InvalidParameter;
+    }
+    
+    // 初始化文件信息结构
+    mz_zip_file file_info = {};
+    
+    // 将 string_view 转换为 null 终止的字符串以供 minizip 使用
+    std::string path_str(internal_path);
+    file_info.filename = path_str.c_str();
+    
+    // 使用跨平台时间戳处理
+    time_t now = time(nullptr);
+    file_info.modified_date = static_cast<uint32_t>(now);
+    file_info.creation_date = static_cast<uint32_t>(now);
+    
+    file_info.flag = MZ_ZIP_FLAG_UTF8 | MZ_ZIP_FLAG_DATA_DESCRIPTOR;
+    
+    // 打开条目
+    int32_t result = mz_zip_writer_entry_open(zip_handle_, &file_info);
+    if (result != MZ_OK) {
+        LOG_ERROR("Failed to open entry for file {} in zip, error: {}", internal_path, result);
+        return ZipError::IoFail;
+    }
+    
+    stream_entry_open_ = true;
+    LOG_DEBUG("Opened entry for streaming: {}", internal_path);
+    return ZipError::Ok;
+}
+
+ZipError ZipArchive::writeChunk(const void* data, size_t size) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (!is_writable_ || !zip_handle_) {
+        LOG_ERROR("Zip archive not opened for writing");
+        return ZipError::NotOpen;
+    }
+    
+    if (!stream_entry_open_) {
+        LOG_ERROR("No entry is open for streaming");
+        return ZipError::InvalidParameter;
+    }
+    
+    if (size == 0) {
+        return ZipError::Ok;  // 空块是合法的
+    }
+    
+    // 检查块大小是否超过 int32_t 最大值
+    if (size > INT32_MAX) {
+        LOG_ERROR("Chunk size {} is too large, maximum size is {} bytes", size, INT32_MAX);
+        return ZipError::TooLarge;
+    }
+    
+    // 写入数据块
+    int32_t bytes_written = mz_zip_writer_entry_write(zip_handle_, data, static_cast<int32_t>(size));
+    if (bytes_written != static_cast<int32_t>(size)) {
+        LOG_ERROR("Failed to write complete chunk to zip, written: {} bytes, expected: {} bytes",
+                 bytes_written, size);
+        return ZipError::IoFail;
+    }
+    
+    return ZipError::Ok;
+}
+
+ZipError ZipArchive::closeEntry() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (!is_writable_ || !zip_handle_) {
+        LOG_ERROR("Zip archive not opened for writing");
+        return ZipError::NotOpen;
+    }
+    
+    if (!stream_entry_open_) {
+        LOG_ERROR("No entry is open for streaming");
+        return ZipError::InvalidParameter;
+    }
+    
+    // 关闭条目 - 这将让 minizip 自动计算并写入 CRC 和大小信息
+    int32_t result = mz_zip_writer_entry_close(zip_handle_);
+    if (result != MZ_OK) {
+        LOG_ERROR("Failed to close streaming entry in zip, error: {}", result);
+        return ZipError::IoFail;
+    }
+    
+    stream_entry_open_ = false;
+    LOG_DEBUG("Closed streaming entry");
+    return ZipError::Ok;
+}
+
+ZipError ZipArchive::extractFileToStream(std::string_view internal_path, std::ostream& output) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (!is_readable_ || !unzip_handle_) {
+        LOG_ERROR("Zip archive not opened for reading");
+        return ZipError::NotOpen;
+    }
+
+    // 先跳到第一个条目
+    if (mz_zip_reader_goto_first_entry(unzip_handle_) != MZ_OK)
+        return ZipError::BadFormat;
+
+    bool found = false;
+    do {
+        mz_zip_file* info = nullptr;
+        if (mz_zip_reader_entry_get_info(unzip_handle_, &info) != MZ_OK || !info)
+            break;
+
+        if (info->filename && internal_path == info->filename) {
+            // 找到目标文件，开始流式读取
+            if (mz_zip_reader_entry_open(unzip_handle_) == MZ_OK) {
+                found = true;
+                
+                // 使用固定大小的缓冲区进行分块读取
+                constexpr size_t BUFFER_SIZE = 8192;  // 8KB 缓冲区
+                std::array<uint8_t, BUFFER_SIZE> buffer;
+                
+                int64_t total_read = 0;
+                int32_t bytes_read = 0;
+                
+                do {
+                    bytes_read = mz_zip_reader_entry_read(unzip_handle_, buffer.data(),
+                                                         static_cast<int32_t>(buffer.size()));
+                    if (bytes_read > 0) {
+                        output.write(reinterpret_cast<const char*>(buffer.data()), bytes_read);
+                        if (!output) {
+                            LOG_ERROR("Failed to write to output stream for file {}", internal_path);
+                            mz_zip_reader_entry_close(unzip_handle_);
+                            return ZipError::IoFail;
+                        }
+                        total_read += bytes_read;
+                    }
+                } while (bytes_read > 0);
+                
+                mz_zip_reader_entry_close(unzip_handle_);
+                
+                // 验证是否读取了完整的数据
+                if (total_read != static_cast<int64_t>(info->uncompressed_size)) {
+                    LOG_ERROR("Incomplete read for file {}, expected: {} bytes, read: {} bytes",
+                             internal_path, info->uncompressed_size, total_read);
+                    return ZipError::IoFail;
+                }
+                
+                LOG_DEBUG("Extracted file {} to stream, size: {} bytes", internal_path, total_read);
+                break;
+            }
+        }
+    } while (mz_zip_reader_goto_next_entry(unzip_handle_) == MZ_OK);
+
+    if (!found) {
+        LOG_ERROR("File {} not found in zip archive", internal_path);
+        return ZipError::FileNotFound;
+    }
+
+    return ZipError::Ok;
+}
+
+ZipError ZipArchive::setCompressionLevel(int level) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    // 验证压缩级别范围 (0-9, 0为无压缩，9为最高压缩)
+    if (level < 0 || level > 9) {
+        LOG_ERROR("Invalid compression level: {}. Valid range: 0 to 9", level);
+        return ZipError::InvalidParameter;
+    }
+    
+    compression_level_ = level;
+    
+    // 如果已经打开写入模式，立即应用新的压缩级别
+    if (is_writable_ && zip_handle_) {
+        mz_zip_writer_set_compress_level(zip_handle_, static_cast<int16_t>(compression_level_));
+    }
+    
+    LOG_DEBUG("Set compression level to {}", level);
+    return ZipError::Ok;
 }
 
 }} // namespace fastexcel::archive
