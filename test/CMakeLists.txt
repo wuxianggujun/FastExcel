@@ -22,6 +22,14 @@ if(FASTEXCEL_BUILD_UNIT_TESTS)
         )
         target_include_directories(unit_tests PRIVATE
             ${CMAKE_SOURCE_DIR}/src
+            ${FASTEXCEL_THIRD_PARTY_INCLUDE_DIRS}
+        )
+        
+        # 确保测试能找到第三方库头文件
+        target_include_directories(unit_tests PRIVATE
+            ${CMAKE_SOURCE_DIR}/third_party/libexpat/expat/lib
+            ${CMAKE_SOURCE_DIR}/third_party/spdlog/include
+            ${CMAKE_SOURCE_DIR}/third_party/minizip-ng
         )
         
         # 设置输出目录
@@ -35,6 +43,8 @@ if(FASTEXCEL_BUILD_UNIT_TESTS)
             set_target_properties(unit_tests PROPERTIES
                 MSVC_RUNTIME_LIBRARY "MultiThreadedDebugDLL"
             )
+            # 设置UTF-8编码，解决C4819编码警告
+            target_compile_options(unit_tests PRIVATE /utf-8)
         endif()
         
         # 发现并注册测试
@@ -58,6 +68,14 @@ if(ENABLE_INTEGRATION_TESTS)
         )
         target_include_directories(integration_tests PRIVATE
             ${CMAKE_SOURCE_DIR}/src
+            ${FASTEXCEL_THIRD_PARTY_INCLUDE_DIRS}
+        )
+        
+        # 确保测试能找到第三方库头文件
+        target_include_directories(integration_tests PRIVATE
+            ${CMAKE_SOURCE_DIR}/third_party/libexpat/expat/lib
+            ${CMAKE_SOURCE_DIR}/third_party/spdlog/include
+            ${CMAKE_SOURCE_DIR}/third_party/minizip-ng
         )
         
         # 设置输出目录
@@ -71,6 +89,8 @@ if(ENABLE_INTEGRATION_TESTS)
             set_target_properties(integration_tests PROPERTIES
                 MSVC_RUNTIME_LIBRARY "MultiThreadedDebugDLL"
             )
+            # 设置UTF-8编码，解决C4819编码警告
+            target_compile_options(integration_tests PRIVATE /utf-8)
         endif()
         
         # 发现并注册测试

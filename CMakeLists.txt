@@ -90,13 +90,19 @@ target_include_directories(fastexcel PRIVATE
     ${FASTEXCEL_THIRD_PARTY_INCLUDE_DIRS}
 )
 
+# 确保第三方库的头文件能被找到
+target_include_directories(fastexcel PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/third_party/libexpat/expat/lib
+    ${CMAKE_CURRENT_SOURCE_DIR}/third_party/spdlog/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/third_party/minizip-ng
+)
+
 # =============================================================================
 # 链接库配置
 # =============================================================================
 target_link_libraries(fastexcel PRIVATE
     ${FASTEXCEL_SPDLOG_TARGET}
     ${FASTEXCEL_EXPAT_TARGET}
-    ${FASTEXCEL_ZLIB_TARGET}
     ${FASTEXCEL_MINIZIP_TARGET}
 )
 
@@ -107,6 +113,8 @@ if(MSVC)
     target_compile_options(fastexcel PRIVATE /W4)
     # 禁用一些不必要的警告
     target_compile_options(fastexcel PRIVATE /wd4251 /wd4275)
+    # 设置源文件和执行字符集为UTF-8，解决C4819编码警告
+    target_compile_options(fastexcel PRIVATE /utf-8)
 else()
     target_compile_options(fastexcel PRIVATE -Wall -Wextra -Wpedantic)
 endif()

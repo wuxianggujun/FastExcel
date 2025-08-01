@@ -28,7 +28,8 @@ endif()
 
 if(NOT spdlog_FOUND)
     add_subdirectory(spdlog)
-    set(SPDLOG_TARGET spdlog::spdlog)
+    # 使用直接的目标名称而不是别名
+    set(SPDLOG_TARGET spdlog)
 else()
     set(SPDLOG_TARGET spdlog::spdlog)
     message(STATUS "FastExcel: Using system spdlog")
@@ -58,52 +59,43 @@ endif()
 
 if(NOT expat_FOUND)
     add_subdirectory(libexpat/expat)
-    set(EXPAT_TARGET expat::expat)
+    # 使用直接的目标名称
+    set(EXPAT_TARGET expat)
 else()
     set(EXPAT_TARGET expat::expat)
     message(STATUS "FastExcel: Using system expat")
 endif()
 
 # =============================================================================
-# zlib-ng 配置
+# zlib 配置 (通过 minizip-ng 自动处理)
 # =============================================================================
-set(ZLIB_ENABLE_TESTS OFF CACHE BOOL "" FORCE)
-set(ZLIBNG_ENABLE_TESTS OFF CACHE BOOL "" FORCE)
-set(WITH_GTEST OFF CACHE BOOL "" FORCE)
-set(WITH_FUZZERS OFF CACHE BOOL "" FORCE)
-set(WITH_BENCHMARKS OFF CACHE BOOL "" FORCE)
-set(WITH_BENCHMARK_APPS OFF CACHE BOOL "" FORCE)
-
+# minizip-ng 会自动处理 zlib 依赖，我们不需要单独配置 zlib-ng
 if(FASTEXCEL_USE_SYSTEM_LIBS)
     find_package(ZLIB QUIET)
+    if(ZLIB_FOUND)
+        set(ZLIB_TARGET ZLIB::ZLIB)
+        message(STATUS "FastExcel: Using system zlib")
+    endif()
 endif()
 
+# 如果没有找到系统 zlib，minizip-ng 会自动获取
 if(NOT ZLIB_FOUND)
-    add_subdirectory(zlib-ng)
-    set(ZLIB_TARGET zlib)
-else()
-    set(ZLIB_TARGET ZLIB::ZLIB)
-    message(STATUS "FastExcel: Using system zlib")
+    set(ZLIB_TARGET "")  # minizip-ng 会处理
 endif()
 
 # =============================================================================
 # minizip-ng 配置
 # =============================================================================
-set(MZ_FETCH_LIBS OFF CACHE BOOL "" FORCE)
-set(MZ_ZLIB ON CACHE BOOL "" FORCE)
-set(MZ_FORCE_FETCH_LIBS OFF CACHE BOOL "" FORCE)
+set(MZ_FETCH_LIBS OFF CACHE BOOL "" FORCE)  # 禁用自动获取，避免网络问题
+set(MZ_ZLIB OFF CACHE BOOL "" FORCE)        # 禁用zlib依赖
+set(MZ_BZIP2 OFF CACHE BOOL "" FORCE)       # 禁用bzip2
+set(MZ_LZMA OFF CACHE BOOL "" FORCE)        # 禁用lzma
+set(MZ_ZSTD OFF CACHE BOOL "" FORCE)        # 禁用zstd
+set(MZ_LIBCOMP OFF CACHE BOOL "" FORCE)     # 禁用libcomp
 set(MZ_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(MZ_BUILD_UNIT_TESTS OFF CACHE BOOL "" FORCE)
 set(MZ_BUILD_FUZZ_TESTS OFF CACHE BOOL "" FORCE)
-
-# 设置zlib-ng库信息，让minizip-ng能找到它
-set(ZLIB-NG_FOUND TRUE)
-set(ZLIB-NG_LIBRARIES ${ZLIB_TARGET})
-set(ZLIB-NG_INCLUDE_DIRS
-    ${CMAKE_CURRENT_SOURCE_DIR}/zlib-ng
-    ${CMAKE_CURRENT_BINARY_DIR}/zlib-ng
-)
-set(ZLIB-NG_LIBRARY_DIRS ${CMAKE_CURRENT_BINARY_DIR}/zlib-ng)
+set(MZ_COMPAT ON CACHE BOOL "" FORCE)       # 启用兼容层
 
 add_subdirectory(minizip-ng)
 set(MINIZIP_TARGET MINIZIP::minizip)
@@ -149,7 +141,6 @@ set(FASTEXCEL_THIRD_PARTY_INCLUDE_DIRS
     ${CMAKE_CURRENT_SOURCE_DIR}/libexpat/expat/lib
     ${CMAKE_CURRENT_SOURCE_DIR}/spdlog/include
     ${CMAKE_CURRENT_SOURCE_DIR}/minizip-ng
-    ${CMAKE_CURRENT_SOURCE_DIR}/zlib-ng
     PARENT_SCOPE
 )
 

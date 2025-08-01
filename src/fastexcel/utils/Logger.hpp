@@ -1,11 +1,26 @@
 #pragma once
 
+// 防止 Windows 宏冲突
+#ifdef _WIN32
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#endif
+
 #include <spdlog/spdlog.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <spdlog/sinks/daily_file_sink.h>
 #include <spdlog/sinks/rotating_file_sink.h>
 #include <memory>
 #include <string>
+
+// 取消可能冲突的 Windows 宏定义
+#ifdef ERROR
+#undef ERROR
+#endif
 
 namespace fastexcel {
 

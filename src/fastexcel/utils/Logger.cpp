@@ -4,7 +4,18 @@
 #include <spdlog/async.h>
 
 #ifdef _WIN32
+// 防止 Windows 宏冲突
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #include <windows.h>
+// 取消可能冲突的 Windows 宏定义
+#ifdef ERROR
+#undef ERROR
+#endif
 #endif
 
 namespace fastexcel {
