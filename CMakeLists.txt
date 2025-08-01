@@ -11,6 +11,11 @@ set(SPDLOG_BUILD_TESTS_HO OFF CACHE BOOL "" FORCE)
 set(EXPAT_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(ZLIB_ENABLE_TESTS OFF CACHE BOOL "" FORCE)
 
+# 强制使用静态库
+set(EXPAT_BUILD_SHARED OFF CACHE BOOL "" FORCE)
+set(EXPAT_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+
 # 禁用 Gtest 自身测试
 set(gtest_build_tests OFF CACHE BOOL "" FORCE)
 set(gtest_build_samples OFF CACHE BOOL "" FORCE)
@@ -56,6 +61,7 @@ set(FASTEXCEL_SOURCES
     src/fastexcel/xml/Relationships.cpp
     src/fastexcel/xml/SharedStrings.cpp
     src/fastexcel/xml/XMLStreamWriter.cpp
+    src/fastexcel/xml/XMLStreamReader.cpp
 )
 
 # 创建静态库
