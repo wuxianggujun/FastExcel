@@ -124,6 +124,8 @@ public:
     
     // 文本操作
     void writeText(const char* text);
+    void writeRaw(const char* data);
+    void writeRaw(const std::string& data);
     
     // 注意：为避免指针悬空，已删除std::string重载
     // 请使用 const char* 或字符串字面量

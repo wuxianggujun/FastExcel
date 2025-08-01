@@ -180,6 +180,16 @@ void XMLStreamWriter::writeText(const char* text) {
     }
 }
 
+void XMLStreamWriter::writeRaw(const char* data) {
+    if (data) {
+        writeRawDirect(data, strlen(data));
+    }
+}
+
+void XMLStreamWriter::writeRaw(const std::string& data) {
+    writeRawDirect(data.c_str(), data.length());
+}
+
 std::string XMLStreamWriter::toString() const {
     if (direct_file_mode_) {
         LOG_WARN("toString() called in direct file mode, result may be incomplete");

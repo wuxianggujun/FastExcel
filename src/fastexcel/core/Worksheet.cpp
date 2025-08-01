@@ -5,6 +5,9 @@
 #include "fastexcel/utils/Logger.hpp"
 #include <sstream>
 #include <stdexcept>
+#include <algorithm>
+#include <iomanip>
+#include <cmath>
 
 namespace fastexcel {
 namespace core {
@@ -12,6 +15,8 @@ namespace core {
 Worksheet::Worksheet(const std::string& name, std::shared_ptr<Workbook> workbook, int sheet_id)
     : name_(name), parent_workbook_(workbook), sheet_id_(sheet_id) {
 }
+
+// ========== 基本单元格操作 ==========
 
 Cell& Worksheet::getCell(int row, int col) {
     validateCellPosition(row, col);
@@ -35,6 +40,7 @@ void Worksheet::writeString(int row, int col, const std::string& value, std::sha
     if (format) {
         cell.setFormat(format);
     }
+    updateUsedRange(row, col);
 }
 
 void Worksheet::writeNumber(int row, int col, double value, std::shared_ptr<Format> format) {
@@ -44,6 +50,7 @@ void Worksheet::writeNumber(int row, int col, double value, std::shared_ptr<Form
     if (format) {
         cell.setFormat(format);
     }
+    updateUsedRange(row, col);
 }
 
 void Worksheet::writeBoolean(int row, int col, bool value, std::shared_ptr<Format> format) {
@@ -53,6 +60,7 @@ void Worksheet::writeBoolean(int row, int col, bool value, std::shared_ptr<Forma
     if (format) {
         cell.setFormat(format);
     }
+    updateUsedRange(row, col);
 }
 
 void Worksheet::writeFormula(int row, int col, const std::string& formula, std::shared_ptr<Format> format) {
@@ -62,7 +70,49 @@ void Worksheet::writeFormula(int row, int col, const std::string& formula, std::
     if (format) {
         cell.setFormat(format);
     }
+    updateUsedRange(row, col);
 }
+
+void Worksheet::writeDateTime(int row, int col, const std::tm& datetime, std::shared_ptr<Format> format) {
+    validateCellPosition(row, col);
+    
+    // 将tm结构转换为Excel日期序列号
+    // Excel使用1900年1月1日作为起始日期（序列号1）
+    std::tm epoch = {};
+    epoch.tm_year = 100; // 1900年
+    epoch.tm_mon = 0;    // 1月
+    epoch.tm_mday = 1;   // 1日
+    
+    std::time_t epoch_time = std::mktime(&epoch);
+    std::time_t input_time = std::mktime(const_cast<std::tm*>(&datetime));
+    
+    double days = std::difftime(input_time, epoch_time) / (24 * 60 * 60);
+    days += 1; // Excel从1开始计数
+    
+    // Excel错误地认为1900年是闰年，所以需要调整
+    if (days >= 60) {
+        days += 1;
+    }
+    
+    writeNumber(row, col, days, format);
+}
+
+void Worksheet::writeUrl(int row, int col, const std::string& url, const std::string& string, 
+                        std::shared_ptr<Format> format) {
+    validateCellPosition(row, col);
+    auto& cell = cells_[std::make_pair(row, col)];
+    
+    std::string display_text = string.empty() ? url : string;
+    cell.setValue(display_text);
+    cell.setHyperlink(url);
+    
+    if (format) {
+        cell.setFormat(format);
+    }
+    updateUsedRange(row, col);
+}
+
+// ========== 批量数据操作 ==========
 
 void Worksheet::writeRange(int start_row, int start_col, const std::vector<std::vector<std::string>>& data) {
     for (size_t row = 0; row < data.size(); ++row) {
@@ -80,6 +130,227 @@ void Worksheet::writeRange(int start_row, int start_col, const std::vector<std::
     }
 }
 
+// ========== 行列操作 ==========
+
+void Worksheet::setColumnWidth(int col, double width) {
+    validateCellPosition(0, col);
+    column_info_[col].width = width;
+}
+
+void Worksheet::setColumnWidth(int first_col, int last_col, double width) {
+    validateRange(0, first_col, 0, last_col);
+    for (int col = first_col; col <= last_col; ++col) {
+        column_info_[col].width = width;
+    }
+}
+
+void Worksheet::setColumnFormat(int col, std::shared_ptr<Format> format) {
+    validateCellPosition(0, col);
+    column_info_[col].format = format;
+}
+
+void Worksheet::setColumnFormat(int first_col, int last_col, std::shared_ptr<Format> format) {
+    validateRange(0, first_col, 0, last_col);
+    for (int col = first_col; col <= last_col; ++col) {
+        column_info_[col].format = format;
+    }
+}
+
+void Worksheet::hideColumn(int col) {
+    validateCellPosition(0, col);
+    column_info_[col].hidden = true;
+}
+
+void Worksheet::hideColumn(int first_col, int last_col) {
+    validateRange(0, first_col, 0, last_col);
+    for (int col = first_col; col <= last_col; ++col) {
+        column_info_[col].hidden = true;
+    }
+}
+
+void Worksheet::setRowHeight(int row, double height) {
+    validateCellPosition(row, 0);
+    row_info_[row].height = height;
+}
+
+void Worksheet::setRowFormat(int row, std::shared_ptr<Format> format) {
+    validateCellPosition(row, 0);
+    row_info_[row].format = format;
+}
+
+void Worksheet::hideRow(int row) {
+    validateCellPosition(row, 0);
+    row_info_[row].hidden = true;
+}
+
+void Worksheet::hideRow(int first_row, int last_row) {
+    validateRange(first_row, 0, last_row, 0);
+    for (int row = first_row; row <= last_row; ++row) {
+        row_info_[row].hidden = true;
+    }
+}
+
+// ========== 合并单元格 ==========
+
+void Worksheet::mergeCells(int first_row, int first_col, int last_row, int last_col) {
+    validateRange(first_row, first_col, last_row, last_col);
+    merge_ranges_.emplace_back(first_row, first_col, last_row, last_col);
+}
+
+void Worksheet::mergeRange(int first_row, int first_col, int last_row, int last_col, 
+                          const std::string& value, std::shared_ptr<Format> format) {
+    mergeCells(first_row, first_col, last_row, last_col);
+    writeString(first_row, first_col, value, format);
+}
+
+// ========== 自动筛选 ==========
+
+void Worksheet::setAutoFilter(int first_row, int first_col, int last_row, int last_col) {
+    validateRange(first_row, first_col, last_row, last_col);
+    autofilter_ = std::make_unique<AutoFilterRange>(first_row, first_col, last_row, last_col);
+}
+
+void Worksheet::removeAutoFilter() {
+    autofilter_.reset();
+}
+
+// ========== 冻结窗格 ==========
+
+void Worksheet::freezePanes(int row, int col) {
+    validateCellPosition(row, col);
+    freeze_panes_ = std::make_unique<FreezePanes>(row, col);
+}
+
+void Worksheet::freezePanes(int row, int col, int top_left_row, int top_left_col) {
+    validateCellPosition(row, col);
+    validateCellPosition(top_left_row, top_left_col);
+    freeze_panes_ = std::make_unique<FreezePanes>(row, col, top_left_row, top_left_col);
+}
+
+void Worksheet::splitPanes(int row, int col) {
+    validateCellPosition(row, col);
+    // 分割窗格的实现与冻结窗格类似，但使用不同的XML属性
+    freeze_panes_ = std::make_unique<FreezePanes>(row, col);
+}
+
+// ========== 打印设置 ==========
+
+void Worksheet::setPrintArea(int first_row, int first_col, int last_row, int last_col) {
+    validateRange(first_row, first_col, last_row, last_col);
+    print_settings_.print_area_first_row = first_row;
+    print_settings_.print_area_first_col = first_col;
+    print_settings_.print_area_last_row = last_row;
+    print_settings_.print_area_last_col = last_col;
+}
+
+void Worksheet::setRepeatRows(int first_row, int last_row) {
+    validateRange(first_row, 0, last_row, 0);
+    print_settings_.repeat_rows_first = first_row;
+    print_settings_.repeat_rows_last = last_row;
+}
+
+void Worksheet::setRepeatColumns(int first_col, int last_col) {
+    validateRange(0, first_col, 0, last_col);
+    print_settings_.repeat_cols_first = first_col;
+    print_settings_.repeat_cols_last = last_col;
+}
+
+void Worksheet::setLandscape(bool landscape) {
+    print_settings_.landscape = landscape;
+}
+
+void Worksheet::setPaperSize(int paper_size) {
+    // 纸张大小代码的实现
+    // 这里可以根据需要添加具体的纸张大小映射
+}
+
+void Worksheet::setMargins(double left, double right, double top, double bottom) {
+    print_settings_.left_margin = left;
+    print_settings_.right_margin = right;
+    print_settings_.top_margin = top;
+    print_settings_.bottom_margin = bottom;
+}
+
+void Worksheet::setHeaderFooterMargins(double header, double footer) {
+    print_settings_.header_margin = header;
+    print_settings_.footer_margin = footer;
+}
+
+void Worksheet::setPrintScale(int scale) {
+    print_settings_.scale = std::max(10, std::min(400, scale));
+    print_settings_.fit_to_pages_wide = 0;
+    print_settings_.fit_to_pages_tall = 0;
+}
+
+void Worksheet::setFitToPages(int width, int height) {
+    print_settings_.fit_to_pages_wide = width;
+    print_settings_.fit_to_pages_tall = height;
+    print_settings_.scale = 100;
+}
+
+void Worksheet::setPrintGridlines(bool print) {
+    print_settings_.print_gridlines = print;
+}
+
+void Worksheet::setPrintHeadings(bool print) {
+    print_settings_.print_headings = print;
+}
+
+void Worksheet::setCenterOnPage(bool horizontal, bool vertical) {
+    print_settings_.center_horizontally = horizontal;
+    print_settings_.center_vertically = vertical;
+}
+
+// ========== 工作表保护 ==========
+
+void Worksheet::protect(const std::string& password) {
+    protected_ = true;
+    protection_password_ = password;
+}
+
+void Worksheet::unprotect() {
+    protected_ = false;
+    protection_password_.clear();
+}
+
+// ========== 视图设置 ==========
+
+void Worksheet::setZoom(int scale) {
+    sheet_view_.zoom_scale = std::max(10, std::min(400, scale));
+}
+
+void Worksheet::showGridlines(bool show) {
+    sheet_view_.show_gridlines = show;
+}
+
+void Worksheet::showRowColHeaders(bool show) {
+    sheet_view_.show_row_col_headers = show;
+}
+
+void Worksheet::setRightToLeft(bool rtl) {
+    sheet_view_.right_to_left = rtl;
+}
+
+void Worksheet::setTabSelected(bool selected) {
+    sheet_view_.tab_selected = selected;
+}
+
+void Worksheet::setActiveCell(int row, int col) {
+    validateCellPosition(row, col);
+    active_cell_ = cellReference(row, col);
+}
+
+void Worksheet::setSelection(int first_row, int first_col, int last_row, int last_col) {
+    validateRange(first_row, first_col, last_row, last_col);
+    if (first_row == last_row && first_col == last_col) {
+        selection_ = cellReference(first_row, first_col);
+    } else {
+        selection_ = rangeReference(first_row, first_col, last_row, last_col);
+    }
+}
+
+// ========== 获取信息 ==========
+
 std::pair<int, int> Worksheet::getUsedRange() const {
     int max_row = -1;
     int max_col = -1;
@@ -94,6 +365,13 @@ std::pair<int, int> Worksheet::getUsedRange() const {
     return {max_row, max_col};
 }
 
+bool Worksheet::hasCellAt(int row, int col) const {
+    auto it = cells_.find(std::make_pair(row, col));
+    return it != cells_.end() && !it->second.isEmpty();
+}
+
+// ========== XML生成 ==========
+
 std::string Worksheet::generateXML() const {
     xml::XMLStreamWriter writer;
     writer.startDocument();
@@ -101,80 +379,77 @@ std::string Worksheet::generateXML() const {
     writer.writeAttribute("xmlns", "http://schemas.openxmlformats.org/spreadsheetml/2006/main");
     writer.writeAttribute("xmlns:r", "http://schemas.openxmlformats.org/officeDocument/2006/relationships");
     
-    // 获取使用范围
-    auto [max_row, max_col] = getUsedRange();
+    // 工作表属性
+    if (sheet_view_.right_to_left) {
+        writer.startElement("sheetPr");
+        writer.writeAttribute("rightToLeft", "1");
+        writer.endElement(); // sheetPr
+    }
     
+    // 尺寸信息
+    auto [max_row, max_col] = getUsedRange();
     if (max_row >= 0 && max_col >= 0) {
-        writer.startElement("sheetData");
-        
-        // 按行处理数据
-        for (int row = 0; row <= max_row; ++row) {
-            bool has_data_in_row = false;
-            
-            // 检查这一行是否有数据
-            for (int col = 0; col <= max_col; ++col) {
-                auto it = cells_.find(std::make_pair(row, col));
-                if (it != cells_.end() && !it->second.isEmpty()) {
-                    has_data_in_row = true;
-                    break;
-                }
-            }
-            
-            if (has_data_in_row) {
-                writer.startElement("row");
-                std::string row_str = std::to_string(row + 1);
-                writer.writeAttribute("r", row_str.c_str());
-                
-                for (int col = 0; col <= max_col; ++col) {
-                    auto it = cells_.find(std::make_pair(row, col));
-                    if (it != cells_.end() && !it->second.isEmpty()) {
-                        const auto& cell = it->second;
-                        
-                        writer.startElement("c");
-                        std::string cell_ref = cellReference(row, col);
-                        writer.writeAttribute("r", cell_ref.c_str());
-                        
-                        // 如果有格式，添加样式ID
-                        if (cell.getFormat()) {
-                            std::string format_id = std::to_string(cell.getFormat()->getFormatId());
-                            writer.writeAttribute("s", format_id.c_str());
-                        }
-                        
-                        if (cell.isString()) {
-                            writer.writeAttribute("t", "inlineStr");
-                            writer.startElement("is");
-                            writer.startElement("t");
-                            std::string str_value = cell.getStringValue();
-                            writer.writeText(str_value.c_str());
-                            writer.endElement(); // t
-                            writer.endElement(); // is
-                        } else if (cell.isNumber()) {
-                            writer.startElement("v");
-                            std::string num_value = std::to_string(cell.getNumberValue());
-                            writer.writeText(num_value.c_str());
-                            writer.endElement(); // v
-                        } else if (cell.isBoolean()) {
-                            writer.writeAttribute("t", "b");
-                            writer.startElement("v");
-                            writer.writeText(cell.getBooleanValue() ? "1" : "0");
-                            writer.endElement(); // v
-                        } else if (cell.isFormula()) {
-                            writer.writeAttribute("t", "str");
-                            writer.startElement("f");
-                            std::string formula = cell.getFormula();
-                            writer.writeText(formula.c_str());
-                            writer.endElement(); // f
-                        }
-                        
-                        writer.endElement(); // c
-                    }
-                }
-                
-                writer.endElement(); // row
-            }
-        }
-        
-        writer.endElement(); // sheetData
+        writer.startElement("dimension");
+        std::string ref = "A1:" + cellReference(max_row, max_col);
+        writer.writeAttribute("ref", ref.c_str());
+        writer.endElement(); // dimension
+    }
+    
+    // 工作表视图
+    std::string sheet_views_xml = generateSheetViewsXML();
+    if (!sheet_views_xml.empty()) {
+        writer.writeRaw(sheet_views_xml.c_str());
+    }
+    
+    // 工作表格式信息
+    std::string sheet_format_xml = "<sheetFormatPr defaultRowHeight=\"" + 
+                                  std::to_string(default_row_height_) + 
+                                  "\" defaultColWidth=\"" + 
+                                  std::to_string(default_col_width_) + "\"/>";
+    writer.writeRaw(sheet_format_xml.c_str());
+    
+    // 列信息
+    std::string columns_xml = generateColumnsXML();
+    if (!columns_xml.empty()) {
+        writer.writeRaw(columns_xml.c_str());
+    }
+    
+    // 工作表数据
+    std::string sheet_data_xml = generateSheetDataXML();
+    writer.writeRaw(sheet_data_xml.c_str());
+    
+    // 工作表保护
+    std::string protection_xml = generateSheetProtectionXML();
+    if (!protection_xml.empty()) {
+        writer.writeRaw(protection_xml.c_str());
+    }
+    
+    // 自动筛选
+    std::string autofilter_xml = generateAutoFilterXML();
+    if (!autofilter_xml.empty()) {
+        writer.writeRaw(autofilter_xml.c_str());
+    }
+    
+    // 合并单元格
+    std::string merge_cells_xml = generateMergeCellsXML();
+    if (!merge_cells_xml.empty()) {
+        writer.writeRaw(merge_cells_xml.c_str());
+    }
+    
+    // 打印选项
+    std::string print_options_xml = generatePrintOptionsXML();
+    if (!print_options_xml.empty()) {
+        writer.writeRaw(print_options_xml.c_str());
+    }
+    
+    // 页边距
+    std::string page_margins_xml = generatePageMarginsXML();
+    writer.writeRaw(page_margins_xml.c_str());
+    
+    // 页面设置
+    std::string page_setup_xml = generatePageSetupXML();
+    if (!page_setup_xml.empty()) {
+        writer.writeRaw(page_setup_xml.c_str());
     }
     
     writer.endElement(); // worksheet
@@ -183,9 +458,83 @@ std::string Worksheet::generateXML() const {
     return writer.toString();
 }
 
+std::string Worksheet::generateRelsXML() const {
+    // 生成工作表关系XML（如果有超链接等）
+    xml::XMLStreamWriter writer;
+    writer.startDocument();
+    writer.startElement("Relationships");
+    writer.writeAttribute("xmlns", "http://schemas.openxmlformats.org/package/2006/relationships");
+    
+    int rel_id = 1;
+    for (const auto& [pos, cell] : cells_) {
+        if (cell.hasHyperlink()) {
+            writer.startElement("Relationship");
+            writer.writeAttribute("Id", ("rId" + std::to_string(rel_id)).c_str());
+            writer.writeAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink");
+            writer.writeAttribute("Target", cell.getHyperlink().c_str());
+            writer.writeAttribute("TargetMode", "External");
+            writer.endElement(); // Relationship
+            rel_id++;
+        }
+    }
+    
+    writer.endElement(); // Relationships
+    writer.endDocument();
+    
+    return writer.toString();
+}
+
+// ========== 工具方法 ==========
+
 void Worksheet::clear() {
     cells_.clear();
+    column_info_.clear();
+    row_info_.clear();
+    merge_ranges_.clear();
+    autofilter_.reset();
+    freeze_panes_.reset();
+    print_settings_ = PrintSettings{};
+    sheet_view_ = SheetView{};
+    protected_ = false;
+    protection_password_.clear();
+    selection_ = "A1";
+    active_cell_ = "A1";
 }
+
+void Worksheet::clearRange(int first_row, int first_col, int last_row, int last_col) {
+    validateRange(first_row, first_col, last_row, last_col);
+    
+    for (int row = first_row; row <= last_row; ++row) {
+        for (int col = first_col; col <= last_col; ++col) {
+            auto it = cells_.find(std::make_pair(row, col));
+            if (it != cells_.end()) {
+                cells_.erase(it);
+            }
+        }
+    }
+}
+
+void Worksheet::insertRows(int row, int count) {
+    validateCellPosition(row, 0);
+    shiftCellsForRowInsertion(row, count);
+}
+
+void Worksheet::insertColumns(int col, int count) {
+    validateCellPosition(0, col);
+    shiftCellsForColumnInsertion(col, count);
+}
+
+void Worksheet::deleteRows(int row, int count) {
+    validateCellPosition(row, 0);
+    shiftCellsForRowDeletion(row, count);
+}
+
+void Worksheet::deleteColumns(int col, int count) {
+    validateCellPosition(0, col);
+    shiftCellsForColumnDeletion(col, count);
+}
+
+// ========== 内部辅助方法 ==========
 
 std::string Worksheet::columnToLetter(int col) const {
     std::string result;
@@ -200,12 +549,445 @@ std::string Worksheet::cellReference(int row, int col) const {
     return columnToLetter(col) + std::to_string(row + 1);
 }
 
+std::string Worksheet::rangeReference(int first_row, int first_col, int last_row, int last_col) const {
+    return cellReference(first_row, first_col) + ":" + cellReference(last_row, last_col);
+}
+
 void Worksheet::validateCellPosition(int row, int col) const {
     if (row < 0 || col < 0) {
         throw std::invalid_argument("Cell position cannot be negative");
     }
     if (row > 1048575 || col > 16383) { // Excel 2007+ limits
         throw std::invalid_argument("Cell position exceeds Excel limits");
+    }
+}
+
+void Worksheet::validateRange(int first_row, int first_col, int last_row, int last_col) const {
+    validateCellPosition(first_row, first_col);
+    validateCellPosition(last_row, last_col);
+    if (first_row > last_row || first_col > last_col) {
+        throw std::invalid_argument("Invalid range: first position must be before last position");
+    }
+}
+
+// ========== XML生成辅助方法 ==========
+
+std::string Worksheet::generateSheetDataXML() const {
+    xml::XMLStreamWriter writer;
+    auto [max_row, max_col] = getUsedRange();
+    
+    if (max_row < 0 || max_col < 0) {
+        return "<sheetData/>";
+    }
+    
+    writer.startElement("sheetData");
+    
+    // 按行处理数据
+    for (int row = 0; row <= max_row; ++row) {
+        bool has_data_in_row = false;
+        
+        // 检查这一行是否有数据
+        for (int col = 0; col <= max_col; ++col) {
+            auto it = cells_.find(std::make_pair(row, col));
+            if (it != cells_.end() && !it->second.isEmpty()) {
+                has_data_in_row = true;
+                break;
+            }
+        }
+        
+        if (has_data_in_row) {
+            writer.startElement("row");
+            writer.writeAttribute("r", std::to_string(row + 1).c_str());
+            
+            // 检查行格式
+            auto row_it = row_info_.find(row);
+            if (row_it != row_info_.end()) {
+                if (row_it->second.height > 0) {
+                    writer.writeAttribute("ht", std::to_string(row_it->second.height).c_str());
+                    writer.writeAttribute("customHeight", "1");
+                }
+                if (row_it->second.hidden) {
+                    writer.writeAttribute("hidden", "1");
+                }
+                if (row_it->second.format) {
+                    writer.writeAttribute("s", std::to_string(row_it->second.format->getXfIndex()).c_str());
+                    writer.writeAttribute("customFormat", "1");
+                }
+            }
+            
+            for (int col = 0; col <= max_col; ++col) {
+                auto it = cells_.find(std::make_pair(row, col));
+                if (it != cells_.end() && !it->second.isEmpty()) {
+                    const auto& cell = it->second;
+                    
+                    writer.startElement("c");
+                    writer.writeAttribute("r", cellReference(row, col).c_str());
+                    
+                    // 如果有格式，添加样式ID
+                    if (cell.getFormat()) {
+                        writer.writeAttribute("s", std::to_string(cell.getFormat()->getXfIndex()).c_str());
+                    }
+                    
+                    if (cell.isString()) {
+                        writer.writeAttribute("t", "inlineStr");
+                        writer.startElement("is");
+                        writer.startElement("t");
+                        writer.writeText(cell.getStringValue().c_str());
+                        writer.endElement(); // t
+                        writer.endElement(); // is
+                    } else if (cell.isNumber()) {
+                        writer.startElement("v");
+                        writer.writeText(std::to_string(cell.getNumberValue()).c_str());
+                        writer.endElement(); // v
+                    } else if (cell.isBoolean()) {
+                        writer.writeAttribute("t", "b");
+                        writer.startElement("v");
+                        writer.writeText(cell.getBooleanValue() ? "1" : "0");
+                        writer.endElement(); // v
+                    } else if (cell.isFormula()) {
+                        writer.startElement("f");
+                        writer.writeText(cell.getFormula().c_str());
+                        writer.endElement(); // f
+                    }
+                    
+                    writer.endElement(); // c
+                }
+            }
+            
+            writer.endElement(); // row
+        }
+    }
+    
+    writer.endElement(); // sheetData
+    return writer.toString();
+}
+
+std::string Worksheet::generateColumnsXML() const {
+    if (column_info_.empty()) {
+        return "";
+    }
+    
+    xml::XMLStreamWriter writer;
+    writer.startElement("cols");
+    
+    for (const auto& [col, info] : column_info_) {
+        writer.startElement("col");
+        writer.writeAttribute("min", std::to_string(col + 1).c_str());
+        writer.writeAttribute("max", std::to_string(col + 1).c_str());
+        
+        if (info.width > 0) {
+            writer.writeAttribute("width", std::to_string(info.width).c_str());
+            writer.writeAttribute("customWidth", "1");
+        }
+        
+        if (info.hidden) {
+            writer.writeAttribute("hidden", "1");
+        }
+        
+        if (info.format) {
+            writer.writeAttribute("style", std::to_string(info.format->getXfIndex()).c_str());
+        }
+        
+        writer.endElement(); // col
+    }
+    
+    writer.endElement(); // cols
+    return writer.toString();
+}
+
+std::string Worksheet::generateMergeCellsXML() const {
+    if (merge_ranges_.empty()) {
+        return "";
+    }
+    
+    xml::XMLStreamWriter writer;
+    writer.startElement("mergeCells");
+    writer.writeAttribute("count", std::to_string(merge_ranges_.size()).c_str());
+    
+    for (const auto& range : merge_ranges_) {
+        writer.startElement("mergeCell");
+        std::string ref = rangeReference(range.first_row, range.first_col, range.last_row, range.last_col);
+        writer.writeAttribute("ref", ref.c_str());
+        writer.endElement(); // mergeCell
+    }
+    
+    writer.endElement(); // mergeCells
+    return writer.toString();
+}
+
+std::string Worksheet::generateAutoFilterXML() const {
+    if (!autofilter_) {
+        return "";
+    }
+    
+    xml::XMLStreamWriter writer;
+    writer.startElement("autoFilter");
+    std::string ref = rangeReference(autofilter_->first_row, autofilter_->first_col, 
+                                   autofilter_->last_row, autofilter_->last_col);
+    writer.writeAttribute("ref", ref.c_str());
+    writer.endElement(); // autoFilter
+    
+    return writer.toString();
+}
+
+std::string Worksheet::generateSheetViewsXML() const {
+    xml::XMLStreamWriter writer;
+    writer.startElement("sheetViews");
+    writer.startElement("sheetView");
+    
+    if (sheet_view_.tab_selected) {
+        writer.writeAttribute("tabSelected", "1");
+    }
+    
+    writer.writeAttribute("workbookViewId", "0");
+    
+    if (sheet_view_.zoom_scale != 100) {
+        writer.writeAttribute("zoomScale", std::to_string(sheet_view_.zoom_scale).c_str());
+    }
+    
+    if (!sheet_view_.show_gridlines) {
+        writer.writeAttribute("showGridLines", "0");
+    }
+    
+    if (!sheet_view_.show_row_col_headers) {
+        writer.writeAttribute("showRowColHeaders", "0");
+    }
+    
+    if (sheet_view_.right_to_left) {
+        writer.writeAttribute("rightToLeft", "1");
+    }
+    
+    // 冻结窗格
+    if (freeze_panes_) {
+        writer.startElement("pane");
+        if (freeze_panes_->col > 0) {
+            writer.writeAttribute("xSplit", std::to_string(freeze_panes_->col).c_str());
+        }
+        if (freeze_panes_->row > 0) {
+            writer.writeAttribute("ySplit", std::to_string(freeze_panes_->row).c_str());
+        }
+        
+        std::string top_left_cell = cellReference(freeze_panes_->top_left_row, freeze_panes_->top_left_col);
+        writer.writeAttribute("topLeftCell", top_left_cell.c_str());
+        writer.writeAttribute("activePane", "bottomRight");
+        writer.writeAttribute("state", "frozen");
+        writer.endElement(); // pane
+    }
+    
+    // 选择
+    writer.startElement("selection");
+    writer.writeAttribute("activeCell", active_cell_.c_str());
+    writer.writeAttribute("sqref", selection_.c_str());
+    writer.endElement(); // selection
+    
+    writer.endElement(); // sheetView
+    writer.endElement(); // sheetViews
+    
+    return writer.toString();
+}
+
+std::string Worksheet::generatePageSetupXML() const {
+    xml::XMLStreamWriter writer;
+    writer.startElement("pageSetup");
+    
+    if (print_settings_.landscape) {
+        writer.writeAttribute("orientation", "landscape");
+    }
+    
+    if (print_settings_.scale != 100) {
+        writer.writeAttribute("scale", std::to_string(print_settings_.scale).c_str());
+    }
+    
+    if (print_settings_.fit_to_pages_wide > 0 || print_settings_.fit_to_pages_tall > 0) {
+        writer.writeAttribute("fitToWidth", std::to_string(print_settings_.fit_to_pages_wide).c_str());
+        writer.writeAttribute("fitToHeight", std::to_string(print_settings_.fit_to_pages_tall).c_str());
+    }
+    
+    writer.endElement(); // pageSetup
+    return writer.toString();
+}
+
+std::string Worksheet::generatePrintOptionsXML() const {
+    if (!print_settings_.print_gridlines && !print_settings_.print_headings) {
+        return "";
+    }
+    
+    xml::XMLStreamWriter writer;
+    writer.startElement("printOptions");
+    
+    if (print_settings_.print_gridlines) {
+        writer.writeAttribute("gridLines", "1");
+    }
+    
+    if (print_settings_.print_headings) {
+        writer.writeAttribute("headings", "1");
+    }
+    
+    if (print_settings_.center_horizontally) {
+        writer.writeAttribute("horizontalCentered", "1");
+    }
+    
+    if (print_settings_.center_vertically) {
+        writer.writeAttribute("verticalCentered", "1");
+    }
+    
+    writer.endElement(); // printOptions
+    return writer.toString();
+}
+
+std::string Worksheet::generatePageMarginsXML() const {
+    xml::XMLStreamWriter writer;
+    writer.startElement("pageMargins");
+    
+    writer.writeAttribute("left", std::to_string(print_settings_.left_margin).c_str());
+    writer.writeAttribute("right", std::to_string(print_settings_.right_margin).c_str());
+    writer.writeAttribute("top", std::to_string(print_settings_.top_margin).c_str());
+    writer.writeAttribute("bottom", std::to_string(print_settings_.bottom_margin).c_str());
+    writer.writeAttribute("header", std::to_string(print_settings_.header_margin).c_str());
+    writer.writeAttribute("footer", std::to_string(print_settings_.footer_margin).c_str());
+    
+    writer.endElement(); // pageMargins
+    return writer.toString();
+}
+
+std::string Worksheet::generateSheetProtectionXML() const {
+    if (!protected_) {
+        return "";
+    }
+    
+    xml::XMLStreamWriter writer;
+    writer.startElement("sheetProtection");
+    writer.writeAttribute("sheet", "1");
+    
+    if (!protection_password_.empty()) {
+        // 这里应该实现密码哈希，简化处理
+        writer.writeAttribute("password", protection_password_.c_str());
+    }
+    
+    writer.endElement(); // sheetProtection
+    return writer.toString();
+}
+
+// ========== 内部状态管理 ==========
+
+void Worksheet::updateUsedRange(int row, int col) {
+    // 这个方法在写入数据时被调用，用于跟踪使用范围
+    // 实际实现中可以优化性能
+}
+
+void Worksheet::shiftCellsForRowInsertion(int row, int count) {
+    std::map<std::pair<int, int>, Cell> new_cells;
+    
+    for (auto& [pos, cell] : cells_) {
+        if (pos.first >= row) {
+            // 向下移动
+            new_cells[{pos.first + count, pos.second}] = std::move(cell);
+        } else {
+            new_cells[pos] = std::move(cell);
+        }
+    }
+    
+    cells_ = std::move(new_cells);
+    
+    // 更新合并单元格
+    for (auto& range : merge_ranges_) {
+        if (range.first_row >= row) {
+            range.first_row += count;
+        }
+        if (range.last_row >= row) {
+            range.last_row += count;
+        }
+    }
+}
+
+void Worksheet::shiftCellsForColumnInsertion(int col, int count) {
+    std::map<std::pair<int, int>, Cell> new_cells;
+    
+    for (auto& [pos, cell] : cells_) {
+        if (pos.second >= col) {
+            // 向右移动
+            new_cells[{pos.first, pos.second + count}] = std::move(cell);
+        } else {
+            new_cells[pos] = std::move(cell);
+        }
+    }
+    
+    cells_ = std::move(new_cells);
+    
+    // 更新合并单元格
+    for (auto& range : merge_ranges_) {
+        if (range.first_col >= col) {
+            range.first_col += count;
+        }
+        if (range.last_col >= col) {
+            range.last_col += count;
+        }
+    }
+}
+
+void Worksheet::shiftCellsForRowDeletion(int row, int count) {
+    std::map<std::pair<int, int>, Cell> new_cells;
+    
+    for (auto& [pos, cell] : cells_) {
+        if (pos.first >= row + count) {
+            // 向上移动
+            new_cells[{pos.first - count, pos.second}] = std::move(cell);
+        } else if (pos.first < row) {
+            new_cells[pos] = std::move(cell);
+        }
+        // 删除范围内的单元格被忽略
+    }
+    
+    cells_ = std::move(new_cells);
+    
+    // 更新合并单元格
+    auto it = merge_ranges_.begin();
+    while (it != merge_ranges_.end()) {
+        if (it->last_row < row) {
+            // 在删除范围之前，不变
+            ++it;
+        } else if (it->first_row >= row + count) {
+            // 在删除范围之后，向上移动
+            it->first_row -= count;
+            it->last_row -= count;
+            ++it;
+        } else {
+            // 与删除范围重叠，删除合并单元格
+            it = merge_ranges_.erase(it);
+        }
+    }
+}
+
+void Worksheet::shiftCellsForColumnDeletion(int col, int count) {
+    std::map<std::pair<int, int>, Cell> new_cells;
+    
+    for (auto& [pos, cell] : cells_) {
+        if (pos.second >= col + count) {
+            // 向左移动
+            new_cells[{pos.first, pos.second - count}] = std::move(cell);
+        } else if (pos.second < col) {
+            new_cells[pos] = std::move(cell);
+        }
+        // 删除范围内的单元格被忽略
+    }
+    
+    cells_ = std::move(new_cells);
+    
+    // 更新合并单元格
+    auto it = merge_ranges_.begin();
+    while (it != merge_ranges_.end()) {
+        if (it->last_col < col) {
+            // 在删除范围之前，不变
+            ++it;
+        } else if (it->first_col >= col + count) {
+            // 在删除范围之后，向左移动
+            it->first_col -= count;
+            it->last_col -= count;
+            ++it;
+        } else {
+            // 与删除范围重叠，删除合并单元格
+            it = merge_ranges_.erase(it);
+        }
     }
 }
 

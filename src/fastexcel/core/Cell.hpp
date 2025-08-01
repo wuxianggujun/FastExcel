@@ -26,6 +26,7 @@ private:
     std::variant<std::monostate, std::string, double, bool> value_;
     std::shared_ptr<Format> format_;
     std::string formula_;
+    std::string hyperlink_;
     
 public:
     Cell() = default;
@@ -55,6 +56,11 @@ public:
     bool isNumber() const { return type_ == CellType::Number; }
     bool isBoolean() const { return type_ == CellType::Boolean; }
     bool isFormula() const { return type_ == CellType::Formula; }
+    
+    // 超链接操作
+    void setHyperlink(const std::string& url) { hyperlink_ = url; }
+    std::string getHyperlink() const { return hyperlink_; }
+    bool hasHyperlink() const { return !hyperlink_.empty(); }
     
     // 清空单元格
     void clear();

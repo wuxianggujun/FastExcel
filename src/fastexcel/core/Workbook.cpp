@@ -5,17 +5,42 @@
 #include "fastexcel/utils/Logger.hpp"
 #include <sstream>
 #include <algorithm>
+#include <iomanip>
+#include <functional>
+#include <ctime>
+#include <fstream>
 
 namespace fastexcel {
 namespace core {
 
+// ========== DocumentProperties 实现 ==========
+
+DocumentProperties::DocumentProperties() {
+    // 设置默认时间为当前时间
+    std::time_t now = std::time(nullptr);
+    created_time = *std::localtime(&now);
+    modified_time = created_time;
+}
+
+// ========== Workbook 实现 ==========
+
+std::unique_ptr<Workbook> Workbook::create(const std::string& filename) {
+    return std::make_unique<Workbook>(filename);
+}
+
 Workbook::Workbook(const std::string& filename) : filename_(filename) {
     file_manager_ = std::make_unique<archive::FileManager>(filename);
+    
+    // 设置默认文档属性
+    doc_properties_.author = "FastExcel";
+    doc_properties_.company = "FastExcel Library";
 }
 
 Workbook::~Workbook() {
     close();
 }
+
+// ========== 文件操作 ==========
 
 bool Workbook::open() {
     if (is_open_) {
@@ -37,6 +62,16 @@ bool Workbook::save() {
     }
     
     try {
+        // 更新修改时间
+        std::time_t now = std::time(nullptr);
+        doc_properties_.modified_time = *std::localtime(&now);
+        
+        // 收集共享字符串
+        collectSharedStrings();
+        
+        // 更新格式索引
+        updateFormatIndices();
+        
         // 生成Excel文件结构
         if (!generateExcelStructure()) {
             LOG_ERROR("Failed to generate Excel structure");
@@ -51,6 +86,23 @@ bool Workbook::save() {
     }
 }
 
+bool Workbook::saveAs(const std::string& filename) {
+    std::string old_filename = filename_;
+    filename_ = filename;
+    
+    // 重新创建文件管理器
+    file_manager_ = std::make_unique<archive::FileManager>(filename);
+    
+    if (!file_manager_->open(true)) {
+        // 恢复原文件名
+        filename_ = old_filename;
+        file_manager_ = std::make_unique<archive::FileManager>(old_filename);
+        return false;
+    }
+    
+    return save();
+}
+
 bool Workbook::close() {
     if (is_open_) {
         file_manager_->close();
@@ -59,6 +111,8 @@ bool Workbook::close() {
     }
     return true;
 }
+
+// ========== 工作表管理 ==========
 
 std::shared_ptr<Worksheet> Workbook::addWorksheet(const std::string& name) {
     if (!is_open_) {
@@ -78,6 +132,56 @@ std::shared_ptr<Worksheet> Workbook::addWorksheet(const std::string& name) {
     
     LOG_DEBUG("Added worksheet: {}", sheet_name);
     return worksheet;
+}
+
+std::shared_ptr<Worksheet> Workbook::insertWorksheet(size_t index, const std::string& name) {
+    if (!is_open_) {
+        LOG_ERROR("Workbook is not open");
+        return nullptr;
+    }
+    
+    if (index > worksheets_.size()) {
+        index = worksheets_.size();
+    }
+    
+    std::string sheet_name = name.empty() ? generateUniqueSheetName("Sheet") : name;
+    
+    if (!validateSheetName(sheet_name)) {
+        LOG_ERROR("Invalid sheet name: {}", sheet_name);
+        return nullptr;
+    }
+    
+    auto worksheet = std::make_shared<Worksheet>(sheet_name, shared_from_this(), next_sheet_id_++);
+    worksheets_.insert(worksheets_.begin() + index, worksheet);
+    
+    LOG_DEBUG("Inserted worksheet: {} at index {}", sheet_name, index);
+    return worksheet;
+}
+
+bool Workbook::removeWorksheet(const std::string& name) {
+    auto it = std::find_if(worksheets_.begin(), worksheets_.end(),
+                          [&name](const std::shared_ptr<Worksheet>& ws) {
+                              return ws->getName() == name;
+                          });
+    
+    if (it != worksheets_.end()) {
+        worksheets_.erase(it);
+        LOG_DEBUG("Removed worksheet: {}", name);
+        return true;
+    }
+    
+    return false;
+}
+
+bool Workbook::removeWorksheet(size_t index) {
+    if (index < worksheets_.size()) {
+        std::string name = worksheets_[index]->getName();
+        worksheets_.erase(worksheets_.begin() + index);
+        LOG_DEBUG("Removed worksheet: {} at index {}", name, index);
+        return true;
+    }
+    
+    return false;
 }
 
 std::shared_ptr<Worksheet> Workbook::getWorksheet(const std::string& name) {
@@ -120,27 +224,328 @@ std::shared_ptr<const Worksheet> Workbook::getWorksheet(size_t index) const {
     return nullptr;
 }
 
+std::vector<std::string> Workbook::getWorksheetNames() const {
+    std::vector<std::string> names;
+    names.reserve(worksheets_.size());
+    
+    for (const auto& worksheet : worksheets_) {
+        names.push_back(worksheet->getName());
+    }
+    
+    return names;
+}
+
+bool Workbook::renameWorksheet(const std::string& old_name, const std::string& new_name) {
+    auto worksheet = getWorksheet(old_name);
+    if (!worksheet) {
+        return false;
+    }
+    
+    if (!validateSheetName(new_name)) {
+        return false;
+    }
+    
+    worksheet->setName(new_name);
+    LOG_DEBUG("Renamed worksheet: {} -> {}", old_name, new_name);
+    return true;
+}
+
+bool Workbook::moveWorksheet(size_t from_index, size_t to_index) {
+    if (from_index >= worksheets_.size() || to_index >= worksheets_.size()) {
+        return false;
+    }
+    
+    if (from_index == to_index) {
+        return true;
+    }
+    
+    auto worksheet = worksheets_[from_index];
+    worksheets_.erase(worksheets_.begin() + from_index);
+    
+    if (to_index > from_index) {
+        to_index--;
+    }
+    
+    worksheets_.insert(worksheets_.begin() + to_index, worksheet);
+    
+    LOG_DEBUG("Moved worksheet from index {} to {}", from_index, to_index);
+    return true;
+}
+
+std::shared_ptr<Worksheet> Workbook::copyWorksheet(const std::string& source_name, const std::string& new_name) {
+    auto source_worksheet = getWorksheet(source_name);
+    if (!source_worksheet) {
+        return nullptr;
+    }
+    
+    if (!validateSheetName(new_name)) {
+        return nullptr;
+    }
+    
+    // 创建新工作表
+    auto new_worksheet = std::make_shared<Worksheet>(new_name, shared_from_this(), next_sheet_id_++);
+    
+    // 这里应该实现深拷贝逻辑
+    // 简化版本，实际需要复制所有单元格、格式、设置等
+    
+    worksheets_.push_back(new_worksheet);
+    
+    LOG_DEBUG("Copied worksheet: {} -> {}", source_name, new_name);
+    return new_worksheet;
+}
+
+void Workbook::setActiveWorksheet(size_t index) {
+    // 取消所有工作表的选中状态
+    for (auto& worksheet : worksheets_) {
+        worksheet->setTabSelected(false);
+    }
+    
+    // 设置指定工作表为活动状态
+    if (index < worksheets_.size()) {
+        worksheets_[index]->setTabSelected(true);
+    }
+}
+
+// ========== 格式管理 ==========
+
 std::shared_ptr<Format> Workbook::createFormat() {
     auto format = std::make_shared<Format>();
-    format->setFormatId(next_format_id_++);
+    format->setXfIndex(next_xf_id_++);
     
-    // 存储格式以便后续使用
-    std::string key = std::to_string(format->getFormatId());
-    formats_[key] = format;
+    // 存储格式
+    formats_[format->getXfIndex()] = format;
     
     return format;
 }
 
 std::shared_ptr<Format> Workbook::getFormat(int format_id) const {
-    std::string key = std::to_string(format_id);
-    auto it = formats_.find(key);
+    auto it = formats_.find(format_id);
     if (it != formats_.end()) {
         return it->second;
     }
     return nullptr;
 }
 
+// ========== 自定义属性 ==========
+
+void Workbook::setCustomProperty(const std::string& name, const std::string& value) {
+    // 查找是否已存在
+    auto it = std::find_if(custom_properties_.begin(), custom_properties_.end(),
+                          [&name](const CustomProperty& prop) {
+                              return prop.name == name;
+                          });
+    
+    if (it != custom_properties_.end()) {
+        it->value = value;
+        it->type = CustomProperty::String;
+    } else {
+        custom_properties_.emplace_back(name, value);
+    }
+}
+
+void Workbook::setCustomProperty(const std::string& name, double value) {
+    auto it = std::find_if(custom_properties_.begin(), custom_properties_.end(),
+                          [&name](const CustomProperty& prop) {
+                              return prop.name == name;
+                          });
+    
+    if (it != custom_properties_.end()) {
+        it->value = std::to_string(value);
+        it->type = CustomProperty::Number;
+    } else {
+        custom_properties_.emplace_back(name, value);
+    }
+}
+
+void Workbook::setCustomProperty(const std::string& name, bool value) {
+    auto it = std::find_if(custom_properties_.begin(), custom_properties_.end(),
+                          [&name](const CustomProperty& prop) {
+                              return prop.name == name;
+                          });
+    
+    if (it != custom_properties_.end()) {
+        it->value = value ? "true" : "false";
+        it->type = CustomProperty::Boolean;
+    } else {
+        custom_properties_.emplace_back(name, value);
+    }
+}
+
+std::string Workbook::getCustomProperty(const std::string& name) const {
+    auto it = std::find_if(custom_properties_.begin(), custom_properties_.end(),
+                          [&name](const CustomProperty& prop) {
+                              return prop.name == name;
+                          });
+    
+    if (it != custom_properties_.end()) {
+        return it->value;
+    }
+    
+    return "";
+}
+
+bool Workbook::removeCustomProperty(const std::string& name) {
+    auto it = std::find_if(custom_properties_.begin(), custom_properties_.end(),
+                          [&name](const CustomProperty& prop) {
+                              return prop.name == name;
+                          });
+    
+    if (it != custom_properties_.end()) {
+        custom_properties_.erase(it);
+        return true;
+    }
+    
+    return false;
+}
+
+// ========== 定义名称 ==========
+
+void Workbook::defineName(const std::string& name, const std::string& formula, const std::string& scope) {
+    // 查找是否已存在
+    auto it = std::find_if(defined_names_.begin(), defined_names_.end(),
+                          [&name, &scope](const DefinedName& dn) {
+                              return dn.name == name && dn.scope == scope;
+                          });
+    
+    if (it != defined_names_.end()) {
+        it->formula = formula;
+    } else {
+        defined_names_.emplace_back(name, formula, scope);
+    }
+}
+
+std::string Workbook::getDefinedName(const std::string& name, const std::string& scope) const {
+    auto it = std::find_if(defined_names_.begin(), defined_names_.end(),
+                          [&name, &scope](const DefinedName& dn) {
+                              return dn.name == name && dn.scope == scope;
+                          });
+    
+    if (it != defined_names_.end()) {
+        return it->formula;
+    }
+    
+    return "";
+}
+
+bool Workbook::removeDefinedName(const std::string& name, const std::string& scope) {
+    auto it = std::find_if(defined_names_.begin(), defined_names_.end(),
+                          [&name, &scope](const DefinedName& dn) {
+                              return dn.name == name && dn.scope == scope;
+                          });
+    
+    if (it != defined_names_.end()) {
+        defined_names_.erase(it);
+        return true;
+    }
+    
+    return false;
+}
+
+// ========== VBA项目 ==========
+
+bool Workbook::addVbaProject(const std::string& vba_project_path) {
+    // 检查文件是否存在
+    std::ifstream file(vba_project_path, std::ios::binary);
+    if (!file.is_open()) {
+        LOG_ERROR("VBA project file not found: {}", vba_project_path);
+        return false;
+    }
+    
+    vba_project_path_ = vba_project_path;
+    has_vba_ = true;
+    
+    LOG_INFO("Added VBA project: {}", vba_project_path);
+    return true;
+}
+
+// ========== 工作簿保护 ==========
+
+void Workbook::protect(const std::string& password, bool lock_structure, bool lock_windows) {
+    protected_ = true;
+    protection_password_ = password;
+    lock_structure_ = lock_structure;
+    lock_windows_ = lock_windows;
+}
+
+void Workbook::unprotect() {
+    protected_ = false;
+    protection_password_.clear();
+    lock_structure_ = false;
+    lock_windows_ = false;
+}
+
+// ========== 工作簿选项 ==========
+
+void Workbook::setCalcOptions(bool calc_on_load, bool full_calc_on_load) {
+    options_.calc_on_load = calc_on_load;
+    options_.full_calc_on_load = full_calc_on_load;
+}
+
+// ========== 共享字符串管理 ==========
+
+int Workbook::addSharedString(const std::string& str) {
+    auto it = shared_strings_.find(str);
+    if (it != shared_strings_.end()) {
+        return it->second;
+    }
+    
+    int index = static_cast<int>(shared_strings_list_.size());
+    shared_strings_[str] = index;
+    shared_strings_list_.push_back(str);
+    
+    return index;
+}
+
+int Workbook::getSharedStringIndex(const std::string& str) const {
+    auto it = shared_strings_.find(str);
+    if (it != shared_strings_.end()) {
+        return it->second;
+    }
+    
+    return -1;
+}
+
+// ========== 内部方法 ==========
+
 bool Workbook::generateExcelStructure() {
+    // 生成[Content_Types].xml
+    std::string content_types_xml = generateContentTypesXML();
+    if (!file_manager_->writeFile("[Content_Types].xml", content_types_xml)) {
+        return false;
+    }
+    
+    // 生成_rels/.rels
+    std::string rels_xml = generateRelsXML();
+    if (!file_manager_->writeFile("_rels/.rels", rels_xml)) {
+        return false;
+    }
+    
+    // 生成docProps/app.xml
+    std::string app_xml = generateDocPropsAppXML();
+    if (!file_manager_->writeFile("docProps/app.xml", app_xml)) {
+        return false;
+    }
+    
+    // 生成docProps/core.xml
+    std::string core_xml = generateDocPropsCoreXML();
+    if (!file_manager_->writeFile("docProps/core.xml", core_xml)) {
+        return false;
+    }
+    
+    // 生成自定义属性（如果有）
+    if (!custom_properties_.empty()) {
+        std::string custom_xml = generateDocPropsCustomXML();
+        if (!file_manager_->writeFile("docProps/custom.xml", custom_xml)) {
+            return false;
+        }
+    }
+    
+    // 生成xl/_rels/workbook.xml.rels
+    std::string workbook_rels_xml = generateWorkbookRelsXML();
+    if (!file_manager_->writeFile("xl/_rels/workbook.xml.rels", workbook_rels_xml)) {
+        return false;
+    }
+    
     // 生成工作簿XML
     std::string workbook_xml = generateWorkbookXML();
     if (!file_manager_->writeFile("xl/workbook.xml", workbook_xml)) {
@@ -166,6 +571,15 @@ bool Workbook::generateExcelStructure() {
         if (!file_manager_->writeFile(worksheet_path, worksheet_xml)) {
             return false;
         }
+        
+        // 生成工作表关系XML（如果有超链接等）
+        std::string worksheet_rels_xml = worksheets_[i]->generateRelsXML();
+        if (!worksheet_rels_xml.empty()) {
+            std::string rels_path = "xl/worksheets/_rels/sheet" + std::to_string(i + 1) + ".xml.rels";
+            if (!file_manager_->writeFile(rels_path, worksheet_rels_xml)) {
+                return false;
+            }
+        }
     }
     
     return true;
@@ -178,26 +592,77 @@ std::string Workbook::generateWorkbookXML() const {
     writer.writeAttribute("xmlns", "http://schemas.openxmlformats.org/spreadsheetml/2006/main");
     writer.writeAttribute("xmlns:r", "http://schemas.openxmlformats.org/officeDocument/2006/relationships");
     
-    // 添加工作表视图
+    // 工作簿属性
+    if (options_.read_only_recommended) {
+        writer.startElement("fileVersion");
+        writer.writeAttribute("readOnlyRecommended", "1");
+        writer.endElement(); // fileVersion
+    }
+    
+    // 工作簿保护
+    if (protected_) {
+        writer.startElement("workbookProtection");
+        if (lock_structure_) {
+            writer.writeAttribute("lockStructure", "1");
+        }
+        if (lock_windows_) {
+            writer.writeAttribute("lockWindows", "1");
+        }
+        if (!protection_password_.empty()) {
+            writer.writeAttribute("workbookPassword", hashPassword(protection_password_).c_str());
+        }
+        writer.endElement(); // workbookProtection
+    }
+    
+    // 工作簿视图
     writer.startElement("bookViews");
-    writer.writeEmptyElement("workbookView");
+    writer.startElement("workbookView");
     writer.writeAttribute("xWindow", "240");
     writer.writeAttribute("yWindow", "15");
     writer.writeAttribute("windowWidth", "16095");
     writer.writeAttribute("windowHeight", "9660");
+    writer.endElement(); // workbookView
     writer.endElement(); // bookViews
     
-    // 添加工作表
+    // 工作表
     writer.startElement("sheets");
     for (size_t i = 0; i < worksheets_.size(); ++i) {
-        writer.writeEmptyElement("sheet");
+        writer.startElement("sheet");
         writer.writeAttribute("name", worksheets_[i]->getName().c_str());
-        std::string sheet_id = std::to_string(worksheets_[i]->getSheetId());
-        writer.writeAttribute("sheetId", sheet_id.c_str());
-        std::string r_id = "rId" + std::to_string(i + 1);
-        writer.writeAttribute("r:id", r_id.c_str());
+        writer.writeAttribute("sheetId", std::to_string(worksheets_[i]->getSheetId()).c_str());
+        writer.writeAttribute("r:id", ("rId" + std::to_string(i + 1)).c_str());
+        writer.endElement(); // sheet
     }
     writer.endElement(); // sheets
+    
+    // 定义名称
+    if (!defined_names_.empty()) {
+        writer.startElement("definedNames");
+        for (const auto& defined_name : defined_names_) {
+            writer.startElement("definedName");
+            writer.writeAttribute("name", defined_name.name.c_str());
+            if (!defined_name.scope.empty()) {
+                writer.writeAttribute("localSheetId", "0"); // 简化处理
+            }
+            if (defined_name.hidden) {
+                writer.writeAttribute("hidden", "1");
+            }
+            writer.writeText(defined_name.formula.c_str());
+            writer.endElement(); // definedName
+        }
+        writer.endElement(); // definedNames
+    }
+    
+    // 计算属性
+    writer.startElement("calcPr");
+    writer.writeAttribute("calcId", "124519");
+    if (!options_.calc_on_load) {
+        writer.writeAttribute("calcMode", "manual");
+    }
+    if (options_.full_calc_on_load) {
+        writer.writeAttribute("fullCalcOnLoad", "1");
+    }
+    writer.endElement(); // calcPr
     
     writer.endElement(); // workbook
     writer.endDocument();
@@ -211,71 +676,147 @@ std::string Workbook::generateStylesXML() const {
     writer.startElement("styleSheet");
     writer.writeAttribute("xmlns", "http://schemas.openxmlformats.org/spreadsheetml/2006/main");
     
-    // 添加数字格式
+    // 数字格式
     writer.startElement("numFmts");
     writer.writeAttribute("count", "0");
     writer.endElement(); // numFmts
     
-    // 添加字体
+    // 字体
     writer.startElement("fonts");
-    writer.writeAttribute("count", "1");
+    writer.writeAttribute("count", std::to_string(next_font_id_).c_str());
+    
+    // 默认字体
     writer.startElement("font");
-    writer.writeEmptyElement("sz");
+    writer.startElement("sz");
     writer.writeAttribute("val", "11");
-    writer.writeEmptyElement("name");
+    writer.endElement(); // sz
+    writer.startElement("name");
     writer.writeAttribute("val", "Calibri");
-    writer.writeEmptyElement("family");
+    writer.endElement(); // name
+    writer.startElement("family");
     writer.writeAttribute("val", "2");
-    writer.writeEmptyElement("scheme");
+    writer.endElement(); // family
+    writer.startElement("scheme");
     writer.writeAttribute("val", "minor");
+    writer.endElement(); // scheme
     writer.endElement(); // font
+    
+    // 生成其他字体
+    for (const auto& [id, format] : formats_) {
+        if (format->hasFont()) {
+            writer.writeRaw(format->generateFontXML().c_str());
+        }
+    }
+    
     writer.endElement(); // fonts
     
-    // 添加填充
+    // 填充
     writer.startElement("fills");
-    writer.writeAttribute("count", "2");
-    writer.writeEmptyElement("fill");
+    writer.writeAttribute("count", std::to_string(next_fill_id_).c_str());
+    
+    // 默认填充
+    writer.startElement("fill");
     writer.startElement("patternFill");
     writer.writeAttribute("patternType", "none");
     writer.endElement(); // patternFill
     writer.endElement(); // fill
-    writer.writeEmptyElement("fill");
+    
+    writer.startElement("fill");
     writer.startElement("patternFill");
     writer.writeAttribute("patternType", "gray125");
     writer.endElement(); // patternFill
     writer.endElement(); // fill
+    
+    // 生成其他填充
+    for (const auto& [id, format] : formats_) {
+        if (format->hasFill()) {
+            writer.writeRaw(format->generateFillXML().c_str());
+        }
+    }
+    
     writer.endElement(); // fills
     
-    // 添加边框
+    // 边框
     writer.startElement("borders");
-    writer.writeAttribute("count", "1");
+    writer.writeAttribute("count", std::to_string(next_border_id_).c_str());
+    
+    // 默认边框
     writer.startElement("border");
-    writer.writeEmptyElement("left");
-    writer.writeEmptyElement("right");
-    writer.writeEmptyElement("top");
-    writer.writeEmptyElement("bottom");
-    writer.writeEmptyElement("diagonal");
+    writer.startElement("left");
+    writer.endElement(); // left
+    writer.startElement("right");
+    writer.endElement(); // right
+    writer.startElement("top");
+    writer.endElement(); // top
+    writer.startElement("bottom");
+    writer.endElement(); // bottom
+    writer.startElement("diagonal");
+    writer.endElement(); // diagonal
     writer.endElement(); // border
+    
+    // 生成其他边框
+    for (const auto& [id, format] : formats_) {
+        if (format->hasBorder()) {
+            writer.writeRaw(format->generateBorderXML().c_str());
+        }
+    }
+    
     writer.endElement(); // borders
     
-    // 添加单元格样式
-    writer.startElement("cellXfs");
+    // 单元格样式XF
+    writer.startElement("cellStyleXfs");
     writer.writeAttribute("count", "1");
-    writer.writeEmptyElement("xf");
+    writer.startElement("xf");
+    writer.writeAttribute("numFmtId", "0");
+    writer.writeAttribute("fontId", "0");
+    writer.writeAttribute("fillId", "0");
+    writer.writeAttribute("borderId", "0");
+    writer.endElement(); // xf
+    writer.endElement(); // cellStyleXfs
+    
+    // 单元格XF
+    writer.startElement("cellXfs");
+    writer.writeAttribute("count", std::to_string(next_xf_id_).c_str());
+    
+    // 默认XF
+    writer.startElement("xf");
     writer.writeAttribute("numFmtId", "0");
     writer.writeAttribute("fontId", "0");
     writer.writeAttribute("fillId", "0");
     writer.writeAttribute("borderId", "0");
     writer.writeAttribute("xfId", "0");
+    writer.endElement(); // xf
+    
+    // 生成其他XF
+    for (const auto& [id, format] : formats_) {
+        writer.startElement("xf");
+        writer.writeAttribute("numFmtId", std::to_string(format->getNumberFormatIndex()).c_str());
+        writer.writeAttribute("fontId", std::to_string(format->getFontIndex()).c_str());
+        writer.writeAttribute("fillId", std::to_string(format->getFillIndex()).c_str());
+        writer.writeAttribute("borderId", std::to_string(format->getBorderIndex()).c_str());
+        writer.writeAttribute("xfId", "0");
+        
+        if (format->hasAlignment()) {
+            writer.writeRaw(format->generateAlignmentXML().c_str());
+        }
+        
+        if (format->hasProtection()) {
+            writer.writeRaw(format->generateProtectionXML().c_str());
+        }
+        
+        writer.endElement(); // xf
+    }
+    
     writer.endElement(); // cellXfs
     
-    // 添加单元格样式
+    // 单元格样式
     writer.startElement("cellStyles");
     writer.writeAttribute("count", "1");
-    writer.writeEmptyElement("cellStyle");
+    writer.startElement("cellStyle");
     writer.writeAttribute("name", "Normal");
     writer.writeAttribute("xfId", "0");
     writer.writeAttribute("builtinId", "0");
+    writer.endElement(); // cellStyle
     writer.endElement(); // cellStyles
     
     writer.endElement(); // styleSheet
@@ -285,23 +826,374 @@ std::string Workbook::generateStylesXML() const {
 }
 
 std::string Workbook::generateSharedStringsXML() const {
-    xml::SharedStrings shared_strings;
+    xml::XMLStreamWriter writer;
+    writer.startDocument();
+    writer.startElement("sst");
+    writer.writeAttribute("xmlns", "http://schemas.openxmlformats.org/spreadsheetml/2006/main");
+    writer.writeAttribute("count", std::to_string(shared_strings_list_.size()).c_str());
+    writer.writeAttribute("uniqueCount", std::to_string(shared_strings_list_.size()).c_str());
     
-    // 收集所有字符串
-    std::map<std::string, int> string_map;
-    collectSharedStrings(string_map);
-    
-    // 添加字符串到共享字符串表
-    for (const auto& [str, index] : string_map) {
-        shared_strings.addString(str);
+    for (const auto& str : shared_strings_list_) {
+        writer.startElement("si");
+        writer.startElement("t");
+        writer.writeText(str.c_str());
+        writer.endElement(); // t
+        writer.endElement(); // si
     }
     
-    return shared_strings.generate();
+    writer.endElement(); // sst
+    writer.endDocument();
+    
+    return writer.toString();
 }
 
 std::string Workbook::generateWorksheetXML(const std::shared_ptr<Worksheet>& worksheet) const {
     return worksheet->generateXML();
 }
+
+std::string Workbook::generateDocPropsAppXML() const {
+    xml::XMLStreamWriter writer;
+    writer.startDocument();
+    writer.startElement("Properties");
+    writer.writeAttribute("xmlns", "http://schemas.openxmlformats.org/officeDocument/2006/extended-properties");
+    writer.writeAttribute("xmlns:vt", "http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes");
+    
+    writer.startElement("Application");
+    writer.writeText("FastExcel");
+    writer.endElement(); // Application
+    
+    writer.startElement("DocSecurity");
+    writer.writeText("0");
+    writer.endElement(); // DocSecurity
+    
+    writer.startElement("Company");
+    writer.writeText(doc_properties_.company.c_str());
+    writer.endElement(); // Company
+    
+    writer.startElement("LinksUpToDate");
+    writer.writeText("false");
+    writer.endElement(); // LinksUpToDate
+    
+    writer.startElement("SharedDoc");
+    writer.writeText("false");
+    writer.endElement(); // SharedDoc
+    
+    writer.startElement("HyperlinksChanged");
+    writer.writeText("false");
+    writer.endElement(); // HyperlinksChanged
+    
+    writer.startElement("AppVersion");
+    writer.writeText("16.0300");
+    writer.endElement(); // AppVersion
+    
+    writer.endElement(); // Properties
+    writer.endDocument();
+    
+    return writer.toString();
+}
+
+std::string Workbook::generateDocPropsCoreXML() const {
+    xml::XMLStreamWriter writer;
+    writer.startDocument();
+    writer.startElement("cp:coreProperties");
+    writer.writeAttribute("xmlns:cp", "http://schemas.openxmlformats.org/package/2006/metadata/core-properties");
+    writer.writeAttribute("xmlns:dc", "http://purl.org/dc/elements/1.1/");
+    writer.writeAttribute("xmlns:dcterms", "http://purl.org/dc/terms/");
+    writer.writeAttribute("xmlns:dcmitype", "http://purl.org/dc/dcmitype/");
+    writer.writeAttribute("xmlns:xsi", "http://www.w3.org/2001/XMLSchema-instance");
+    
+    if (!doc_properties_.title.empty()) {
+        writer.startElement("dc:title");
+        writer.writeText(doc_properties_.title.c_str());
+        writer.endElement(); // dc:title
+    }
+    
+    if (!doc_properties_.subject.empty()) {
+        writer.startElement("dc:subject");
+        writer.writeText(doc_properties_.subject.c_str());
+        writer.endElement(); // dc:subject
+    }
+    
+    if (!doc_properties_.author.empty()) {
+        writer.startElement("dc:creator");
+        writer.writeText(doc_properties_.author.c_str());
+        writer.endElement(); // dc:creator
+    }
+    
+    if (!doc_properties_.keywords.empty()) {
+        writer.startElement("cp:keywords");
+        writer.writeText(doc_properties_.keywords.c_str());
+        writer.endElement(); // cp:keywords
+    }
+    
+    if (!doc_properties_.comments.empty()) {
+        writer.startElement("dc:description");
+        writer.writeText(doc_properties_.comments.c_str());
+        writer.endElement(); // dc:description
+    }
+    
+    writer.startElement("cp:lastModifiedBy");
+    writer.writeText(doc_properties_.author.c_str());
+    writer.endElement(); // cp:lastModifiedBy
+    
+    writer.startElement("dcterms:created");
+    writer.writeAttribute("xsi:type", "dcterms:W3CDTF");
+    writer.writeText(formatTime(doc_properties_.created_time).c_str());
+    writer.endElement(); // dcterms:created
+    
+    writer.startElement("dcterms:modified");
+    writer.writeAttribute("xsi:type", "dcterms:W3CDTF");
+    writer.writeText(formatTime(doc_properties_.modified_time).c_str());
+    writer.endElement(); // dcterms:modified
+    
+    if (!doc_properties_.category.empty()) {
+        writer.startElement("cp:category");
+        writer.writeText(doc_properties_.category.c_str());
+        writer.endElement(); // cp:category
+    }
+    
+    if (!doc_properties_.status.empty()) {
+        writer.startElement("cp:contentStatus");
+        writer.writeText(doc_properties_.status.c_str());
+        writer.endElement(); // cp:contentStatus
+    }
+    
+    writer.endElement(); // cp:coreProperties
+    writer.endDocument();
+    
+    return writer.toString();
+}
+
+std::string Workbook::generateDocPropsCustomXML() const {
+    if (custom_properties_.empty()) {
+        return "";
+    }
+    
+    xml::XMLStreamWriter writer;
+    writer.startDocument();
+    writer.startElement("Properties");
+    writer.writeAttribute("xmlns", "http://schemas.openxmlformats.org/officeDocument/2006/custom-properties");
+    writer.writeAttribute("xmlns:vt", "http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes");
+    
+    int pid = 2;
+    for (const auto& prop : custom_properties_) {
+        writer.startElement("property");
+        writer.writeAttribute("fmtid", "{D5CDD505-2E9C-101B-9397-08002B2CF9AE}");
+        writer.writeAttribute("pid", std::to_string(pid++).c_str());
+        writer.writeAttribute("name", prop.name.c_str());
+        
+        writer.startElement("vt:lpwstr");
+        writer.writeText(prop.value.c_str());
+        writer.endElement(); // vt:lpwstr
+        
+        writer.endElement(); // property
+    }
+    
+    writer.endElement(); // Properties
+    writer.endDocument();
+    
+    return writer.toString();
+}
+
+std::string Workbook::generateContentTypesXML() const {
+    xml::XMLStreamWriter writer;
+    writer.startDocument();
+    writer.startElement("Types");
+    writer.writeAttribute("xmlns", "http://schemas.openxmlformats.org/package/2006/content-types");
+    
+    // 默认类型
+    writer.startElement("Default");
+    writer.writeAttribute("Extension", "rels");
+    writer.writeAttribute("ContentType", "application/vnd.openxmlformats-package.relationships+xml");
+    writer.endElement(); // Default
+    
+    writer.startElement("Default");
+    writer.writeAttribute("Extension", "xml");
+    writer.writeAttribute("ContentType", "application/xml");
+    writer.endElement(); // Default
+    
+    // 覆盖类型
+    writer.startElement("Override");
+    writer.writeAttribute("PartName", "/xl/workbook.xml");
+    writer.writeAttribute("ContentType", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml");
+    writer.endElement(); // Override
+    
+    for (size_t i = 0; i < worksheets_.size(); ++i) {
+        writer.startElement("Override");
+        writer.writeAttribute("PartName", ("/xl/worksheets/sheet" + std::to_string(i + 1) + ".xml").c_str());
+        writer.writeAttribute("ContentType", "application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml");
+        writer.endElement(); // Override
+    }
+    
+    writer.startElement("Override");
+    writer.writeAttribute("PartName", "/xl/styles.xml");
+    writer.writeAttribute("ContentType", "application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml");
+    writer.endElement(); // Override
+    
+    writer.startElement("Override");
+    writer.writeAttribute("PartName", "/xl/sharedStrings.xml");
+    writer.writeAttribute("ContentType", "application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml");
+    writer.endElement(); // Override
+    
+    writer.startElement("Override");
+    writer.writeAttribute("PartName", "/docProps/core.xml");
+    writer.writeAttribute("ContentType", "application/vnd.openxmlformats-package.core-properties+xml");
+    writer.endElement(); // Override
+    
+    writer.startElement("Override");
+    writer.writeAttribute("PartName", "/docProps/app.xml");
+    writer.writeAttribute("ContentType", "application/vnd.openxmlformats-officedocument.extended-properties+xml");
+    writer.endElement(); // Override
+    
+    if (!custom_properties_.empty()) {
+        writer.startElement("Override");
+        writer.writeAttribute("PartName", "/docProps/custom.xml");
+        writer.writeAttribute("ContentType", "application/vnd.openxmlformats-officedocument.custom-properties+xml");
+        writer.endElement(); // Override
+    }
+    
+    writer.endElement(); // Types
+    writer.endDocument();
+    
+    return writer.toString();
+}
+
+std::string Workbook::generateRelsXML() const {
+    xml::XMLStreamWriter writer;
+    writer.startDocument();
+    writer.startElement("Relationships");
+    writer.writeAttribute("xmlns", "http://schemas.openxmlformats.org/package/2006/relationships");
+    
+    writer.startElement("Relationship");
+    writer.writeAttribute("Id", "rId1");
+    writer.writeAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument");
+    writer.writeAttribute("Target", "xl/workbook.xml");
+    writer.endElement(); // Relationship
+    
+    writer.startElement("Relationship");
+    writer.writeAttribute("Id", "rId2");
+    writer.writeAttribute("Type", "http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties");
+    writer.writeAttribute("Target", "docProps/core.xml");
+    writer.endElement(); // Relationship
+    
+    writer.startElement("Relationship");
+    writer.writeAttribute("Id", "rId3");
+    writer.writeAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties");
+    writer.writeAttribute("Target", "docProps/app.xml");
+    writer.endElement(); // Relationship
+    
+    if (!custom_properties_.empty()) {
+        writer.startElement("Relationship");
+        writer.writeAttribute("Id", "rId4");
+        writer.writeAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/custom-properties");
+        writer.writeAttribute("Target", "docProps/custom.xml");
+        writer.endElement(); // Relationship
+    }
+    
+    writer.endElement(); // Relationships
+    writer.endDocument();
+    
+    return writer.toString();
+}
+
+std::string Workbook::generateWorkbookRelsXML() const {
+    xml::XMLStreamWriter writer;
+    writer.startDocument();
+    writer.startElement("Relationships");
+    writer.writeAttribute("xmlns", "http://schemas.openxmlformats.org/package/2006/relationships");
+    
+    // 工作表关系
+    for (size_t i = 0; i < worksheets_.size(); ++i) {
+        writer.startElement("Relationship");
+        writer.writeAttribute("Id", ("rId" + std::to_string(i + 1)).c_str());
+        writer.writeAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet");
+        writer.writeAttribute("Target", getWorksheetRelPath(static_cast<int>(i + 1)).c_str());
+        writer.endElement(); // Relationship
+    }
+    
+    // 样式关系
+    writer.startElement("Relationship");
+    writer.writeAttribute("Id", ("rId" + std::to_string(worksheets_.size() + 1)).c_str());
+    writer.writeAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles");
+    writer.writeAttribute("Target", "styles.xml");
+    writer.endElement(); // Relationship
+    
+    // 共享字符串关系
+    writer.startElement("Relationship");
+    writer.writeAttribute("Id", ("rId" + std::to_string(worksheets_.size() + 2)).c_str());
+    writer.writeAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings");
+    writer.writeAttribute("Target", "sharedStrings.xml");
+    writer.endElement(); // Relationship
+    
+    writer.endElement(); // Relationships
+    writer.endDocument();
+    
+    return writer.toString();
+}
+
+// ========== 格式管理内部方法 ==========
+
+int Workbook::getFontId(const Format& format) {
+    if (!format.hasFont()) {
+        return 0; // 默认字体
+    }
+    
+    size_t hash = format.hash();
+    auto it = font_hash_to_id_.find(hash);
+    if (it != font_hash_to_id_.end()) {
+        return it->second;
+    }
+    
+    int id = next_font_id_++;
+    font_hash_to_id_[hash] = id;
+    return id;
+}
+
+int Workbook::getFillId(const Format& format) {
+    if (!format.hasFill()) {
+        return 0; // 默认填充
+    }
+    
+    size_t hash = format.hash();
+    auto it = fill_hash_to_id_.find(hash);
+    if (it != fill_hash_to_id_.end()) {
+        return it->second;
+    }
+    
+    int id = next_fill_id_++;
+    fill_hash_to_id_[hash] = id;
+    return id;
+}
+
+int Workbook::getBorderId(const Format& format) {
+    if (!format.hasBorder()) {
+        return 0; // 默认边框
+    }
+    
+    size_t hash = format.hash();
+    auto it = border_hash_to_id_.find(hash);
+    if (it != border_hash_to_id_.end()) {
+        return it->second;
+    }
+    
+    int id = next_border_id_++;
+    border_hash_to_id_[hash] = id;
+    return id;
+}
+
+int Workbook::getXfId(const Format& format) {
+    size_t hash = format.hash();
+    auto it = xf_hash_to_id_.find(hash);
+    if (it != xf_hash_to_id_.end()) {
+        return it->second;
+    }
+    
+    int id = next_xf_id_++;
+    xf_hash_to_id_[hash] = id;
+    return id;
+}
+
+// ========== 辅助函数 ==========
 
 std::string Workbook::generateUniqueSheetName(const std::string& base_name) const {
     std::string name = base_name;
@@ -339,12 +1231,34 @@ bool Workbook::validateSheetName(const std::string& name) const {
     return true;
 }
 
-void Workbook::collectSharedStrings(std::map<std::string, int>& shared_strings) const {
-    int index = 0;
+void Workbook::collectSharedStrings() {
+    shared_strings_.clear();
+    shared_strings_list_.clear();
+    
     for (const auto& worksheet : worksheets_) {
-        // 这里需要访问Worksheet的私有数据来收集字符串
-        // 简化版本，实际实现可能需要添加友元类或公共方法
-        // 暂时留空
+        // 这里需要访问工作表的单元格来收集字符串
+        // 简化版本，实际实现需要遍历所有字符串单元格
+        auto [max_row, max_col] = worksheet->getUsedRange();
+        
+        for (int row = 0; row <= max_row; ++row) {
+            for (int col = 0; col <= max_col; ++col) {
+                if (worksheet->hasCellAt(row, col)) {
+                    const auto& cell = worksheet->getCell(row, col);
+                    if (cell.isString()) {
+                        addSharedString(cell.getStringValue());
+                    }
+                }
+            }
+        }
+    }
+}
+
+void Workbook::updateFormatIndices() {
+    for (auto& [id, format] : formats_) {
+        format->setFontIndex(getFontId(*format));
+        format->setFillIndex(getFillId(*format));
+        format->setBorderIndex(getBorderId(*format));
+        format->setXfIndex(getXfId(*format));
     }
 }
 
@@ -354,6 +1268,23 @@ std::string Workbook::getWorksheetPath(int sheet_id) const {
 
 std::string Workbook::getWorksheetRelPath(int sheet_id) const {
     return "worksheets/sheet" + std::to_string(sheet_id) + ".xml";
+}
+
+std::string Workbook::formatTime(const std::tm& time) const {
+    std::ostringstream oss;
+    oss << std::put_time(&time, "%Y-%m-%dT%H:%M:%SZ");
+    return oss.str();
+}
+
+std::string Workbook::hashPassword(const std::string& password) const {
+    // 简化的密码哈希实现
+    // 实际应该使用Excel的密码哈希算法
+    std::hash<std::string> hasher;
+    size_t hash = hasher(password);
+    
+    std::ostringstream oss;
+    oss << std::hex << std::uppercase << hash;
+    return oss.str();
 }
 
 }} // namespace fastexcel::core

@@ -2,150 +2,622 @@
 
 #include <string>
 #include <memory>
+#include <cstdint>
 
 namespace fastexcel {
 namespace core {
 
-enum class FontBold {
-    None,
-    Bold
+// 颜色类型定义
+using Color = uint32_t;
+
+// 预定义颜色常量
+constexpr Color COLOR_BLACK   = 0x000000;
+constexpr Color COLOR_WHITE   = 0xFFFFFF;
+constexpr Color COLOR_RED     = 0xFF0000;
+constexpr Color COLOR_GREEN   = 0x008000;
+constexpr Color COLOR_BLUE    = 0x0000FF;
+constexpr Color COLOR_YELLOW  = 0xFFFF00;
+constexpr Color COLOR_MAGENTA = 0xFF00FF;
+constexpr Color COLOR_CYAN    = 0x00FFFF;
+constexpr Color COLOR_BROWN   = 0x800000;
+constexpr Color COLOR_GRAY    = 0x808080;
+constexpr Color COLOR_LIME    = 0x00FF00;
+constexpr Color COLOR_NAVY    = 0x000080;
+constexpr Color COLOR_ORANGE  = 0xFF6600;
+constexpr Color COLOR_PINK    = 0xFF00FF;
+constexpr Color COLOR_PURPLE  = 0x800080;
+constexpr Color COLOR_SILVER  = 0xC0C0C0;
+
+// 下划线类型
+enum class UnderlineType : uint8_t {
+    None = 0,
+    Single = 1,
+    Double = 2,
+    SingleAccounting = 3,
+    DoubleAccounting = 4
 };
 
-enum class FontItalic {
-    None,
-    Italic
+// 字体脚本类型（上标/下标）
+enum class FontScript : uint8_t {
+    None = 0,
+    Superscript = 1,
+    Subscript = 2
 };
 
-enum class FontUnderline {
-    None,
-    Single,
-    Double
+// 水平对齐方式
+enum class HorizontalAlign : uint8_t {
+    None = 0,
+    Left = 1,
+    Center = 2,
+    Right = 3,
+    Fill = 4,
+    Justify = 5,
+    CenterAcross = 6,
+    Distributed = 7
 };
 
-enum class HorizontalAlignment {
-    General,
-    Left,
-    Center,
-    Right,
-    Fill,
-    Justify,
-    CenterContinuous,
-    Distributed
+// 垂直对齐方式
+enum class VerticalAlign : uint8_t {
+    Top = 8,
+    Bottom = 9,
+    Center = 10,
+    Justify = 11,
+    Distributed = 12
 };
 
-enum class VerticalAlignment {
-    Top,
-    Center,
-    Bottom,
-    Justify,
-    Distributed
+// 填充模式
+enum class PatternType : uint8_t {
+    None = 0,
+    Solid = 1,
+    MediumGray = 2,
+    DarkGray = 3,
+    LightGray = 4,
+    DarkHorizontal = 5,
+    DarkVertical = 6,
+    DarkDown = 7,
+    DarkUp = 8,
+    DarkGrid = 9,
+    DarkTrellis = 10,
+    LightHorizontal = 11,
+    LightVertical = 12,
+    LightDown = 13,
+    LightUp = 14,
+    LightGrid = 15,
+    LightTrellis = 16,
+    Gray125 = 17,
+    Gray0625 = 18
 };
 
+// 边框样式
+enum class BorderStyle : uint8_t {
+    None = 0,
+    Thin = 1,
+    Medium = 2,
+    Dashed = 3,
+    Dotted = 4,
+    Thick = 5,
+    Double = 6,
+    Hair = 7,
+    MediumDashed = 8,
+    DashDot = 9,
+    MediumDashDot = 10,
+    DashDotDot = 11,
+    MediumDashDotDot = 12,
+    SlantDashDot = 13
+};
+
+// 对角线边框类型
+enum class DiagonalBorderType : uint8_t {
+    None = 0,
+    Up = 1,
+    Down = 2,
+    UpDown = 3
+};
+
+/**
+ * @brief Format类 - Excel单元格格式化
+ * 
+ * 提供与libxlsxwriter兼容的格式化功能，包括：
+ * - 字体设置（名称、大小、颜色、样式）
+ * - 对齐设置（水平、垂直、换行、旋转、缩进）
+ * - 边框设置（样式、颜色、对角线）
+ * - 填充设置（背景色、前景色、模式）
+ * - 数字格式设置
+ * - 保护设置（锁定、隐藏）
+ */
 class Format {
 private:
     // 字体属性
-    std::string font_name_;
-    int font_size_ = 11;
-    FontBold font_bold_ = FontBold::None;
-    FontItalic font_italic_ = FontItalic::None;
-    FontUnderline font_underline_ = FontUnderline::None;
-    uint32_t font_color_ = 0x000000; // 黑色
+    std::string font_name_ = "Calibri";
+    double font_size_ = 11.0;
+    bool bold_ = false;
+    bool italic_ = false;
+    UnderlineType underline_ = UnderlineType::None;
+    bool strikeout_ = false;
+    bool outline_ = false;
+    bool shadow_ = false;
+    FontScript script_ = FontScript::None;
+    Color font_color_ = COLOR_BLACK;
+    uint8_t font_family_ = 2;
+    uint8_t font_charset_ = 1;
+    bool font_condense_ = false;
+    bool font_extend_ = false;
+    std::string font_scheme_;
+    uint8_t theme_ = 1;
     
     // 对齐属性
-    HorizontalAlignment horizontal_align_ = HorizontalAlignment::General;
-    VerticalAlignment vertical_align_ = VerticalAlignment::Bottom;
-    bool wrap_text_ = false;
-    
-    // 背景属性
-    bool has_background_ = false;
-    uint32_t background_color_ = 0xFFFFFF; // 白色
-    uint32_t pattern_color_ = 0x000000; // 黑色
-    std::string pattern_type_ = "none";
+    HorizontalAlign horizontal_align_ = HorizontalAlign::None;
+    VerticalAlign vertical_align_ = VerticalAlign::Bottom;
+    bool text_wrap_ = false;
+    int16_t rotation_ = 0;
+    uint8_t indent_ = 0;
+    bool shrink_ = false;
+    uint8_t reading_order_ = 0;
+    bool just_distrib_ = false;
     
     // 边框属性
-    bool has_border_ = false;
-    uint32_t border_color_ = 0x000000; // 黑色
-    std::string border_style_ = "none";
+    BorderStyle left_border_ = BorderStyle::None;
+    BorderStyle right_border_ = BorderStyle::None;
+    BorderStyle top_border_ = BorderStyle::None;
+    BorderStyle bottom_border_ = BorderStyle::None;
+    BorderStyle diag_border_ = BorderStyle::None;
+    DiagonalBorderType diag_type_ = DiagonalBorderType::None;
+    
+    Color left_border_color_ = COLOR_BLACK;
+    Color right_border_color_ = COLOR_BLACK;
+    Color top_border_color_ = COLOR_BLACK;
+    Color bottom_border_color_ = COLOR_BLACK;
+    Color diag_border_color_ = COLOR_BLACK;
+    
+    // 填充属性
+    PatternType pattern_ = PatternType::None;
+    Color bg_color_ = COLOR_WHITE;
+    Color fg_color_ = COLOR_BLACK;
     
     // 数字格式
-    std::string number_format_;
+    std::string num_format_;
+    uint16_t num_format_index_ = 0;
     
-    // 格式ID
-    int format_id_ = -1;
+    // 保护属性
+    bool locked_ = true;
+    bool hidden_ = false;
     
+    // 其他属性
+    bool quote_prefix_ = false;
+    bool hyperlink_ = false;
+    uint8_t color_indexed_ = 0;
+    bool font_only_ = false;
+    
+    // 格式索引
+    int32_t xf_index_ = -1;
+    int32_t dxf_index_ = -1;
+    int32_t font_index_ = -1;
+    int32_t fill_index_ = -1;
+    int32_t border_index_ = -1;
+    
+    // 标记是否有相应的格式设置
+    bool has_font_ = false;
+    bool has_fill_ = false;
+    bool has_border_ = false;
+    bool has_alignment_ = false;
+    bool has_protection_ = false;
+
 public:
     Format() = default;
     ~Format() = default;
     
-    // 字体设置
-    void setFontName(const std::string& name) { font_name_ = name; }
-    void setFontSize(int size) { font_size_ = size; }
-    void setBold(bool bold = true) { font_bold_ = bold ? FontBold::Bold : FontBold::None; }
-    void setItalic(bool italic = true) { font_italic_ = italic ? FontItalic::Italic : FontItalic::None; }
-    void setUnderline(FontUnderline underline) { font_underline_ = underline; }
-    void setFontColor(uint32_t color) { font_color_ = color; }
+    // 禁用拷贝构造和赋值
+    Format(const Format&) = delete;
+    Format& operator=(const Format&) = delete;
     
-    // 对齐设置
-    void setHorizontalAlignment(HorizontalAlignment align) { horizontal_align_ = align; }
-    void setVerticalAlignment(VerticalAlignment align) { vertical_align_ = align; }
-    void setWrapText(bool wrap = true) { wrap_text_ = wrap; }
+    // 允许移动构造和赋值
+    Format(Format&&) = default;
+    Format& operator=(Format&&) = default;
     
-    // 背景设置
-    void setBackgroundColor(uint32_t color) { 
-        has_background_ = true; 
-        background_color_ = color; 
-    }
-    void setPattern(const std::string& pattern, uint32_t color = 0x000000) {
-        pattern_type_ = pattern;
-        pattern_color_ = color;
-    }
+    // ========== 字体设置 ==========
     
-    // 边框设置
-    void setBorderStyle(const std::string& style, uint32_t color = 0x000000) {
-        has_border_ = true;
-        border_style_ = style;
-        border_color_ = color;
-    }
+    /**
+     * @brief 设置字体名称
+     * @param name 字体名称，如"Calibri", "Arial"等
+     */
+    void setFontName(const std::string& name);
     
-    // 数字格式设置
-    void setNumberFormat(const std::string& format) { number_format_ = format; }
+    /**
+     * @brief 设置字体大小
+     * @param size 字体大小，范围1.0-409.0
+     */
+    void setFontSize(double size);
     
-    // 获取属性
-    std::string getFontName() const { return font_name_; }
-    int getFontSize() const { return font_size_; }
-    FontBold getBold() const { return font_bold_; }
-    FontItalic getItalic() const { return font_italic_; }
-    FontUnderline getUnderline() const { return font_underline_; }
-    uint32_t getFontColor() const { return font_color_; }
+    /**
+     * @brief 设置字体颜色
+     * @param color RGB颜色值
+     */
+    void setFontColor(Color color);
     
-    HorizontalAlignment getHorizontalAlignment() const { return horizontal_align_; }
-    VerticalAlignment getVerticalAlignment() const { return vertical_align_; }
-    bool getWrapText() const { return wrap_text_; }
+    /**
+     * @brief 设置粗体
+     * @param bold 是否粗体
+     */
+    void setBold(bool bold = true);
     
-    bool hasBackground() const { return has_background_; }
-    uint32_t getBackgroundColor() const { return background_color_; }
-    std::string getPatternType() const { return pattern_type_; }
-    uint32_t getPatternColor() const { return pattern_color_; }
+    /**
+     * @brief 设置斜体
+     * @param italic 是否斜体
+     */
+    void setItalic(bool italic = true);
     
+    /**
+     * @brief 设置下划线
+     * @param underline 下划线类型
+     */
+    void setUnderline(UnderlineType underline);
+    
+    /**
+     * @brief 设置删除线
+     * @param strikeout 是否删除线
+     */
+    void setStrikeout(bool strikeout = true);
+    
+    /**
+     * @brief 设置字体轮廓
+     * @param outline 是否轮廓
+     */
+    void setFontOutline(bool outline = true);
+    
+    /**
+     * @brief 设置字体阴影
+     * @param shadow 是否阴影
+     */
+    void setFontShadow(bool shadow = true);
+    
+    /**
+     * @brief 设置字体脚本（上标/下标）
+     * @param script 脚本类型
+     */
+    void setFontScript(FontScript script);
+    
+    /**
+     * @brief 设置字体族
+     * @param family 字体族索引
+     */
+    void setFontFamily(uint8_t family);
+    
+    /**
+     * @brief 设置字体字符集
+     * @param charset 字符集
+     */
+    void setFontCharset(uint8_t charset);
+    
+    /**
+     * @brief 设置字体压缩
+     * @param condense 是否压缩
+     */
+    void setFontCondense(bool condense = true);
+    
+    /**
+     * @brief 设置字体扩展
+     * @param extend 是否扩展
+     */
+    void setFontExtend(bool extend = true);
+    
+    /**
+     * @brief 设置字体方案
+     * @param scheme 字体方案
+     */
+    void setFontScheme(const std::string& scheme);
+    
+    /**
+     * @brief 设置主题
+     * @param theme 主题索引
+     */
+    void setTheme(uint8_t theme);
+    
+    // ========== 对齐设置 ==========
+    
+    /**
+     * @brief 设置水平对齐
+     * @param align 水平对齐方式
+     */
+    void setHorizontalAlign(HorizontalAlign align);
+    
+    /**
+     * @brief 设置垂直对齐
+     * @param align 垂直对齐方式
+     */
+    void setVerticalAlign(VerticalAlign align);
+    
+    /**
+     * @brief 设置对齐（兼容libxlsxwriter）
+     * @param alignment 对齐方式
+     */
+    void setAlign(uint8_t alignment);
+    
+    /**
+     * @brief 设置文本换行
+     * @param wrap 是否换行
+     */
+    void setTextWrap(bool wrap = true);
+    
+    /**
+     * @brief 设置文本旋转
+     * @param angle 旋转角度（-90到90，或270）
+     */
+    void setRotation(int16_t angle);
+    
+    /**
+     * @brief 设置缩进级别
+     * @param level 缩进级别
+     */
+    void setIndent(uint8_t level);
+    
+    /**
+     * @brief 设置收缩以适应
+     * @param shrink 是否收缩
+     */
+    void setShrink(bool shrink = true);
+    
+    /**
+     * @brief 设置阅读顺序
+     * @param order 阅读顺序
+     */
+    void setReadingOrder(uint8_t order);
+    
+    // ========== 边框设置 ==========
+    
+    /**
+     * @brief 设置所有边框
+     * @param style 边框样式
+     */
+    void setBorder(BorderStyle style);
+    
+    /**
+     * @brief 设置左边框
+     * @param style 边框样式
+     */
+    void setLeftBorder(BorderStyle style);
+    
+    /**
+     * @brief 设置右边框
+     * @param style 边框样式
+     */
+    void setRightBorder(BorderStyle style);
+    
+    /**
+     * @brief 设置上边框
+     * @param style 边框样式
+     */
+    void setTopBorder(BorderStyle style);
+    
+    /**
+     * @brief 设置下边框
+     * @param style 边框样式
+     */
+    void setBottomBorder(BorderStyle style);
+    
+    /**
+     * @brief 设置所有边框颜色
+     * @param color 边框颜色
+     */
+    void setBorderColor(Color color);
+    
+    /**
+     * @brief 设置左边框颜色
+     * @param color 边框颜色
+     */
+    void setLeftBorderColor(Color color);
+    
+    /**
+     * @brief 设置右边框颜色
+     * @param color 边框颜色
+     */
+    void setRightBorderColor(Color color);
+    
+    /**
+     * @brief 设置上边框颜色
+     * @param color 边框颜色
+     */
+    void setTopBorderColor(Color color);
+    
+    /**
+     * @brief 设置下边框颜色
+     * @param color 边框颜色
+     */
+    void setBottomBorderColor(Color color);
+    
+    /**
+     * @brief 设置对角线边框类型
+     * @param type 对角线类型
+     */
+    void setDiagType(DiagonalBorderType type);
+    
+    /**
+     * @brief 设置对角线边框样式
+     * @param style 边框样式
+     */
+    void setDiagBorder(BorderStyle style);
+    
+    /**
+     * @brief 设置对角线边框颜色
+     * @param color 边框颜色
+     */
+    void setDiagColor(Color color);
+    
+    // ========== 填充设置 ==========
+    
+    /**
+     * @brief 设置填充模式
+     * @param pattern 填充模式
+     */
+    void setPattern(PatternType pattern);
+    
+    /**
+     * @brief 设置背景色
+     * @param color 背景色
+     */
+    void setBackgroundColor(Color color);
+    
+    /**
+     * @brief 设置前景色
+     * @param color 前景色
+     */
+    void setForegroundColor(Color color);
+    
+    // ========== 数字格式设置 ==========
+    
+    /**
+     * @brief 设置数字格式
+     * @param format 格式字符串
+     */
+    void setNumberFormat(const std::string& format);
+    
+    /**
+     * @brief 设置数字格式索引
+     * @param index 内置格式索引
+     */
+    void setNumberFormatIndex(uint16_t index);
+    
+    // ========== 保护设置 ==========
+    
+    /**
+     * @brief 设置单元格解锁
+     * @param unlocked 是否解锁
+     */
+    void setUnlocked(bool unlocked = true);
+    
+    /**
+     * @brief 设置公式隐藏
+     * @param hidden 是否隐藏
+     */
+    void setHidden(bool hidden = true);
+    
+    // ========== 其他设置 ==========
+    
+    /**
+     * @brief 设置引号前缀
+     * @param prefix 是否添加引号前缀
+     */
+    void setQuotePrefix(bool prefix = true);
+    
+    /**
+     * @brief 设置超链接格式
+     * @param hyperlink 是否为超链接
+     */
+    void setHyperlink(bool hyperlink = true);
+    
+    /**
+     * @brief 设置颜色索引
+     * @param index 颜色索引
+     */
+    void setColorIndexed(uint8_t index);
+    
+    /**
+     * @brief 设置仅字体格式
+     * @param font_only 是否仅字体
+     */
+    void setFontOnly(bool font_only = true);
+    
+    // ========== 获取属性 ==========
+    
+    const std::string& getFontName() const { return font_name_; }
+    double getFontSize() const { return font_size_; }
+    Color getFontColor() const { return font_color_; }
+    bool isBold() const { return bold_; }
+    bool isItalic() const { return italic_; }
+    UnderlineType getUnderline() const { return underline_; }
+    bool isStrikeout() const { return strikeout_; }
+    FontScript getFontScript() const { return script_; }
+    
+    HorizontalAlign getHorizontalAlign() const { return horizontal_align_; }
+    VerticalAlign getVerticalAlign() const { return vertical_align_; }
+    bool isTextWrap() const { return text_wrap_; }
+    int16_t getRotation() const { return rotation_; }
+    uint8_t getIndent() const { return indent_; }
+    bool isShrink() const { return shrink_; }
+    
+    BorderStyle getLeftBorder() const { return left_border_; }
+    BorderStyle getRightBorder() const { return right_border_; }
+    BorderStyle getTopBorder() const { return top_border_; }
+    BorderStyle getBottomBorder() const { return bottom_border_; }
+    BorderStyle getDiagBorder() const { return diag_border_; }
+    DiagonalBorderType getDiagType() const { return diag_type_; }
+    
+    Color getLeftBorderColor() const { return left_border_color_; }
+    Color getRightBorderColor() const { return right_border_color_; }
+    Color getTopBorderColor() const { return top_border_color_; }
+    Color getBottomBorderColor() const { return bottom_border_color_; }
+    Color getDiagBorderColor() const { return diag_border_color_; }
+    
+    PatternType getPattern() const { return pattern_; }
+    Color getBackgroundColor() const { return bg_color_; }
+    Color getForegroundColor() const { return fg_color_; }
+    
+    const std::string& getNumberFormat() const { return num_format_; }
+    uint16_t getNumberFormatIndex() const { return num_format_index_; }
+    
+    bool isLocked() const { return locked_; }
+    bool isHidden() const { return hidden_; }
+    bool hasQuotePrefix() const { return quote_prefix_; }
+    
+    // ========== 格式索引管理 ==========
+    
+    void setXfIndex(int32_t index) { xf_index_ = index; }
+    int32_t getXfIndex() const { return xf_index_; }
+    
+    void setDxfIndex(int32_t index) { dxf_index_ = index; }
+    int32_t getDxfIndex() const { return dxf_index_; }
+    
+    void setFontIndex(int32_t index) { font_index_ = index; }
+    int32_t getFontIndex() const { return font_index_; }
+    
+    void setFillIndex(int32_t index) { fill_index_ = index; }
+    int32_t getFillIndex() const { return fill_index_; }
+    
+    void setBorderIndex(int32_t index) { border_index_ = index; }
+    int32_t getBorderIndex() const { return border_index_; }
+    
+    // ========== 格式检查 ==========
+    
+    bool hasFont() const { return has_font_; }
+    bool hasFill() const { return has_fill_; }
     bool hasBorder() const { return has_border_; }
-    uint32_t getBorderColor() const { return border_color_; }
-    std::string getBorderStyle() const { return border_style_; }
+    bool hasAlignment() const { return has_alignment_; }
+    bool hasProtection() const { return has_protection_; }
+    bool hasAnyFormatting() const;
     
-    std::string getNumberFormat() const { return number_format_; }
+    // ========== XML生成 ==========
     
-    // 格式ID管理
-    void setFormatId(int id) { format_id_ = id; }
-    int getFormatId() const { return format_id_; }
-    
-    // 生成XML格式字符串
     std::string generateFontXML() const;
-    std::string generateAlignmentXML() const;
     std::string generateFillXML() const;
     std::string generateBorderXML() const;
+    std::string generateAlignmentXML() const;
+    std::string generateProtectionXML() const;
     std::string generateNumberFormatXML() const;
     
-    // 检查是否有任何格式设置
-    bool hasAnyFormatting() const;
+    // ========== 格式比较和哈希 ==========
+    
+    bool equals(const Format& other) const;
+    size_t hash() const;
+    
+    // ========== 兼容性方法 ==========
+    
+    // 为了与现有代码兼容而保留的方法
+    void setWrapText(bool wrap = true) { setTextWrap(wrap); }
+    void setHorizontalAlignment(HorizontalAlign align) { setHorizontalAlign(align); }
+    void setVerticalAlignment(VerticalAlign align) { setVerticalAlign(align); }
+    void setBorderStyle(const std::string& style, Color color = COLOR_BLACK);
+    void setPattern(const std::string& pattern, Color color = COLOR_BLACK);
+    
+private:
+    // 内部辅助方法
+    void markFontChanged() { has_font_ = true; }
+    void markFillChanged() { has_fill_ = true; }
+    void markBorderChanged() { has_border_ = true; }
+    void markAlignmentChanged() { has_alignment_ = true; }
+    void markProtectionChanged() { has_protection_ = true; }
+    
+    std::string borderStyleToString(BorderStyle style) const;
+    std::string patternTypeToString(PatternType pattern) const;
+    std::string colorToHex(Color color) const;
 };
 
 }} // namespace fastexcel::core

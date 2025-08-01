@@ -53,6 +53,7 @@ void Cell::clear() {
     type_ = CellType::Empty;
     value_ = std::monostate{};
     formula_.clear();
+    hyperlink_.clear();
     format_.reset();
 }
 
@@ -61,6 +62,7 @@ Cell::Cell(const Cell& other) {
     value_ = other.value_;
     format_ = other.format_;
     formula_ = other.formula_;
+    hyperlink_ = other.hyperlink_;
 }
 
 Cell& Cell::operator=(const Cell& other) {
@@ -69,6 +71,7 @@ Cell& Cell::operator=(const Cell& other) {
         value_ = other.value_;
         format_ = other.format_;
         formula_ = other.formula_;
+        hyperlink_ = other.hyperlink_;
     }
     return *this;
 }
