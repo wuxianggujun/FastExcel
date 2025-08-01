@@ -141,6 +141,11 @@ void XMLStreamWriter::writeAttribute(const char* name, const char* value) {
 }
 
 void XMLStreamWriter::writeAttribute(const char* name, int value) {
+    if (!in_element_) {
+        LOG_WARN("Attempted to write attribute '{}' outside of element", name);
+        return;
+    }
+    
     char buffer[32];
     int length = snprintf(buffer, sizeof(buffer), "%d", value);
     
@@ -152,6 +157,11 @@ void XMLStreamWriter::writeAttribute(const char* name, int value) {
 }
 
 void XMLStreamWriter::writeAttribute(const char* name, double value) {
+    if (!in_element_) {
+        LOG_WARN("Attempted to write attribute '{}' outside of element", name);
+        return;
+    }
+    
     char buffer[64];
     int length = snprintf(buffer, sizeof(buffer), "%.6g", value);
     

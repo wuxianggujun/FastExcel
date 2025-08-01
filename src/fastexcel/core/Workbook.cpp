@@ -127,7 +127,7 @@ std::shared_ptr<Worksheet> Workbook::addWorksheet(const std::string& name) {
         return nullptr;
     }
     
-    auto worksheet = std::make_shared<Worksheet>(sheet_name, shared_from_this(), next_sheet_id_++);
+    auto worksheet = std::make_shared<Worksheet>(sheet_name, std::shared_ptr<Workbook>(this, [](Workbook*){}), next_sheet_id_++);
     worksheets_.push_back(worksheet);
     
     LOG_DEBUG("Added worksheet: {}", sheet_name);
@@ -151,7 +151,7 @@ std::shared_ptr<Worksheet> Workbook::insertWorksheet(size_t index, const std::st
         return nullptr;
     }
     
-    auto worksheet = std::make_shared<Worksheet>(sheet_name, shared_from_this(), next_sheet_id_++);
+    auto worksheet = std::make_shared<Worksheet>(sheet_name, std::shared_ptr<Workbook>(this, [](Workbook*){}), next_sheet_id_++);
     worksheets_.insert(worksheets_.begin() + index, worksheet);
     
     LOG_DEBUG("Inserted worksheet: {} at index {}", sheet_name, index);
@@ -283,7 +283,7 @@ std::shared_ptr<Worksheet> Workbook::copyWorksheet(const std::string& source_nam
     }
     
     // 创建新工作表
-    auto new_worksheet = std::make_shared<Worksheet>(new_name, shared_from_this(), next_sheet_id_++);
+    auto new_worksheet = std::make_shared<Worksheet>(new_name, std::shared_ptr<Workbook>(this, [](Workbook*){}), next_sheet_id_++);
     
     // 这里应该实现深拷贝逻辑
     // 简化版本，实际需要复制所有单元格、格式、设置等

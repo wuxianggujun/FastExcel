@@ -87,7 +87,7 @@ struct DefinedName {
  * - 工作簿保护
  * - 多种保存选项
  */
-class Workbook : public std::enable_shared_from_this<Workbook> {
+class Workbook {
 private:
     std::string filename_;
     std::vector<std::shared_ptr<Worksheet>> worksheets_;

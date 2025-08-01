@@ -28,10 +28,7 @@ bool FileManager::open(bool create) {
         return false;
     }
     
-    if (create) {
-        return createExcelStructure();
-    }
-    
+    // 不在这里创建Excel结构，而是在Workbook::save()时创建
     return true;
 }
 
