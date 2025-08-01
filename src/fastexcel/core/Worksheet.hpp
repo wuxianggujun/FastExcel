@@ -607,6 +607,195 @@ public:
      */
     bool hasCellAt(int row, int col) const;
     
+    /**
+     * @brief 获取列宽
+     * @param col 列号
+     * @return 列宽
+     */
+    double getColumnWidth(int col) const;
+    
+    /**
+     * @brief 获取行高
+     * @param row 行号
+     * @return 行高
+     */
+    double getRowHeight(int row) const;
+    
+    /**
+     * @brief 获取列格式
+     * @param col 列号
+     * @return 列格式
+     */
+    std::shared_ptr<Format> getColumnFormat(int col) const;
+    
+    /**
+     * @brief 获取行格式
+     * @param row 行号
+     * @return 行格式
+     */
+    std::shared_ptr<Format> getRowFormat(int row) const;
+    
+    /**
+     * @brief 检查列是否隐藏
+     * @param col 列号
+     * @return 是否隐藏
+     */
+    bool isColumnHidden(int col) const;
+    
+    /**
+     * @brief 检查行是否隐藏
+     * @param row 行号
+     * @return 是否隐藏
+     */
+    bool isRowHidden(int row) const;
+    
+    /**
+     * @brief 获取合并单元格范围
+     * @return 合并单元格范围列表
+     */
+    const std::vector<MergeRange>& getMergeRanges() const { return merge_ranges_; }
+    
+    /**
+     * @brief 检查是否有自动筛选
+     * @return 是否有自动筛选
+     */
+    bool hasAutoFilter() const { return autofilter_ != nullptr; }
+    
+    /**
+     * @brief 获取自动筛选范围
+     * @return 自动筛选范围
+     */
+    AutoFilterRange getAutoFilterRange() const;
+    
+    /**
+     * @brief 检查是否有冻结窗格
+     * @return 是否有冻结窗格
+     */
+    bool hasFrozenPanes() const { return freeze_panes_ != nullptr; }
+    
+    /**
+     * @brief 获取冻结窗格信息
+     * @return 冻结窗格信息
+     */
+    FreezePanes getFreezeInfo() const;
+    
+    /**
+     * @brief 获取打印区域
+     * @return 打印区域
+     */
+    AutoFilterRange getPrintArea() const;
+    
+    /**
+     * @brief 获取重复行范围
+     * @return (起始行, 结束行)
+     */
+    std::pair<int, int> getRepeatRows() const;
+    
+    /**
+     * @brief 获取重复列范围
+     * @return (起始列, 结束列)
+     */
+    std::pair<int, int> getRepeatColumns() const;
+    
+    /**
+     * @brief 检查是否横向打印
+     * @return 是否横向打印
+     */
+    bool isLandscape() const { return print_settings_.landscape; }
+    
+    /**
+     * @brief 获取页边距
+     * @return 页边距结构
+     */
+    struct Margins {
+        double left, right, top, bottom;
+    };
+    Margins getMargins() const;
+    
+    /**
+     * @brief 获取打印缩放
+     * @return 缩放百分比
+     */
+    int getPrintScale() const { return print_settings_.scale; }
+    
+    /**
+     * @brief 获取适应页面设置
+     * @return (宽度, 高度)
+     */
+    std::pair<int, int> getFitToPages() const;
+    
+    /**
+     * @brief 检查是否打印网格线
+     * @return 是否打印网格线
+     */
+    bool isPrintGridlines() const { return print_settings_.print_gridlines; }
+    
+    /**
+     * @brief 检查是否打印标题
+     * @return 是否打印标题
+     */
+    bool isPrintHeadings() const { return print_settings_.print_headings; }
+    
+    /**
+     * @brief 检查是否水平居中
+     * @return 是否水平居中
+     */
+    bool isCenterHorizontally() const { return print_settings_.center_horizontally; }
+    
+    /**
+     * @brief 检查是否垂直居中
+     * @return 是否垂直居中
+     */
+    bool isCenterVertically() const { return print_settings_.center_vertically; }
+    
+    /**
+     * @brief 获取保护密码
+     * @return 保护密码
+     */
+    const std::string& getProtectionPassword() const { return protection_password_; }
+    
+    /**
+     * @brief 获取缩放比例
+     * @return 缩放比例
+     */
+    int getZoom() const { return sheet_view_.zoom_scale; }
+    
+    /**
+     * @brief 检查网格线是否可见
+     * @return 网格线是否可见
+     */
+    bool isGridlinesVisible() const { return sheet_view_.show_gridlines; }
+    
+    /**
+     * @brief 检查行列标题是否可见
+     * @return 行列标题是否可见
+     */
+    bool isRowColHeadersVisible() const { return sheet_view_.show_row_col_headers; }
+    
+    /**
+     * @brief 检查是否从右到左
+     * @return 是否从右到左
+     */
+    bool isRightToLeft() const { return sheet_view_.right_to_left; }
+    
+    /**
+     * @brief 检查选项卡是否选中
+     * @return 选项卡是否选中
+     */
+    bool isTabSelected() const { return sheet_view_.tab_selected; }
+    
+    /**
+     * @brief 获取活动单元格
+     * @return 活动单元格引用
+     */
+    const std::string& getActiveCell() const { return active_cell_; }
+    
+    /**
+     * @brief 获取选中范围
+     * @return 选中范围引用
+     */
+    const std::string& getSelection() const { return selection_; }
+    
     // ========== XML生成 ==========
     
     /**

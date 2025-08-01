@@ -1,113 +1,160 @@
-# Test CMakeLists.txt for FastExcel
+# FastExcel 测试 CMakeLists.txt
 
-# 启用测试
-enable_testing()
+cmake_minimum_required(VERSION 3.10)
 
-# 包含GoogleTest
-include(GoogleTest)
+# 检查是否启用了测试
+if(NOT FASTEXCEL_BUILD_TESTS AND NOT FASTEXCEL_BUILD_UNIT_TESTS)
+    message(STATUS "FastExcel: Tests are disabled")
+    return()
+endif()
 
-# 单元测试
+# 确保 GoogleTest 目标可用
+if(NOT DEFINED FASTEXCEL_GTEST_TARGETS)
+    message(FATAL_ERROR "FastExcel: GoogleTest targets not available. Make sure third_party/CMakeLists.txt is processed first.")
+endif()
+
+# 包含目录
+include_directories(${CMAKE_SOURCE_DIR}/src)
+include_directories(${CMAKE_SOURCE_DIR}/third_party/fmt/include)
+include_directories(${CMAKE_SOURCE_DIR}/third_party/libexpat/expat/lib)
+
+# 单元测试源文件
+set(UNIT_TEST_SOURCES
+    unit/test_main.cpp
+    unit/test_cell.cpp
+    unit/test_format.cpp
+    unit/test_worksheet.cpp
+    unit/test_workbook.cpp
+    unit/test_xml_writer.cpp
+)
+
+# 集成测试源文件
+set(INTEGRATION_TEST_SOURCES
+    integration/test_integration.cpp
+)
+
+# 创建单元测试可执行文件
 if(FASTEXCEL_BUILD_UNIT_TESTS)
-    # 收集单元测试源文件
-    file(GLOB_RECURSE UNIT_TEST_SOURCES
-        "unit/*.cpp"
+    add_executable(fastexcel_unit_tests ${UNIT_TEST_SOURCES})
+    
+    # 链接库
+    target_link_libraries(fastexcel_unit_tests
+        fastexcel
+        ${FASTEXCEL_GTEST_TARGETS}
     )
     
-    # 创建单元测试可执行文件
-    if(UNIT_TEST_SOURCES)
-        add_executable(unit_tests ${UNIT_TEST_SOURCES})
-        target_link_libraries(unit_tests PRIVATE
-            fastexcel
-            ${FASTEXCEL_GTEST_TARGETS}
-        )
-        target_include_directories(unit_tests PRIVATE
-            ${CMAKE_SOURCE_DIR}/src
-            ${FASTEXCEL_THIRD_PARTY_INCLUDE_DIRS}
-        )
-        
-        # 确保测试能找到第三方库头文件
-        target_include_directories(unit_tests PRIVATE
-            ${CMAKE_SOURCE_DIR}/third_party/libexpat/expat/lib
-            ${CMAKE_SOURCE_DIR}/third_party/spdlog/include
-            ${CMAKE_SOURCE_DIR}/third_party/minizip-ng
-        )
-        
-        # 设置输出目录
-        set_target_properties(unit_tests PROPERTIES
-            RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin/test
-            FOLDER "Tests"
-        )
-        
-        # 设置运行时库为动态链接Debug版本
-        if(MSVC)
-            set_target_properties(unit_tests PROPERTIES
-                MSVC_RUNTIME_LIBRARY "MultiThreadedDebugDLL"
-            )
-            # 设置UTF-8编码，解决C4819编码警告
-            target_compile_options(unit_tests PRIVATE /utf-8)
-        endif()
-        
-        # 发现并注册测试
-        gtest_discover_tests(unit_tests)
-    endif()
-endif()
-
-# 集成测试
-if(ENABLE_INTEGRATION_TESTS)
-    # 收集集成测试源文件
-    file(GLOB_RECURSE INTEGRATION_TEST_SOURCES
-        "integration/*.cpp"
+    # 设置 C++ 标准
+    set_target_properties(fastexcel_unit_tests PROPERTIES
+        CXX_STANDARD 17
+        CXX_STANDARD_REQUIRED ON
     )
     
-    # 创建集成测试可执行文件
-    if(INTEGRATION_TEST_SOURCES)
-        add_executable(integration_tests ${INTEGRATION_TEST_SOURCES})
-        target_link_libraries(integration_tests PRIVATE
-            fastexcel
-            ${FASTEXCEL_GTEST_TARGETS}
-        )
-        target_include_directories(integration_tests PRIVATE
-            ${CMAKE_SOURCE_DIR}/src
-            ${FASTEXCEL_THIRD_PARTY_INCLUDE_DIRS}
-        )
-        
-        # 确保测试能找到第三方库头文件
-        target_include_directories(integration_tests PRIVATE
-            ${CMAKE_SOURCE_DIR}/third_party/libexpat/expat/lib
-            ${CMAKE_SOURCE_DIR}/third_party/spdlog/include
-            ${CMAKE_SOURCE_DIR}/third_party/minizip-ng
-        )
-        
-        # 设置输出目录
-        set_target_properties(integration_tests PROPERTIES
-            RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin/test
-            FOLDER "Tests"
-        )
-        
-        # 设置运行时库为动态链接Debug版本
-        if(MSVC)
-            set_target_properties(integration_tests PROPERTIES
-                MSVC_RUNTIME_LIBRARY "MultiThreadedDebugDLL"
-            )
-            # 设置UTF-8编码，解决C4819编码警告
-            target_compile_options(integration_tests PRIVATE /utf-8)
-        endif()
-        
-        # 发现并注册测试
-        gtest_discover_tests(integration_tests)
+    # 为 MSVC 添加 UTF-8 编译选项
+    if(MSVC)
+        target_compile_options(fastexcel_unit_tests PRIVATE /utf-8)
     endif()
+    
+    # 添加测试
+    if(CMAKE_VERSION VERSION_GREATER_EQUAL "3.10")
+        include(GoogleTest)
+        gtest_discover_tests(fastexcel_unit_tests)
+    else()
+        add_test(NAME fastexcel_unit_tests COMMAND fastexcel_unit_tests)
+    endif()
+    
+    message(STATUS "FastExcel: Unit tests enabled")
 endif()
 
+# 创建集成测试可执行文件
+if(FASTEXCEL_BUILD_INTEGRATION_TESTS)
+    add_executable(fastexcel_integration_tests ${INTEGRATION_TEST_SOURCES})
+    
+    # 链接库
+    target_link_libraries(fastexcel_integration_tests
+        fastexcel
+        ${FASTEXCEL_GTEST_TARGETS}
+    )
+    
+    # 设置 C++ 标准
+    set_target_properties(fastexcel_integration_tests PROPERTIES
+        CXX_STANDARD 17
+        CXX_STANDARD_REQUIRED ON
+    )
+    
+    # 为 MSVC 添加 UTF-8 编译选项
+    if(MSVC)
+        target_compile_options(fastexcel_integration_tests PRIVATE /utf-8)
+    endif()
+    
+    # 添加测试
+    if(CMAKE_VERSION VERSION_GREATER_EQUAL "3.10")
+        include(GoogleTest)
+        gtest_discover_tests(fastexcel_integration_tests)
+    else()
+        add_test(NAME fastexcel_integration_tests COMMAND fastexcel_integration_tests)
+    endif()
+    
+    message(STATUS "FastExcel: Integration tests enabled")
+endif()
 
-# 添加一个总的测试目标
-add_custom_target(tests 
-    DEPENDS unit_tests integration_tests
-    COMMENT "Build all tests"
-)
+# 创建组合测试可执行文件（包含所有测试）
+if(FASTEXCEL_BUILD_TESTS AND FASTEXCEL_BUILD_UNIT_TESTS)
+    set(ALL_TEST_SOURCES ${UNIT_TEST_SOURCES})
+    if(FASTEXCEL_BUILD_INTEGRATION_TESTS)
+        list(APPEND ALL_TEST_SOURCES ${INTEGRATION_TEST_SOURCES})
+    endif()
+    
+    add_executable(fastexcel_all_tests ${ALL_TEST_SOURCES})
+    
+    # 链接库
+    target_link_libraries(fastexcel_all_tests
+        fastexcel
+        ${FASTEXCEL_GTEST_TARGETS}
+    )
+    
+    # 设置 C++ 标准
+    set_target_properties(fastexcel_all_tests PROPERTIES
+        CXX_STANDARD 17
+        CXX_STANDARD_REQUIRED ON
+    )
+    
+    # 为 MSVC 添加 UTF-8 编译选项
+    if(MSVC)
+        target_compile_options(fastexcel_all_tests PRIVATE /utf-8)
+    endif()
+    
+    # 添加测试
+    if(CMAKE_VERSION VERSION_GREATER_EQUAL "3.10")
+        include(GoogleTest)
+        gtest_discover_tests(fastexcel_all_tests)
+    else()
+        add_test(NAME fastexcel_all_tests COMMAND fastexcel_all_tests)
+    endif()
+    
+    message(STATUS "FastExcel: All tests enabled")
+endif()
 
-# 添加运行测试的目标
-add_custom_target(run_tests
-    COMMAND ${CMAKE_CTEST_COMMAND} --verbose
-    DEPENDS tests
-    COMMENT "Run all tests"
-)
+# 添加自定义测试目标
+if(TARGET fastexcel_unit_tests)
+    add_custom_target(run_unit_tests
+        COMMAND fastexcel_unit_tests
+        DEPENDS fastexcel_unit_tests
+        COMMENT "运行 FastExcel 单元测试"
+    )
+endif()
+
+if(TARGET fastexcel_integration_tests)
+    add_custom_target(run_integration_tests
+        COMMAND fastexcel_integration_tests
+        DEPENDS fastexcel_integration_tests
+        COMMENT "运行 FastExcel 集成测试"
+    )
+endif()
+
+if(TARGET fastexcel_all_tests)
+    add_custom_target(run_all_tests
+        COMMAND fastexcel_all_tests
+        DEPENDS fastexcel_all_tests
+        COMMENT "运行 FastExcel 所有测试"
+    )
+endif()

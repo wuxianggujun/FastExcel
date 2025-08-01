@@ -114,6 +114,24 @@ enum class DiagonalBorderType : uint8_t {
     UpDown = 3
 };
 
+// 对角线类型别名
+using DiagonalType = DiagonalBorderType;
+
+// 数字格式类型
+enum class NumberFormatType : uint8_t {
+    General = 0,
+    Number = 1,
+    Decimal = 2,
+    Currency = 3,
+    Accounting = 4,
+    Date = 14,
+    Time = 21,
+    Percentage = 10,
+    Fraction = 12,
+    Scientific = 11,
+    Text = 49
+};
+
 /**
  * @brief Format类 - Excel单元格格式化
  * 
@@ -206,9 +224,9 @@ public:
     Format() = default;
     ~Format() = default;
     
-    // 禁用拷贝构造和赋值
-    Format(const Format&) = delete;
-    Format& operator=(const Format&) = delete;
+    // 允许拷贝构造和赋值（为了测试）
+    Format(const Format&) = default;
+    Format& operator=(const Format&) = default;
     
     // 允许移动构造和赋值
     Format(Format&&) = default;
@@ -275,6 +293,18 @@ public:
      * @param script 脚本类型
      */
     void setFontScript(FontScript script);
+    
+    /**
+     * @brief 设置上标
+     * @param superscript 是否上标
+     */
+    void setSuperscript(bool superscript = true);
+    
+    /**
+     * @brief 设置下标
+     * @param subscript 是否下标
+     */
+    void setSubscript(bool subscript = true);
     
     /**
      * @brief 设置字体族
@@ -355,6 +385,12 @@ public:
      * @param shrink 是否收缩
      */
     void setShrink(bool shrink = true);
+    
+    /**
+     * @brief 设置收缩以适应（别名）
+     * @param shrink 是否收缩
+     */
+    void setShrinkToFit(bool shrink = true);
     
     /**
      * @brief 设置阅读顺序
@@ -442,6 +478,24 @@ public:
      */
     void setDiagColor(Color color);
     
+    /**
+     * @brief 设置对角线边框（别名）
+     * @param style 边框样式
+     */
+    void setDiagonalBorder(BorderStyle style);
+    
+    /**
+     * @brief 设置对角线边框颜色（别名）
+     * @param color 边框颜色
+     */
+    void setDiagonalBorderColor(Color color);
+    
+    /**
+     * @brief 设置对角线类型（别名）
+     * @param type 对角线类型
+     */
+    void setDiagonalType(DiagonalType type);
+    
     // ========== 填充设置 ==========
     
     /**
@@ -476,6 +530,12 @@ public:
      */
     void setNumberFormatIndex(uint16_t index);
     
+    /**
+     * @brief 设置数字格式（使用预定义类型）
+     * @param type 数字格式类型
+     */
+    void setNumberFormat(NumberFormatType type);
+    
     // ========== 保护设置 ==========
     
     /**
@@ -483,6 +543,12 @@ public:
      * @param unlocked 是否解锁
      */
     void setUnlocked(bool unlocked = true);
+    
+    /**
+     * @brief 设置单元格锁定
+     * @param locked 是否锁定
+     */
+    void setLocked(bool locked = true);
     
     /**
      * @brief 设置公式隐藏
@@ -526,6 +592,8 @@ public:
     UnderlineType getUnderline() const { return underline_; }
     bool isStrikeout() const { return strikeout_; }
     FontScript getFontScript() const { return script_; }
+    bool isSuperscript() const { return script_ == FontScript::Superscript; }
+    bool isSubscript() const { return script_ == FontScript::Subscript; }
     
     HorizontalAlign getHorizontalAlign() const { return horizontal_align_; }
     VerticalAlign getVerticalAlign() const { return vertical_align_; }
@@ -533,6 +601,7 @@ public:
     int16_t getRotation() const { return rotation_; }
     uint8_t getIndent() const { return indent_; }
     bool isShrink() const { return shrink_; }
+    bool isShrinkToFit() const { return shrink_; }
     
     BorderStyle getLeftBorder() const { return left_border_; }
     BorderStyle getRightBorder() const { return right_border_; }
@@ -540,12 +609,15 @@ public:
     BorderStyle getBottomBorder() const { return bottom_border_; }
     BorderStyle getDiagBorder() const { return diag_border_; }
     DiagonalBorderType getDiagType() const { return diag_type_; }
+    BorderStyle getDiagonalBorder() const { return diag_border_; }
+    DiagonalType getDiagonalType() const { return diag_type_; }
     
     Color getLeftBorderColor() const { return left_border_color_; }
     Color getRightBorderColor() const { return right_border_color_; }
     Color getTopBorderColor() const { return top_border_color_; }
     Color getBottomBorderColor() const { return bottom_border_color_; }
     Color getDiagBorderColor() const { return diag_border_color_; }
+    Color getDiagonalBorderColor() const { return diag_border_color_; }
     
     PatternType getPattern() const { return pattern_; }
     Color getBackgroundColor() const { return bg_color_; }
@@ -592,6 +664,7 @@ public:
     std::string generateAlignmentXML() const;
     std::string generateProtectionXML() const;
     std::string generateNumberFormatXML() const;
+    std::string generateXML() const;
     
     // ========== 格式比较和哈希 ==========
     

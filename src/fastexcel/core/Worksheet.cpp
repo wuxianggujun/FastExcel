@@ -370,6 +370,94 @@ bool Worksheet::hasCellAt(int row, int col) const {
     return it != cells_.end() && !it->second.isEmpty();
 }
 
+// ========== 获取方法实现 ==========
+
+double Worksheet::getColumnWidth(int col) const {
+    auto it = column_info_.find(col);
+    if (it != column_info_.end() && it->second.width > 0) {
+        return it->second.width;
+    }
+    return default_col_width_;
+}
+
+double Worksheet::getRowHeight(int row) const {
+    auto it = row_info_.find(row);
+    if (it != row_info_.end() && it->second.height > 0) {
+        return it->second.height;
+    }
+    return default_row_height_;
+}
+
+std::shared_ptr<Format> Worksheet::getColumnFormat(int col) const {
+    auto it = column_info_.find(col);
+    if (it != column_info_.end()) {
+        return it->second.format;
+    }
+    return nullptr;
+}
+
+std::shared_ptr<Format> Worksheet::getRowFormat(int row) const {
+    auto it = row_info_.find(row);
+    if (it != row_info_.end()) {
+        return it->second.format;
+    }
+    return nullptr;
+}
+
+bool Worksheet::isColumnHidden(int col) const {
+    auto it = column_info_.find(col);
+    return it != column_info_.end() && it->second.hidden;
+}
+
+bool Worksheet::isRowHidden(int row) const {
+    auto it = row_info_.find(row);
+    return it != row_info_.end() && it->second.hidden;
+}
+
+AutoFilterRange Worksheet::getAutoFilterRange() const {
+    if (autofilter_) {
+        return *autofilter_;
+    }
+    return AutoFilterRange(0, 0, 0, 0);
+}
+
+FreezePanes Worksheet::getFreezeInfo() const {
+    if (freeze_panes_) {
+        return *freeze_panes_;
+    }
+    return FreezePanes();
+}
+
+AutoFilterRange Worksheet::getPrintArea() const {
+    return AutoFilterRange(
+        print_settings_.print_area_first_row,
+        print_settings_.print_area_first_col,
+        print_settings_.print_area_last_row,
+        print_settings_.print_area_last_col
+    );
+}
+
+std::pair<int, int> Worksheet::getRepeatRows() const {
+    return {print_settings_.repeat_rows_first, print_settings_.repeat_rows_last};
+}
+
+std::pair<int, int> Worksheet::getRepeatColumns() const {
+    return {print_settings_.repeat_cols_first, print_settings_.repeat_cols_last};
+}
+
+Worksheet::Margins Worksheet::getMargins() const {
+    return {
+        print_settings_.left_margin,
+        print_settings_.right_margin,
+        print_settings_.top_margin,
+        print_settings_.bottom_margin
+    };
+}
+
+std::pair<int, int> Worksheet::getFitToPages() const {
+    return {print_settings_.fit_to_pages_wide, print_settings_.fit_to_pages_tall};
+}
+
 // ========== XML生成 ==========
 
 std::string Worksheet::generateXML() const {

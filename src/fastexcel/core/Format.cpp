@@ -90,6 +90,24 @@ void Format::setTheme(uint8_t theme) {
     markFontChanged();
 }
 
+void Format::setSuperscript(bool superscript) {
+    if (superscript) {
+        script_ = FontScript::Superscript;
+    } else if (script_ == FontScript::Superscript) {
+        script_ = FontScript::None;
+    }
+    markFontChanged();
+}
+
+void Format::setSubscript(bool subscript) {
+    if (subscript) {
+        script_ = FontScript::Subscript;
+    } else if (script_ == FontScript::Subscript) {
+        script_ = FontScript::None;
+    }
+    markFontChanged();
+}
+
 // ========== 对齐设置 ==========
 
 void Format::setHorizontalAlign(HorizontalAlign align) {
@@ -132,6 +150,10 @@ void Format::setIndent(uint8_t level) {
 void Format::setShrink(bool shrink) {
     shrink_ = shrink;
     markAlignmentChanged();
+}
+
+void Format::setShrinkToFit(bool shrink) {
+    setShrink(shrink);
 }
 
 void Format::setReadingOrder(uint8_t order) {
@@ -207,6 +229,18 @@ void Format::setDiagColor(Color color) {
     markBorderChanged();
 }
 
+void Format::setDiagonalBorder(BorderStyle style) {
+    setDiagBorder(style);
+}
+
+void Format::setDiagonalBorderColor(Color color) {
+    setDiagColor(color);
+}
+
+void Format::setDiagonalType(DiagonalType type) {
+    setDiagType(type);
+}
+
 // ========== 填充设置 ==========
 
 void Format::setPattern(PatternType pattern) {
@@ -237,10 +271,68 @@ void Format::setNumberFormatIndex(uint16_t index) {
     num_format_index_ = index;
 }
 
+void Format::setNumberFormat(NumberFormatType type) {
+    switch (type) {
+        case NumberFormatType::General:
+            num_format_ = "General";
+            num_format_index_ = 0;
+            break;
+        case NumberFormatType::Number:
+            num_format_ = "0";
+            num_format_index_ = 1;
+            break;
+        case NumberFormatType::Decimal:
+            num_format_ = "0.00";
+            num_format_index_ = 2;
+            break;
+        case NumberFormatType::Currency:
+            num_format_ = "$#,##0.00";
+            num_format_index_ = 7;
+            break;
+        case NumberFormatType::Accounting:
+            num_format_ = "_($* #,##0.00_);_($* (#,##0.00);_($* \"-\"??_);_(@_)";
+            num_format_index_ = 44;
+            break;
+        case NumberFormatType::Percentage:
+            num_format_ = "0%";
+            num_format_index_ = 9;
+            break;
+        case NumberFormatType::Fraction:
+            num_format_ = "# ?/?";
+            num_format_index_ = 12;
+            break;
+        case NumberFormatType::Scientific:
+            num_format_ = "0.00E+00";
+            num_format_index_ = 11;
+            break;
+        case NumberFormatType::Date:
+            num_format_ = "m/d/yy";
+            num_format_index_ = 14;
+            break;
+        case NumberFormatType::Time:
+            num_format_ = "h:mm:ss AM/PM";
+            num_format_index_ = 21;
+            break;
+        case NumberFormatType::Text:
+            num_format_ = "@";
+            num_format_index_ = 49;
+            break;
+        default:
+            num_format_ = "General";
+            num_format_index_ = 0;
+            break;
+    }
+}
+
 // ========== 保护设置 ==========
 
 void Format::setUnlocked(bool unlocked) {
     locked_ = !unlocked;
+    markProtectionChanged();
+}
+
+void Format::setLocked(bool locked) {
+    locked_ = locked;
     markProtectionChanged();
 }
 
