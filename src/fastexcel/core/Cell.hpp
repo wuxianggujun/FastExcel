@@ -78,7 +78,13 @@ public:
     void setFormula(const std::string& formula, double result = 0.0);
     
     // 获取值
-    CellType getType() const { return flags_.type; }
+    CellType getType() const {
+        // 对外API统一：InlineString也显示为String
+        return (flags_.type == CellType::InlineString) ? CellType::String : flags_.type;
+    }
+    
+    // 内部方法：获取真实的类型（用于测试和内部逻辑）
+    CellType getInternalType() const { return flags_.type; }
     double getNumberValue() const;
     bool getBooleanValue() const;
     std::string getStringValue() const;
@@ -100,7 +106,7 @@ public:
     // 状态检查
     bool isEmpty() const { return flags_.type == CellType::Empty; }
     bool isNumber() const { return flags_.type == CellType::Number; }
-    bool isString() const { return flags_.type == CellType::String; }
+    bool isString() const { return flags_.type == CellType::String || flags_.type == CellType::InlineString; }
     bool isBoolean() const { return flags_.type == CellType::Boolean; }
     bool isFormula() const { return flags_.type == CellType::Formula; }
     bool isDate() const { return flags_.type == CellType::Date; }

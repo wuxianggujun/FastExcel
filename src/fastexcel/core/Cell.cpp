@@ -32,16 +32,17 @@ void Cell::setValue(bool value) {
 
 void Cell::setValue(const std::string& value) {
     clear();
-    flags_.type = CellType::String;  // 对外始终显示为String类型
     
     // 短字符串内联存储优化 - 借鉴libxlsxwriter的思路
     if (value.length() < sizeof(value_.inline_string) - 1) {  // 留一位给\0
+        flags_.type = CellType::InlineString;  // 短字符串使用InlineString类型
         // 内联存储，但不修改string_id，因为它们共享内存
         std::memset(value_.inline_string, 0, sizeof(value_.inline_string));
         std::strcpy(value_.inline_string, value.c_str());
         // 使用extended_来标记是否为内联字符串
         // 如果extended_为空，说明是内联字符串
     } else {
+        flags_.type = CellType::String;  // 长字符串使用String类型
         // 长字符串存储
         ensureExtended();
         if (!extended_->long_string) {
@@ -89,6 +90,9 @@ std::string Cell::getStringValue() const {
             // 内联字符串（extended_为空表示内联）
             return std::string(value_.inline_string);
         }
+    } else if (flags_.type == CellType::InlineString) {
+        // 内联字符串
+        return std::string(value_.inline_string);
     }
     return "";
 }
@@ -185,9 +189,19 @@ size_t Cell::getMemoryUsage() const {
     size_t usage = sizeof(Cell);
     if (extended_) {
         usage += sizeof(ExtendedData);
-        if (extended_->long_string) usage += extended_->long_string->capacity();
-        if (extended_->formula) usage += extended_->formula->capacity();
-        if (extended_->hyperlink) usage += extended_->hyperlink->capacity();
+        if (extended_->long_string) {
+            usage += sizeof(std::string) + extended_->long_string->capacity();
+        }
+        if (extended_->formula) {
+            usage += sizeof(std::string) + extended_->formula->capacity();
+            usage += sizeof(double);  // formula_result
+        }
+        if (extended_->hyperlink) {
+            usage += sizeof(std::string) + extended_->hyperlink->capacity();
+        }
+        if (extended_->format) {
+            usage += sizeof(Format*);  // 格式指针
+        }
     }
     return usage;
 }

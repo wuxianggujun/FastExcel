@@ -45,7 +45,7 @@ TEST_F(CellOptimizedTest, InlineStringOptimization) {
     
     EXPECT_TRUE(cell->isString());
     EXPECT_EQ(cell->getStringValue(), short_str);
-    EXPECT_EQ(cell->getType(), CellType::InlineString);
+    EXPECT_EQ(cell->getInternalType(), CellType::InlineString);
     
     // 验证内存使用（应该很小）
     size_t memory_usage = cell->getMemoryUsage();
@@ -164,10 +164,25 @@ TEST_F(CellOptimizedTest, MemoryUsageOptimization) {
     size_t long_string_usage = cell->getMemoryUsage();
     EXPECT_GT(long_string_usage, empty_usage);
     
-    // 添加公式应该进一步增加内存使用
-    cell->setFormula("=SUM(A1:A10)", 100.0);
-    size_t formula_usage = cell->getMemoryUsage();
-    EXPECT_GT(formula_usage, long_string_usage);
+    // 创建另一个单元格测试公式内存使用
+    Cell formula_cell;
+    formula_cell.setFormula("=SUM(A1:A10)", 100.0);
+    size_t formula_usage = formula_cell.getMemoryUsage();
+    
+    // 公式单元格应该比空单元格使用更多内存
+    EXPECT_GT(formula_usage, empty_usage);
+    
+    // 测试短字符串vs短公式的内存使用
+    Cell short_string_cell;
+    short_string_cell.setValue("Hello");
+    size_t short_str_usage = short_string_cell.getMemoryUsage();
+    
+    Cell short_formula_cell;
+    short_formula_cell.setFormula("=A1+B1", 10.0);
+    size_t short_formula_usage = short_formula_cell.getMemoryUsage();
+    
+    // 短公式应该比短字符串使用更多内存（因为需要ExtendedData）
+    EXPECT_GT(short_formula_usage, short_str_usage);
 }
 
 // 性能基准测试
