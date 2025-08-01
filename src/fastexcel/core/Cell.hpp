@@ -2,7 +2,7 @@
 
 #include <string>
 #include <memory>
-#include <variant>
+#include <cstdint>
 
 namespace fastexcel {
 namespace core {
@@ -10,66 +10,117 @@ namespace core {
 // 前向声明
 class Format;
 
-enum class CellType {
-    Empty,
-    String,
+enum class CellType : uint8_t {
+    Empty = 0,
     Number,
+    String,
+    InlineString,    // 短字符串内联存储
     Boolean,
-    Date,
     Formula,
-    Error
+    Date,
+    Error,
+    Hyperlink
 };
 
 class Cell {
 private:
-    CellType type_ = CellType::Empty;
-    std::variant<std::monostate, std::string, double, bool> value_;
-    std::shared_ptr<Format> format_;
-    std::string formula_;
-    std::string hyperlink_;
+    // 使用位域压缩标志 - 借鉴libxlsxwriter的优化思路
+    struct {
+        CellType type : 4;           // 4位足够存储类型
+        bool has_format : 1;         // 是否有格式
+        bool has_hyperlink : 1;      // 是否有超链接
+        bool has_formula_result : 1; // 公式是否有缓存结果
+        uint8_t reserved : 1;        // 保留位
+    } flags_;
+    
+    // 使用union节省内存 - 核心优化点
+    union CellValue {
+        double number;
+        int32_t string_id;           // SST索引或内联字符串长度
+        bool boolean;
+        uint32_t error_code;
+        char inline_string[16];      // 短字符串内联存储
+        
+        CellValue() : number(0.0) {}
+        ~CellValue() {}
+    } value_;
+    
+    // 可选字段指针（只在需要时分配） - 延迟分配策略
+    struct ExtendedData {
+        std::string* long_string;    // 长字符串
+        std::string* formula;        // 公式
+        std::string* hyperlink;      // 超链接
+        Format* format;              // 格式（原始指针，避免shared_ptr开销）
+        double formula_result;       // 公式计算结果
+        
+        ExtendedData() : long_string(nullptr), formula(nullptr),
+                        hyperlink(nullptr), format(nullptr), formula_result(0.0) {}
+    };
+    
+    ExtendedData* extended_;  // 只在需要时分配
+    
+    // 辅助方法
+    void ensureExtended();
+    void clearExtended();
     
 public:
-    Cell() = default;
-    ~Cell() = default;
+    Cell();
+    ~Cell();
     
-    // 设置值
-    void setValue(const std::string& value);
+    // 基本值设置
     void setValue(double value);
     void setValue(bool value);
+    void setValue(const std::string& value);
     void setValue(int value) { setValue(static_cast<double>(value)); }
-    void setFormula(const std::string& formula);
+    
+    // 公式设置
+    void setFormula(const std::string& formula, double result = 0.0);
     
     // 获取值
-    CellType getType() const { return type_; }
-    std::string getStringValue() const;
+    CellType getType() const { return flags_.type; }
     double getNumberValue() const;
     bool getBooleanValue() const;
-    std::string getFormula() const { return formula_; }
+    std::string getStringValue() const;
+    std::string getFormula() const;
+    double getFormulaResult() const;
     
-    // 格式设置
-    void setFormat(std::shared_ptr<Format> format) { format_ = format; }
-    std::shared_ptr<Format> getFormat() const { return format_; }
-    
-    // 检查状态
-    bool isEmpty() const { return type_ == CellType::Empty; }
-    bool isString() const { return type_ == CellType::String; }
-    bool isNumber() const { return type_ == CellType::Number; }
-    bool isBoolean() const { return type_ == CellType::Boolean; }
-    bool isFormula() const { return type_ == CellType::Formula; }
+    // 格式操作 - 兼容原有API
+    void setFormat(std::shared_ptr<Format> format);
+    void setFormat(Format* format);  // 新增：直接指针版本
+    std::shared_ptr<Format> getFormat() const;
+    Format* getFormatPtr() const;    // 新增：获取原始指针
+    bool hasFormat() const { return flags_.has_format; }
     
     // 超链接操作
-    void setHyperlink(const std::string& url) { hyperlink_ = url; }
-    std::string getHyperlink() const { return hyperlink_; }
-    bool hasHyperlink() const { return !hyperlink_.empty(); }
+    void setHyperlink(const std::string& url);
+    std::string getHyperlink() const;
+    bool hasHyperlink() const { return flags_.has_hyperlink; }
     
-    // 清空单元格
+    // 状态检查
+    bool isEmpty() const { return flags_.type == CellType::Empty; }
+    bool isNumber() const { return flags_.type == CellType::Number; }
+    bool isString() const { return flags_.type == CellType::String || flags_.type == CellType::InlineString; }
+    bool isBoolean() const { return flags_.type == CellType::Boolean; }
+    bool isFormula() const { return flags_.type == CellType::Formula; }
+    bool isDate() const { return flags_.type == CellType::Date; }
+    
+    // 清空
     void clear();
     
-    // 复制和赋值
+    // 内存使用统计 - 调试用
+    size_t getMemoryUsage() const;
+    
+    // 移动语义优化
+    Cell(Cell&& other) noexcept;
+    Cell& operator=(Cell&& other) noexcept;
+    
+    // 拷贝构造和赋值（保持兼容性）
     Cell(const Cell& other);
     Cell& operator=(const Cell& other);
-    Cell(Cell&& other) noexcept = default;
-    Cell& operator=(Cell&& other) noexcept = default;
+
+private:
+    // 格式的shared_ptr持有者（为了兼容性）
+    mutable std::shared_ptr<Format> format_holder_;
 };
 
 }} // namespace fastexcel::core
