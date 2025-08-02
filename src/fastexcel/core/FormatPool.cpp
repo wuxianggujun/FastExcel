@@ -196,8 +196,8 @@ void FormatPool::clear() {
     format_to_index_[default_format_.get()] = 0;
 }
 
-std::string FormatPool::generateStylesXML() const {
-    xml::XMLStreamWriter writer;
+void FormatPool::generateStylesXML(const std::function<void(const char*, size_t)>& callback) const {
+    xml::XMLStreamWriter writer(callback);
     writer.startDocument();
     writer.startElement("styleSheet");
     writer.writeAttribute("xmlns", "http://schemas.openxmlformats.org/spreadsheetml/2006/main");
@@ -367,8 +367,179 @@ std::string FormatPool::generateStylesXML() const {
     
     writer.endElement(); // styleSheet
     writer.endDocument();
+}
+
+void FormatPool::generateStylesXMLToFile(const std::string& filename) const {
+    xml::XMLStreamWriter writer(filename);
+    writer.startDocument();
+    writer.startElement("styleSheet");
+    writer.writeAttribute("xmlns", "http://schemas.openxmlformats.org/spreadsheetml/2006/main");
     
-    return writer.toString();
+    // 数字格式部分
+    std::vector<std::string> custom_formats;
+    for (const auto& format : formats_) {
+        std::string numFmt = format->generateNumberFormatXML();
+        if (!numFmt.empty()) {
+            custom_formats.push_back(numFmt);
+        }
+    }
+    
+    if (!custom_formats.empty()) {
+        writer.startElement("numFmts");
+        writer.writeAttribute("count", std::to_string(custom_formats.size()).c_str());
+        for (const auto& fmt : custom_formats) {
+            writer.writeRaw(fmt);
+        }
+        writer.endElement(); // numFmts
+    }
+    
+    // 字体部分
+    writer.startElement("fonts");
+    writer.writeAttribute("count", std::to_string(getFormatCount() + 1).c_str());
+    
+    // 默认字体
+    writer.writeRaw(default_format_->generateFontXML());
+    
+    // 其他字体
+    for (const auto& format : formats_) {
+        std::string fontXML = format->generateFontXML();
+        if (!fontXML.empty()) {
+            writer.writeRaw(fontXML);
+        } else {
+            writer.writeRaw(default_format_->generateFontXML());
+        }
+    }
+    
+    writer.endElement(); // fonts
+    
+    // 填充部分
+    writer.startElement("fills");
+    writer.writeAttribute("count", std::to_string(getFormatCount() + 2).c_str());
+    
+    // 默认填充
+    writer.startElement("fill");
+    writer.startElement("patternFill");
+    writer.writeAttribute("patternType", "none");
+    writer.endElement(); // patternFill
+    writer.endElement(); // fill
+    
+    writer.startElement("fill");
+    writer.startElement("patternFill");
+    writer.writeAttribute("patternType", "gray125");
+    writer.endElement(); // patternFill
+    writer.endElement(); // fill
+    
+    // 其他填充
+    for (const auto& format : formats_) {
+        std::string fillXML = format->generateFillXML();
+        if (!fillXML.empty()) {
+            writer.writeRaw(fillXML);
+        } else {
+            writer.startElement("fill");
+            writer.startElement("patternFill");
+            writer.writeAttribute("patternType", "none");
+            writer.endElement(); // patternFill
+            writer.endElement(); // fill
+        }
+    }
+    
+    writer.endElement(); // fills
+    
+    // 边框部分
+    writer.startElement("borders");
+    writer.writeAttribute("count", std::to_string(getFormatCount() + 1).c_str());
+    
+    // 默认边框
+    writer.startElement("border");
+    writer.startElement("left");
+    writer.endElement(); // left
+    writer.startElement("right");
+    writer.endElement(); // right
+    writer.startElement("top");
+    writer.endElement(); // top
+    writer.startElement("bottom");
+    writer.endElement(); // bottom
+    writer.startElement("diagonal");
+    writer.endElement(); // diagonal
+    writer.endElement(); // border
+    
+    // 其他边框
+    for (const auto& format : formats_) {
+        std::string borderXML = format->generateBorderXML();
+        if (!borderXML.empty()) {
+            writer.writeRaw(borderXML);
+        } else {
+            writer.startElement("border");
+            writer.startElement("left");
+            writer.endElement(); // left
+            writer.startElement("right");
+            writer.endElement(); // right
+            writer.startElement("top");
+            writer.endElement(); // top
+            writer.startElement("bottom");
+            writer.endElement(); // bottom
+            writer.startElement("diagonal");
+            writer.endElement(); // diagonal
+            writer.endElement(); // border
+        }
+    }
+    
+    writer.endElement(); // borders
+    
+    // 单元格样式格式
+    writer.startElement("cellStyleXfs");
+    writer.writeAttribute("count", "1");
+    
+    writer.startElement("xf");
+    writer.writeAttribute("numFmtId", "0");
+    writer.writeAttribute("fontId", "0");
+    writer.writeAttribute("fillId", "0");
+    writer.writeAttribute("borderId", "0");
+    writer.endElement(); // xf
+    
+    writer.endElement(); // cellStyleXfs
+    
+    // 单元格格式
+    writer.startElement("cellXfs");
+    writer.writeAttribute("count", std::to_string(getFormatCount() + 1).c_str());
+    
+    // 默认格式
+    writer.startElement("xf");
+    writer.writeAttribute("numFmtId", "0");
+    writer.writeAttribute("fontId", "0");
+    writer.writeAttribute("fillId", "0");
+    writer.writeAttribute("borderId", "0");
+    writer.writeAttribute("xfId", "0");
+    writer.endElement(); // xf
+    
+    // 其他格式
+    for (size_t i = 0; i < formats_.size(); ++i) {
+        const auto& format = formats_[i];
+        // 设置格式索引
+        format->setFontIndex(i + 1);
+        format->setFillIndex(i + 2);
+        format->setBorderIndex(i + 1);
+        
+        std::string xfXML = format->generateXML();
+        writer.writeRaw(xfXML);
+    }
+    
+    writer.endElement(); // cellXfs
+    
+    // 单元格样式
+    writer.startElement("cellStyles");
+    writer.writeAttribute("count", "1");
+    
+    writer.startElement("cellStyle");
+    writer.writeAttribute("name", "Normal");
+    writer.writeAttribute("xfId", "0");
+    writer.writeAttribute("builtinId", "0");
+    writer.endElement(); // cellStyle
+    
+    writer.endElement(); // cellStyles
+    
+    writer.endElement(); // styleSheet
+    writer.endDocument();
 }
 
 size_t FormatPool::getMemoryUsage() const {

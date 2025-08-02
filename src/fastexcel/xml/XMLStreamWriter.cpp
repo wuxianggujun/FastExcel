@@ -16,13 +16,31 @@ XMLStreamWriter::XMLStreamWriter() {
     auto_flush_ = true;
 }
 
+XMLStreamWriter::XMLStreamWriter(const std::function<void(const char*, size_t)>& callback) : XMLStreamWriter() {
+    // 设置回调模式
+    callback_mode_ = true;
+    write_callback_ = [callback](const std::string& chunk) {
+        callback(chunk.c_str(), chunk.size());
+    };
+}
+
+XMLStreamWriter::XMLStreamWriter(const std::string& filename) : XMLStreamWriter() {
+    // 设置直接文件模式
+    FILE* file = nullptr;
+    errno_t err = fopen_s(&file, filename.c_str(), "wb");
+    if (err == 0 && file) {
+        setDirectFileMode(file, true);
+    } else {
+        LOG_ERROR("Failed to open file for writing: {}", filename);
+    }
+}
+
 XMLStreamWriter::~XMLStreamWriter() {
     // 只有在缓冲区中有数据且没有被正常处理时才记录警告
-    // 如果用户调用了toString()或endDocument()，缓冲区应该已经被清理
-    if ((buffer_pos_ > 0 || !whole_.empty()) && !direct_file_mode_) {
+    if (buffer_pos_ > 0 && !direct_file_mode_ && !callback_mode_) {
         // 只有在数据量较大时才记录警告，避免正常使用时的噪音
-        if (buffer_pos_ > 100 || whole_.size() > 100) {
-            LOG_WARN("XMLStreamWriter destroyed with {} bytes in buffer and {} bytes in whole_", buffer_pos_, whole_.size());
+        if (buffer_pos_ > 100) {
+            LOG_WARN("XMLStreamWriter destroyed with {} bytes in buffer", buffer_pos_);
         }
     }
     
@@ -43,12 +61,8 @@ void XMLStreamWriter::setDirectFileMode(FILE* file, bool take_ownership) {
     LOG_DEBUG("XMLStreamWriter switched to direct file mode");
 }
 
-void XMLStreamWriter::setBufferedMode() {
-    direct_file_mode_ = false;
-    callback_mode_ = false;
-    write_callback_ = nullptr;
-    LOG_DEBUG("XMLStreamWriter switched to buffered mode");
-}
+// 已移除setBufferedMode()以获得极致性能
+// 现在只支持直接文件模式和回调模式
 
 void XMLStreamWriter::setCallbackMode(WriteCallback callback, bool auto_flush) {
     if (!callback) {
@@ -77,15 +91,15 @@ void XMLStreamWriter::flushBuffer() {
         std::string chunk(buffer_, buffer_pos_);
         write_callback_(chunk);
     } else {
-        // 缓冲模式：把数据拼到 whole_，避免丢失
-        whole_.append(buffer_, buffer_pos_);
+        // 兼容性模式：如果没有设置输出目标，静默丢弃数据
+        // 这主要是为了支持toString()方法的兼容性
+        // 在实际使用中应该设置适当的输出目标
     }
     buffer_pos_ = 0;
 }
 
 void XMLStreamWriter::startDocument() {
     buffer_pos_ = 0;
-    whole_.clear();  // 清空累积的缓冲区，确保每次开始新文档时都是干净的
     const char* xml_decl = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n";
     size_t xml_decl_len = strlen(xml_decl);
     writeRawDirect(xml_decl, xml_decl_len);
@@ -237,33 +251,10 @@ void XMLStreamWriter::writeRaw(const std::string& data) {
     writeRawDirect(data.c_str(), data.length());
 }
 
-std::string XMLStreamWriter::toString() {
-    if (direct_file_mode_) {
-        LOG_WARN("toString() called in direct file mode, result may be incomplete");
-        return std::string();
-    }
-    
-    if (callback_mode_) {
-        LOG_WARN("toString() called in callback mode, result may be incomplete");
-        return std::string();
-    }
-    
-    // 在缓冲模式下，返回 whole_ + buffer_ 的完整内容
-    std::string result;
-    result.reserve(whole_.size() + buffer_pos_);
-    result.append(whole_);
-    result.append(buffer_, buffer_pos_);
-    
-    // 清理缓冲区，避免析构时的警告
-    buffer_pos_ = 0;
-    whole_.clear();
-    
-    return result;
-}
+// toString()方法已彻底删除 - 专注极致性能，所有XML生成都使用流式模式
 
 void XMLStreamWriter::clear() {
     buffer_pos_ = 0;
-    whole_.clear();
     while (!element_stack_.empty()) {
         element_stack_.pop();
     }

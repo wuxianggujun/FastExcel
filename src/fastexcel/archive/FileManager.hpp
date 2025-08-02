@@ -29,6 +29,12 @@ public:
     bool writeFiles(const std::vector<std::pair<std::string, std::string>>& files);
     bool writeFiles(std::vector<std::pair<std::string, std::string>>&& files); // 移动语义版本
     
+    // 流式写入文件 - 极致性能模式，直接写入ZIP
+    bool openStreamingFile(const std::string& internal_path);
+    bool writeStreamingChunk(const void* data, size_t size);
+    bool writeStreamingChunk(const std::string& data);
+    bool closeStreamingFile();
+    
     // 读取文件
     bool readFile(const std::string& internal_path, std::string& content);
     bool readFile(const std::string& internal_path, std::vector<uint8_t>& data);

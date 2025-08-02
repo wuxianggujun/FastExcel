@@ -568,31 +568,79 @@ bool Workbook::generateExcelStructureBatch() {
     // 收集所有文件内容（批量模式）
     LOG_DEBUG("Generating XML content for {} estimated files", estimated_files);
     
-    // 基础文件
-    files.emplace_back("[Content_Types].xml", generateContentTypesXML());
-    files.emplace_back("_rels/.rels", generateRelsXML());
-    files.emplace_back("docProps/app.xml", generateDocPropsAppXML());
-    files.emplace_back("docProps/core.xml", generateDocPropsCoreXML());
+    // 基础文件 - 使用回调函数生成XML内容
+    std::string content_types_xml;
+    generateContentTypesXML([&content_types_xml](const char* data, size_t size) {
+        content_types_xml.append(data, size);
+    });
+    files.emplace_back("[Content_Types].xml", std::move(content_types_xml));
+    
+    std::string rels_xml;
+    generateRelsXML([&rels_xml](const char* data, size_t size) {
+        rels_xml.append(data, size);
+    });
+    files.emplace_back("_rels/.rels", std::move(rels_xml));
+    
+    std::string app_xml;
+    generateDocPropsAppXML([&app_xml](const char* data, size_t size) {
+        app_xml.append(data, size);
+    });
+    files.emplace_back("docProps/app.xml", std::move(app_xml));
+    
+    std::string core_xml;
+    generateDocPropsCoreXML([&core_xml](const char* data, size_t size) {
+        core_xml.append(data, size);
+    });
+    files.emplace_back("docProps/core.xml", std::move(core_xml));
     
     // 自定义属性（如果有）
     if (!custom_properties_.empty()) {
-        files.emplace_back("docProps/custom.xml", generateDocPropsCustomXML());
+        std::string custom_xml;
+        generateDocPropsCustomXML([&custom_xml](const char* data, size_t size) {
+            custom_xml.append(data, size);
+        });
+        files.emplace_back("docProps/custom.xml", std::move(custom_xml));
     }
     
     // Excel核心文件
-    files.emplace_back("xl/_rels/workbook.xml.rels", generateWorkbookRelsXML());
-    files.emplace_back("xl/workbook.xml", generateWorkbookXML());
-    files.emplace_back("xl/styles.xml", generateStylesXML());
-    files.emplace_back("xl/sharedStrings.xml", generateSharedStringsXML());
+    std::string workbook_rels_xml;
+    generateWorkbookRelsXML([&workbook_rels_xml](const char* data, size_t size) {
+        workbook_rels_xml.append(data, size);
+    });
+    files.emplace_back("xl/_rels/workbook.xml.rels", std::move(workbook_rels_xml));
+    
+    std::string workbook_xml;
+    generateWorkbookXML([&workbook_xml](const char* data, size_t size) {
+        workbook_xml.append(data, size);
+    });
+    files.emplace_back("xl/workbook.xml", std::move(workbook_xml));
+    
+    std::string styles_xml;
+    generateStylesXML([&styles_xml](const char* data, size_t size) {
+        styles_xml.append(data, size);
+    });
+    files.emplace_back("xl/styles.xml", std::move(styles_xml));
+    
+    std::string shared_strings_xml;
+    generateSharedStringsXML([&shared_strings_xml](const char* data, size_t size) {
+        shared_strings_xml.append(data, size);
+    });
+    files.emplace_back("xl/sharedStrings.xml", std::move(shared_strings_xml));
     
     // 工作表文件
     for (size_t i = 0; i < worksheets_.size(); ++i) {
-        std::string worksheet_xml = generateWorksheetXML(worksheets_[i]);
+        std::string worksheet_xml;
+        generateWorksheetXML(worksheets_[i], [&worksheet_xml](const char* data, size_t size) {
+            worksheet_xml.append(data, size);
+        });
         std::string worksheet_path = getWorksheetPath(static_cast<int>(i + 1));
         files.emplace_back(std::move(worksheet_path), std::move(worksheet_xml));
         
         // 工作表关系文件（如果有超链接等）
-        std::string worksheet_rels_xml = worksheets_[i]->generateRelsXML();
+        std::string worksheet_rels_xml;
+        worksheets_[i]->generateRelsXML([&worksheet_rels_xml](const char* data, size_t size) {
+            worksheet_rels_xml.append(data, size);
+        });
         if (!worksheet_rels_xml.empty()) {
             std::string rels_path = "xl/worksheets/_rels/sheet" + std::to_string(i + 1) + ".xml.rels";
             files.emplace_back(std::move(rels_path), std::move(worksheet_rels_xml));
@@ -618,51 +666,87 @@ bool Workbook::generateExcelStructureStreaming() {
     
     try {
         // 基础文件（这些通常较小，直接生成）
-        if (!file_manager_->writeFile("[Content_Types].xml", generateContentTypesXML())) {
+        std::string content_types_xml;
+        generateContentTypesXML([&content_types_xml](const char* data, size_t size) {
+            content_types_xml.append(data, size);
+        });
+        if (!file_manager_->writeFile("[Content_Types].xml", content_types_xml)) {
             LOG_ERROR("Failed to write Content_Types.xml");
             return false;
         }
         
-        if (!file_manager_->writeFile("_rels/.rels", generateRelsXML())) {
+        std::string rels_xml;
+        generateRelsXML([&rels_xml](const char* data, size_t size) {
+            rels_xml.append(data, size);
+        });
+        if (!file_manager_->writeFile("_rels/.rels", rels_xml)) {
             LOG_ERROR("Failed to write _rels/.rels");
             return false;
         }
         
-        if (!file_manager_->writeFile("docProps/app.xml", generateDocPropsAppXML())) {
+        std::string app_xml;
+        generateDocPropsAppXML([&app_xml](const char* data, size_t size) {
+            app_xml.append(data, size);
+        });
+        if (!file_manager_->writeFile("docProps/app.xml", app_xml)) {
             LOG_ERROR("Failed to write docProps/app.xml");
             return false;
         }
         
-        if (!file_manager_->writeFile("docProps/core.xml", generateDocPropsCoreXML())) {
+        std::string core_xml;
+        generateDocPropsCoreXML([&core_xml](const char* data, size_t size) {
+            core_xml.append(data, size);
+        });
+        if (!file_manager_->writeFile("docProps/core.xml", core_xml)) {
             LOG_ERROR("Failed to write docProps/core.xml");
             return false;
         }
         
         // 自定义属性（如果有）
         if (!custom_properties_.empty()) {
-            if (!file_manager_->writeFile("docProps/custom.xml", generateDocPropsCustomXML())) {
+            std::string custom_xml;
+            generateDocPropsCustomXML([&custom_xml](const char* data, size_t size) {
+                custom_xml.append(data, size);
+            });
+            if (!file_manager_->writeFile("docProps/custom.xml", custom_xml)) {
                 LOG_ERROR("Failed to write docProps/custom.xml");
                 return false;
             }
         }
         
         // Excel核心文件
-        if (!file_manager_->writeFile("xl/_rels/workbook.xml.rels", generateWorkbookRelsXML())) {
+        std::string workbook_rels_xml;
+        generateWorkbookRelsXML([&workbook_rels_xml](const char* data, size_t size) {
+            workbook_rels_xml.append(data, size);
+        });
+        if (!file_manager_->writeFile("xl/_rels/workbook.xml.rels", workbook_rels_xml)) {
             LOG_ERROR("Failed to write xl/_rels/workbook.xml.rels");
             return false;
         }
         
-        if (!file_manager_->writeFile("xl/workbook.xml", generateWorkbookXML())) {
+        std::string workbook_xml;
+        generateWorkbookXML([&workbook_xml](const char* data, size_t size) {
+            workbook_xml.append(data, size);
+        });
+        if (!file_manager_->writeFile("xl/workbook.xml", workbook_xml)) {
             LOG_ERROR("Failed to write xl/workbook.xml");
             return false;
         }
         
-        if (!file_manager_->writeFile("xl/styles.xml", generateStylesXML())) {
+        std::string styles_xml;
+        generateStylesXML([&styles_xml](const char* data, size_t size) {
+            styles_xml.append(data, size);
+        });
+        if (!file_manager_->writeFile("xl/styles.xml", styles_xml)) {
             LOG_ERROR("Failed to write xl/styles.xml");
             return false;
         }
         
-        if (!file_manager_->writeFile("xl/sharedStrings.xml", generateSharedStringsXML())) {
+        std::string shared_strings_xml;
+        generateSharedStringsXML([&shared_strings_xml](const char* data, size_t size) {
+            shared_strings_xml.append(data, size);
+        });
+        if (!file_manager_->writeFile("xl/sharedStrings.xml", shared_strings_xml)) {
             LOG_ERROR("Failed to write xl/sharedStrings.xml");
             return false;
         }
@@ -678,7 +762,10 @@ bool Workbook::generateExcelStructureStreaming() {
             }
             
             // 工作表关系文件（如果有超链接等）
-            std::string worksheet_rels_xml = worksheets_[i]->generateRelsXML();
+            std::string worksheet_rels_xml;
+            worksheets_[i]->generateRelsXML([&worksheet_rels_xml](const char* data, size_t size) {
+                worksheet_rels_xml.append(data, size);
+            });
             if (!worksheet_rels_xml.empty()) {
                 std::string rels_path = "xl/worksheets/_rels/sheet" + std::to_string(i + 1) + ".xml.rels";
                 if (!file_manager_->writeFile(rels_path, worksheet_rels_xml)) {
@@ -697,8 +784,8 @@ bool Workbook::generateExcelStructureStreaming() {
     }
 }
 
-std::string Workbook::generateWorkbookXML() const {
-    xml::XMLStreamWriter writer;
+void Workbook::generateWorkbookXML(const std::function<void(const char*, size_t)>& callback) const {
+    xml::XMLStreamWriter writer(callback);
     writer.startDocument();
     writer.startElement("workbook");
     writer.writeAttribute("xmlns", "http://schemas.openxmlformats.org/spreadsheetml/2006/main");
@@ -778,12 +865,10 @@ std::string Workbook::generateWorkbookXML() const {
     
     writer.endElement(); // workbook
     writer.endDocument();
-    
-    return writer.toString();
 }
 
-std::string Workbook::generateStylesXML() const {
-    xml::XMLStreamWriter writer;
+void Workbook::generateStylesXML(const std::function<void(const char*, size_t)>& callback) const {
+    xml::XMLStreamWriter writer(callback);
     writer.startDocument();
     writer.startElement("styleSheet");
     writer.writeAttribute("xmlns", "http://schemas.openxmlformats.org/spreadsheetml/2006/main");
@@ -933,28 +1018,23 @@ std::string Workbook::generateStylesXML() const {
     
     writer.endElement(); // styleSheet
     writer.endDocument();
-    
-    return writer.toString();
 }
 
-std::string Workbook::generateSharedStringsXML() const {
+void Workbook::generateSharedStringsXML(const std::function<void(const char*, size_t)>& callback) const {
+    xml::XMLStreamWriter writer(callback);
+    writer.startDocument();
+    writer.startElement("sst");
+    writer.writeAttribute("xmlns", "http://schemas.openxmlformats.org/spreadsheetml/2006/main");
+    
     // 如果禁用了共享字符串，生成空的共享字符串文件
     if (!options_.use_shared_strings || shared_strings_list_.empty()) {
-        xml::XMLStreamWriter writer;
-        writer.startDocument();
-        writer.startElement("sst");
-        writer.writeAttribute("xmlns", "http://schemas.openxmlformats.org/spreadsheetml/2006/main");
         writer.writeAttribute("count", "0");
         writer.writeAttribute("uniqueCount", "0");
         writer.endElement(); // sst
         writer.endDocument();
-        return writer.toString();
+        return;
     }
     
-    xml::XMLStreamWriter writer;
-    writer.startDocument();
-    writer.startElement("sst");
-    writer.writeAttribute("xmlns", "http://schemas.openxmlformats.org/spreadsheetml/2006/main");
     writer.writeAttribute("count", std::to_string(shared_strings_list_.size()).c_str());
     writer.writeAttribute("uniqueCount", std::to_string(shared_strings_list_.size()).c_str());
     
@@ -968,16 +1048,14 @@ std::string Workbook::generateSharedStringsXML() const {
     
     writer.endElement(); // sst
     writer.endDocument();
-    
-    return writer.toString();
 }
 
-std::string Workbook::generateWorksheetXML(const std::shared_ptr<Worksheet>& worksheet) const {
-    return worksheet->generateXML();
+void Workbook::generateWorksheetXML(const std::shared_ptr<Worksheet>& worksheet, const std::function<void(const char*, size_t)>& callback) const {
+    worksheet->generateXML(callback);
 }
 
-std::string Workbook::generateDocPropsAppXML() const {
-    xml::XMLStreamWriter writer;
+void Workbook::generateDocPropsAppXML(const std::function<void(const char*, size_t)>& callback) const {
+    xml::XMLStreamWriter writer(callback);
     writer.startDocument();
     writer.startElement("Properties");
     writer.writeAttribute("xmlns", "http://schemas.openxmlformats.org/officeDocument/2006/extended-properties");
@@ -1013,12 +1091,10 @@ std::string Workbook::generateDocPropsAppXML() const {
     
     writer.endElement(); // Properties
     writer.endDocument();
-    
-    return writer.toString();
 }
 
-std::string Workbook::generateDocPropsCoreXML() const {
-    xml::XMLStreamWriter writer;
+void Workbook::generateDocPropsCoreXML(const std::function<void(const char*, size_t)>& callback) const {
+    xml::XMLStreamWriter writer(callback);
     writer.startDocument();
     writer.startElement("cp:coreProperties");
     writer.writeAttribute("xmlns:cp", "http://schemas.openxmlformats.org/package/2006/metadata/core-properties");
@@ -1085,16 +1161,14 @@ std::string Workbook::generateDocPropsCoreXML() const {
     
     writer.endElement(); // cp:coreProperties
     writer.endDocument();
-    
-    return writer.toString();
 }
 
-std::string Workbook::generateDocPropsCustomXML() const {
+void Workbook::generateDocPropsCustomXML(const std::function<void(const char*, size_t)>& callback) const {
     if (custom_properties_.empty()) {
-        return "";
+        return;
     }
     
-    xml::XMLStreamWriter writer;
+    xml::XMLStreamWriter writer(callback);
     writer.startDocument();
     writer.startElement("Properties");
     writer.writeAttribute("xmlns", "http://schemas.openxmlformats.org/officeDocument/2006/custom-properties");
@@ -1116,12 +1190,10 @@ std::string Workbook::generateDocPropsCustomXML() const {
     
     writer.endElement(); // Properties
     writer.endDocument();
-    
-    return writer.toString();
 }
 
-std::string Workbook::generateContentTypesXML() const {
-    xml::XMLStreamWriter writer;
+void Workbook::generateContentTypesXML(const std::function<void(const char*, size_t)>& callback) const {
+    xml::XMLStreamWriter writer(callback);
     writer.startDocument();
     writer.startElement("Types");
     writer.writeAttribute("xmlns", "http://schemas.openxmlformats.org/package/2006/content-types");
@@ -1179,12 +1251,10 @@ std::string Workbook::generateContentTypesXML() const {
     
     writer.endElement(); // Types
     writer.endDocument();
-    
-    return writer.toString();
 }
 
-std::string Workbook::generateRelsXML() const {
-    xml::XMLStreamWriter writer;
+void Workbook::generateRelsXML(const std::function<void(const char*, size_t)>& callback) const {
+    xml::XMLStreamWriter writer(callback);
     writer.startDocument();
     writer.startElement("Relationships");
     writer.writeAttribute("xmlns", "http://schemas.openxmlformats.org/package/2006/relationships");
@@ -1217,12 +1287,10 @@ std::string Workbook::generateRelsXML() const {
     
     writer.endElement(); // Relationships
     writer.endDocument();
-    
-    return writer.toString();
 }
 
-std::string Workbook::generateWorkbookRelsXML() const {
-    xml::XMLStreamWriter writer;
+void Workbook::generateWorkbookRelsXML(const std::function<void(const char*, size_t)>& callback) const {
+    xml::XMLStreamWriter writer(callback);
     writer.startDocument();
     writer.startElement("Relationships");
     writer.writeAttribute("xmlns", "http://schemas.openxmlformats.org/package/2006/relationships");
@@ -1252,8 +1320,6 @@ std::string Workbook::generateWorkbookRelsXML() const {
     
     writer.endElement(); // Relationships
     writer.endDocument();
-    
-    return writer.toString();
 }
 
 // ========== 格式管理内部方法 ==========
@@ -1462,20 +1528,20 @@ bool Workbook::generateWorksheetXMLStreaming(const std::shared_ptr<Worksheet>& w
     LOG_DEBUG("Generating worksheet XML using streaming mode: {}", path);
     
     try {
-        // 创建XMLStreamWriter并设置为回调模式，直接写入文件
+        // 打开流式ZIP写入
+        if (!file_manager_->openStreamingFile(path)) {
+            LOG_ERROR("Failed to open streaming file: {}", path);
+            return false;
+        }
+        
+        // 创建XMLStreamWriter并设置为回调模式，直接写入ZIP
         xml::XMLStreamWriter writer;
         
-        // 设置回调模式，直接将数据块写入ZIP文件
-        writer.setCallbackMode([this, &path](const std::string& chunk) {
-            // 这里需要实现直接写入ZIP文件的逻辑
-            // 暂时先累积到字符串中，后续可以优化为直接写入ZIP流
-            static std::string accumulated_xml;
-            accumulated_xml += chunk;
-            
-            // 当累积到一定大小时，可以考虑分批写入
-            if (accumulated_xml.size() > options_.xml_buffer_size) {
-                // 这里可以实现分批写入逻辑
-                // 目前先简单累积
+        // 设置回调模式，直接将XML块写入ZIP文件
+        writer.setCallbackMode([this](const std::string& chunk) {
+            // 直接写入ZIP，实现真正的流式处理
+            if (!file_manager_->writeStreamingChunk(chunk)) {
+                LOG_ERROR("Failed to write streaming chunk to ZIP");
             }
         }, true); // 启用自动刷新
         
@@ -1624,12 +1690,11 @@ bool Workbook::generateWorksheetXMLStreaming(const std::shared_ptr<Worksheet>& w
         writer.endElement(); // worksheet
         writer.endDocument();
         
-        // 最终刷新并获取完整的XML内容
+        // 最终刷新
         writer.flushBuffer();
-        std::string final_xml = writer.toString();
         
-        // 将XML写入文件
-        bool success = file_manager_->writeFile(path, final_xml);
+        // 关闭流式ZIP写入
+        bool success = file_manager_->closeStreamingFile();
         
         if (success) {
             LOG_INFO("Successfully generated streaming worksheet XML: {}, {} rows processed", path, rows_processed);

@@ -166,8 +166,16 @@ bool FileManager::addContentTypes() {
     xml::ContentTypes content_types;
     content_types.addExcelDefaults();
     
-    std::string content = content_types.generate();
-    return writeFile("[Content_Types].xml", content);
+    // 使用流式写入到ZIP
+    if (!openStreamingFile("[Content_Types].xml")) {
+        return false;
+    }
+    
+    content_types.generate([this](const char* data, size_t size) {
+        writeStreamingChunk(data, size);
+    });
+    
+    return closeStreamingFile();
 }
 
 bool FileManager::addWorkbookRels() {
@@ -176,8 +184,16 @@ bool FileManager::addWorkbookRels() {
     rels.addRelationship("rId2", "http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties", "docProps/core.xml");
     rels.addRelationship("rId3", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties", "docProps/app.xml");
     
-    std::string content = rels.generate();
-    return writeFile("_rels/.rels", content);
+    // 使用流式写入到ZIP
+    if (!openStreamingFile("_rels/.rels")) {
+        return false;
+    }
+    
+    rels.generate([this](const char* data, size_t size) {
+        writeStreamingChunk(data, size);
+    });
+    
+    return closeStreamingFile();
 }
 
 bool FileManager::addRootRels() {
@@ -186,8 +202,16 @@ bool FileManager::addRootRels() {
     rels.addRelationship("rId2", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings", "sharedStrings.xml");
     rels.addRelationship("rId3", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet", "worksheets/sheet1.xml");
     
-    std::string content = rels.generate();
-    return writeFile("xl/_rels/workbook.xml.rels", content);
+    // 使用流式写入到ZIP
+    if (!openStreamingFile("xl/_rels/workbook.xml.rels")) {
+        return false;
+    }
+    
+    rels.generate([this](const char* data, size_t size) {
+        writeStreamingChunk(data, size);
+    });
+    
+    return closeStreamingFile();
 }
 
 bool FileManager::addDocProps() {
@@ -244,6 +268,58 @@ bool FileManager::setCompressionLevel(int level) {
     }
     
     return archive_->setCompressionLevel(level) == ZipError::Ok;
+}
+
+// 流式写入方法实现 - 极致性能模式
+bool FileManager::openStreamingFile(const std::string& internal_path) {
+    if (!isOpen()) {
+        LOG_ERROR("Archive not open");
+        return false;
+    }
+    
+    ZipError result = archive_->openEntry(internal_path);
+    if (result != ZipError::Ok) {
+        LOG_ERROR("Failed to open streaming entry: {}", internal_path);
+        return false;
+    }
+    
+    LOG_DEBUG("Opened streaming file: {}", internal_path);
+    return true;
+}
+
+bool FileManager::writeStreamingChunk(const void* data, size_t size) {
+    if (!isOpen()) {
+        LOG_ERROR("Archive not open");
+        return false;
+    }
+    
+    ZipError result = archive_->writeChunk(data, size);
+    if (result != ZipError::Ok) {
+        LOG_ERROR("Failed to write streaming chunk of size {}", size);
+        return false;
+    }
+    
+    return true;
+}
+
+bool FileManager::writeStreamingChunk(const std::string& data) {
+    return writeStreamingChunk(data.c_str(), data.size());
+}
+
+bool FileManager::closeStreamingFile() {
+    if (!isOpen()) {
+        LOG_ERROR("Archive not open");
+        return false;
+    }
+    
+    ZipError result = archive_->closeEntry();
+    if (result != ZipError::Ok) {
+        LOG_ERROR("Failed to close streaming entry");
+        return false;
+    }
+    
+    LOG_DEBUG("Closed streaming file");
+    return true;
 }
 
 }} // namespace fastexcel::archive

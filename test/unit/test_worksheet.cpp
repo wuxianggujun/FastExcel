@@ -487,7 +487,10 @@ TEST_F(WorksheetTest, XMLGeneration) {
     worksheet->writeString(1, 0, "Bold Text", format);
     
     // 生成XML
-    std::string xml = worksheet->generateXML();
+    std::string xml;
+    worksheet->generateXML([&xml](const char* data, size_t size) {
+        xml.append(data, size);
+    });
     EXPECT_FALSE(xml.empty());
     EXPECT_NE(xml.find("<worksheet"), std::string::npos);
     EXPECT_NE(xml.find("<sheetData"), std::string::npos);
@@ -495,7 +498,10 @@ TEST_F(WorksheetTest, XMLGeneration) {
     
     // 生成关系XML
     worksheet->writeUrl(2, 0, "https://example.com", "Link");
-    std::string rels_xml = worksheet->generateRelsXML();
+    std::string rels_xml;
+    worksheet->generateRelsXML([&rels_xml](const char* data, size_t size) {
+        rels_xml.append(data, size);
+    });
     EXPECT_FALSE(rels_xml.empty());
     EXPECT_NE(rels_xml.find("<Relationships"), std::string::npos);
 }

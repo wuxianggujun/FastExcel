@@ -3,6 +3,7 @@
 #include "fastexcel/xml/XMLStreamWriter.hpp"
 #include <string>
 #include <vector>
+#include <functional>
 
 namespace fastexcel {
 namespace xml {
@@ -23,8 +24,11 @@ public:
     void addRelationship(const std::string& id, const std::string& type, const std::string& target);
     void addRelationship(const std::string& id, const std::string& type, const std::string& target, const std::string& target_mode);
     
-    // 生成XML内容
-    std::string generate() const;
+    // 生成XML内容到回调函数（流式写入）
+    void generate(const std::function<void(const char*, size_t)>& callback) const;
+    
+    // 生成XML内容到文件（流式写入）
+    void generateToFile(const std::string& filename) const;
     
     // 清空关系
     void clear();

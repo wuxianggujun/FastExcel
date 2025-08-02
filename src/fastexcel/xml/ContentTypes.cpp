@@ -11,8 +11,8 @@ void ContentTypes::addOverride(const std::string& part_name, const std::string& 
     override_types_.push_back({part_name, content_type});
 }
 
-std::string ContentTypes::generate() const {
-    XMLStreamWriter writer;
+void ContentTypes::generate(const std::function<void(const char*, size_t)>& callback) const {
+    XMLStreamWriter writer(callback);
     writer.startDocument();
     writer.startElement("Types");
     writer.writeAttribute("xmlns", "http://schemas.openxmlformats.org/package/2006/content-types");
@@ -33,8 +33,30 @@ std::string ContentTypes::generate() const {
     
     writer.endElement(); // Types
     writer.endDocument();
+}
+
+void ContentTypes::generateToFile(const std::string& filename) const {
+    XMLStreamWriter writer(filename);
+    writer.startDocument();
+    writer.startElement("Types");
+    writer.writeAttribute("xmlns", "http://schemas.openxmlformats.org/package/2006/content-types");
     
-    return writer.toString();
+    // 写入默认类型
+    for (const auto& def : default_types_) {
+        writer.writeEmptyElement("Default");
+        writer.writeAttribute("Extension", def.extension.c_str());
+        writer.writeAttribute("ContentType", def.content_type.c_str());
+    }
+    
+    // 写入覆盖类型
+    for (const auto& override : override_types_) {
+        writer.writeEmptyElement("Override");
+        writer.writeAttribute("PartName", override.part_name.c_str());
+        writer.writeAttribute("ContentType", override.content_type.c_str());
+    }
+    
+    writer.endElement(); // Types
+    writer.endDocument();
 }
 
 void ContentTypes::clear() {

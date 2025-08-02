@@ -10,6 +10,7 @@
 #include <unordered_map>
 #include <set>
 #include <ctime>
+#include <functional>
 
 namespace fastexcel {
 namespace core {
@@ -606,17 +607,17 @@ private:
     bool generateExcelStructureStreaming();
     bool generateWorksheetXMLStreaming(const std::shared_ptr<Worksheet>& worksheet, const std::string& path);
     
-    // 生成各种XML文件
-    std::string generateWorkbookXML() const;
-    std::string generateStylesXML() const;
-    std::string generateSharedStringsXML() const;
-    std::string generateWorksheetXML(const std::shared_ptr<Worksheet>& worksheet) const;
-    std::string generateDocPropsAppXML() const;
-    std::string generateDocPropsCoreXML() const;
-    std::string generateDocPropsCustomXML() const;
-    std::string generateContentTypesXML() const;
-    std::string generateRelsXML() const;
-    std::string generateWorkbookRelsXML() const;
+    // 生成各种XML文件（流式写入）
+    void generateWorkbookXML(const std::function<void(const char*, size_t)>& callback) const;
+    void generateStylesXML(const std::function<void(const char*, size_t)>& callback) const;
+    void generateSharedStringsXML(const std::function<void(const char*, size_t)>& callback) const;
+    void generateWorksheetXML(const std::shared_ptr<Worksheet>& worksheet, const std::function<void(const char*, size_t)>& callback) const;
+    void generateDocPropsAppXML(const std::function<void(const char*, size_t)>& callback) const;
+    void generateDocPropsCoreXML(const std::function<void(const char*, size_t)>& callback) const;
+    void generateDocPropsCustomXML(const std::function<void(const char*, size_t)>& callback) const;
+    void generateContentTypesXML(const std::function<void(const char*, size_t)>& callback) const;
+    void generateRelsXML(const std::function<void(const char*, size_t)>& callback) const;
+    void generateWorkbookRelsXML(const std::function<void(const char*, size_t)>& callback) const;
     
     // 格式管理内部方法
     int getFontId(const Format& format);

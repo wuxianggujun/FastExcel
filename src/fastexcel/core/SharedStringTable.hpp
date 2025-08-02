@@ -4,6 +4,7 @@
 #include <unordered_map>
 #include <vector>
 #include <cstdint>
+#include <functional>
 
 namespace fastexcel {
 namespace core {
@@ -75,10 +76,16 @@ public:
     void clear();
     
     /**
-     * @brief 生成SharedStrings.xml
-     * @return XML字符串
+     * @brief 生成SharedStrings.xml到回调函数（流式写入）
+     * @param callback 数据写入回调函数
      */
-    std::string generateXML() const;
+    void generateXML(const std::function<void(const char*, size_t)>& callback) const;
+    
+    /**
+     * @brief 生成SharedStrings.xml到文件（流式写入）
+     * @param filename 输出文件名
+     */
+    void generateXMLToFile(const std::string& filename) const;
     
     /**
      * @brief 获取内存使用统计

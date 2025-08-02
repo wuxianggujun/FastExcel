@@ -3,6 +3,7 @@
 #include "fastexcel/xml/XMLStreamWriter.hpp"
 #include <string>
 #include <vector>
+#include <functional>
 
 namespace fastexcel {
 namespace xml {
@@ -18,8 +19,11 @@ public:
     // 添加覆盖内容类型
     void addOverride(const std::string& part_name, const std::string& content_type);
     
-    // 生成XML内容
-    std::string generate() const;
+    // 生成XML内容到回调函数（流式写入）
+    void generate(const std::function<void(const char*, size_t)>& callback) const;
+    
+    // 生成XML内容到文件（流式写入）
+    void generateToFile(const std::string& filename) const;
     
     // 清空内容
     void clear();

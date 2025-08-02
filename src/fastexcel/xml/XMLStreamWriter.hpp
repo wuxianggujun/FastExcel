@@ -70,8 +70,8 @@ private:
     WriteCallback write_callback_;   // 写入回调函数
     bool auto_flush_ = true;         // 自动刷新
     
-    // 缓冲模式下累积全部输出
-    std::string whole_;  // 新增：仅在缓冲模式下累积全部输出
+    // 移除缓冲模式的字符串累积，专注于极致性能
+    // std::string whole_;  // 已移除：不再支持缓冲模式的字符串拼接
     
     // 属性批处理
     struct XMLAttribute {
@@ -105,16 +105,20 @@ private:
     
 public:
     XMLStreamWriter();
+    explicit XMLStreamWriter(const std::function<void(const char*, size_t)>& callback);
+    explicit XMLStreamWriter(const std::string& filename);
     ~XMLStreamWriter();
     
     // 禁用拷贝构造和赋值
     XMLStreamWriter(const XMLStreamWriter&) = delete;
     XMLStreamWriter& operator=(const XMLStreamWriter&) = delete;
     
-    // 模式设置
+    // 模式设置 - 专注于高性能模式
     void setDirectFileMode(FILE* file, bool take_ownership = false);
-    void setBufferedMode();
     void setCallbackMode(WriteCallback callback, bool auto_flush = true);
+    
+    // 已移除缓冲模式以获得极致性能
+    // void setBufferedMode();
     
     // 文档操作
     void startDocument();
@@ -137,9 +141,10 @@ public:
     void writeRaw(const char* data);
     void writeRaw(const std::string& data);
     
-    // 获取结果（仅在缓冲模式下有效）
-    std::string toString();
+    // 清理方法
     void clear();
+    
+    // toString()方法已彻底删除 - 专注极致性能
     
     // 文件操作
     bool writeToFile(const std::string& filename);

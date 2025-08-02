@@ -31,8 +31,8 @@ std::string SharedStrings::getString(int index) const {
     return "";
 }
 
-std::string SharedStrings::generate() const {
-    XMLStreamWriter writer;
+void SharedStrings::generate(const std::function<void(const char*, size_t)>& callback) const {
+    XMLStreamWriter writer(callback);
     writer.startDocument();
     writer.startElement("sst");
     writer.writeAttribute("xmlns", "http://schemas.openxmlformats.org/spreadsheetml/2006/main");
@@ -51,8 +51,28 @@ std::string SharedStrings::generate() const {
     
     writer.endElement(); // sst
     writer.endDocument();
+}
+
+void SharedStrings::generateToFile(const std::string& filename) const {
+    XMLStreamWriter writer(filename);
+    writer.startDocument();
+    writer.startElement("sst");
+    writer.writeAttribute("xmlns", "http://schemas.openxmlformats.org/spreadsheetml/2006/main");
+    std::string count_str = std::to_string(strings_.size());
+    writer.writeAttribute("count", count_str.c_str());
+    std::string unique_count_str = std::to_string(strings_.size());
+    writer.writeAttribute("uniqueCount", unique_count_str.c_str());
     
-    return writer.toString();
+    for (const auto& str : strings_) {
+        writer.startElement("si");
+        writer.startElement("t");
+        writer.writeText(str.c_str());
+        writer.endElement(); // t
+        writer.endElement(); // si
+    }
+    
+    writer.endElement(); // sst
+    writer.endDocument();
 }
 
 void SharedStrings::clear() {

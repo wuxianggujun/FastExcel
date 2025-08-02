@@ -148,10 +148,16 @@ public:
     void clear();
     
     /**
-     * @brief 生成样式XML
-     * @return XML字符串
+     * @brief 生成样式XML到回调函数（流式写入）
+     * @param callback 数据写入回调函数
      */
-    std::string generateStylesXML() const;
+    void generateStylesXML(const std::function<void(const char*, size_t)>& callback) const;
+    
+    /**
+     * @brief 生成样式XML到文件（流式写入）
+     * @param filename 输出文件名
+     */
+    void generateStylesXMLToFile(const std::string& filename) const;
     
     /**
      * @brief 获取内存使用统计
