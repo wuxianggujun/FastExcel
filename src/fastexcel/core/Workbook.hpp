@@ -64,11 +64,11 @@ struct WorkbookOptions {
     bool encrypt_metadata = false;    // 加密元数据
     
     // 性能优化选项
-    bool use_shared_strings = true;   // 使用共享字符串（默认启用）
-    bool streaming_xml = false;       // 流式XML写入（大数据时启用）
-    size_t row_buffer_size = 1000;    // 行缓冲大小
-    int compression_level = 6;        // ZIP压缩级别（0-9，0无压缩，9最高压缩）
-    size_t xml_buffer_size = 1024 * 1024; // XML缓冲区大小（1MB）
+    bool use_shared_strings = false;  // 使用共享字符串（默认禁用以提高性能）
+    bool streaming_xml = true;        // 流式XML写入（默认启用以优化内存）
+    size_t row_buffer_size = 5000;    // 行缓冲大小（默认较大缓冲）
+    int compression_level = 1;        // ZIP压缩级别（默认快速压缩）
+    size_t xml_buffer_size = 4 * 1024 * 1024; // XML缓冲区大小（4MB）
 };
 
 // 定义名称

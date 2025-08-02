@@ -1493,34 +1493,30 @@ std::string Workbook::hashPassword(const std::string& password) const {
 
 void Workbook::setHighPerformanceMode(bool enable) {
     if (enable) {
-        LOG_INFO("Enabling high performance mode");
+        LOG_INFO("Enabling ultra high performance mode (beyond defaults)");
         
-        // 禁用共享字符串以避免哈希和排序开销
+        // 进一步优化：无压缩以获得最快速度
+        options_.compression_level = 0;  // 无压缩
+        
+        // 更大的缓冲区
+        options_.row_buffer_size = 10000;
+        options_.xml_buffer_size = 8 * 1024 * 1024;  // 8MB
+        
+        // 确保流式模式和禁用共享字符串（现在是默认的）
         options_.use_shared_strings = false;
-        
-        // 启用流式XML写入以减少内存占用
         options_.streaming_xml = true;
         
-        // 设置较大的行缓冲以减少I/O次数
-        options_.row_buffer_size = 5000;
-        
-        // 使用较低的压缩级别以提高速度
-        options_.compression_level = 1;  // 快速压缩
-        
-        // 增大XML缓冲区以减少内存分配
-        options_.xml_buffer_size = 4 * 1024 * 1024;  // 4MB
-        
-        LOG_INFO("High performance mode configured: SharedStrings=OFF, StreamingXML=ON, RowBuffer={}, Compression={}",
-                options_.row_buffer_size, options_.compression_level);
+        LOG_INFO("Ultra high performance mode configured: Compression=OFF, RowBuffer={}, XMLBuffer={}MB",
+                options_.row_buffer_size, options_.xml_buffer_size / (1024*1024));
     } else {
-        LOG_INFO("Disabling high performance mode, using balanced settings");
+        LOG_INFO("Using standard high performance mode (default settings)");
         
-        // 恢复平衡设置
-        options_.use_shared_strings = true;
-        options_.streaming_xml = false;
-        options_.row_buffer_size = 1000;
-        options_.compression_level = 6;  // 平衡压缩
-        options_.xml_buffer_size = 1024 * 1024;  // 1MB
+        // 恢复到默认的高性能设置
+        options_.use_shared_strings = false;  // 默认禁用
+        options_.streaming_xml = true;        // 默认启用
+        options_.row_buffer_size = 5000;      // 默认较大缓冲
+        options_.compression_level = 1;       // 默认快速压缩
+        options_.xml_buffer_size = 4 * 1024 * 1024;  // 默认4MB
     }
 }
 

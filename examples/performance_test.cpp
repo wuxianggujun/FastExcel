@@ -6,12 +6,12 @@
 
 int main() {
     // 初始化FastExcel库
-    if (!fastexcel::initialize("logs/ultra_performance_test.log", true)) {
+    if (!fastexcel::initialize("logs/performance_test.log", true)) {
         std::cerr << "Failed to initialize FastExcel library" << std::endl;
         return 1;
     }
     
-    LOG_INFO("FastExcel ultra performance test started");
+    LOG_INFO("FastExcel performance test started");
     
     try {
         const int rows = 50000;   // 5万行
@@ -23,7 +23,7 @@ int main() {
         auto start_time = std::chrono::high_resolution_clock::now();
         
         // 创建工作簿
-        auto workbook = std::make_shared<fastexcel::core::Workbook>("ultra_performance_test.xlsx");
+        auto workbook = std::make_shared<fastexcel::core::Workbook>("performance_test.xlsx");
         
         // 打开工作簿
         if (!workbook->open()) {
@@ -31,19 +31,18 @@ int main() {
             return 1;
         }
         
-        // 手动设置极致性能选项
+        // 现在默认就是高性能配置，无需手动设置
+        // 如果需要极致性能，可以进一步优化：
         auto& options = workbook->getOptions();
-        options.use_shared_strings = false;      // 完全禁用共享字符串
-        options.streaming_xml = true;            // 启用流式XML
-        options.row_buffer_size = 10000;         // 大缓冲区
         options.compression_level = 0;           // 无压缩（最快）
+        options.row_buffer_size = 10000;         // 更大缓冲区
         options.xml_buffer_size = 8 * 1024 * 1024; // 8MB XML缓冲区
         
-        LOG_INFO("Ultra performance mode configured: SharedStrings=OFF, StreamingXML=ON, RowBuffer={}, Compression={}, XMLBuffer={}MB",
+        LOG_INFO("Performance test configured: StreamingXML=ON (default), SharedStrings=OFF (default), RowBuffer={}, Compression={}, XMLBuffer={}MB",
                 options.row_buffer_size, options.compression_level, options.xml_buffer_size / (1024*1024));
         
         // 添加工作表
-        auto worksheet = workbook->addWorksheet("超级性能测试");
+        auto worksheet = workbook->addWorksheet("性能测试");
         if (!worksheet) {
             LOG_ERROR("Failed to create worksheet");
             return 1;
@@ -147,7 +146,7 @@ int main() {
             std::cout << "性能评级: 需要优化 (<20K 单元格/秒)" << std::endl;
         }
         
-        LOG_INFO("Ultra performance test completed: {} cells in {} ms ({} cells/sec)", 
+        LOG_INFO("Performance test completed: {} cells in {} ms ({} cells/sec)",
                 total_cells, total_duration.count(), cells_per_second);
         
     } catch (const std::exception& e) {
@@ -159,8 +158,8 @@ int main() {
     // 清理FastExcel库
     fastexcel::cleanup();
     
-    LOG_INFO("FastExcel ultra performance test completed");
-    std::cout << "\n超级性能测试完成！" << std::endl;
+    LOG_INFO("FastExcel performance test completed");
+    std::cout << "\n性能测试完成！" << std::endl;
     
     return 0;
 }
