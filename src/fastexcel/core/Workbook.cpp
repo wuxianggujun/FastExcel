@@ -18,7 +18,11 @@ namespace core {
 DocumentProperties::DocumentProperties() {
     // 设置默认时间为当前时间
     std::time_t now = std::time(nullptr);
+#ifdef _WIN32
+    localtime_s(&created_time, &now);
+#else
     created_time = *std::localtime(&now);
+#endif
     modified_time = created_time;
 }
 
@@ -63,10 +67,30 @@ bool Workbook::save() {
     try {
         // 更新修改时间
         std::time_t now = std::time(nullptr);
+#ifdef _WIN32
+        localtime_s(&doc_properties_.modified_time, &now);
+#else
         doc_properties_.modified_time = *std::localtime(&now);
+#endif
         
-        // 收集共享字符串
-        collectSharedStrings();
+        // 设置ZIP压缩级别
+        if (file_manager_->isOpen()) {
+            if (!file_manager_->setCompressionLevel(options_.compression_level)) {
+                LOG_WARN("Failed to set compression level to {}", options_.compression_level);
+            } else {
+                LOG_DEBUG("Set ZIP compression level to {}", options_.compression_level);
+            }
+        }
+        
+        // 根据选项决定是否收集共享字符串
+        if (options_.use_shared_strings) {
+            LOG_DEBUG("Collecting shared strings (enabled)");
+            collectSharedStrings();
+        } else {
+            LOG_DEBUG("Skipping shared strings collection (disabled for performance)");
+            shared_strings_.clear();
+            shared_strings_list_.clear();
+        }
         
         // 更新格式索引
         updateFormatIndices();
@@ -322,7 +346,7 @@ std::shared_ptr<Format> Workbook::createFormat() {
     }
     
     auto format = std::make_shared<Format>();
-    int xf_index = formats_.size(); // 从0开始索引
+    int xf_index = static_cast<int>(formats_.size()); // 从0开始索引
     format->setXfIndex(xf_index);
     
     // 存储格式
@@ -521,6 +545,14 @@ int Workbook::getSharedStringIndex(const std::string& str) const {
 // ========== 内部方法 ==========
 
 bool Workbook::generateExcelStructure() {
+    if (options_.streaming_xml) {
+        return generateExcelStructureStreaming();
+    } else {
+        return generateExcelStructureBatch();
+    }
+}
+
+bool Workbook::generateExcelStructureBatch() {
     LOG_INFO("Starting Excel structure generation with batch mode");
     
     // 预估文件数量：基础文件8个 + 工作表文件 + 工作表关系文件 + 自定义属性
@@ -579,6 +611,90 @@ bool Workbook::generateExcelStructure() {
     }
     
     return success;
+}
+
+bool Workbook::generateExcelStructureStreaming() {
+    LOG_INFO("Starting Excel structure generation with streaming mode");
+    
+    try {
+        // 基础文件（这些通常较小，直接生成）
+        if (!file_manager_->writeFile("[Content_Types].xml", generateContentTypesXML())) {
+            LOG_ERROR("Failed to write Content_Types.xml");
+            return false;
+        }
+        
+        if (!file_manager_->writeFile("_rels/.rels", generateRelsXML())) {
+            LOG_ERROR("Failed to write _rels/.rels");
+            return false;
+        }
+        
+        if (!file_manager_->writeFile("docProps/app.xml", generateDocPropsAppXML())) {
+            LOG_ERROR("Failed to write docProps/app.xml");
+            return false;
+        }
+        
+        if (!file_manager_->writeFile("docProps/core.xml", generateDocPropsCoreXML())) {
+            LOG_ERROR("Failed to write docProps/core.xml");
+            return false;
+        }
+        
+        // 自定义属性（如果有）
+        if (!custom_properties_.empty()) {
+            if (!file_manager_->writeFile("docProps/custom.xml", generateDocPropsCustomXML())) {
+                LOG_ERROR("Failed to write docProps/custom.xml");
+                return false;
+            }
+        }
+        
+        // Excel核心文件
+        if (!file_manager_->writeFile("xl/_rels/workbook.xml.rels", generateWorkbookRelsXML())) {
+            LOG_ERROR("Failed to write xl/_rels/workbook.xml.rels");
+            return false;
+        }
+        
+        if (!file_manager_->writeFile("xl/workbook.xml", generateWorkbookXML())) {
+            LOG_ERROR("Failed to write xl/workbook.xml");
+            return false;
+        }
+        
+        if (!file_manager_->writeFile("xl/styles.xml", generateStylesXML())) {
+            LOG_ERROR("Failed to write xl/styles.xml");
+            return false;
+        }
+        
+        if (!file_manager_->writeFile("xl/sharedStrings.xml", generateSharedStringsXML())) {
+            LOG_ERROR("Failed to write xl/sharedStrings.xml");
+            return false;
+        }
+        
+        // 工作表文件（流式写入）
+        for (size_t i = 0; i < worksheets_.size(); ++i) {
+            std::string worksheet_path = getWorksheetPath(static_cast<int>(i + 1));
+            
+            // 使用流式写入生成工作表XML
+            if (!generateWorksheetXMLStreaming(worksheets_[i], worksheet_path)) {
+                LOG_ERROR("Failed to write worksheet {}", worksheet_path);
+                return false;
+            }
+            
+            // 工作表关系文件（如果有超链接等）
+            std::string worksheet_rels_xml = worksheets_[i]->generateRelsXML();
+            if (!worksheet_rels_xml.empty()) {
+                std::string rels_path = "xl/worksheets/_rels/sheet" + std::to_string(i + 1) + ".xml.rels";
+                if (!file_manager_->writeFile(rels_path, worksheet_rels_xml)) {
+                    LOG_ERROR("Failed to write worksheet relations {}", rels_path);
+                    return false;
+                }
+            }
+        }
+        
+        LOG_INFO("Excel structure generation completed successfully in streaming mode");
+        return true;
+        
+    } catch (const std::exception& e) {
+        LOG_ERROR("Exception in streaming Excel structure generation: {}", e.what());
+        return false;
+    }
 }
 
 std::string Workbook::generateWorkbookXML() const {
@@ -822,6 +938,19 @@ std::string Workbook::generateStylesXML() const {
 }
 
 std::string Workbook::generateSharedStringsXML() const {
+    // 如果禁用了共享字符串，生成空的共享字符串文件
+    if (!options_.use_shared_strings || shared_strings_list_.empty()) {
+        xml::XMLStreamWriter writer;
+        writer.startDocument();
+        writer.startElement("sst");
+        writer.writeAttribute("xmlns", "http://schemas.openxmlformats.org/spreadsheetml/2006/main");
+        writer.writeAttribute("count", "0");
+        writer.writeAttribute("uniqueCount", "0");
+        writer.endElement(); // sst
+        writer.endDocument();
+        return writer.toString();
+    }
+    
     xml::XMLStreamWriter writer;
     writer.startDocument();
     writer.startElement("sst");
@@ -1294,6 +1423,260 @@ std::string Workbook::hashPassword(const std::string& password) const {
     std::ostringstream oss;
     oss << std::hex << std::uppercase << hash;
     return oss.str();
+}
+
+void Workbook::setHighPerformanceMode(bool enable) {
+    if (enable) {
+        LOG_INFO("Enabling high performance mode");
+        
+        // 禁用共享字符串以避免哈希和排序开销
+        options_.use_shared_strings = false;
+        
+        // 启用流式XML写入以减少内存占用
+        options_.streaming_xml = true;
+        
+        // 设置较大的行缓冲以减少I/O次数
+        options_.row_buffer_size = 5000;
+        
+        // 使用较低的压缩级别以提高速度
+        options_.compression_level = 1;  // 快速压缩
+        
+        // 增大XML缓冲区以减少内存分配
+        options_.xml_buffer_size = 4 * 1024 * 1024;  // 4MB
+        
+        LOG_INFO("High performance mode configured: SharedStrings=OFF, StreamingXML=ON, RowBuffer={}, Compression={}",
+                options_.row_buffer_size, options_.compression_level);
+    } else {
+        LOG_INFO("Disabling high performance mode, using balanced settings");
+        
+        // 恢复平衡设置
+        options_.use_shared_strings = true;
+        options_.streaming_xml = false;
+        options_.row_buffer_size = 1000;
+        options_.compression_level = 6;  // 平衡压缩
+        options_.xml_buffer_size = 1024 * 1024;  // 1MB
+    }
+}
+
+bool Workbook::generateWorksheetXMLStreaming(const std::shared_ptr<Worksheet>& worksheet, const std::string& path) {
+    LOG_DEBUG("Generating worksheet XML using streaming mode: {}", path);
+    
+    try {
+        // 创建XMLStreamWriter并设置为回调模式，直接写入文件
+        xml::XMLStreamWriter writer;
+        
+        // 设置回调模式，直接将数据块写入ZIP文件
+        writer.setCallbackMode([this, &path](const std::string& chunk) {
+            // 这里需要实现直接写入ZIP文件的逻辑
+            // 暂时先累积到字符串中，后续可以优化为直接写入ZIP流
+            static std::string accumulated_xml;
+            accumulated_xml += chunk;
+            
+            // 当累积到一定大小时，可以考虑分批写入
+            if (accumulated_xml.size() > options_.xml_buffer_size) {
+                // 这里可以实现分批写入逻辑
+                // 目前先简单累积
+            }
+        }, true); // 启用自动刷新
+        
+        // 写入XML声明和工作表开始标签
+        writer.startDocument();
+        writer.startElement("worksheet");
+        writer.writeAttribute("xmlns", "http://schemas.openxmlformats.org/spreadsheetml/2006/main");
+        writer.writeAttribute("xmlns:r", "http://schemas.openxmlformats.org/officeDocument/2006/relationships");
+        
+        // 工作表属性（如果有）
+        if (worksheet->hasFrozenPanes()) {
+            auto freeze_info = worksheet->getFreezeInfo();
+            writer.startElement("sheetViews");
+            writer.startElement("sheetView");
+            writer.writeAttribute("workbookViewId", "0");
+            writer.startElement("pane");
+            writer.writeAttribute("ySplit", std::to_string(freeze_info.row));
+            writer.writeAttribute("xSplit", std::to_string(freeze_info.col));
+            writer.writeAttribute("topLeftCell", "A1"); // 简化处理
+            writer.writeAttribute("activePane", "bottomRight");
+            writer.writeAttribute("state", "frozen");
+            writer.endElement(); // pane
+            writer.endElement(); // sheetView
+            writer.endElement(); // sheetViews
+        }
+        
+        // 列信息（如果有）
+        // 这里简化处理，实际需要从worksheet获取列信息
+        
+        // 工作表数据 - 这是最重要的部分，需要流式处理
+        writer.startElement("sheetData");
+        
+        // 获取使用范围
+        auto [max_row, max_col] = worksheet->getUsedRange();
+        
+        // 按行处理数据，实现真正的流式写入
+        size_t rows_processed = 0;
+        for (int row = 0; row <= max_row; ++row) {
+            bool has_data_in_row = false;
+            
+            // 检查这一行是否有数据
+            for (int col = 0; col <= max_col; ++col) {
+                if (worksheet->hasCellAt(row, col)) {
+                    has_data_in_row = true;
+                    break;
+                }
+            }
+            
+            if (has_data_in_row) {
+                // 写入行开始标签
+                writer.startElement("row");
+                writer.writeAttribute("r", std::to_string(row + 1));
+                
+                for (int col = 0; col <= max_col; ++col) {
+                    if (worksheet->hasCellAt(row, col)) {
+                        const auto& cell = worksheet->getCell(row, col);
+                        std::string cell_ref = columnToLetter(col) + std::to_string(row + 1);
+                        
+                        writer.startElement("c");
+                        writer.writeAttribute("r", cell_ref);
+                        
+                        // 根据单元格类型添加属性和内容
+                        if (cell.isString()) {
+                            if (options_.use_shared_strings) {
+                                int sst_index = getSharedStringIndex(cell.getStringValue());
+                                if (sst_index >= 0) {
+                                    writer.writeAttribute("t", "s");
+                                    writer.startElement("v");
+                                    writer.writeText(std::to_string(sst_index));
+                                    writer.endElement(); // v
+                                } else {
+                                    writer.writeAttribute("t", "inlineStr");
+                                    writer.startElement("is");
+                                    writer.startElement("t");
+                                    writer.writeText(cell.getStringValue());
+                                    writer.endElement(); // t
+                                    writer.endElement(); // is
+                                }
+                            } else {
+                                writer.writeAttribute("t", "inlineStr");
+                                writer.startElement("is");
+                                writer.startElement("t");
+                                writer.writeText(cell.getStringValue());
+                                writer.endElement(); // t
+                                writer.endElement(); // is
+                            }
+                        } else if (cell.isNumber()) {
+                            writer.startElement("v");
+                            writer.writeText(std::to_string(cell.getNumberValue()));
+                            writer.endElement(); // v
+                        } else if (cell.isBoolean()) {
+                            writer.writeAttribute("t", "b");
+                            writer.startElement("v");
+                            writer.writeText(cell.getBooleanValue() ? "1" : "0");
+                            writer.endElement(); // v
+                        } else if (cell.isFormula()) {
+                            writer.startElement("f");
+                            writer.writeText(cell.getStringValue());
+                            writer.endElement(); // f
+                        }
+                        
+                        writer.endElement(); // c
+                    }
+                }
+                
+                writer.endElement(); // row
+                rows_processed++;
+                
+                // 每处理一定数量的行就刷新缓冲区
+                if (rows_processed % options_.row_buffer_size == 0) {
+                    writer.flushBuffer();
+                    LOG_DEBUG("Processed {} rows, flushed buffer", rows_processed);
+                }
+            }
+        }
+        
+        writer.endElement(); // sheetData
+        
+        // 合并单元格（如果有）
+        const auto& merge_ranges = worksheet->getMergeRanges();
+        if (!merge_ranges.empty()) {
+            writer.startElement("mergeCells");
+            writer.writeAttribute("count", std::to_string(merge_ranges.size()));
+            
+            for (const auto& range : merge_ranges) {
+                writer.startElement("mergeCell");
+                std::string range_ref = columnToLetter(range.first_col) + std::to_string(range.first_row + 1) +
+                                      ":" + columnToLetter(range.last_col) + std::to_string(range.last_row + 1);
+                writer.writeAttribute("ref", range_ref);
+                writer.endElement(); // mergeCell
+            }
+            
+            writer.endElement(); // mergeCells
+        }
+        
+        // 自动筛选（如果有）
+        if (worksheet->hasAutoFilter()) {
+            auto filter_range = worksheet->getAutoFilterRange();
+            writer.startElement("autoFilter");
+            std::string range_ref = columnToLetter(filter_range.first_col) + std::to_string(filter_range.first_row + 1) +
+                                  ":" + columnToLetter(filter_range.last_col) + std::to_string(filter_range.last_row + 1);
+            writer.writeAttribute("ref", range_ref);
+            writer.endElement(); // autoFilter
+        }
+        
+        writer.endElement(); // worksheet
+        writer.endDocument();
+        
+        // 最终刷新并获取完整的XML内容
+        writer.flushBuffer();
+        std::string final_xml = writer.toString();
+        
+        // 将XML写入文件
+        bool success = file_manager_->writeFile(path, final_xml);
+        
+        if (success) {
+            LOG_INFO("Successfully generated streaming worksheet XML: {}, {} rows processed", path, rows_processed);
+        } else {
+            LOG_ERROR("Failed to write streaming worksheet XML: {}", path);
+        }
+        
+        return success;
+        
+    } catch (const std::exception& e) {
+        LOG_ERROR("Exception in streaming worksheet XML generation: {}", e.what());
+        return false;
+    }
+}
+
+// 辅助方法：列号转字母
+std::string Workbook::columnToLetter(int col) const {
+    std::string result;
+    while (col >= 0) {
+        result = static_cast<char>('A' + (col % 26)) + result;
+        col = col / 26 - 1;
+    }
+    return result;
+}
+
+// 辅助方法：XML转义
+std::string Workbook::escapeXML(const std::string& text) const {
+    std::string result;
+    result.reserve(text.size() * 1.2);
+    
+    for (char c : text) {
+        switch (c) {
+            case '<': result += "&lt;"; break;
+            case '>': result += "&gt;"; break;
+            case '&': result += "&amp;"; break;
+            case '"': result += "&quot;"; break;
+            case '\'': result += "&apos;"; break;
+            default:
+                if (c < 0x20 && c != 0x09 && c != 0x0A && c != 0x0D) {
+                    continue; // 跳过无效控制字符
+                }
+                result.push_back(c);
+                break;
+        }
+    }
+    
+    return result;
 }
 
 }} // namespace fastexcel::core

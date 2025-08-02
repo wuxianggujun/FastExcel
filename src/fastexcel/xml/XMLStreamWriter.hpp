@@ -6,6 +6,7 @@
 #include <memory>
 #include <cstdio>
 #include <cstring>
+#include <functional>
 
 // 项目日志头文件
 #include "fastexcel/utils/Logger.hpp"
@@ -15,15 +16,19 @@ namespace xml {
 
 /**
  * @brief 高性能流式XML写入器，基于libxlsxwriter的设计模式
- * 
+ *
  * 这个类参考了libxlsxwriter的高效XML写入机制，提供了接近其性能的流式处理。
  * 主要优化：
  * - 使用固定大小缓冲区，减少动态内存分配
  * - 直接文件写入模式，避免内存拷贝
  * - 高效的字符转义算法，使用memcpy和预定义长度
  * - 属性批处理机制
+ * - 支持回调函数的真正流式写入
  */
 class XMLStreamWriter {
+public:
+    // 数据写入回调函数类型
+    using WriteCallback = std::function<void(const std::string& chunk)>;
 private:
     //------------------------------------------------------------------------------
     //  XML 转义常量（已修正）
@@ -57,10 +62,13 @@ private:
     std::stack<const char*> element_stack_;
     bool in_element_ = false;
     
-    // 文件输出支持
+    // 输出模式支持
     FILE* output_file_ = nullptr;
     bool owns_file_ = false;
     bool direct_file_mode_ = false;  // 直接文件写入模式
+    bool callback_mode_ = false;     // 回调模式
+    WriteCallback write_callback_;   // 写入回调函数
+    bool auto_flush_ = true;         // 自动刷新
     
     // 缓冲模式下累积全部输出
     std::string whole_;  // 新增：仅在缓冲模式下累积全部输出
@@ -77,7 +85,6 @@ private:
     std::vector<XMLAttribute> pending_attributes_;
     
     // 内部方法
-    void flushBuffer();
     void writeRawToBuffer(const char* data, size_t length);
     void writeRawToFile(const char* data, size_t length);
     void writeRawDirect(const char* data, size_t length);
@@ -107,6 +114,7 @@ public:
     // 模式设置
     void setDirectFileMode(FILE* file, bool take_ownership = false);
     void setBufferedMode();
+    void setCallbackMode(WriteCallback callback, bool auto_flush = true);
     
     // 文档操作
     void startDocument();
@@ -119,16 +127,15 @@ public:
     
     // 属性操作
     void writeAttribute(const char* name, const char* value);
+    void writeAttribute(const char* name, const std::string& value);
     void writeAttribute(const char* name, int value);
     void writeAttribute(const char* name, double value);
     
     // 文本操作
     void writeText(const char* text);
+    void writeText(const std::string& text);
     void writeRaw(const char* data);
     void writeRaw(const std::string& data);
-    
-    // 注意：为避免指针悬空，已删除std::string重载
-    // 请使用 const char* 或字符串字面量
     
     // 获取结果（仅在缓冲模式下有效）
     std::string toString();
@@ -141,6 +148,9 @@ public:
     // 批处理属性
     void startAttributeBatch();
     void endAttributeBatch();
+    
+    // 缓冲区管理
+    void flushBuffer();
 };
 
 }} // namespace fastexcel::xml

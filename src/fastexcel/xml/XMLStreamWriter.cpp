@@ -12,6 +12,8 @@ XMLStreamWriter::XMLStreamWriter() {
     output_file_ = nullptr;
     owns_file_ = false;
     direct_file_mode_ = false;
+    callback_mode_ = false;
+    auto_flush_ = true;
 }
 
 XMLStreamWriter::~XMLStreamWriter() {
@@ -43,7 +45,26 @@ void XMLStreamWriter::setDirectFileMode(FILE* file, bool take_ownership) {
 
 void XMLStreamWriter::setBufferedMode() {
     direct_file_mode_ = false;
+    callback_mode_ = false;
+    write_callback_ = nullptr;
     LOG_DEBUG("XMLStreamWriter switched to buffered mode");
+}
+
+void XMLStreamWriter::setCallbackMode(WriteCallback callback, bool auto_flush) {
+    if (!callback) {
+        LOG_ERROR("Invalid callback provided to setCallbackMode");
+        return;
+    }
+    
+    // 刷新当前缓冲区内容
+    flushBuffer();
+    
+    direct_file_mode_ = false;
+    callback_mode_ = true;
+    write_callback_ = std::move(callback);
+    auto_flush_ = auto_flush;
+    
+    LOG_DEBUG("XMLStreamWriter switched to callback mode with auto_flush={}", auto_flush);
 }
 
 void XMLStreamWriter::flushBuffer() {
@@ -51,6 +72,10 @@ void XMLStreamWriter::flushBuffer() {
 
     if (direct_file_mode_ && output_file_) {
         fwrite(buffer_, 1, buffer_pos_, output_file_);
+    } else if (callback_mode_ && write_callback_) {
+        // 回调模式：调用回调函数
+        std::string chunk(buffer_, buffer_pos_);
+        write_callback_(chunk);
     } else {
         // 缓冲模式：把数据拼到 whole_，避免丢失
         whole_.append(buffer_, buffer_pos_);
@@ -176,6 +201,10 @@ void XMLStreamWriter::writeAttribute(const char* name, double value) {
     writeRawDirect("\"", 1);
 }
 
+void XMLStreamWriter::writeAttribute(const char* name, const std::string& value) {
+    writeAttribute(name, value.c_str());
+}
+
 void XMLStreamWriter::writeText(const char* text) {
     if (in_element_) {
         writeRawDirect(">", 1);
@@ -194,6 +223,10 @@ void XMLStreamWriter::writeText(const char* text) {
     }
 }
 
+void XMLStreamWriter::writeText(const std::string& text) {
+    writeText(text.c_str());
+}
+
 void XMLStreamWriter::writeRaw(const char* data) {
     if (data) {
         writeRawDirect(data, strlen(data));
@@ -207,6 +240,11 @@ void XMLStreamWriter::writeRaw(const std::string& data) {
 std::string XMLStreamWriter::toString() {
     if (direct_file_mode_) {
         LOG_WARN("toString() called in direct file mode, result may be incomplete");
+        return std::string();
+    }
+    
+    if (callback_mode_) {
+        LOG_WARN("toString() called in callback mode, result may be incomplete");
         return std::string();
     }
     
@@ -331,6 +369,11 @@ void XMLStreamWriter::writeRawToBuffer(const char* data, size_t length) {
         buffer_pos_ += chunk_size;
         data += chunk_size;
         length -= chunk_size;
+        
+        // 在回调模式下，如果启用了自动刷新，检查是否需要刷新
+        if (callback_mode_ && auto_flush_ && buffer_pos_ >= BUFFER_SIZE * 0.8) {
+            flushBuffer();
+        }
     }
 }
 
@@ -343,6 +386,17 @@ void XMLStreamWriter::writeRawToFile(const char* data, size_t length) {
 void XMLStreamWriter::writeRawDirect(const char* data, size_t length) {
     if (direct_file_mode_ && output_file_) {
         writeRawToFile(data, length);
+    } else if (callback_mode_ && write_callback_) {
+        // 在回调模式下，如果数据很大，直接调用回调而不缓冲
+        if (length > BUFFER_SIZE / 2) {
+            // 先刷新现有缓冲区
+            flushBuffer();
+            // 直接调用回调
+            std::string chunk(data, length);
+            write_callback_(chunk);
+        } else {
+            writeRawToBuffer(data, length);
+        }
     } else {
         writeRawToBuffer(data, length);
     }

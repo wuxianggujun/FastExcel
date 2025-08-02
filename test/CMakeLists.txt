@@ -27,6 +27,7 @@ set(UNIT_TEST_SOURCES
     unit/test_worksheet.cpp
     unit/test_workbook.cpp
     unit/test_xml_writer.cpp
+    unit/test_xml_streaming.cpp
 )
 
 # 集成测试源文件

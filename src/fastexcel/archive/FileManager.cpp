@@ -237,4 +237,13 @@ bool FileManager::addDocProps() {
     return writeFile("docProps/app.xml", app_props.str());
 }
 
+bool FileManager::setCompressionLevel(int level) {
+    if (!archive_) {
+        LOG_ERROR("Archive not initialized");
+        return false;
+    }
+    
+    return archive_->setCompressionLevel(level) == ZipError::Ok;
+}
+
 }} // namespace fastexcel::archive

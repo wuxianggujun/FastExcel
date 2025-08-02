@@ -61,6 +61,13 @@ struct WorkbookOptions {
     // 安全选项
     std::string password;             // 工作簿密码
     bool encrypt_metadata = false;    // 加密元数据
+    
+    // 性能优化选项
+    bool use_shared_strings = true;   // 使用共享字符串（默认启用）
+    bool streaming_xml = false;       // 流式XML写入（大数据时启用）
+    size_t row_buffer_size = 1000;    // 行缓冲大小
+    int compression_level = 6;        // ZIP压缩级别（0-9，0无压缩，9最高压缩）
+    size_t xml_buffer_size = 1024 * 1024; // XML缓冲区大小（1MB）
 };
 
 // 定义名称
@@ -512,6 +519,42 @@ public:
      */
     void setCalcOptions(bool calc_on_load, bool full_calc_on_load = false);
     
+    /**
+     * @brief 启用/禁用共享字符串
+     * @param enable 是否启用共享字符串
+     */
+    void setUseSharedStrings(bool enable) { options_.use_shared_strings = enable; }
+    
+    /**
+     * @brief 启用/禁用流式XML写入
+     * @param enable 是否启用流式XML写入
+     */
+    void setStreamingXML(bool enable) { options_.streaming_xml = enable; }
+    
+    /**
+     * @brief 设置行缓冲大小
+     * @param size 缓冲大小
+     */
+    void setRowBufferSize(size_t size) { options_.row_buffer_size = size; }
+    
+    /**
+     * @brief 设置ZIP压缩级别
+     * @param level 压缩级别（0-9）
+     */
+    void setCompressionLevel(int level) { options_.compression_level = level; }
+    
+    /**
+     * @brief 设置XML缓冲区大小
+     * @param size 缓冲区大小（字节）
+     */
+    void setXMLBufferSize(size_t size) { options_.xml_buffer_size = size; }
+    
+    /**
+     * @brief 启用高性能模式（自动配置最佳性能参数）
+     * @param enable 是否启用
+     */
+    void setHighPerformanceMode(bool enable);
+    
     // ========== 获取状态 ==========
     
     /**
@@ -559,6 +602,9 @@ private:
     
     // 生成Excel文件结构
     bool generateExcelStructure();
+    bool generateExcelStructureBatch();
+    bool generateExcelStructureStreaming();
+    bool generateWorksheetXMLStreaming(const std::shared_ptr<Worksheet>& worksheet, const std::string& path);
     
     // 生成各种XML文件
     std::string generateWorkbookXML() const;
@@ -593,6 +639,10 @@ private:
     
     // 密码哈希
     std::string hashPassword(const std::string& password) const;
+    
+    // 流式XML辅助方法
+    std::string columnToLetter(int col) const;
+    std::string escapeXML(const std::string& text) const;
 };
 
 }} // namespace fastexcel::core

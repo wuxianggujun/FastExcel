@@ -42,6 +42,9 @@ public:
     // 获取状态
     bool isOpen() const { return archive_ && archive_->isOpen(); }
     
+    // 压缩设置
+    bool setCompressionLevel(int level);
+    
 private:
     // Excel文件结构管理
     bool createExcelStructure();

@@ -13,8 +13,8 @@ int main() {
     LOG_INFO("FastExcel performance test started");
     
     try {
-        const int rows = 1000;  // 1000行
-        const int cols = 20;   // 20列
+        const int rows = 100000;  // 1000行
+        const int cols = 100;   // 20列
         const int total_cells = rows * cols;
         
         std::cout << "开始性能测试，将生成 " << rows << " 行 x " << cols << " 列 = " << total_cells << " 个单元格..." << std::endl;
