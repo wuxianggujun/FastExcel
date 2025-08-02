@@ -582,6 +582,18 @@ public:
      */
     const DocumentProperties& getDocumentProperties() const { return doc_properties_; }
     
+    /**
+     * @brief 获取工作簿选项
+     * @return 工作簿选项引用
+     */
+    WorkbookOptions& getOptions() { return options_; }
+    
+    /**
+     * @brief 获取工作簿选项（只读）
+     * @return 工作簿选项引用
+     */
+    const WorkbookOptions& getOptions() const { return options_; }
+    
     // ========== 共享字符串管理 ==========
     
     /**
