@@ -4,6 +4,7 @@
 #include "mz.h"
 #include "mz_zip.h"
 #include "mz_strm_mem.h"
+#include "zlib.h"  // 添加 zlib 头文件以支持 z_stream
 #include <string>
 #include <vector>
 #include <memory>
@@ -14,6 +15,17 @@
 
 namespace fastexcel {
 namespace archive {
+
+/**
+ * @brief 压缩任务结构
+ */
+struct CompressionTask {
+    std::string filename;
+    std::string content;
+    
+    CompressionTask(std::string name, std::string data)
+        : filename(std::move(name)), content(std::move(data)) {}
+};
 
 /**
  * @brief 基于minizip-ng的并行压缩文件结构
@@ -28,7 +40,7 @@ struct CompressedFile {
     bool success;                      // 压缩是否成功
     std::string error_message;         // 错误信息
     
-    CompressedFile() : crc32(0), uncompressed_size(0), compressed_size(0), 
+    CompressedFile() : crc32(0), uncompressed_size(0), compressed_size(0),
                       compression_method(MZ_COMPRESS_METHOD_DEFLATE), success(false) {}
 };
 
@@ -130,6 +142,14 @@ private:
     size_t total_compressed_size_;
     std::chrono::high_resolution_clock::time_point start_time_;
     
+    // 压缩流重用
+    thread_local static std::unique_ptr<z_stream> compression_stream_;
+    thread_local static int current_compression_level_;
+    
+    // 任务分块配置
+    static constexpr size_t LARGE_FILE_THRESHOLD = 2 * 1024 * 1024; // 2MB
+    static constexpr size_t CHUNK_SIZE = 512 * 1024; // 512KB per chunk
+    
     /**
      * @brief 使用minizip-ng压缩单个文件
      * @param filename 文件名
@@ -157,7 +177,30 @@ private:
                               uint16_t compression_method);
     
     /**
-     * @brief 计算统计信息
+     * @brief 创建压缩任务列表，包括大文件分块
+     * @param files 原始文件列表
+     * @return 任务列表
+     */
+    std::vector<CompressionTask> createCompressionTasks(
+        const std::vector<std::pair<std::string, std::string>>& files);
+    
+    /**
+     * @brief 获取或创建线程本地的压缩流
+     * @param compression_level 压缩级别
+     * @return 压缩流引用
+     */
+    z_stream& getOrCreateCompressionStream(int compression_level);
+    
+    /**
+     * @brief 计算统计信息（基于任务）
+     * @param tasks 任务列表
+     * @param compressed_files 压缩文件列表
+     */
+    void calculateStatisticsFromTasks(const std::vector<CompressionTask>& tasks,
+                                    const std::vector<CompressedFile>& compressed_files);
+    
+    /**
+     * @brief 计算统计信息（原版本兼容）
      * @param original_files 原始文件列表
      * @param compressed_files 压缩文件列表
      */

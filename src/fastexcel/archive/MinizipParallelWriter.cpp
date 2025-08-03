@@ -21,6 +21,10 @@
 namespace fastexcel {
 namespace archive {
 
+// 线程本地存储的压缩流
+thread_local std::unique_ptr<z_stream> MinizipParallelWriter::compression_stream_;
+thread_local int MinizipParallelWriter::current_compression_level_ = -1;
+
 MinizipParallelWriter::MinizipParallelWriter(size_t thread_count)
     : thread_pool_(std::make_unique<utils::ThreadPool>(thread_count == 0 ? std::thread::hardware_concurrency() : thread_count)),
       stats_{},
@@ -47,21 +51,24 @@ bool MinizipParallelWriter::compressAndWrite(
         stats_ = Statistics{};
         stats_.thread_count = thread_pool_->size();
         
-        // 并行压缩所有文件
-        std::vector<std::future<CompressedFile>> futures;
-        futures.reserve(files.size());
+        // 创建任务列表，包括文件分块
+        std::vector<CompressionTask> tasks = createCompressionTasks(files);
         
-        for (const auto& file : files) {
+        // 并行压缩所有任务
+        std::vector<std::future<CompressedFile>> futures;
+        futures.reserve(tasks.size());
+        
+        for (const auto& task : tasks) {
             futures.emplace_back(
-                thread_pool_->enqueue([this, file, compression_level]() {
-                    return compressFile(file.first, file.second, compression_level);
+                thread_pool_->enqueue([this, task, compression_level]() {
+                    return compressFile(task.filename, task.content, compression_level);
                 })
             );
         }
         
         // 收集压缩结果
         std::vector<CompressedFile> compressed_files;
-        compressed_files.reserve(files.size());
+        compressed_files.reserve(tasks.size());
         
         for (auto& future : futures) {
             auto result = future.get();
@@ -82,7 +89,7 @@ bool MinizipParallelWriter::compressAndWrite(
         stats_.total_compression_time_ms = static_cast<double>(duration.count());
         
         // 计算压缩比和并行效率
-        calculateStatistics(files, compressed_files);
+        calculateStatisticsFromTasks(tasks, compressed_files);
         
         return success;
         
@@ -106,16 +113,18 @@ CompressedFile MinizipParallelWriter::compressFile(
         // 计算 CRC32 - 使用 minizip-ng 的 CRC32 函数
         result.crc32 = mz_crypt_crc32_update(0, reinterpret_cast<const uint8_t*>(content.data()), static_cast<int32_t>(content.size()));
         
-        // 使用 zlib 进行真正的压缩
-        z_stream strm = {};
-        int ret = deflateInit2(&strm, compression_level, Z_DEFLATED, -15, 9, Z_DEFAULT_STRATEGY);
+        // 获取或创建重用的压缩流
+        auto& strm = getOrCreateCompressionStream(compression_level);
+        
+        // 重置流以重用
+        int ret = deflateReset(&strm);
         if (ret != Z_OK) {
-            result.error_message = "Failed to initialize deflate stream";
+            result.error_message = "Failed to reset deflate stream";
             return result;
         }
         
-        // 预估压缩后大小并分配缓冲区
-        size_t max_compressed_size = deflateBound(&strm, static_cast<uLong>(content.size()));
+        // 更精确的内存分配 - 避免 deflateBound 的过度分配
+        size_t max_compressed_size = content.size() + (content.size() >> 8) + 64;
         result.compressed_data.resize(max_compressed_size);
         
         // 设置输入和输出
@@ -127,7 +136,6 @@ CompressedFile MinizipParallelWriter::compressFile(
         // 执行压缩
         ret = deflate(&strm, Z_FINISH);
         if (ret != Z_STREAM_END) {
-            deflateEnd(&strm);
             result.error_message = "Failed to compress data";
             return result;
         }
@@ -135,9 +143,6 @@ CompressedFile MinizipParallelWriter::compressFile(
         // 获取实际压缩大小并调整缓冲区
         result.compressed_size = strm.total_out;
         result.compressed_data.resize(result.compressed_size);
-        
-        // 清理压缩流
-        deflateEnd(&strm);
         
         result.compression_method = MZ_COMPRESS_METHOD_DEFLATE;
         result.success = true;
@@ -357,6 +362,97 @@ std::vector<std::future<CompressedFile>> MinizipParallelWriter::compressFilesAsy
     }
     
     return futures;
+}
+
+std::vector<CompressionTask> MinizipParallelWriter::createCompressionTasks(
+    const std::vector<std::pair<std::string, std::string>>& files) {
+    
+    std::vector<CompressionTask> tasks;
+    
+    for (const auto& [filename, content] : files) {
+        // 如果文件大于阈值，进行分块
+        if (content.size() > LARGE_FILE_THRESHOLD) {
+            size_t chunks = (content.size() + CHUNK_SIZE - 1) / CHUNK_SIZE;
+            
+            for (size_t i = 0; i < chunks; ++i) {
+                size_t start = i * CHUNK_SIZE;
+                size_t size = std::min(CHUNK_SIZE, content.size() - start);
+                
+                std::string chunk_filename = filename;
+                if (chunks > 1) {
+                    // 为分块文件添加后缀
+                    size_t dot_pos = filename.find_last_of('.');
+                    if (dot_pos != std::string::npos) {
+                        chunk_filename = filename.substr(0, dot_pos) +
+                                       "_part" + std::to_string(i) +
+                                       filename.substr(dot_pos);
+                    } else {
+                        chunk_filename = filename + "_part" + std::to_string(i);
+                    }
+                }
+                
+                tasks.emplace_back(chunk_filename, content.substr(start, size));
+            }
+        } else {
+            // 小文件直接添加
+            tasks.emplace_back(filename, content);
+        }
+    }
+    
+    return tasks;
+}
+
+z_stream& MinizipParallelWriter::getOrCreateCompressionStream(int compression_level) {
+    if (!compression_stream_ || current_compression_level_ != compression_level) {
+        compression_stream_ = std::make_unique<z_stream>();
+        memset(compression_stream_.get(), 0, sizeof(z_stream));
+        
+        int ret = deflateInit2(compression_stream_.get(), compression_level,
+                              Z_DEFLATED, -15, 9, Z_DEFAULT_STRATEGY);
+        if (ret != Z_OK) {
+            throw std::runtime_error("Failed to initialize deflate stream");
+        }
+        
+        current_compression_level_ = compression_level;
+    }
+    
+    return *compression_stream_;
+}
+
+void MinizipParallelWriter::calculateStatisticsFromTasks(
+    const std::vector<CompressionTask>& tasks,
+    const std::vector<CompressedFile>& compressed_files) {
+    
+    size_t total_uncompressed = 0;
+    size_t total_compressed = 0;
+    
+    for (const auto& task : tasks) {
+        total_uncompressed += task.content.size();
+    }
+    
+    for (const auto& file : compressed_files) {
+        total_compressed += file.compressed_size;
+    }
+    
+    if (total_uncompressed > 0) {
+        stats_.compression_ratio = static_cast<double>(total_compressed) / total_uncompressed;
+    }
+    
+    // 计算并行效率 - 基于任务数量而不是文件数量
+    if (stats_.thread_count > 1) {
+        if (tasks.size() < stats_.thread_count) {
+            stats_.parallel_efficiency = static_cast<double>(tasks.size()) / static_cast<double>(stats_.thread_count);
+        } else {
+            // 考虑负载均衡：任务数量足够时的理想效率
+            double task_distribution_efficiency = std::min(1.0, static_cast<double>(tasks.size()) / (stats_.thread_count * 2.0));
+            stats_.parallel_efficiency = 0.85 * task_distribution_efficiency;
+        }
+    } else {
+        stats_.parallel_efficiency = 1.0;
+    }
+    
+    // 转换为百分比
+    stats_.parallel_efficiency *= 100.0;
 }
 
 void MinizipParallelWriter::waitForAllTasks() {
