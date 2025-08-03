@@ -617,8 +617,9 @@ void Worksheet::generateXML(const std::function<void(const char*, size_t)>& call
     
     // 按行排序输出单元格数据
     std::map<int, std::map<int, const Cell*>> sorted_cells;
+    // 关键修复 #1: 只要单元格有值或有格式，就必须处理
     for (const auto& [pos, cell] : cells_) {
-        if (!cell.isEmpty()) {
+        if (!cell.isEmpty() || cell.hasFormat()) {
             sorted_cells[pos.first][pos.second] = &cell;
         }
     }
@@ -643,27 +644,43 @@ void Worksheet::generateXML(const std::function<void(const char*, size_t)>& call
             writer.startElement("c");
             writer.writeAttribute("r", cellReference(row_num, col_num).c_str());
             
-            if (cell->isFormula()) {
-                writer.writeAttribute("t", "str");
-                writer.startElement("f");
-                writer.writeText(cell->getFormula().c_str());
-                writer.endElement(); // f
-            } else if (cell->getType() == CellType::String) {
-                writer.writeAttribute("t", "inlineStr");
-                writer.startElement("is");
-                writer.startElement("t");
-                writer.writeText(cell->getStringValue().c_str());
-                writer.endElement(); // t
-                writer.endElement(); // is
-            } else if (cell->getType() == CellType::Number) {
-                writer.startElement("v");
-                writer.writeText(std::to_string(cell->getNumberValue()).c_str());
-                writer.endElement(); // v
-            } else if (cell->getType() == CellType::Boolean) {
-                writer.writeAttribute("t", "b");
-                writer.startElement("v");
-                writer.writeText(cell->getBooleanValue() ? "1" : "0");
-                writer.endElement(); // v
+            // 关键修复 #2: 应用单元格格式
+            if (cell->hasFormat()) {
+                writer.writeAttribute("s", std::to_string(cell->getFormat()->getXfIndex()).c_str());
+            }
+            
+            // 只有在单元格不为空时才写入值
+            if (!cell->isEmpty()) {
+                if (cell->isFormula()) {
+                    writer.writeAttribute("t", "str");
+                    writer.startElement("f");
+                    writer.writeText(cell->getFormula().c_str());
+                    writer.endElement(); // f
+                } else if (cell->isString()) {
+                    // 关键修复 #3: 根据是否使用SST，决定写入共享字符串还是内联字符串
+                    if (sst_) {
+                        writer.writeAttribute("t", "s");
+                        writer.startElement("v");
+                        writer.writeText(std::to_string(sst_->getStringId(cell->getStringValue())).c_str());
+                        writer.endElement(); // v
+                    } else {
+                        writer.writeAttribute("t", "inlineStr");
+                        writer.startElement("is");
+                        writer.startElement("t");
+                        writer.writeText(cell->getStringValue().c_str());
+                        writer.endElement(); // t
+                        writer.endElement(); // is
+                    }
+                } else if (cell->isNumber()) {
+                    writer.startElement("v");
+                    writer.writeText(std::to_string(cell->getNumberValue()).c_str());
+                    writer.endElement(); // v
+                } else if (cell->isBoolean()) {
+                    writer.writeAttribute("t", "b");
+                    writer.startElement("v");
+                    writer.writeText(cell->getBooleanValue() ? "1" : "0");
+                    writer.endElement(); // v
+                }
             }
             
             writer.endElement(); // c
@@ -975,8 +992,9 @@ void Worksheet::generateSheetDataXML(const std::function<void(const char*, size_
     
     // 按行排序输出单元格数据
     std::map<int, std::map<int, const Cell*>> sorted_cells;
+    // 关键修复 #1: 只要单元格有值或有格式，就必须处理
     for (const auto& [pos, cell] : cells_) {
-        if (!cell.isEmpty()) {
+        if (!cell.isEmpty() || cell.hasFormat()) {
             sorted_cells[pos.first][pos.second] = &cell;
         }
     }
@@ -1001,27 +1019,43 @@ void Worksheet::generateSheetDataXML(const std::function<void(const char*, size_
             writer.startElement("c");
             writer.writeAttribute("r", cellReference(row_num, col_num).c_str());
             
-            if (cell->isFormula()) {
-                writer.writeAttribute("t", "str");
-                writer.startElement("f");
-                writer.writeText(cell->getFormula().c_str());
-                writer.endElement(); // f
-            } else if (cell->getType() == CellType::String) {
-                writer.writeAttribute("t", "inlineStr");
-                writer.startElement("is");
-                writer.startElement("t");
-                writer.writeText(cell->getStringValue().c_str());
-                writer.endElement(); // t
-                writer.endElement(); // is
-            } else if (cell->getType() == CellType::Number) {
-                writer.startElement("v");
-                writer.writeText(std::to_string(cell->getNumberValue()).c_str());
-                writer.endElement(); // v
-            } else if (cell->getType() == CellType::Boolean) {
-                writer.writeAttribute("t", "b");
-                writer.startElement("v");
-                writer.writeText(cell->getBooleanValue() ? "1" : "0");
-                writer.endElement(); // v
+            // 关键修复 #2: 应用单元格格式
+            if (cell->hasFormat()) {
+                writer.writeAttribute("s", std::to_string(cell->getFormat()->getXfIndex()).c_str());
+            }
+            
+            // 只有在单元格不为空时才写入值
+            if (!cell->isEmpty()) {
+                if (cell->isFormula()) {
+                    writer.writeAttribute("t", "str");
+                    writer.startElement("f");
+                    writer.writeText(cell->getFormula().c_str());
+                    writer.endElement(); // f
+                } else if (cell->isString()) {
+                    // 关键修复 #3: 根据是否使用SST，决定写入共享字符串还是内联字符串
+                    if (sst_) {
+                        writer.writeAttribute("t", "s");
+                        writer.startElement("v");
+                        writer.writeText(std::to_string(sst_->getStringId(cell->getStringValue())).c_str());
+                        writer.endElement(); // v
+                    } else {
+                        writer.writeAttribute("t", "inlineStr");
+                        writer.startElement("is");
+                        writer.startElement("t");
+                        writer.writeText(cell->getStringValue().c_str());
+                        writer.endElement(); // t
+                        writer.endElement(); // is
+                    }
+                } else if (cell->isNumber()) {
+                    writer.startElement("v");
+                    writer.writeText(std::to_string(cell->getNumberValue()).c_str());
+                    writer.endElement(); // v
+                } else if (cell->isBoolean()) {
+                    writer.writeAttribute("t", "b");
+                    writer.startElement("v");
+                    writer.writeText(cell->getBooleanValue() ? "1" : "0");
+                    writer.endElement(); // v
+                }
             }
             
             writer.endElement(); // c
