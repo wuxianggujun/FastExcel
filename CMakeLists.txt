@@ -6,7 +6,7 @@ project(FastExcel VERSION 1.0.0 LANGUAGES CXX C)
 # =============================================================================
 option(FASTEXCEL_BUILD_SHARED_LIBS "Build FastExcel as shared library" OFF)
 option(FASTEXCEL_USE_SYSTEM_LIBS "Use system libraries when available" OFF)
-option(FASTEXCEL_USE_LIBDEFLATE "Enable libdeflate for high-performance compression" ON)
+option(FASTEXCEL_USE_LIBDEFLATE "Enable libdeflate for high-performance compression" OFF)
 option(FASTEXCEL_BUILD_EXAMPLES "Build example programs" ON)
 option(FASTEXCEL_BUILD_TESTS "Build all tests" ON)
 option(FASTEXCEL_BUILD_UNIT_TESTS "Build unit tests" ON)

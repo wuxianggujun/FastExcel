@@ -92,6 +92,29 @@ if(FASTEXCEL_USE_LIBDEFLATE)
     set(LIBDEFLATE_BUILD_GZIP OFF CACHE BOOL "" FORCE)
     set(LIBDEFLATE_BUILD_TESTS OFF CACHE BOOL "" FORCE)
     
+    # 为libdeflate设置高性能编译选项（在add_subdirectory之前）
+    if(MSVC)
+        # 临时保存当前的CMAKE标志
+        set(ORIGINAL_CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG}")
+        set(ORIGINAL_CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG}")
+        
+        # 为libdeflate设置优化的编译标志
+        set(CMAKE_C_FLAGS_DEBUG "/O2 /DNDEBUG /arch:AVX2")
+        set(CMAKE_CXX_FLAGS_DEBUG "/O2 /DNDEBUG /arch:AVX2")
+        
+        message(STATUS "FastExcel: Using optimized MSVC flags for libdeflate")
+    else()
+        # 临时保存当前的CMAKE标志
+        set(ORIGINAL_CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG}")
+        set(ORIGINAL_CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG}")
+        
+        # 为libdeflate设置优化的编译标志
+        set(CMAKE_C_FLAGS_DEBUG "-O3 -DNDEBUG -march=native")
+        set(CMAKE_CXX_FLAGS_DEBUG "-O3 -DNDEBUG -march=native")
+        
+        message(STATUS "FastExcel: Using optimized GCC/Clang flags for libdeflate")
+    endif()
+    
     if(FASTEXCEL_USE_SYSTEM_LIBS)
         find_package(libdeflate QUIET)
     endif()
@@ -99,10 +122,19 @@ if(FASTEXCEL_USE_LIBDEFLATE)
     if(NOT libdeflate_FOUND)
         add_subdirectory(libdeflate)
         set(LIBDEFLATE_TARGET libdeflate_static)
-        message(STATUS "FastExcel: Using bundled libdeflate")
+        message(STATUS "FastExcel: Using bundled libdeflate with high-performance optimizations")
+        
+        # 恢复原始的CMAKE标志，避免影响其他目标
+        set(CMAKE_C_FLAGS_DEBUG "${ORIGINAL_CMAKE_C_FLAGS_DEBUG}")
+        set(CMAKE_CXX_FLAGS_DEBUG "${ORIGINAL_CMAKE_CXX_FLAGS_DEBUG}")
+        
     else()
         set(LIBDEFLATE_TARGET libdeflate::libdeflate)
         message(STATUS "FastExcel: Using system libdeflate")
+        
+        # 恢复原始的CMAKE标志
+        set(CMAKE_C_FLAGS_DEBUG "${ORIGINAL_CMAKE_C_FLAGS_DEBUG}")
+        set(CMAKE_CXX_FLAGS_DEBUG "${ORIGINAL_CMAKE_CXX_FLAGS_DEBUG}")
     endif()
     
     # 定义宏以启用 libdeflate 支持
