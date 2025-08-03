@@ -28,22 +28,23 @@ std::string generateTestData(size_t size_kb) {
 void testMinizipParallelCompression() {
     std::cout << "\n=== 基于Minizip-NG的并行压缩性能测试 ===" << std::endl;
     
-    // 创建测试文件（模拟Excel文件结构）
+    // 创建测试文件（模拟Excel文件结构）- 增大数据量以更好地测试并行性能
     std::vector<std::pair<std::string, std::string>> test_files;
     
-    // 生成类似Excel的文件结构
+    // 生成类似Excel的文件结构 - 增大文件大小
     std::vector<std::pair<std::string, size_t>> file_configs = {
-        {"xl/worksheets/sheet1.xml", 2000},    // 2MB 工作表
-        {"xl/worksheets/sheet2.xml", 1500},    // 1.5MB 工作表
-        {"xl/worksheets/sheet3.xml", 1000},    // 1MB 工作表
-        {"xl/styles.xml", 300},                // 300KB 样式
-        {"xl/workbook.xml", 50},               // 50KB 工作簿
-        {"xl/sharedStrings.xml", 800},         // 800KB 共享字符串
-        {"[Content_Types].xml", 5},            // 5KB 内容类型
-        {"_rels/.rels", 2},                    // 2KB 关系
-        {"xl/_rels/workbook.xml.rels", 3},     // 3KB 工作簿关系
-        {"docProps/core.xml", 10},             // 10KB 核心属性
-        {"docProps/app.xml", 8}                // 8KB 应用属性
+        {"xl/worksheets/sheet1.xml", 8000},    // 8MB 工作表
+        {"xl/worksheets/sheet2.xml", 6000},    // 6MB 工作表
+        {"xl/worksheets/sheet3.xml", 4000},    // 4MB 工作表
+        {"xl/worksheets/sheet4.xml", 3000},    // 3MB 工作表
+        {"xl/styles.xml", 1200},               // 1.2MB 样式
+        {"xl/workbook.xml", 200},              // 200KB 工作簿
+        {"xl/sharedStrings.xml", 3200},        // 3.2MB 共享字符串
+        {"[Content_Types].xml", 20},           // 20KB 内容类型
+        {"_rels/.rels", 8},                    // 8KB 关系
+        {"xl/_rels/workbook.xml.rels", 12},    // 12KB 工作簿关系
+        {"docProps/core.xml", 40},             // 40KB 核心属性
+        {"docProps/app.xml", 32}               // 32KB 应用属性
     };
     
     std::cout << "生成Excel风格的测试数据..." << std::endl;
@@ -57,12 +58,13 @@ void testMinizipParallelCompression() {
         total_size += content.size();
     }
     
-    std::cout << "总数据量: " << std::fixed << std::setprecision(2) 
+    std::cout << "总数据量: " << std::fixed << std::setprecision(2)
               << total_size / 1024.0 / 1024.0 << " MB" << std::endl;
     
-    // 测试不同线程数的性能
+    // 测试不同线程数的性能 - 使用更高的压缩级别以增加CPU负载
     std::vector<size_t> thread_counts = {1, 2, 4, 8};
     std::vector<double> performance_results;
+    std::vector<double> duration_results;
     
     for (size_t thread_count : thread_counts) {
         std::cout << "\n--- 测试 " << thread_count << " 个线程 ---" << std::endl;
@@ -72,7 +74,8 @@ void testMinizipParallelCompression() {
         archive::MinizipParallelWriter writer(thread_count);
         
         std::string zip_filename = "minizip_parallel_test_" + std::to_string(thread_count) + "threads.xlsx";
-        bool success = writer.compressAndWrite(zip_filename, test_files, MZ_COMPRESS_LEVEL_FAST);
+        // 使用更高的压缩级别以增加CPU负载
+        bool success = writer.compressAndWrite(zip_filename, test_files, 6);
         
         auto end_time = std::chrono::high_resolution_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
@@ -81,25 +84,31 @@ void testMinizipParallelCompression() {
             auto stats = writer.getStatistics();
             double mb_per_second = (total_size / 1024.0 / 1024.0) / (duration.count() / 1000.0);
             performance_results.push_back(mb_per_second);
+            duration_results.push_back(static_cast<double>(duration.count()));
             
             std::cout << "✅ 压缩成功" << std::endl;
             std::cout << "总耗时: " << duration.count() << " ms" << std::endl;
             std::cout << "压缩速度: " << std::fixed << std::setprecision(2) << mb_per_second << " MB/s" << std::endl;
-            std::cout << "压缩比: " << std::fixed << std::setprecision(1) 
+            std::cout << "压缩比: " << std::fixed << std::setprecision(1)
                       << stats.compression_ratio * 100 << "%" << std::endl;
-            std::cout << "完成任务: " << stats.completed_tasks << "/" 
+            std::cout << "完成任务: " << stats.completed_tasks << "/"
                       << (stats.completed_tasks + stats.failed_tasks) << std::endl;
-            std::cout << "并行效率: " << std::fixed << std::setprecision(1) 
+            std::cout << "并行效率: " << std::fixed << std::setprecision(1)
                       << stats.parallel_efficiency << "%" << std::endl;
             
-            // 计算加速比
+            // 计算真实的加速比和效率
             if (thread_count > 1 && !performance_results.empty()) {
-                double speedup = mb_per_second / performance_results[0]; // 相对于单线程
-                std::cout << "加速比: " << std::fixed << std::setprecision(2) << speedup << "x" << std::endl;
+                double speedup = duration_results[0] / duration.count(); // 时间比值
+                double efficiency = speedup / thread_count * 100.0; // 并行效率
                 
-                if (speedup >= thread_count * 0.7) {
+                std::cout << "真实加速比: " << std::fixed << std::setprecision(2) << speedup << "x" << std::endl;
+                std::cout << "真实并行效率: " << std::fixed << std::setprecision(1) << efficiency << "%" << std::endl;
+                
+                if (speedup >= thread_count * 0.8) {
+                    std::cout << "🚀 并行效果卓越！" << std::endl;
+                } else if (speedup >= thread_count * 0.6) {
                     std::cout << "🎉 并行效果优秀！" << std::endl;
-                } else if (speedup >= thread_count * 0.5) {
+                } else if (speedup >= thread_count * 0.4) {
                     std::cout << "👍 并行效果良好" << std::endl;
                 } else {
                     std::cout << "⚠️  并行效果一般" << std::endl;
@@ -108,14 +117,23 @@ void testMinizipParallelCompression() {
         } else {
             std::cout << "❌ 压缩失败" << std::endl;
             performance_results.push_back(0.0);
+            duration_results.push_back(0.0);
         }
     }
     
     // 性能总结
     std::cout << "\n📊 性能总结:" << std::endl;
+    std::cout << "线程数\t速度(MB/s)\t耗时(ms)\t加速比\t效率" << std::endl;
+    std::cout << "----\t--------\t-------\t-----\t----" << std::endl;
     for (size_t i = 0; i < thread_counts.size(); ++i) {
-        std::cout << thread_counts[i] << " 线程: " << std::fixed << std::setprecision(2) 
-                  << performance_results[i] << " MB/s" << std::endl;
+        double speedup = (i > 0 && duration_results[0] > 0) ? duration_results[0] / duration_results[i] : 1.0;
+        double efficiency = speedup / thread_counts[i] * 100.0;
+        
+        std::cout << thread_counts[i] << "\t"
+                  << std::fixed << std::setprecision(1) << performance_results[i] << "\t\t"
+                  << std::fixed << std::setprecision(0) << duration_results[i] << "\t\t"
+                  << std::fixed << std::setprecision(2) << speedup << "x\t"
+                  << std::fixed << std::setprecision(1) << efficiency << "%" << std::endl;
     }
 }
 
