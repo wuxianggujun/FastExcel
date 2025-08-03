@@ -23,7 +23,7 @@ ZipArchive::ZipArchive(const std::string& filename) : filename_(filename) {
     is_writable_ = false;
     is_readable_ = false;
     stream_entry_open_ = false;
-    compression_level_ = 6;  // 默认压缩级别
+    compression_level_ = 1;  // 使用较低的压缩级别以提高性能
 }
 
 ZipArchive::~ZipArchive() {
@@ -78,18 +78,36 @@ ZipError ZipArchive::addFile(std::string_view internal_path, const void* data, s
     std::string path_str(internal_path);
     file_info.filename = path_str.c_str();
     
-    // 使用跨平台时间戳处理
-    // 使用 UTC 时间确保跨时区一致性
+    // 设置文件大小信息，这对Excel兼容性很重要
+    file_info.uncompressed_size = static_cast<uint64_t>(size);
+    file_info.compressed_size = 0; // 让minizip自动计算
+    
+    // 设置压缩方法
+    file_info.compression_method = MZ_COMPRESS_METHOD_DEFLATE;
+    
+    // 使用DOS时间格式，这是ZIP标准要求的格式
+    // 避免使用Unix时间戳，因为某些Excel阅读器可能不兼容
     time_t now = time(nullptr);
-    file_info.modified_date = static_cast<uint32_t>(now);
-    file_info.creation_date = static_cast<uint32_t>(now);
+    struct tm* timeinfo = localtime(&now);
+    
+    // 转换为DOS时间格式 (YYYYYYYMMMMDDDDDHHHHHMMMMMMSSSSS)
+    // 年份从1980开始，月份从1开始，日期从1开始
+    uint16_t dos_date = ((timeinfo->tm_year - 80) << 9) |
+                        ((timeinfo->tm_mon + 1) << 5) |
+                        timeinfo->tm_mday;
+    uint16_t dos_time = (timeinfo->tm_hour << 11) |
+                        (timeinfo->tm_min << 5) |
+                        (timeinfo->tm_sec >> 1);
+    
+    // minizip-ng期望的是Unix时间戳，但我们设置一个标准的时间
+    // 使用2024年1月1日作为固定时间戳以确保兼容性
+    file_info.modified_date = 1704067200; // 2024-01-01 00:00:00 UTC
+    file_info.creation_date = 1704067200;
     
     file_info.flag = MZ_ZIP_FLAG_UTF8;
     
-    // 只为非零大小文件添加 DATA_DESCRIPTOR 标志
-    if (size > 0) {
-        file_info.flag |= MZ_ZIP_FLAG_DATA_DESCRIPTOR;
-    }
+    // 不使用 DATA_DESCRIPTOR 标志以提高兼容性
+    // Excel 文件不需要这个标志，去掉可以提高与各种阅读器的兼容性
     
     // 打开条目
     int32_t result = mz_zip_writer_entry_open(zip_handle_, &file_info);
@@ -146,15 +164,17 @@ ZipError ZipArchive::addFiles(const std::vector<FileEntry>& files) {
         mz_zip_file file_info = {};
         file_info.filename = file.internal_path.c_str();
         
-        // 使用当前时间
-        time_t now = time(nullptr);
-        file_info.modified_date = static_cast<uint32_t>(now);
-        file_info.creation_date = static_cast<uint32_t>(now);
+        // 设置文件大小信息
+        file_info.uncompressed_size = static_cast<uint64_t>(file.content.size());
+        file_info.compressed_size = 0; // 让minizip自动计算
+        file_info.compression_method = MZ_COMPRESS_METHOD_DEFLATE;
+        
+        // 使用固定时间戳以确保兼容性
+        file_info.modified_date = 1704067200; // 2024-01-01 00:00:00 UTC
+        file_info.creation_date = 1704067200;
         
         file_info.flag = MZ_ZIP_FLAG_UTF8;
-        if (!file.content.empty()) {
-            file_info.flag |= MZ_ZIP_FLAG_DATA_DESCRIPTOR;
-        }
+        // 不使用 DATA_DESCRIPTOR 标志以提高兼容性
         
         // 打开条目
         int32_t result = mz_zip_writer_entry_open(zip_handle_, &file_info);
@@ -216,15 +236,17 @@ ZipError ZipArchive::addFiles(std::vector<FileEntry>&& files) {
         mz_zip_file file_info = {};
         file_info.filename = file.internal_path.c_str();
         
-        // 使用当前时间
-        time_t now = time(nullptr);
-        file_info.modified_date = static_cast<uint32_t>(now);
-        file_info.creation_date = static_cast<uint32_t>(now);
+        // 设置文件大小信息
+        file_info.uncompressed_size = static_cast<uint64_t>(file.content.size());
+        file_info.compressed_size = 0; // 让minizip自动计算
+        file_info.compression_method = MZ_COMPRESS_METHOD_DEFLATE;
+        
+        // 使用固定时间戳以确保兼容性
+        file_info.modified_date = 1704067200; // 2024-01-01 00:00:00 UTC
+        file_info.creation_date = 1704067200;
         
         file_info.flag = MZ_ZIP_FLAG_UTF8;
-        if (!file.content.empty()) {
-            file_info.flag |= MZ_ZIP_FLAG_DATA_DESCRIPTOR;
-        }
+        // 不使用 DATA_DESCRIPTOR 标志以提高兼容性
         
         // 打开条目
         int32_t result = mz_zip_writer_entry_open(zip_handle_, &file_info);
@@ -474,12 +496,17 @@ ZipError ZipArchive::openEntry(std::string_view internal_path) {
     std::string path_str(internal_path);
     file_info.filename = path_str.c_str();
     
-    // 使用跨平台时间戳处理
-    time_t now = time(nullptr);
-    file_info.modified_date = static_cast<uint32_t>(now);
-    file_info.creation_date = static_cast<uint32_t>(now);
+    // 对于流式写入，我们不知道最终大小，让minizip处理
+    file_info.uncompressed_size = 0;
+    file_info.compressed_size = 0;
+    file_info.compression_method = MZ_COMPRESS_METHOD_DEFLATE;
     
-    file_info.flag = MZ_ZIP_FLAG_UTF8 | MZ_ZIP_FLAG_DATA_DESCRIPTOR;
+    // 使用固定时间戳以确保兼容性
+    file_info.modified_date = 1704067200; // 2024-01-01 00:00:00 UTC
+    file_info.creation_date = 1704067200;
+    
+    file_info.flag = MZ_ZIP_FLAG_UTF8;
+    // 不使用 DATA_DESCRIPTOR 标志以提高兼容性
     
     // 打开条目
     int32_t result = mz_zip_writer_entry_open(zip_handle_, &file_info);

@@ -178,7 +178,7 @@ bool FileManager::addContentTypes() {
     return closeStreamingFile();
 }
 
-bool FileManager::addWorkbookRels() {
+bool FileManager::addRootRels() {
     xml::Relationships rels;
     rels.addRelationship("rId1", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument", "xl/workbook.xml");
     rels.addRelationship("rId2", "http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties", "docProps/core.xml");
@@ -196,7 +196,7 @@ bool FileManager::addWorkbookRels() {
     return closeStreamingFile();
 }
 
-bool FileManager::addRootRels() {
+bool FileManager::addWorkbookRels() {
     xml::Relationships rels;
     rels.addRelationship("rId1", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles", "styles.xml");
     rels.addRelationship("rId2", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings", "sharedStrings.xml");
