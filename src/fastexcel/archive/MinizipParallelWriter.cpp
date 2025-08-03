@@ -114,12 +114,9 @@ CompressedFile MinizipParallelWriter::compressFile(
         result.crc32 = mz_crypt_crc32_update(0, reinterpret_cast<const uint8_t*>(content.data()), static_cast<int32_t>(content.size()));
         
         // 获取或创建重用的压缩流
-        auto& strm = getOrCreateCompressionStream(compression_level);
-        
-        // 重置流以重用
-        int ret = deflateReset(&strm);
-        if (ret != Z_OK) {
-            result.error_message = "Failed to reset deflate stream";
+        z_stream* strm = getOrCreateCompressionStream(compression_level);
+        if (!strm) {
+            result.error_message = "Failed to create compression stream";
             return result;
         }
         
@@ -128,20 +125,20 @@ CompressedFile MinizipParallelWriter::compressFile(
         result.compressed_data.resize(max_compressed_size);
         
         // 设置输入和输出
-        strm.next_in = reinterpret_cast<Bytef*>(const_cast<char*>(content.data()));
-        strm.avail_in = static_cast<uInt>(content.size());
-        strm.next_out = result.compressed_data.data();
-        strm.avail_out = static_cast<uInt>(max_compressed_size);
+        strm->next_in = reinterpret_cast<Bytef*>(const_cast<char*>(content.data()));
+        strm->avail_in = static_cast<uInt>(content.size());
+        strm->next_out = result.compressed_data.data();
+        strm->avail_out = static_cast<uInt>(max_compressed_size);
         
         // 执行压缩
-        ret = deflate(&strm, Z_FINISH);
+        int ret = deflate(strm, Z_FINISH);
         if (ret != Z_STREAM_END) {
             result.error_message = "Failed to compress data";
             return result;
         }
         
         // 获取实际压缩大小并调整缓冲区
-        result.compressed_size = strm.total_out;
+        result.compressed_size = strm->total_out;
         result.compressed_data.resize(result.compressed_size);
         
         result.compression_method = MZ_COMPRESS_METHOD_DEFLATE;
@@ -402,21 +399,43 @@ std::vector<CompressionTask> MinizipParallelWriter::createCompressionTasks(
     return tasks;
 }
 
-z_stream& MinizipParallelWriter::getOrCreateCompressionStream(int compression_level) {
+z_stream* MinizipParallelWriter::getOrCreateCompressionStream(int compression_level) {
     if (!compression_stream_ || current_compression_level_ != compression_level) {
+        // 清理旧流
+        if (compression_stream_) {
+            deflateEnd(compression_stream_.get());
+        }
+        
         compression_stream_ = std::make_unique<z_stream>();
         memset(compression_stream_.get(), 0, sizeof(z_stream));
         
         int ret = deflateInit2(compression_stream_.get(), compression_level,
                               Z_DEFLATED, -15, 9, Z_DEFAULT_STRATEGY);
         if (ret != Z_OK) {
-            throw std::runtime_error("Failed to initialize deflate stream");
+            compression_stream_.reset();
+            return nullptr;
         }
         
         current_compression_level_ = compression_level;
+    } else {
+        // 重用现有流，只需重置 - 这是关键优化！
+        // 避免重复的 deflateInit2/deflateEnd 调用
+        int ret = deflateReset(compression_stream_.get());
+        if (ret != Z_OK) {
+            // 重置失败，尝试重新初始化
+            deflateEnd(compression_stream_.get());
+            memset(compression_stream_.get(), 0, sizeof(z_stream));
+            
+            ret = deflateInit2(compression_stream_.get(), compression_level,
+                              Z_DEFLATED, -15, 9, Z_DEFAULT_STRATEGY);
+            if (ret != Z_OK) {
+                compression_stream_.reset();
+                return nullptr;
+            }
+        }
     }
     
-    return *compression_stream_;
+    return compression_stream_.get();
 }
 
 void MinizipParallelWriter::calculateStatisticsFromTasks(

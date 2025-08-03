@@ -189,7 +189,7 @@ private:
      * @param compression_level 压缩级别
      * @return 压缩流引用
      */
-    z_stream& getOrCreateCompressionStream(int compression_level);
+    z_stream* getOrCreateCompressionStream(int compression_level);
     
     /**
      * @brief 计算统计信息（基于任务）
