@@ -1,6 +1,9 @@
 # Third-party libraries configuration
 cmake_minimum_required(VERSION 3.10)
 
+# 设置 CMake 策略以允许跨目录链接
+cmake_policy(SET CMP0079 NEW)
+
 # 构建选项
 option(FASTEXCEL_USE_SYSTEM_LIBS "Use system libraries when available" OFF)
 
@@ -60,47 +63,22 @@ else()
 endif()
 
 # =============================================================================
-# zlib 配置 (通过 minizip-ng 自动处理)
+# ZlibMinizipBundle 配置
 # =============================================================================
-# minizip-ng 会自动处理 zlib 依赖，我们不需要单独配置 zlib-ng
-if(FASTEXCEL_USE_SYSTEM_LIBS)
-    find_package(ZLIB QUIET)
-    if(ZLIB_FOUND)
-        set(ZLIB_TARGET ZLIB::ZLIB)
-        message(STATUS "FastExcel: Using system zlib")
-    endif()
-endif()
+# 配置ZlibMinizipBundle选项
+set(ZLIBMINIZIPBUNDLE_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 
-# 如果没有找到系统 zlib，minizip-ng 会自动获取
-if(NOT ZLIB_FOUND)
-    set(ZLIB_TARGET "")  # minizip-ng 会处理
-endif()
+add_subdirectory(ZlibMinizipBundle)
 
-# =============================================================================
-# minizip-ng 配置
-# =============================================================================
-set(MZ_FETCH_LIBS OFF CACHE BOOL "" FORCE)  # 禁用自动获取，避免网络问题
-set(MZ_ZLIB OFF CACHE BOOL "" FORCE)        # 禁用zlib依赖
-set(MZ_BZIP2 OFF CACHE BOOL "" FORCE)       # 禁用bzip2
-set(MZ_LZMA OFF CACHE BOOL "" FORCE)        # 禁用lzma
-set(MZ_ZSTD OFF CACHE BOOL "" FORCE)        # 禁用zstd
-set(MZ_LIBCOMP OFF CACHE BOOL "" FORCE)     # 禁用libcomp
-set(MZ_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-set(MZ_BUILD_UNIT_TESTS OFF CACHE BOOL "" FORCE)
-set(MZ_BUILD_FUZZ_TESTS OFF CACHE BOOL "" FORCE)
-set(MZ_COMPAT ON CACHE BOOL "" FORCE)       # 启用兼容层
-set(MZ_PKCRYPT ON CACHE BOOL "" FORCE)      # 启用传统加密，确保有基本功能
-set(MZ_WZAES OFF CACHE BOOL "" FORCE)       # 禁用WinZIP AES加密
-set(MZ_OPENSSL OFF CACHE BOOL "" FORCE)     # 禁用OpenSSL
-set(MZ_COMPRESS_ONLY OFF CACHE BOOL "" FORCE)
-set(MZ_DECOMPRESS_ONLY OFF CACHE BOOL "" FORCE)
+# 设置目标变量
+set(ZLIB_TARGET zlibstatic)
+set(MINIZIP_TARGET minizip)
+set(ZLIBMINIZIPBUNDLE_TARGET ZlibMinizipBundle::ZlibMinizipBundle)
 
-add_subdirectory(minizip-ng)
-
-# 确定正确的目标名称
-set(MINIZIP_TARGET minizip)  # 由于 MZ_COMPAT=ON 且 MZ_LIB_SUFFIX=""，目标名称应该是 minizip
-
-message(STATUS "FastExcel: minizip target set to: ${MINIZIP_TARGET}")
+message(STATUS "FastExcel: Using ZlibMinizipBundle")
+message(STATUS "  ZLIB target: ${ZLIB_TARGET}")
+message(STATUS "  MINIZIP target: ${MINIZIP_TARGET}")
+message(STATUS "  Bundle target: ${ZLIBMINIZIPBUNDLE_TARGET}")
 
 # =============================================================================
 # GoogleTest 配置 (仅在需要测试时)
@@ -134,6 +112,11 @@ set(FASTEXCEL_EXPAT_TARGET ${EXPAT_TARGET} PARENT_SCOPE)
 set(FASTEXCEL_ZLIB_TARGET ${ZLIB_TARGET} PARENT_SCOPE)
 set(FASTEXCEL_MINIZIP_TARGET ${MINIZIP_TARGET} PARENT_SCOPE)
 
+# 如果使用ZlibMinizipBundle，也导出Bundle目标
+if(DEFINED ZLIBMINIZIPBUNDLE_TARGET)
+    set(FASTEXCEL_ZLIBMINIZIPBUNDLE_TARGET ${ZLIBMINIZIPBUNDLE_TARGET} PARENT_SCOPE)
+endif()
+
 if(DEFINED GTEST_TARGETS)
     set(FASTEXCEL_GTEST_TARGETS ${GTEST_TARGETS} PARENT_SCOPE)
 endif()
@@ -142,7 +125,9 @@ endif()
 set(FASTEXCEL_THIRD_PARTY_INCLUDE_DIRS
     ${CMAKE_CURRENT_SOURCE_DIR}/libexpat/expat/lib
     ${CMAKE_CURRENT_SOURCE_DIR}/fmt/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/minizip-ng
+    ${CMAKE_CURRENT_SOURCE_DIR}/ZlibMinizipBundle/third_party/zlib-ng
+    ${CMAKE_CURRENT_BINARY_DIR}/ZlibMinizipBundle/third_party/zlib-ng
+    ${CMAKE_CURRENT_SOURCE_DIR}/ZlibMinizipBundle/third_party/minizip-ng
     PARENT_SCOPE
 )
 
