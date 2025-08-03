@@ -31,6 +31,11 @@ foreach(SOURCE ${EXAMPLE_SOURCES})
         target_link_libraries(${EXEC_NAME} PRIVATE ${FASTEXCEL_MINIZIP_TARGET})
     endif()
     
+    # 为compression_benchmark添加libdeflate链接（如果可用）
+    if(EXEC_NAME STREQUAL "compression_benchmark" AND FASTEXCEL_LIBDEFLATE_TARGET AND NOT FASTEXCEL_LIBDEFLATE_TARGET STREQUAL "")
+        target_link_libraries(${EXEC_NAME} PRIVATE ${FASTEXCEL_LIBDEFLATE_TARGET})
+    endif()
+    
     # 为示例程序添加编译选项
     if(MSVC)
         # 设置源文件和执行字符集为UTF-8，解决C4819编码警告

@@ -81,6 +81,38 @@ message(STATUS "  MINIZIP target: ${MINIZIP_TARGET}")
 message(STATUS "  Bundle target: ${ZLIBMINIZIPBUNDLE_TARGET}")
 
 # =============================================================================
+# libdeflate 配置
+# =============================================================================
+option(FASTEXCEL_USE_LIBDEFLATE "Enable libdeflate for high-performance compression" ON)
+
+if(FASTEXCEL_USE_LIBDEFLATE)
+    # 配置 libdeflate 选项
+    set(LIBDEFLATE_BUILD_STATIC_LIB ON CACHE BOOL "" FORCE)
+    set(LIBDEFLATE_BUILD_SHARED_LIB OFF CACHE BOOL "" FORCE)
+    set(LIBDEFLATE_BUILD_GZIP OFF CACHE BOOL "" FORCE)
+    set(LIBDEFLATE_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+    
+    if(FASTEXCEL_USE_SYSTEM_LIBS)
+        find_package(libdeflate QUIET)
+    endif()
+    
+    if(NOT libdeflate_FOUND)
+        add_subdirectory(libdeflate)
+        set(LIBDEFLATE_TARGET libdeflate_static)
+        message(STATUS "FastExcel: Using bundled libdeflate")
+    else()
+        set(LIBDEFLATE_TARGET libdeflate::libdeflate)
+        message(STATUS "FastExcel: Using system libdeflate")
+    endif()
+    
+    # 定义宏以启用 libdeflate 支持
+    set(FASTEXCEL_HAS_LIBDEFLATE ON PARENT_SCOPE)
+    message(STATUS "FastExcel: libdeflate support enabled")
+else()
+    message(STATUS "FastExcel: libdeflate support disabled")
+endif()
+
+# =============================================================================
 # GoogleTest 配置 (仅在需要测试时)
 # =============================================================================
 if(ENABLE_TESTS OR ENABLE_UNIT_TESTS OR FASTEXCEL_BUILD_TESTS)
@@ -117,6 +149,11 @@ if(DEFINED ZLIBMINIZIPBUNDLE_TARGET)
     set(FASTEXCEL_ZLIBMINIZIPBUNDLE_TARGET ${ZLIBMINIZIPBUNDLE_TARGET} PARENT_SCOPE)
 endif()
 
+# 导出 libdeflate 目标
+if(DEFINED LIBDEFLATE_TARGET)
+    set(FASTEXCEL_LIBDEFLATE_TARGET ${LIBDEFLATE_TARGET} PARENT_SCOPE)
+endif()
+
 if(DEFINED GTEST_TARGETS)
     set(FASTEXCEL_GTEST_TARGETS ${GTEST_TARGETS} PARENT_SCOPE)
 endif()
@@ -130,5 +167,14 @@ set(FASTEXCEL_THIRD_PARTY_INCLUDE_DIRS
     ${CMAKE_CURRENT_SOURCE_DIR}/ZlibMinizipBundle/third_party/minizip-ng
     PARENT_SCOPE
 )
+
+# 如果启用了 libdeflate，添加其包含目录
+if(FASTEXCEL_USE_LIBDEFLATE AND DEFINED LIBDEFLATE_TARGET)
+    set(FASTEXCEL_THIRD_PARTY_INCLUDE_DIRS
+        ${FASTEXCEL_THIRD_PARTY_INCLUDE_DIRS}
+        ${CMAKE_CURRENT_SOURCE_DIR}/libdeflate
+        PARENT_SCOPE
+    )
+endif()
 
 message(STATUS "FastExcel: Third-party libraries configuration completed")

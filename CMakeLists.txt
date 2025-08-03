@@ -6,6 +6,7 @@ project(FastExcel VERSION 1.0.0 LANGUAGES CXX C)
 # =============================================================================
 option(FASTEXCEL_BUILD_SHARED_LIBS "Build FastExcel as shared library" OFF)
 option(FASTEXCEL_USE_SYSTEM_LIBS "Use system libraries when available" OFF)
+option(FASTEXCEL_USE_LIBDEFLATE "Enable libdeflate for high-performance compression" ON)
 option(FASTEXCEL_BUILD_EXAMPLES "Build example programs" ON)
 option(FASTEXCEL_BUILD_TESTS "Build all tests" ON)
 option(FASTEXCEL_BUILD_UNIT_TESTS "Build unit tests" ON)
@@ -47,6 +48,8 @@ set(FASTEXCEL_SOURCES
         src/fastexcel/archive/ZipArchive.cpp
         src/fastexcel/archive/FileManager.cpp
         src/fastexcel/archive/MinizipParallelWriter.cpp
+        src/fastexcel/archive/CompressionEngine.cpp
+        src/fastexcel/archive/ZlibEngine.cpp
         src/fastexcel/core/Color.cpp
         src/fastexcel/core/Cell.cpp
         src/fastexcel/core/Format.cpp
@@ -63,6 +66,13 @@ set(FASTEXCEL_SOURCES
         src/fastexcel/xml/XMLStreamReader.cpp
         
 )
+
+# 如果启用了 libdeflate，添加相关源文件
+if(FASTEXCEL_USE_LIBDEFLATE)
+    list(APPEND FASTEXCEL_SOURCES
+        src/fastexcel/archive/LibDeflateEngine.cpp
+    )
+endif()
 
 # =============================================================================
 # 创建 FastExcel 库
@@ -118,6 +128,21 @@ if (FASTEXCEL_MINIZIP_TARGET AND NOT FASTEXCEL_MINIZIP_TARGET STREQUAL "")
 else ()
     message(WARNING "FastExcel: minizip target not available, ZipArchive functionality will be limited")
 endif ()
+
+# 链接 libdeflate（如果可用）
+if (FASTEXCEL_LIBDEFLATE_TARGET AND NOT FASTEXCEL_LIBDEFLATE_TARGET STREQUAL "")
+    target_link_libraries(fastexcel PRIVATE ${FASTEXCEL_LIBDEFLATE_TARGET})
+    message(STATUS "FastExcel: Linking with libdeflate target: ${FASTEXCEL_LIBDEFLATE_TARGET}")
+endif ()
+
+# =============================================================================
+# 宏定义配置
+# =============================================================================
+# 如果启用了 libdeflate，定义相应的宏
+if(FASTEXCEL_USE_LIBDEFLATE AND FASTEXCEL_HAS_LIBDEFLATE)
+    target_compile_definitions(fastexcel PRIVATE FASTEXCEL_HAS_LIBDEFLATE=1)
+    message(STATUS "FastExcel: FASTEXCEL_HAS_LIBDEFLATE macro defined")
+endif()
 
 # =============================================================================
 # 编译器配置
@@ -199,6 +224,7 @@ message(STATUS "  Version: ${PROJECT_VERSION}")
 message(STATUS "  Build type: ${CMAKE_BUILD_TYPE}")
 message(STATUS "  Shared libraries: ${FASTEXCEL_BUILD_SHARED_LIBS}")
 message(STATUS "  Use system libs: ${FASTEXCEL_USE_SYSTEM_LIBS}")
+message(STATUS "  Use libdeflate: ${FASTEXCEL_USE_LIBDEFLATE}")
 message(STATUS "  Build examples: ${FASTEXCEL_BUILD_EXAMPLES}")
 message(STATUS "  Build tests: ${FASTEXCEL_BUILD_TESTS}")
 message(STATUS "  Install prefix: ${CMAKE_INSTALL_PREFIX}")
