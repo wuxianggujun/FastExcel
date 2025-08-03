@@ -26,6 +26,11 @@ foreach(SOURCE ${EXAMPLE_SOURCES})
         ${FASTEXCEL_EXPAT_TARGET}
     )
     
+    # 为minizip_parallel_test添加minizip-ng链接
+    if(EXEC_NAME STREQUAL "minizip_parallel_test" AND FASTEXCEL_MINIZIP_TARGET AND NOT FASTEXCEL_MINIZIP_TARGET STREQUAL "")
+        target_link_libraries(${EXEC_NAME} PRIVATE ${FASTEXCEL_MINIZIP_TARGET})
+    endif()
+    
     # 为示例程序添加编译选项
     if(MSVC)
         # 设置源文件和执行字符集为UTF-8，解决C4819编码警告

@@ -46,6 +46,7 @@ set(FASTEXCEL_SOURCES
         src/fastexcel/FastExcel.cpp
         src/fastexcel/archive/ZipArchive.cpp
         src/fastexcel/archive/FileManager.cpp
+        src/fastexcel/archive/MinizipParallelWriter.cpp
         src/fastexcel/core/Color.cpp
         src/fastexcel/core/Cell.cpp
         src/fastexcel/core/Format.cpp
@@ -54,11 +55,13 @@ set(FASTEXCEL_SOURCES
         src/fastexcel/core/SharedStringTable.cpp
         src/fastexcel/core/FormatPool.cpp
         src/fastexcel/utils/Logger.cpp
+        src/fastexcel/utils/ThreadPool.cpp
         src/fastexcel/xml/ContentTypes.cpp
         src/fastexcel/xml/Relationships.cpp
         src/fastexcel/xml/SharedStrings.cpp
         src/fastexcel/xml/XMLStreamWriter.cpp
         src/fastexcel/xml/XMLStreamReader.cpp
+        
 )
 
 # =============================================================================
