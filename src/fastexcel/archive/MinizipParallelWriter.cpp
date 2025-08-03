@@ -21,9 +21,10 @@
 namespace fastexcel {
 namespace archive {
 
-// 线程本地存储的压缩流
+// 线程本地存储的压缩流和缓冲区
 thread_local std::unique_ptr<z_stream> MinizipParallelWriter::compression_stream_;
 thread_local int MinizipParallelWriter::current_compression_level_ = -1;
+thread_local std::vector<uint8_t> MinizipParallelWriter::compression_buffer_;
 
 MinizipParallelWriter::MinizipParallelWriter(size_t thread_count)
     : thread_pool_(std::make_unique<utils::ThreadPool>(thread_count == 0 ? std::thread::hardware_concurrency() : thread_count)),
@@ -35,6 +36,10 @@ MinizipParallelWriter::MinizipParallelWriter(size_t thread_count)
       total_compressed_size_(0),
       start_time_(std::chrono::high_resolution_clock::now()) {
     stats_.thread_count = thread_count == 0 ? std::thread::hardware_concurrency() : thread_count;
+    
+    // 注意：硬件CRC32支持需要检查minizip-ng版本
+    // 在某些版本中可能需要不同的API调用
+    // mz_crypt_crc32_update_source(MZ_CRC32_AUTO); // 暂时注释掉，避免编译错误
 }
 
 MinizipParallelWriter::~MinizipParallelWriter() = default;
@@ -120,14 +125,18 @@ CompressedFile MinizipParallelWriter::compressFile(
             return result;
         }
         
-        // 更精确的内存分配 - 避免 deflateBound 的过度分配
+        // 使用线程本地缓冲区池化 - 避免频繁的内存分配
         size_t max_compressed_size = content.size() + (content.size() >> 8) + 64;
-        result.compressed_data.resize(max_compressed_size);
+        
+        // 重用线程本地缓冲区，只在需要时扩容
+        if (compression_buffer_.size() < max_compressed_size) {
+            compression_buffer_.resize(max_compressed_size);
+        }
         
         // 设置输入和输出
         strm->next_in = reinterpret_cast<Bytef*>(const_cast<char*>(content.data()));
         strm->avail_in = static_cast<uInt>(content.size());
-        strm->next_out = result.compressed_data.data();
+        strm->next_out = compression_buffer_.data();
         strm->avail_out = static_cast<uInt>(max_compressed_size);
         
         // 执行压缩
@@ -137,9 +146,10 @@ CompressedFile MinizipParallelWriter::compressFile(
             return result;
         }
         
-        // 获取实际压缩大小并调整缓冲区
+        // 获取实际压缩大小并复制到结果
         result.compressed_size = strm->total_out;
-        result.compressed_data.resize(result.compressed_size);
+        result.compressed_data.assign(compression_buffer_.begin(),
+                                    compression_buffer_.begin() + result.compressed_size);
         
         result.compression_method = MZ_COMPRESS_METHOD_DEFLATE;
         result.success = true;
@@ -457,14 +467,41 @@ void MinizipParallelWriter::calculateStatisticsFromTasks(
         stats_.compression_ratio = static_cast<double>(total_compressed) / total_uncompressed;
     }
     
-    // 计算并行效率 - 基于任务数量而不是文件数量
+    // 计算并行效率 - 按数据大小加权而非简单任务数量
     if (stats_.thread_count > 1) {
         if (tasks.size() < stats_.thread_count) {
+            // 任务数少于线程数，效率受限
             stats_.parallel_efficiency = static_cast<double>(tasks.size()) / static_cast<double>(stats_.thread_count);
         } else {
-            // 考虑负载均衡：任务数量足够时的理想效率
-            double task_distribution_efficiency = std::min(1.0, static_cast<double>(tasks.size()) / (stats_.thread_count * 2.0));
-            stats_.parallel_efficiency = 0.85 * task_distribution_efficiency;
+            // 按数据大小加权计算负载均衡
+            std::vector<size_t> task_sizes;
+            task_sizes.reserve(tasks.size());
+            for (const auto& task : tasks) {
+                task_sizes.push_back(task.content.size());
+            }
+            
+            // 模拟任务分配到线程的负载均衡
+            std::vector<size_t> thread_loads(stats_.thread_count, 0);
+            
+            // 简单的贪心分配：每个任务分配给当前负载最小的线程
+            for (size_t task_size : task_sizes) {
+                auto min_it = std::min_element(thread_loads.begin(), thread_loads.end());
+                *min_it += task_size;
+            }
+            
+            // 计算负载均衡系数
+            size_t max_load = *std::max_element(thread_loads.begin(), thread_loads.end());
+            size_t min_load = *std::min_element(thread_loads.begin(), thread_loads.end());
+            double avg_load = static_cast<double>(total_uncompressed) / stats_.thread_count;
+            
+            double load_balance_factor = 1.0;
+            if (max_load > 0) {
+                load_balance_factor = avg_load / max_load;
+            }
+            
+            // 考虑任务粒度和负载均衡的综合效率
+            double task_granularity_factor = std::min(1.0, static_cast<double>(tasks.size()) / (stats_.thread_count * 2.0));
+            stats_.parallel_efficiency = 0.85 * task_granularity_factor * load_balance_factor;
         }
     } else {
         stats_.parallel_efficiency = 1.0;

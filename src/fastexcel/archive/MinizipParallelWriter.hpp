@@ -146,6 +146,9 @@ private:
     thread_local static std::unique_ptr<z_stream> compression_stream_;
     thread_local static int current_compression_level_;
     
+    // 向量池化 - 线程本地缓冲区重用
+    thread_local static std::vector<uint8_t> compression_buffer_;
+    
     // 任务分块配置
     static constexpr size_t LARGE_FILE_THRESHOLD = 2 * 1024 * 1024; // 2MB
     static constexpr size_t CHUNK_SIZE = 512 * 1024; // 512KB per chunk
