@@ -7,6 +7,7 @@ project(FastExcel VERSION 1.0.0 LANGUAGES CXX C)
 option(FASTEXCEL_BUILD_SHARED_LIBS "Build FastExcel as shared library" OFF)
 option(FASTEXCEL_USE_SYSTEM_LIBS "Use system libraries when available" OFF)
 option(FASTEXCEL_USE_LIBDEFLATE "Enable libdeflate for high-performance compression" OFF)
+option(FASTEXCEL_USE_EXCEPTIONS "Enable exception handling (disable for maximum performance)" ON)
 option(FASTEXCEL_BUILD_EXAMPLES "Build example programs" ON)
 option(FASTEXCEL_BUILD_TESTS "Build all tests" ON)
 option(FASTEXCEL_BUILD_UNIT_TESTS "Build unit tests" ON)
@@ -57,6 +58,7 @@ set(FASTEXCEL_SOURCES
         src/fastexcel/core/Worksheet.cpp
         src/fastexcel/core/SharedStringTable.cpp
         src/fastexcel/core/FormatPool.cpp
+        src/fastexcel/core/ErrorCode.cpp
         src/fastexcel/reader/XLSXReader.cpp
         src/fastexcel/reader/StylesParser.cpp
         src/fastexcel/reader/SharedStringsParser.cpp
@@ -148,6 +150,21 @@ if(FASTEXCEL_USE_LIBDEFLATE AND FASTEXCEL_HAS_LIBDEFLATE)
     message(STATUS "FastExcel: FASTEXCEL_HAS_LIBDEFLATE macro defined")
 endif()
 
+# 异常处理配置
+if(FASTEXCEL_USE_EXCEPTIONS)
+    target_compile_definitions(fastexcel PUBLIC FASTEXCEL_USE_EXCEPTIONS=1)
+    message(STATUS "FastExcel: Exception handling enabled")
+else()
+    target_compile_definitions(fastexcel PUBLIC FASTEXCEL_USE_EXCEPTIONS=0)
+    message(STATUS "FastExcel: Exception handling disabled (maximum performance mode)")
+    # 在某些编译器上禁用异常
+    if(MSVC)
+        target_compile_options(fastexcel PRIVATE /EHs-c-)
+    else()
+        target_compile_options(fastexcel PRIVATE -fno-exceptions)
+    endif()
+endif()
+
 # =============================================================================
 # 编译器配置
 # =============================================================================
@@ -229,6 +246,7 @@ message(STATUS "  Build type: ${CMAKE_BUILD_TYPE}")
 message(STATUS "  Shared libraries: ${FASTEXCEL_BUILD_SHARED_LIBS}")
 message(STATUS "  Use system libs: ${FASTEXCEL_USE_SYSTEM_LIBS}")
 message(STATUS "  Use libdeflate: ${FASTEXCEL_USE_LIBDEFLATE}")
+message(STATUS "  Use exceptions: ${FASTEXCEL_USE_EXCEPTIONS}")
 message(STATUS "  Build examples: ${FASTEXCEL_BUILD_EXAMPLES}")
 message(STATUS "  Build tests: ${FASTEXCEL_BUILD_TESTS}")
 message(STATUS "  Install prefix: ${CMAKE_INSTALL_PREFIX}")
