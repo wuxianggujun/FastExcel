@@ -945,6 +945,106 @@ public:
      * @param count 删除数量
      */
     void deleteColumns(int col, int count = 1);
+    
+    // ========== 单元格编辑功能 ==========
+    
+    /**
+     * @brief 修改现有单元格的值
+     * @param row 行号
+     * @param col 列号
+     * @param value 新值
+     * @param preserve_format 是否保留原有格式
+     */
+    void editCellValue(int row, int col, const std::string& value, bool preserve_format = true);
+    void editCellValue(int row, int col, double value, bool preserve_format = true);
+    void editCellValue(int row, int col, bool value, bool preserve_format = true);
+    
+    /**
+     * @brief 修改单元格格式
+     * @param row 行号
+     * @param col 列号
+     * @param format 新格式
+     */
+    void editCellFormat(int row, int col, std::shared_ptr<Format> format);
+    
+    /**
+     * @brief 复制单元格
+     * @param src_row 源行号
+     * @param src_col 源列号
+     * @param dst_row 目标行号
+     * @param dst_col 目标列号
+     * @param copy_format 是否复制格式
+     */
+    void copyCell(int src_row, int src_col, int dst_row, int dst_col, bool copy_format = true);
+    
+    /**
+     * @brief 移动单元格
+     * @param src_row 源行号
+     * @param src_col 源列号
+     * @param dst_row 目标行号
+     * @param dst_col 目标列号
+     */
+    void moveCell(int src_row, int src_col, int dst_row, int dst_col);
+    
+    /**
+     * @brief 复制范围
+     * @param src_first_row 源起始行
+     * @param src_first_col 源起始列
+     * @param src_last_row 源结束行
+     * @param src_last_col 源结束列
+     * @param dst_row 目标起始行
+     * @param dst_col 目标起始列
+     * @param copy_format 是否复制格式
+     */
+    void copyRange(int src_first_row, int src_first_col, int src_last_row, int src_last_col,
+                   int dst_row, int dst_col, bool copy_format = true);
+    
+    /**
+     * @brief 移动范围
+     * @param src_first_row 源起始行
+     * @param src_first_col 源起始列
+     * @param src_last_row 源结束行
+     * @param src_last_col 源结束列
+     * @param dst_row 目标起始行
+     * @param dst_col 目标起始列
+     */
+    void moveRange(int src_first_row, int src_first_col, int src_last_row, int src_last_col,
+                   int dst_row, int dst_col);
+    
+    /**
+     * @brief 查找并替换
+     * @param find_text 查找的文本
+     * @param replace_text 替换的文本
+     * @param match_case 是否区分大小写
+     * @param match_entire_cell 是否匹配整个单元格
+     * @return 替换的数量
+     */
+    int findAndReplace(const std::string& find_text, const std::string& replace_text,
+                       bool match_case = false, bool match_entire_cell = false);
+    
+    /**
+     * @brief 查找单元格
+     * @param search_text 搜索文本
+     * @param match_case 是否区分大小写
+     * @param match_entire_cell 是否匹配整个单元格
+     * @return 匹配的单元格位置列表 (row, col)
+     */
+    std::vector<std::pair<int, int>> findCells(const std::string& search_text,
+                                               bool match_case = false,
+                                               bool match_entire_cell = false) const;
+    
+    /**
+     * @brief 排序范围
+     * @param first_row 起始行
+     * @param first_col 起始列
+     * @param last_row 结束行
+     * @param last_col 结束列
+     * @param sort_column 排序列（相对于范围的列索引）
+     * @param ascending 是否升序
+     * @param has_header 是否有标题行
+     */
+    void sortRange(int first_row, int first_col, int last_row, int last_col,
+                   int sort_column = 0, bool ascending = true, bool has_header = false);
 
 private:
     // 内部辅助方法

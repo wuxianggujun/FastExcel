@@ -609,6 +609,101 @@ public:
      * @return 索引（如果不存在返回-1）
      */
     int getSharedStringIndex(const std::string& str) const;
+    
+    // ========== 工作簿编辑功能 ==========
+    
+    /**
+     * @brief 从现有文件加载工作簿进行编辑
+     * @param filename 文件名
+     * @return 工作簿智能指针，失败返回nullptr
+     */
+    static std::unique_ptr<Workbook> loadForEdit(const std::string& filename);
+    
+    /**
+     * @brief 刷新工作簿（重新读取文件内容）
+     * @return 是否成功
+     */
+    bool refresh();
+    
+    /**
+     * @brief 合并另一个工作簿的内容
+     * @param other_workbook 其他工作簿
+     * @param merge_options 合并选项
+     * @return 是否成功
+     */
+    struct MergeOptions {
+        bool merge_worksheets = true;      // 合并工作表
+        bool merge_formats = true;         // 合并格式
+        bool merge_properties = false;     // 合并文档属性
+        bool overwrite_existing = false;   // 覆盖现有内容
+        std::string name_prefix;           // 工作表名称前缀
+    };
+    bool mergeWorkbook(const std::unique_ptr<Workbook>& other_workbook, const MergeOptions& options = {});
+    
+    /**
+     * @brief 导出工作表到新工作簿
+     * @param worksheet_names 要导出的工作表名称列表
+     * @param output_filename 输出文件名
+     * @return 是否成功
+     */
+    bool exportWorksheets(const std::vector<std::string>& worksheet_names, const std::string& output_filename);
+    
+    /**
+     * @brief 批量重命名工作表
+     * @param rename_map 重命名映射 (旧名称 -> 新名称)
+     * @return 成功重命名的数量
+     */
+    int batchRenameWorksheets(const std::unordered_map<std::string, std::string>& rename_map);
+    
+    /**
+     * @brief 批量删除工作表
+     * @param worksheet_names 要删除的工作表名称列表
+     * @return 成功删除的数量
+     */
+    int batchRemoveWorksheets(const std::vector<std::string>& worksheet_names);
+    
+    /**
+     * @brief 重新排序工作表
+     * @param new_order 新的工作表顺序（工作表名称列表）
+     * @return 是否成功
+     */
+    bool reorderWorksheets(const std::vector<std::string>& new_order);
+    
+    /**
+     * @brief 查找并替换（全工作簿）
+     * @param find_text 查找的文本
+     * @param replace_text 替换的文本
+     * @param options 查找替换选项
+     * @return 替换的总数量
+     */
+    struct FindReplaceOptions {
+        bool match_case = false;
+        bool match_entire_cell = false;
+        std::vector<std::string> worksheet_filter; // 限制在特定工作表中查找
+    };
+    int findAndReplaceAll(const std::string& find_text, const std::string& replace_text,
+                         const FindReplaceOptions& options = {});
+    
+    /**
+     * @brief 全局查找
+     * @param search_text 搜索文本
+     * @param options 查找选项
+     * @return 匹配结果列表 (工作表名, 行, 列)
+     */
+    std::vector<std::tuple<std::string, int, int>> findAll(const std::string& search_text,
+                                                           const FindReplaceOptions& options = {});
+    
+    /**
+     * @brief 获取工作簿统计信息
+     */
+    struct WorkbookStats {
+        size_t total_worksheets = 0;
+        size_t total_cells = 0;
+        size_t total_formats = 0;
+        size_t memory_usage = 0;
+        std::unordered_map<std::string, size_t> worksheet_cell_counts;
+    };
+    WorkbookStats getStatistics() const;
 
 private:
     // ========== 内部方法 ==========

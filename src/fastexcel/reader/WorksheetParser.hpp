@@ -62,6 +62,11 @@ private:
     int extractStyleIndex(const std::string& cell_xml);
     std::string decodeXMLEntities(const std::string& text);
     int columnLetterToNumber(const std::string& column);
+    
+    // 新增的工具方法
+    std::string extractFormula(const std::string& cell_xml);
+    bool isDateFormat(int style_index, const std::unordered_map<int, std::shared_ptr<core::Format>>& styles);
+    std::string convertExcelDateToString(double excel_date);
 };
 
 } // namespace reader

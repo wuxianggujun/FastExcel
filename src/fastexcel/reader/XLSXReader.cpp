@@ -5,6 +5,7 @@
 #include "XLSXReader.hpp"
 #include "SharedStringsParser.hpp"
 #include "WorksheetParser.hpp"
+#include "StylesParser.hpp"
 #include "fastexcel/core/Workbook.hpp"
 #include "fastexcel/archive/ZipArchive.hpp"
 #include <iostream>
@@ -276,44 +277,91 @@ bool XLSXReader::validateXLSXStructure() {
     return true;
 }
 
-// 解析工作簿XML - 基本实现
+// 解析工作簿XML - 完整实现
 bool XLSXReader::parseWorkbookXML() {
     std::string xml_content = extractXMLFromZip("xl/workbook.xml");
     if (xml_content.empty()) {
         return false;
     }
     
-    // TODO: 实现完整的XML解析
-    // 这里先提供一个简单的实现来提取工作表名称
-    
-    // 简单的字符串搜索来找到工作表信息
-    size_t pos = 0;
-    while ((pos = xml_content.find("<sheet ", pos)) != std::string::npos) {
-        size_t name_start = xml_content.find("name=\"", pos);
-        if (name_start != std::string::npos) {
-            name_start += 6; // 跳过 name="
-            size_t name_end = xml_content.find("\"", name_start);
-            if (name_end != std::string::npos) {
-                std::string sheet_name = xml_content.substr(name_start, name_end - name_start);
+    try {
+        // 清理之前的数据
+        worksheet_names_.clear();
+        worksheet_paths_.clear();
+        defined_names_.clear();
+        
+        // 首先解析关系文件来获取工作表的实际路径
+        std::unordered_map<std::string, std::string> relationships;
+        if (!parseWorkbookRelationships(relationships)) {
+            std::cerr << "警告: 无法解析工作簿关系文件，使用默认路径" << std::endl;
+        }
+        
+        // 解析工作表信息
+        size_t sheets_start = xml_content.find("<sheets");
+        if (sheets_start == std::string::npos) {
+            std::cerr << "未找到工作表定义" << std::endl;
+            return false;
+        }
+        
+        size_t sheets_end = xml_content.find("</sheets>", sheets_start);
+        if (sheets_end == std::string::npos) {
+            std::cerr << "工作表定义格式错误" << std::endl;
+            return false;
+        }
+        
+        std::string sheets_content = xml_content.substr(sheets_start, sheets_end - sheets_start);
+        
+        // 解析每个工作表
+        size_t pos = 0;
+        while ((pos = sheets_content.find("<sheet ", pos)) != std::string::npos) {
+            size_t sheet_end = sheets_content.find("/>", pos);
+            if (sheet_end == std::string::npos) {
+                sheet_end = sheets_content.find("</sheet>", pos);
+                if (sheet_end == std::string::npos) {
+                    break;
+                }
+                sheet_end += 8; // 包含 </sheet>
+            } else {
+                sheet_end += 2; // 包含 />
+            }
+            
+            std::string sheet_xml = sheets_content.substr(pos, sheet_end - pos);
+            
+            // 提取工作表属性
+            std::string sheet_name = extractAttribute(sheet_xml, "name");
+            std::string sheet_id = extractAttribute(sheet_xml, "sheetId");
+            std::string rel_id = extractAttribute(sheet_xml, "r:id");
+            
+            if (!sheet_name.empty()) {
                 worksheet_names_.push_back(sheet_name);
                 
-                // 构造工作表文件路径
-                size_t id_start = xml_content.find("sheetId=\"", pos);
-                if (id_start != std::string::npos) {
-                    id_start += 9; // 跳过 sheetId="
-                    size_t id_end = xml_content.find("\"", id_start);
-                    if (id_end != std::string::npos) {
-                        std::string sheet_id = xml_content.substr(id_start, id_end - id_start);
-                        std::string sheet_path = "xl/worksheets/sheet" + sheet_id + ".xml";
-                        worksheet_paths_[sheet_name] = sheet_path;
-                    }
+                // 确定工作表文件路径
+                std::string sheet_path;
+                if (!rel_id.empty() && relationships.find(rel_id) != relationships.end()) {
+                    sheet_path = "xl/" + relationships[rel_id];
+                } else if (!sheet_id.empty()) {
+                    // 回退到默认路径
+                    sheet_path = "xl/worksheets/sheet" + sheet_id + ".xml";
+                } else {
+                    std::cerr << "无法确定工作表 " << sheet_name << " 的路径" << std::endl;
+                    continue;
                 }
+                
+                worksheet_paths_[sheet_name] = sheet_path;
             }
+            
+            pos = sheet_end;
         }
-        pos++;
+        
+        // 解析定义名称
+        parseDefinedNames(xml_content);
+        
+        return !worksheet_names_.empty();
+        
+    } catch (const std::exception& e) {
+        std::cerr << "解析工作簿XML时发生异常: " << e.what() << std::endl;
+        return false;
     }
-    
-    return !worksheet_names_.empty();
 }
 
 // 解析工作表XML
@@ -359,8 +407,22 @@ bool XLSXReader::parseStylesXML() {
     }
     
     try {
-        // TODO: 实现完整的样式解析
-        // 目前只是简单地标记样式文件存在，不输出错误信息
+        StylesParser parser;
+        if (!parser.parse(xml_content)) {
+            std::cerr << "解析样式XML失败" << std::endl;
+            return false;
+        }
+        
+        // 将解析结果转换为styles_映射
+        styles_.clear();
+        for (size_t i = 0; i < parser.getFormatCount(); ++i) {
+            auto format = parser.getFormat(static_cast<int>(i));
+            if (format) {
+                styles_[static_cast<int>(i)] = format;
+            }
+        }
+        
+        std::cout << "成功解析 " << styles_.size() << " 个样式" << std::endl;
         return true;
         
     } catch (const std::exception& e) {
@@ -478,7 +540,54 @@ bool XLSXReader::parseDocPropsXML() {
 }
 
 std::string XLSXReader::getCellValue(const std::string& cell_xml, core::CellType& type) {
-    // TODO: 实现单元格值解析
+    // 提取单元格类型
+    std::string cell_type = extractAttribute(cell_xml, "t");
+    
+    // 查找值标签
+    size_t v_start = cell_xml.find("<v>");
+    if (v_start != std::string::npos) {
+        v_start += 3; // 跳过 <v>
+        size_t v_end = cell_xml.find("</v>", v_start);
+        if (v_end != std::string::npos) {
+            std::string value = cell_xml.substr(v_start, v_end - v_start);
+            
+            if (cell_type == "s") {
+                type = core::CellType::String;
+                // 共享字符串索引
+                try {
+                    int index = std::stoi(value);
+                    auto it = shared_strings_.find(index);
+                    return (it != shared_strings_.end()) ? it->second : "";
+                } catch (...) {
+                    return "";
+                }
+            } else if (cell_type == "b") {
+                type = core::CellType::Boolean;
+                return value;
+            } else if (cell_type == "str") {
+                type = core::CellType::String;
+                return value;
+            } else {
+                type = core::CellType::Number;
+                return value;
+            }
+        }
+    }
+    
+    // 查找内联字符串
+    size_t is_start = cell_xml.find("<is>");
+    if (is_start != std::string::npos) {
+        size_t t_start = cell_xml.find("<t>", is_start);
+        if (t_start != std::string::npos) {
+            t_start += 3;
+            size_t t_end = cell_xml.find("</t>", t_start);
+            if (t_end != std::string::npos) {
+                type = core::CellType::String;
+                return cell_xml.substr(t_start, t_end - t_start);
+            }
+        }
+    }
+    
     type = core::CellType::Empty;
     return "";
 }
@@ -489,6 +598,99 @@ std::shared_ptr<core::Format> XLSXReader::getStyleByIndex(int index) {
         return it->second;
     }
     return nullptr;
+}
+
+// 新增的辅助方法
+std::string XLSXReader::extractAttribute(const std::string& xml, const std::string& attr_name) {
+    std::string search_pattern = attr_name + "=\"";
+    size_t attr_start = xml.find(search_pattern);
+    if (attr_start == std::string::npos) {
+        return "";
+    }
+    
+    attr_start += search_pattern.length();
+    size_t attr_end = xml.find("\"", attr_start);
+    if (attr_end == std::string::npos) {
+        return "";
+    }
+    
+    return xml.substr(attr_start, attr_end - attr_start);
+}
+
+bool XLSXReader::parseWorkbookRelationships(std::unordered_map<std::string, std::string>& relationships) {
+    std::string xml_content = extractXMLFromZip("xl/_rels/workbook.xml.rels");
+    if (xml_content.empty()) {
+        return false;
+    }
+    
+    try {
+        size_t pos = 0;
+        while ((pos = xml_content.find("<Relationship ", pos)) != std::string::npos) {
+            size_t rel_end = xml_content.find("/>", pos);
+            if (rel_end == std::string::npos) {
+                rel_end = xml_content.find("</Relationship>", pos);
+                if (rel_end == std::string::npos) {
+                    break;
+                }
+                rel_end += 15;
+            } else {
+                rel_end += 2;
+            }
+            
+            std::string rel_xml = xml_content.substr(pos, rel_end - pos);
+            
+            std::string id = extractAttribute(rel_xml, "Id");
+            std::string target = extractAttribute(rel_xml, "Target");
+            std::string type = extractAttribute(rel_xml, "Type");
+            
+            // 只处理工作表关系
+            if (!id.empty() && !target.empty() &&
+                type.find("worksheet") != std::string::npos) {
+                relationships[id] = target;
+            }
+            
+            pos = rel_end;
+        }
+        
+        return !relationships.empty();
+        
+    } catch (const std::exception& e) {
+        std::cerr << "解析关系文件时发生异常: " << e.what() << std::endl;
+        return false;
+    }
+}
+
+bool XLSXReader::parseDefinedNames(const std::string& xml_content) {
+    size_t names_start = xml_content.find("<definedNames");
+    if (names_start == std::string::npos) {
+        return true; // 没有定义名称是正常的
+    }
+    
+    size_t names_end = xml_content.find("</definedNames>", names_start);
+    if (names_end == std::string::npos) {
+        return false;
+    }
+    
+    std::string names_content = xml_content.substr(names_start, names_end - names_start);
+    
+    size_t pos = 0;
+    while ((pos = names_content.find("<definedName ", pos)) != std::string::npos) {
+        size_t name_end = names_content.find("</definedName>", pos);
+        if (name_end == std::string::npos) {
+            break;
+        }
+        
+        std::string name_xml = names_content.substr(pos, name_end - pos);
+        std::string name = extractAttribute(name_xml, "name");
+        
+        if (!name.empty()) {
+            defined_names_.push_back(name);
+        }
+        
+        pos = name_end + 14; // 跳过 </definedName>
+    }
+    
+    return true;
 }
 
 } // namespace reader

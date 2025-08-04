@@ -75,6 +75,11 @@ private:
     bool validateXLSXStructure();
     std::string getCellValue(const std::string& cell_xml, core::CellType& type);
     std::shared_ptr<core::Format> getStyleByIndex(int index);
+    
+    // 新增的XML解析辅助方法
+    std::string extractAttribute(const std::string& xml, const std::string& attr_name);
+    bool parseWorkbookRelationships(std::unordered_map<std::string, std::string>& relationships);
+    bool parseDefinedNames(const std::string& xml_content);
 };
 } // namespace reader
 } // namespace fastexcel
