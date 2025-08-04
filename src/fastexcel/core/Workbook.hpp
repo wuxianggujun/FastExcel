@@ -717,6 +717,7 @@ private:
     void generateContentTypesXML(const std::function<void(const char*, size_t)>& callback) const;
     void generateRelsXML(const std::function<void(const char*, size_t)>& callback) const;
     void generateWorkbookRelsXML(const std::function<void(const char*, size_t)>& callback) const;
+    void generateThemeXML(const std::function<void(const char*, size_t)>& callback) const;
     
     // 辅助函数
     std::string generateUniqueSheetName(const std::string& base_name) const;

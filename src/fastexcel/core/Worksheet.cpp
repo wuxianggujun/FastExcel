@@ -380,7 +380,8 @@ std::pair<int, int> Worksheet::getUsedRange() const {
     int max_col = -1;
     
     for (const auto& [pos, cell] : cells_) {
-        if (!cell.isEmpty()) {
+        // 关键修复：包含有格式但为空的单元格
+        if (!cell.isEmpty() || cell.hasFormat()) {
             max_row = std::max(max_row, pos.first);
             max_col = std::max(max_col, pos.second);
         }
@@ -498,16 +499,19 @@ void Worksheet::generateXML(const std::function<void(const char*, size_t)>& call
         writer.endElement(); // sheetPr
     }
     
-    // 尺寸信息
+    // 尺寸信息 - 关键修复：总是生成dimension元素
     auto [max_row, max_col] = getUsedRange();
+    writer.startElement("dimension");
     if (max_row >= 0 && max_col >= 0) {
-        writer.startElement("dimension");
         std::string ref = "A1:" + utils::CommonUtils::cellReference(max_row, max_col);
         writer.writeAttribute("ref", ref.c_str());
-        writer.endElement(); // dimension
+    } else {
+        // 如果没有数据，使用默认的A1
+        writer.writeAttribute("ref", "A1");
     }
+    writer.endElement(); // dimension
     
-    // 工作表视图
+    // 工作表视图 - 关键修复：总是生成sheetViews
     writer.startElement("sheetViews");
     writer.startElement("sheetView");
     
@@ -533,15 +537,19 @@ void Worksheet::generateXML(const std::function<void(const char*, size_t)>& call
         writer.writeAttribute("rightToLeft", "1");
     }
     
-    // 选择区域
+    // 选择区域 - 关键修复：总是生成默认选择
+    writer.startElement("selection");
     if (!selection_.empty()) {
-        writer.startElement("selection");
         writer.writeAttribute("sqref", selection_.c_str());
-        if (!active_cell_.empty()) {
-            writer.writeAttribute("activeCell", active_cell_.c_str());
-        }
-        writer.endElement(); // selection
+    } else {
+        writer.writeAttribute("sqref", "A1");
     }
+    if (!active_cell_.empty()) {
+        writer.writeAttribute("activeCell", active_cell_.c_str());
+    } else {
+        writer.writeAttribute("activeCell", "A1");
+    }
+    writer.endElement(); // selection
     
     // 冻结窗格
     if (freeze_panes_) {
@@ -563,12 +571,11 @@ void Worksheet::generateXML(const std::function<void(const char*, size_t)>& call
     writer.endElement(); // sheetView
     writer.endElement(); // sheetViews
     
-    // 工作表格式信息
-    writer.writeRaw("<sheetFormatPr defaultRowHeight=\"");
-    writer.writeRaw(std::to_string(default_row_height_).c_str());
-    writer.writeRaw("\" defaultColWidth=\"");
-    writer.writeRaw(std::to_string(default_col_width_).c_str());
-    writer.writeRaw("\"/>");
+    // 工作表格式信息 - 关键修复：使用正确的XML结构
+    writer.startElement("sheetFormatPr");
+    writer.writeAttribute("defaultRowHeight", std::to_string(default_row_height_).c_str());
+    writer.writeAttribute("defaultColWidth", std::to_string(default_col_width_).c_str());
+    writer.endElement(); // sheetFormatPr
     
     // 列信息
     if (!column_info_.empty()) {
@@ -734,7 +741,7 @@ void Worksheet::generateXML(const std::function<void(const char*, size_t)>& call
         writer.endElement(); // printOptions
     }
     
-    // 页边距
+    // 页边距 - 关键修复：总是生成pageMargins
     writer.startElement("pageMargins");
     writer.writeAttribute("left", std::to_string(print_settings_.left_margin).c_str());
     writer.writeAttribute("right", std::to_string(print_settings_.right_margin).c_str());
@@ -743,24 +750,6 @@ void Worksheet::generateXML(const std::function<void(const char*, size_t)>& call
     writer.writeAttribute("header", std::to_string(print_settings_.header_margin).c_str());
     writer.writeAttribute("footer", std::to_string(print_settings_.footer_margin).c_str());
     writer.endElement(); // pageMargins
-    
-    // 页面设置
-    writer.startElement("pageSetup");
-    
-    if (print_settings_.landscape) {
-        writer.writeAttribute("orientation", "landscape");
-    }
-    
-    if (print_settings_.scale != 100) {
-        writer.writeAttribute("scale", std::to_string(print_settings_.scale).c_str());
-    }
-    
-    if (print_settings_.fit_to_pages_wide > 0 || print_settings_.fit_to_pages_tall > 0) {
-        writer.writeAttribute("fitToWidth", std::to_string(print_settings_.fit_to_pages_wide).c_str());
-        writer.writeAttribute("fitToHeight", std::to_string(print_settings_.fit_to_pages_tall).c_str());
-    }
-    
-    writer.endElement(); // pageSetup
     
     writer.endElement(); // worksheet
     writer.endDocument();
@@ -780,14 +769,17 @@ void Worksheet::generateXMLToFile(const std::string& filename) const {
         writer.endElement(); // sheetPr
     }
     
-    // 尺寸信息
+    // 尺寸信息 - 关键修复：总是生成dimension元素
     auto [max_row, max_col] = getUsedRange();
+    writer.startElement("dimension");
     if (max_row >= 0 && max_col >= 0) {
-        writer.startElement("dimension");
         std::string ref = "A1:" + utils::CommonUtils::cellReference(max_row, max_col);
         writer.writeAttribute("ref", ref.c_str());
-        writer.endElement(); // dimension
+    } else {
+        // 如果没有数据，使用默认的A1
+        writer.writeAttribute("ref", "A1");
     }
+    writer.endElement(); // dimension
     
     // 使用回调模式生成各部分
     auto file_callback = [&writer](const char* data, size_t size) {
@@ -833,6 +825,20 @@ void Worksheet::generateXMLToFile(const std::string& filename) const {
 }
 
 void Worksheet::generateRelsXML(const std::function<void(const char*, size_t)>& callback) const {
+    // 关键修复：只有在有超链接时才生成关系XML
+    bool has_hyperlinks = false;
+    for (const auto& [pos, cell] : cells_) {
+        if (cell.hasHyperlink()) {
+            has_hyperlinks = true;
+            break;
+        }
+    }
+    
+    // 如果没有超链接，不生成任何内容
+    if (!has_hyperlinks) {
+        return;
+    }
+    
     // 生成工作表关系XML（如果有超链接等）
     xml::XMLStreamWriter writer(callback);
     writer.startDocument();
@@ -857,6 +863,20 @@ void Worksheet::generateRelsXML(const std::function<void(const char*, size_t)>& 
 }
 
 void Worksheet::generateRelsXMLToFile(const std::string& filename) const {
+    // 关键修复：只有在有超链接时才生成关系XML文件
+    bool has_hyperlinks = false;
+    for (const auto& [pos, cell] : cells_) {
+        if (cell.hasHyperlink()) {
+            has_hyperlinks = true;
+            break;
+        }
+    }
+    
+    // 如果没有超链接，不生成文件
+    if (!has_hyperlinks) {
+        return;
+    }
+    
     // 生成工作表关系XML（如果有超链接等）
     xml::XMLStreamWriter writer(filename);
     writer.startDocument();

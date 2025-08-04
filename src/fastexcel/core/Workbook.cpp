@@ -625,6 +625,13 @@ bool Workbook::generateExcelStructureBatch() {
     });
     files.emplace_back("xl/sharedStrings.xml", std::move(shared_strings_xml));
     
+    // Theme文件
+    std::string theme_xml;
+    generateThemeXML([&theme_xml](const char* data, size_t size) {
+        theme_xml.append(data, size);
+    });
+    files.emplace_back("xl/theme/theme1.xml", std::move(theme_xml));
+    
     // 工作表文件
     for (size_t i = 0; i < worksheets_.size(); ++i) {
         std::string worksheet_xml;
@@ -746,6 +753,16 @@ bool Workbook::generateExcelStructureStreaming() {
         });
         if (!file_manager_->writeFile("xl/sharedStrings.xml", shared_strings_xml)) {
             LOG_ERROR("Failed to write xl/sharedStrings.xml");
+            return false;
+        }
+        
+        // Theme文件
+        std::string theme_xml;
+        generateThemeXML([&theme_xml](const char* data, size_t size) {
+            theme_xml.append(data, size);
+        });
+        if (!file_manager_->writeFile("xl/theme/theme1.xml", theme_xml)) {
+            LOG_ERROR("Failed to write xl/theme/theme1.xml");
             return false;
         }
         
@@ -1172,6 +1189,235 @@ void Workbook::generateWorkbookRelsXML(const std::function<void(const char*, siz
     writer.endDocument();
 }
 
+void Workbook::generateThemeXML(const std::function<void(const char*, size_t)>& callback) const {
+    xml::XMLStreamWriter writer(callback);
+    writer.startDocument();
+    writer.startElement("a:theme");
+    writer.writeAttribute("xmlns:a", "http://schemas.openxmlformats.org/drawingml/2006/main");
+    writer.writeAttribute("name", "Office 主题​​");
+    
+    writer.startElement("a:themeElements");
+    
+    // 颜色方案
+    writer.startElement("a:clrScheme");
+    writer.writeAttribute("name", "Office");
+    
+    writer.startElement("a:dk1");
+    writer.startElement("a:sysClr");
+    writer.writeAttribute("val", "windowText");
+    writer.writeAttribute("lastClr", "000000");
+    writer.endElement(); // a:sysClr
+    writer.endElement(); // a:dk1
+    
+    writer.startElement("a:lt1");
+    writer.startElement("a:sysClr");
+    writer.writeAttribute("val", "window");
+    writer.writeAttribute("lastClr", "FFFFFF");
+    writer.endElement(); // a:sysClr
+    writer.endElement(); // a:lt1
+    
+    writer.startElement("a:dk2");
+    writer.startElement("a:srgbClr");
+    writer.writeAttribute("val", "0E2841");
+    writer.endElement(); // a:srgbClr
+    writer.endElement(); // a:dk2
+    
+    writer.startElement("a:lt2");
+    writer.startElement("a:srgbClr");
+    writer.writeAttribute("val", "E8E8E8");
+    writer.endElement(); // a:srgbClr
+    writer.endElement(); // a:lt2
+    
+    writer.startElement("a:accent1");
+    writer.startElement("a:srgbClr");
+    writer.writeAttribute("val", "156082");
+    writer.endElement(); // a:srgbClr
+    writer.endElement(); // a:accent1
+    
+    writer.startElement("a:accent2");
+    writer.startElement("a:srgbClr");
+    writer.writeAttribute("val", "E97132");
+    writer.endElement(); // a:srgbClr
+    writer.endElement(); // a:accent2
+    
+    writer.startElement("a:accent3");
+    writer.startElement("a:srgbClr");
+    writer.writeAttribute("val", "196B24");
+    writer.endElement(); // a:srgbClr
+    writer.endElement(); // a:accent3
+    
+    writer.startElement("a:accent4");
+    writer.startElement("a:srgbClr");
+    writer.writeAttribute("val", "0F9ED5");
+    writer.endElement(); // a:srgbClr
+    writer.endElement(); // a:accent4
+    
+    writer.startElement("a:accent5");
+    writer.startElement("a:srgbClr");
+    writer.writeAttribute("val", "A02B93");
+    writer.endElement(); // a:srgbClr
+    writer.endElement(); // a:accent5
+    
+    writer.startElement("a:accent6");
+    writer.startElement("a:srgbClr");
+    writer.writeAttribute("val", "4EA72E");
+    writer.endElement(); // a:srgbClr
+    writer.endElement(); // a:accent6
+    
+    writer.startElement("a:hlink");
+    writer.startElement("a:srgbClr");
+    writer.writeAttribute("val", "467886");
+    writer.endElement(); // a:srgbClr
+    writer.endElement(); // a:hlink
+    
+    writer.startElement("a:folHlink");
+    writer.startElement("a:srgbClr");
+    writer.writeAttribute("val", "96607D");
+    writer.endElement(); // a:srgbClr
+    writer.endElement(); // a:folHlink
+    
+    writer.endElement(); // a:clrScheme
+    
+    // 字体方案
+    writer.startElement("a:fontScheme");
+    writer.writeAttribute("name", "Office");
+    
+    writer.startElement("a:majorFont");
+    writer.startElement("a:latin");
+    writer.writeAttribute("typeface", "Aptos Display");
+    writer.writeAttribute("panose", "02110004020202020204");
+    writer.endElement(); // a:latin
+    writer.startElement("a:ea");
+    writer.writeAttribute("typeface", "");
+    writer.endElement(); // a:ea
+    writer.startElement("a:cs");
+    writer.writeAttribute("typeface", "");
+    writer.endElement(); // a:cs
+    writer.startElement("a:font");
+    writer.writeAttribute("script", "Hans");
+    writer.writeAttribute("typeface", "等线 Light");
+    writer.endElement(); // a:font
+    writer.endElement(); // a:majorFont
+    
+    writer.startElement("a:minorFont");
+    writer.startElement("a:latin");
+    writer.writeAttribute("typeface", "Aptos Narrow");
+    writer.writeAttribute("panose", "02110004020202020204");
+    writer.endElement(); // a:latin
+    writer.startElement("a:ea");
+    writer.writeAttribute("typeface", "");
+    writer.endElement(); // a:ea
+    writer.startElement("a:cs");
+    writer.writeAttribute("typeface", "");
+    writer.endElement(); // a:cs
+    writer.startElement("a:font");
+    writer.writeAttribute("script", "Hans");
+    writer.writeAttribute("typeface", "等线");
+    writer.endElement(); // a:font
+    writer.endElement(); // a:minorFont
+    
+    writer.endElement(); // a:fontScheme
+    
+    // 格式方案
+    writer.startElement("a:fmtScheme");
+    writer.writeAttribute("name", "Office");
+    
+    writer.startElement("a:fillStyleLst");
+    writer.startElement("a:solidFill");
+    writer.startElement("a:schemeClr");
+    writer.writeAttribute("val", "phClr");
+    writer.endElement(); // a:schemeClr
+    writer.endElement(); // a:solidFill
+    writer.endElement(); // a:fillStyleLst
+    
+    writer.startElement("a:lnStyleLst");
+    writer.startElement("a:ln");
+    writer.writeAttribute("w", "12700");
+    writer.writeAttribute("cap", "flat");
+    writer.writeAttribute("cmpd", "sng");
+    writer.writeAttribute("algn", "ctr");
+    writer.startElement("a:solidFill");
+    writer.startElement("a:schemeClr");
+    writer.writeAttribute("val", "phClr");
+    writer.endElement(); // a:schemeClr
+    writer.endElement(); // a:solidFill
+    writer.endElement(); // a:ln
+    writer.endElement(); // a:lnStyleLst
+    
+    writer.startElement("a:effectStyleLst");
+    writer.startElement("a:effectStyle");
+    writer.startElement("a:effectLst");
+    writer.endElement(); // a:effectLst
+    writer.endElement(); // a:effectStyle
+    writer.endElement(); // a:effectStyleLst
+    
+    writer.startElement("a:bgFillStyleLst");
+    writer.startElement("a:solidFill");
+    writer.startElement("a:schemeClr");
+    writer.writeAttribute("val", "phClr");
+    writer.endElement(); // a:schemeClr
+    writer.endElement(); // a:solidFill
+    writer.endElement(); // a:bgFillStyleLst
+    
+    writer.endElement(); // a:fmtScheme
+    writer.endElement(); // a:themeElements
+    
+    writer.startElement("a:objectDefaults");
+    writer.startElement("a:lnDef");
+    writer.startElement("a:spPr");
+    writer.endElement(); // a:spPr
+    writer.startElement("a:bodyPr");
+    writer.endElement(); // a:bodyPr
+    writer.startElement("a:lstStyle");
+    writer.endElement(); // a:lstStyle
+    writer.startElement("a:style");
+    writer.startElement("a:lnRef");
+    writer.writeAttribute("idx", "2");
+    writer.startElement("a:schemeClr");
+    writer.writeAttribute("val", "accent1");
+    writer.endElement(); // a:schemeClr
+    writer.endElement(); // a:lnRef
+    writer.startElement("a:fillRef");
+    writer.writeAttribute("idx", "0");
+    writer.startElement("a:schemeClr");
+    writer.writeAttribute("val", "accent1");
+    writer.endElement(); // a:schemeClr
+    writer.endElement(); // a:fillRef
+    writer.startElement("a:effectRef");
+    writer.writeAttribute("idx", "1");
+    writer.startElement("a:schemeClr");
+    writer.writeAttribute("val", "accent1");
+    writer.endElement(); // a:schemeClr
+    writer.endElement(); // a:effectRef
+    writer.startElement("a:fontRef");
+    writer.writeAttribute("idx", "minor");
+    writer.startElement("a:schemeClr");
+    writer.writeAttribute("val", "tx1");
+    writer.endElement(); // a:schemeClr
+    writer.endElement(); // a:fontRef
+    writer.endElement(); // a:style
+    writer.endElement(); // a:lnDef
+    writer.endElement(); // a:objectDefaults
+    
+    writer.startElement("a:extraClrSchemeLst");
+    writer.endElement(); // a:extraClrSchemeLst
+    
+    writer.startElement("a:extLst");
+    writer.startElement("a:ext");
+    writer.writeAttribute("uri", "{05A4C25C-085E-4340-85A3-A5531E510DB2}");
+    writer.startElement("thm15:themeFamily");
+    writer.writeAttribute("xmlns:thm15", "http://schemas.microsoft.com/office/thememl/2012/main");
+    writer.writeAttribute("name", "Office Theme");
+    writer.writeAttribute("id", "{2E142A2C-CD16-42D6-873A-C26D2A0506FA}");
+    writer.writeAttribute("vid", "{1BDDFF52-6CD6-40A5-AB3C-68EB2F1E4D0A}");
+    writer.endElement(); // thm15:themeFamily
+    writer.endElement(); // a:ext
+    writer.endElement(); // a:extLst
+    
+    writer.endElement(); // a:theme
+    writer.endDocument();
+}
+
 // ========== 格式管理内部方法 ==========
 
 
@@ -1384,7 +1630,12 @@ bool Workbook::generateWorksheetXMLStreaming(const std::shared_ptr<Worksheet>& w
                         
                         // 关键修复：应用单元格格式索引
                         if (cell.hasFormat()) {
-                            writer.writeAttribute("s", std::to_string(cell.getFormat()->getXfIndex()));
+                            auto format = cell.getFormat();
+                            if (format) {
+                                // 获取格式在FormatPool中的索引
+                                size_t format_index = format_pool_->getFormatIndex(format.get());
+                                writer.writeAttribute("s", std::to_string(format_index));
+                            }
                         }
                         
                         // 根据单元格类型添加属性和内容
