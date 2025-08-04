@@ -35,6 +35,7 @@ std::unique_ptr<Workbook> Workbook::create(const std::string& filename) {
 
 Workbook::Workbook(const std::string& filename) : filename_(filename) {
     file_manager_ = std::make_unique<archive::FileManager>(filename);
+    format_pool_ = std::make_unique<FormatPool>();
     
     // 设置默认文档属性
     doc_properties_.author = "FastExcel";
@@ -92,9 +93,6 @@ bool Workbook::save() {
             shared_strings_.clear();
             shared_strings_list_.clear();
         }
-        
-        // 更新格式索引
-        updateFormatIndices();
         
         // 生成Excel文件结构
         if (!generateExcelStructure()) {
@@ -346,22 +344,17 @@ std::shared_ptr<Format> Workbook::createFormat() {
         throw std::runtime_error("Workbook is not open");
     }
     
-    auto format = std::make_shared<Format>();
-    int xf_index = static_cast<int>(formats_.size()); // 从0开始索引
-    format->setXfIndex(xf_index);
+    // 创建一个新的格式对象
+    auto format = std::make_unique<Format>();
     
-    // 存储格式
-    formats_[xf_index] = format;
+    // 将格式添加到格式池中，FormatPool会管理去重和索引
+    Format* pool_format = format_pool_->addFormat(std::move(format));
     
-    return format;
-}
-
-std::shared_ptr<Format> Workbook::getFormat(int format_id) const {
-    auto it = formats_.find(format_id);
-    if (it != formats_.end()) {
-        return it->second;
-    }
-    return nullptr;
+    // 返回一个共享指针，指向池中的格式
+    // 使用空删除器，因为FormatPool管理Format的生命周期
+    return std::shared_ptr<Format>(pool_format, [](Format*){
+        // 空删除器，FormatPool负责管理生命周期
+    });
 }
 
 // ========== 自定义属性 ==========
@@ -869,184 +862,8 @@ void Workbook::generateWorkbookXML(const std::function<void(const char*, size_t)
 }
 
 void Workbook::generateStylesXML(const std::function<void(const char*, size_t)>& callback) const {
-    xml::XMLStreamWriter writer(callback);
-    writer.startDocument();
-    writer.startElement("styleSheet");
-    writer.writeAttribute("xmlns", "http://schemas.openxmlformats.org/spreadsheetml/2006/main");
-    
-    // 数字格式
-    writer.startElement("numFmts");
-    writer.writeAttribute("count", "0");
-    writer.endElement(); // numFmts
-    
-    // 字体
-    writer.startElement("fonts");
-    writer.writeAttribute("count", std::to_string(next_font_id_).c_str());
-    
-    // 默认字体
-    writer.startElement("font");
-    writer.startElement("sz");
-    writer.writeAttribute("val", "11");
-    writer.endElement(); // sz
-    writer.startElement("name");
-    writer.writeAttribute("val", "Calibri");
-    writer.endElement(); // name
-    writer.startElement("family");
-    writer.writeAttribute("val", "2");
-    writer.endElement(); // family
-    writer.startElement("scheme");
-    writer.writeAttribute("val", "minor");
-    writer.endElement(); // scheme
-    writer.endElement(); // font
-    
-    // 生成其他字体
-    for (const auto& [id, format] : formats_) {
-        if (format->hasFont()) {
-            writer.writeRaw(format->generateFontXML().c_str());
-        }
-    }
-    
-    writer.endElement(); // fonts
-    
-    // 填充
-    writer.startElement("fills");
-    writer.writeAttribute("count", std::to_string(next_fill_id_).c_str());
-    
-    // 默认填充
-    writer.startElement("fill");
-    writer.startElement("patternFill");
-    writer.writeAttribute("patternType", "none");
-    writer.endElement(); // patternFill
-    writer.endElement(); // fill
-    
-    writer.startElement("fill");
-    writer.startElement("patternFill");
-    writer.writeAttribute("patternType", "gray125");
-    writer.endElement(); // patternFill
-    writer.endElement(); // fill
-    
-    // 生成其他填充
-    for (const auto& [id, format] : formats_) {
-        if (format->hasFill()) {
-            writer.writeRaw(format->generateFillXML().c_str());
-        }
-    }
-    
-    writer.endElement(); // fills
-    
-    // 边框
-    writer.startElement("borders");
-    writer.writeAttribute("count", std::to_string(next_border_id_).c_str());
-    
-    // 默认边框
-    writer.startElement("border");
-    writer.startElement("left");
-    writer.endElement(); // left
-    writer.startElement("right");
-    writer.endElement(); // right
-    writer.startElement("top");
-    writer.endElement(); // top
-    writer.startElement("bottom");
-    writer.endElement(); // bottom
-    writer.startElement("diagonal");
-    writer.endElement(); // diagonal
-    writer.endElement(); // border
-    
-    // 生成其他边框
-    for (const auto& [id, format] : formats_) {
-        if (format->hasBorder()) {
-            writer.writeRaw(format->generateBorderXML().c_str());
-        }
-    }
-    
-    writer.endElement(); // borders
-    
-    // 单元格样式XF
-    writer.startElement("cellStyleXfs");
-    writer.writeAttribute("count", "1");
-    writer.startElement("xf");
-    writer.writeAttribute("numFmtId", "0");
-    writer.writeAttribute("fontId", "0");
-    writer.writeAttribute("fillId", "0");
-    writer.writeAttribute("borderId", "0");
-    writer.endElement(); // xf
-    writer.endElement(); // cellStyleXfs
-    
-    // 单元格XF
-    writer.startElement("cellXfs");
-    // 计算实际的XF数量：1个默认 + 用户定义的格式数量
-    size_t total_xf_count = 1 + formats_.size();
-    writer.writeAttribute("count", std::to_string(total_xf_count).c_str());
-    
-    // 默认XF
-    writer.startElement("xf");
-    writer.writeAttribute("numFmtId", "0");
-    writer.writeAttribute("fontId", "0");
-    writer.writeAttribute("fillId", "0");
-    writer.writeAttribute("borderId", "0");
-    writer.writeAttribute("xfId", "0");
-    writer.endElement(); // xf
-    
-    // 生成其他XF
-    for (const auto& [id, format] : formats_) {
-        writer.startElement("xf");
-        writer.writeAttribute("numFmtId", std::to_string(format->getNumberFormatIndex()).c_str());
-        writer.writeAttribute("fontId", std::to_string(format->getFontIndex()).c_str());
-        writer.writeAttribute("fillId", std::to_string(format->getFillIndex()).c_str());
-        writer.writeAttribute("borderId", std::to_string(format->getBorderIndex()).c_str());
-        writer.writeAttribute("xfId", "0");
-        
-        // 添加应用标志
-        if (format->hasFont()) {
-            writer.writeAttribute("applyFont", "1");
-        }
-        if (format->hasFill()) {
-            writer.writeAttribute("applyFill", "1");
-        }
-        if (format->hasBorder()) {
-            writer.writeAttribute("applyBorder", "1");
-        }
-        if (format->hasAlignment()) {
-            writer.writeAttribute("applyAlignment", "1");
-        }
-        if (format->hasProtection()) {
-            writer.writeAttribute("applyProtection", "1");
-        }
-        if (!format->getNumberFormat().empty()) {
-            writer.writeAttribute("applyNumberFormat", "1");
-        }
-        
-        // 如果有对齐或保护设置，需要添加子元素
-        if (format->hasAlignment() || format->hasProtection()) {
-            writer.endElement(); // 结束 xf 开始标签
-            
-            if (format->hasAlignment()) {
-                writer.writeRaw(format->generateAlignmentXML().c_str());
-            }
-            if (format->hasProtection()) {
-                writer.writeRaw(format->generateProtectionXML().c_str());
-            }
-            
-            writer.endElement(); // 结束 xf 元素
-        } else {
-            writer.endElement(); // 自闭合 xf 元素
-        }
-    }
-    
-    writer.endElement(); // cellXfs
-    
-    // 单元格样式
-    writer.startElement("cellStyles");
-    writer.writeAttribute("count", "1");
-    writer.startElement("cellStyle");
-    writer.writeAttribute("name", "Normal");
-    writer.writeAttribute("xfId", "0");
-    writer.writeAttribute("builtinId", "0");
-    writer.endElement(); // cellStyle
-    writer.endElement(); // cellStyles
-    
-    writer.endElement(); // styleSheet
-    writer.endDocument();
+    // 委托给FormatPool生成样式XML
+    format_pool_->generateStylesXML(callback);
 }
 
 void Workbook::generateSharedStringsXML(const std::function<void(const char*, size_t)>& callback) const {
@@ -1353,65 +1170,6 @@ void Workbook::generateWorkbookRelsXML(const std::function<void(const char*, siz
 
 // ========== 格式管理内部方法 ==========
 
-int Workbook::getFontId(const Format& format) {
-    if (!format.hasFont()) {
-        return 0; // 默认字体
-    }
-    
-    size_t hash = format.hash();
-    auto it = font_hash_to_id_.find(hash);
-    if (it != font_hash_to_id_.end()) {
-        return it->second;
-    }
-    
-    int id = next_font_id_++;
-    font_hash_to_id_[hash] = id;
-    return id;
-}
-
-int Workbook::getFillId(const Format& format) {
-    if (!format.hasFill()) {
-        return 0; // 默认填充
-    }
-    
-    size_t hash = format.hash();
-    auto it = fill_hash_to_id_.find(hash);
-    if (it != fill_hash_to_id_.end()) {
-        return it->second;
-    }
-    
-    int id = next_fill_id_++;
-    fill_hash_to_id_[hash] = id;
-    return id;
-}
-
-int Workbook::getBorderId(const Format& format) {
-    if (!format.hasBorder()) {
-        return 0; // 默认边框
-    }
-    
-    size_t hash = format.hash();
-    auto it = border_hash_to_id_.find(hash);
-    if (it != border_hash_to_id_.end()) {
-        return it->second;
-    }
-    
-    int id = next_border_id_++;
-    border_hash_to_id_[hash] = id;
-    return id;
-}
-
-int Workbook::getXfId(const Format& format) {
-    size_t hash = format.hash();
-    auto it = xf_hash_to_id_.find(hash);
-    if (it != xf_hash_to_id_.end()) {
-        return it->second;
-    }
-    
-    int id = next_xf_id_++;
-    xf_hash_to_id_[hash] = id;
-    return id;
-}
 
 // ========== 辅助函数 ==========
 
@@ -1486,14 +1244,6 @@ void Workbook::collectSharedStrings() {
     }
 }
 
-void Workbook::updateFormatIndices() {
-    for (auto& [id, format] : formats_) {
-        format->setFontIndex(getFontId(*format));
-        format->setFillIndex(getFillId(*format));
-        format->setBorderIndex(getBorderId(*format));
-        format->setXfIndex(getXfId(*format));
-    }
-}
 
 std::string Workbook::getWorksheetPath(int sheet_id) const {
     return "xl/worksheets/sheet" + std::to_string(sheet_id) + ".xml";
@@ -1818,7 +1568,7 @@ bool Workbook::refresh() {
         
         // 替换当前内容
         worksheets_ = std::move(refreshed_workbook->worksheets_);
-        formats_ = std::move(refreshed_workbook->formats_);
+        format_pool_ = std::move(refreshed_workbook->format_pool_);
         doc_properties_ = refreshed_workbook->doc_properties_;
         custom_properties_ = std::move(refreshed_workbook->custom_properties_);
         defined_names_ = std::move(refreshed_workbook->defined_names_);
@@ -1880,23 +1630,12 @@ bool Workbook::mergeWorkbook(const std::unique_ptr<Workbook>& other_workbook, co
         
         // 合并格式
         if (options.merge_formats) {
-            for (const auto& [id, format] : other_workbook->formats_) {
-                // 检查格式是否已存在（基于哈希）
-                bool format_exists = false;
-                for (const auto& [existing_id, existing_format] : formats_) {
-                    if (existing_format->hash() == format->hash()) {
-                        format_exists = true;
-                        break;
-                    }
-                }
-                
-                if (!format_exists || options.overwrite_existing) {
-                    auto new_format = createFormat();
-                    // 复制格式属性
-                    *new_format = *format;
-                    LOG_DEBUG("Merged format with ID: {}", id);
-                }
+            // 将其他工作簿的格式池合并到当前格式池
+            // 这里简化处理，实际可以实现更复杂的合并逻辑
+            for (const auto& format : *other_workbook->format_pool_) {
+                format_pool_->getOrCreateFormat(*format);
             }
+            LOG_DEBUG("Merged formats from other workbook");
         }
         
         // 合并文档属性
@@ -1923,7 +1662,7 @@ bool Workbook::mergeWorkbook(const std::unique_ptr<Workbook>& other_workbook, co
         }
         
         LOG_INFO("Successfully merged workbook: {} worksheets, {} formats",
-                merged_count, other_workbook->formats_.size());
+                merged_count, other_workbook->format_pool_->getFormatCount());
         return true;
         
     } catch (const std::exception& e) {
@@ -2113,7 +1852,7 @@ Workbook::WorkbookStats Workbook::getStatistics() const {
     WorkbookStats stats;
     
     stats.total_worksheets = worksheets_.size();
-    stats.total_formats = formats_.size();
+    stats.total_formats = format_pool_->getFormatCount();
     
     // 计算总单元格数和内存使用
     for (const auto& worksheet : worksheets_) {
@@ -2129,7 +1868,7 @@ Workbook::WorkbookStats Workbook::getStatistics() const {
     // 估算工作簿本身的内存使用
     stats.memory_usage += sizeof(Workbook);
     stats.memory_usage += worksheets_.capacity() * sizeof(std::shared_ptr<Worksheet>);
-    stats.memory_usage += formats_.size() * sizeof(std::pair<int, std::shared_ptr<Format>>);
+    stats.memory_usage += format_pool_->getMemoryUsage();
     stats.memory_usage += custom_properties_.capacity() * sizeof(CustomProperty);
     stats.memory_usage += defined_names_.capacity() * sizeof(DefinedName);
     

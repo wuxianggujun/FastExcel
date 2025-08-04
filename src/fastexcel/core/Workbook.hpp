@@ -2,6 +2,7 @@
 
 #include "fastexcel/core/Worksheet.hpp"
 #include "fastexcel/core/Format.hpp"
+#include "fastexcel/core/FormatPool.hpp"
 #include "fastexcel/archive/FileManager.hpp"
 #include "fastexcel/utils/CommonUtils.hpp"
 #include <string>
@@ -100,16 +101,13 @@ class Workbook {
 private:
     std::string filename_;
     std::vector<std::shared_ptr<Worksheet>> worksheets_;
-    std::unordered_map<int, std::shared_ptr<Format>> formats_;
     std::unique_ptr<archive::FileManager> file_manager_;
     
+    // 格式管理 - 使用FormatPool
+    std::unique_ptr<FormatPool> format_pool_;
+    
     // ID管理
-    int next_format_id_ = 164;        // Excel内置格式之后从164开始
     int next_sheet_id_ = 1;
-    int next_font_id_ = 1;
-    int next_fill_id_ = 2;            // 0和1是默认填充
-    int next_border_id_ = 1;
-    int next_xf_id_ = 1;
     
     // 状态
     bool is_open_ = false;
@@ -124,12 +122,6 @@ private:
     
     // 工作簿选项
     WorkbookOptions options_;
-    
-    // 格式索引管理
-    std::unordered_map<size_t, int> font_hash_to_id_;
-    std::unordered_map<size_t, int> fill_hash_to_id_;
-    std::unordered_map<size_t, int> border_hash_to_id_;
-    std::unordered_map<size_t, int> xf_hash_to_id_;
     
     // 共享字符串
     std::unordered_map<std::string, int> shared_strings_;
@@ -309,17 +301,16 @@ public:
     std::shared_ptr<Format> createFormat();
     
     /**
-     * @brief 获取格式
-     * @param format_id 格式ID
-     * @return 格式指针
+     * @brief 获取格式池
+     * @return 格式池指针
      */
-    std::shared_ptr<Format> getFormat(int format_id) const;
+    FormatPool* getFormatPool() const { return format_pool_.get(); }
     
     /**
      * @brief 获取格式数量
      * @return 格式数量
      */
-    size_t getFormatCount() const { return formats_.size(); }
+    size_t getFormatCount() const { return format_pool_->getFormatCount(); }
     
     // ========== 文档属性 ==========
     
@@ -727,17 +718,10 @@ private:
     void generateRelsXML(const std::function<void(const char*, size_t)>& callback) const;
     void generateWorkbookRelsXML(const std::function<void(const char*, size_t)>& callback) const;
     
-    // 格式管理内部方法
-    int getFontId(const Format& format);
-    int getFillId(const Format& format);
-    int getBorderId(const Format& format);
-    int getXfId(const Format& format);
-    
     // 辅助函数
     std::string generateUniqueSheetName(const std::string& base_name) const;
     bool validateSheetName(const std::string& name) const;
     void collectSharedStrings();
-    void updateFormatIndices();
     
     // 文件路径生成
     std::string getWorksheetPath(int sheet_id) const;
