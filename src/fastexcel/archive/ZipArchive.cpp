@@ -57,57 +57,33 @@ ZipError ZipArchive::addFile(std::string_view internal_path, const uint8_t* data
     return addFile(internal_path, reinterpret_cast<const void*>(data), size);
 }
 
-ZipError ZipArchive::addFile(std::string_view internal_path, const void* data, size_t size) {
-    std::lock_guard<std::mutex> lock(mutex_);
-    if (!is_writable_ || !zip_handle_) {
-        LOG_ERROR("Zip archive not opened for writing");
-        return ZipError::NotOpen;
-    }
+// 私有辅助方法：初始化文件信息结构
+void ZipArchive::initializeFileInfo(void* file_info_ptr, const std::string& path, size_t size) {
+    mz_zip_file& file_info = *static_cast<mz_zip_file*>(file_info_ptr);
+    file_info = {}; // 清零结构体
+    file_info.filename = path.c_str();
+    file_info.uncompressed_size = static_cast<uint64_t>(size);
+    file_info.compressed_size = 0; // 让minizip自动计算
+    file_info.compression_method = MZ_COMPRESS_METHOD_DEFLATE;
     
-    // 检查文件大小是否超过 int32_t 最大值
+    // 使用固定时间戳以确保兼容性
+    file_info.modified_date = 1704067200; // 2024-01-01 00:00:00 UTC
+    file_info.creation_date = 1704067200;
+    file_info.flag = MZ_ZIP_FLAG_UTF8;
+}
+
+// 私有辅助方法：写入单个文件条目
+ZipError ZipArchive::writeFileEntry(const std::string& internal_path, const void* data, size_t size) {
+    // 检查文件大小
     if (size > INT32_MAX) {
         LOG_ERROR("File {} is too large ({} bytes), maximum size is {} bytes",
                  internal_path, size, INT32_MAX);
         return ZipError::TooLarge;
     }
     
-    // 初始化文件信息结构 - 只设置必要的字段，让 minizip 自动计算 CRC 和大小
-    mz_zip_file file_info = {};
-    
-    // 将 string_view 转换为 null 终止的字符串以供 minizip 使用
-    std::string path_str(internal_path);
-    file_info.filename = path_str.c_str();
-    
-    // 设置文件大小信息，这对Excel兼容性很重要
-    file_info.uncompressed_size = static_cast<uint64_t>(size);
-    file_info.compressed_size = 0; // 让minizip自动计算
-    
-    // 设置压缩方法
-    file_info.compression_method = MZ_COMPRESS_METHOD_DEFLATE;
-    
-    // 使用DOS时间格式，这是ZIP标准要求的格式
-    // 避免使用Unix时间戳，因为某些Excel阅读器可能不兼容
-    time_t now = time(nullptr);
-    struct tm* timeinfo = localtime(&now);
-    
-    // 转换为DOS时间格式 (YYYYYYYMMMMDDDDDHHHHHMMMMMMSSSSS)
-    // 年份从1980开始，月份从1开始，日期从1开始
-    uint16_t dos_date = ((timeinfo->tm_year - 80) << 9) |
-                        ((timeinfo->tm_mon + 1) << 5) |
-                        timeinfo->tm_mday;
-    uint16_t dos_time = (timeinfo->tm_hour << 11) |
-                        (timeinfo->tm_min << 5) |
-                        (timeinfo->tm_sec >> 1);
-    
-    // minizip-ng期望的是Unix时间戳，但我们设置一个标准的时间
-    // 使用2024年1月1日作为固定时间戳以确保兼容性
-    file_info.modified_date = 1704067200; // 2024-01-01 00:00:00 UTC
-    file_info.creation_date = 1704067200;
-    
-    file_info.flag = MZ_ZIP_FLAG_UTF8;
-    
-    // 不使用 DATA_DESCRIPTOR 标志以提高兼容性
-    // Excel 文件不需要这个标志，去掉可以提高与各种阅读器的兼容性
+    // 初始化文件信息
+    mz_zip_file file_info;
+    initializeFileInfo(&file_info, internal_path, size);
     
     // 打开条目
     int32_t result = mz_zip_writer_entry_open(zip_handle_, &file_info);
@@ -127,7 +103,7 @@ ZipError ZipArchive::addFile(std::string_view internal_path, const void* data, s
         }
     }
     
-    // 关闭条目 - 这将让 minizip 自动计算并写入 CRC 和大小信息
+    // 关闭条目
     result = mz_zip_writer_entry_close(zip_handle_);
     if (result != MZ_OK) {
         LOG_ERROR("Failed to close entry for file {} in zip, error: {}", internal_path, result);
@@ -136,6 +112,17 @@ ZipError ZipArchive::addFile(std::string_view internal_path, const void* data, s
     
     LOG_DEBUG("Added file {} to zip, size: {} bytes", internal_path, size);
     return ZipError::Ok;
+}
+
+ZipError ZipArchive::addFile(std::string_view internal_path, const void* data, size_t size) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (!is_writable_ || !zip_handle_) {
+        LOG_ERROR("Zip archive not opened for writing");
+        return ZipError::NotOpen;
+    }
+    
+    std::string path_str(internal_path);
+    return writeFileEntry(path_str, data, size);
 }
 
 ZipError ZipArchive::addFiles(const std::vector<FileEntry>& files) {
@@ -153,57 +140,10 @@ ZipError ZipArchive::addFiles(const std::vector<FileEntry>& files) {
     
     // 批量写入所有文件
     for (const auto& file : files) {
-        // 检查文件大小
-        if (file.content.size() > INT32_MAX) {
-            LOG_ERROR("File {} is too large ({} bytes), maximum size is {} bytes",
-                     file.internal_path, file.content.size(), INT32_MAX);
-            return ZipError::TooLarge;
+        ZipError result = writeFileEntry(file.internal_path, file.content.data(), file.content.size());
+        if (result != ZipError::Ok) {
+            return result;
         }
-        
-        // 初始化文件信息结构
-        mz_zip_file file_info = {};
-        file_info.filename = file.internal_path.c_str();
-        
-        // 设置文件大小信息
-        file_info.uncompressed_size = static_cast<uint64_t>(file.content.size());
-        file_info.compressed_size = 0; // 让minizip自动计算
-        file_info.compression_method = MZ_COMPRESS_METHOD_DEFLATE;
-        
-        // 使用固定时间戳以确保兼容性
-        file_info.modified_date = 1704067200; // 2024-01-01 00:00:00 UTC
-        file_info.creation_date = 1704067200;
-        
-        file_info.flag = MZ_ZIP_FLAG_UTF8;
-        // 不使用 DATA_DESCRIPTOR 标志以提高兼容性
-        
-        // 打开条目
-        int32_t result = mz_zip_writer_entry_open(zip_handle_, &file_info);
-        if (result != MZ_OK) {
-            LOG_ERROR("Failed to open entry for file {} in zip, error: {}", file.internal_path, result);
-            return ZipError::IoFail;
-        }
-        
-        // 写入数据
-        if (!file.content.empty()) {
-            int32_t bytes_written = mz_zip_writer_entry_write(zip_handle_,
-                                                            file.content.data(),
-                                                            static_cast<int32_t>(file.content.size()));
-            if (bytes_written != static_cast<int32_t>(file.content.size())) {
-                LOG_ERROR("Failed to write complete data for file {} to zip, written: {} bytes, expected: {} bytes",
-                         file.internal_path, bytes_written, file.content.size());
-                mz_zip_writer_entry_close(zip_handle_);
-                return ZipError::IoFail;
-            }
-        }
-        
-        // 关闭条目
-        result = mz_zip_writer_entry_close(zip_handle_);
-        if (result != MZ_OK) {
-            LOG_ERROR("Failed to close entry for file {} in zip, error: {}", file.internal_path, result);
-            return ZipError::IoFail;
-        }
-        
-        LOG_DEBUG("Added file {} to zip, size: {} bytes", file.internal_path, file.content.size());
     }
     
     LOG_INFO("Batch write completed successfully, {} files added", files.size());

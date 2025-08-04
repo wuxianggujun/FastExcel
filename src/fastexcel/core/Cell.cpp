@@ -6,7 +6,8 @@
 namespace fastexcel {
 namespace core {
 
-Cell::Cell() : extended_(nullptr) {
+// 私有辅助方法：初始化标志位
+void Cell::initializeFlags() {
     flags_.type = CellType::Empty;
     flags_.has_format = false;
     flags_.has_hyperlink = false;
@@ -14,49 +15,28 @@ Cell::Cell() : extended_(nullptr) {
     flags_.reserved = 0;
 }
 
-// 便利构造函数实现
-Cell::Cell(const std::string& value) : extended_(nullptr) {
-    flags_.type = CellType::Empty;
-    flags_.has_format = false;
-    flags_.has_hyperlink = false;
-    flags_.has_formula_result = false;
-    flags_.reserved = 0;
+Cell::Cell() : extended_(nullptr) {
+    initializeFlags();
+}
+
+// 便利构造函数实现 - 使用委托构造函数
+Cell::Cell(const std::string& value) : Cell() {
     setValue(value);
 }
 
-Cell::Cell(const char* value) : extended_(nullptr) {
-    flags_.type = CellType::Empty;
-    flags_.has_format = false;
-    flags_.has_hyperlink = false;
-    flags_.has_formula_result = false;
-    flags_.reserved = 0;
+Cell::Cell(const char* value) : Cell() {
     setValue(std::string(value));
 }
 
-Cell::Cell(double value) : extended_(nullptr) {
-    flags_.type = CellType::Empty;
-    flags_.has_format = false;
-    flags_.has_hyperlink = false;
-    flags_.has_formula_result = false;
-    flags_.reserved = 0;
+Cell::Cell(double value) : Cell() {
     setValue(value);
 }
 
-Cell::Cell(int value) : extended_(nullptr) {
-    flags_.type = CellType::Empty;
-    flags_.has_format = false;
-    flags_.has_hyperlink = false;
-    flags_.has_formula_result = false;
-    flags_.reserved = 0;
+Cell::Cell(int value) : Cell() {
     setValue(static_cast<double>(value));
 }
 
-Cell::Cell(bool value) : extended_(nullptr) {
-    flags_.type = CellType::Empty;
-    flags_.has_format = false;
-    flags_.has_hyperlink = false;
-    flags_.has_formula_result = false;
-    flags_.reserved = 0;
+Cell::Cell(bool value) : Cell() {
     setValue(value);
 }
 
@@ -275,12 +255,7 @@ Cell::Cell(Cell&& other) noexcept : extended_(nullptr) {
     format_holder_ = std::move(other.format_holder_);
     
     // 重置源对象
-    other.flags_.type = CellType::Empty;
-    other.flags_.has_format = false;
-    other.flags_.has_hyperlink = false;
-    other.flags_.has_formula_result = false;
-    other.extended_ = nullptr;
-    other.format_holder_.reset();
+    other.resetToEmpty();
 }
 
 Cell& Cell::operator=(Cell&& other) noexcept {
@@ -294,36 +269,48 @@ Cell& Cell::operator=(Cell&& other) noexcept {
         format_holder_ = std::move(other.format_holder_);
         
         // 重置源对象
-        other.flags_.type = CellType::Empty;
-        other.flags_.has_format = false;
-        other.flags_.has_hyperlink = false;
-        other.flags_.has_formula_result = false;
-        other.extended_ = nullptr;
-        other.format_holder_.reset();
+        other.resetToEmpty();
     }
     return *this;
+}
+
+// 私有辅助方法：深拷贝ExtendedData
+void Cell::deepCopyExtendedData(const Cell& other) {
+    if (other.extended_) {
+        ensureExtended();
+        copyStringField(extended_->long_string, other.extended_->long_string);
+        copyStringField(extended_->formula, other.extended_->formula);
+        copyStringField(extended_->hyperlink, other.extended_->hyperlink);
+        extended_->format = other.extended_->format;
+        extended_->formula_result = other.extended_->formula_result;
+    }
+}
+
+// 私有辅助方法：拷贝字符串字段
+void Cell::copyStringField(std::string*& dest, const std::string* src) {
+    if (src) {
+        if (!dest) {
+            dest = new std::string();
+        }
+        *dest = *src;
+    }
+}
+
+// 私有辅助方法：重置为空状态
+void Cell::resetToEmpty() {
+    flags_.type = CellType::Empty;
+    flags_.has_format = false;
+    flags_.has_hyperlink = false;
+    flags_.has_formula_result = false;
+    extended_ = nullptr;
+    format_holder_.reset();
 }
 
 Cell::Cell(const Cell& other) : extended_(nullptr) {
     flags_ = other.flags_;
     value_ = other.value_;
     format_holder_ = other.format_holder_;
-    
-    // 深拷贝ExtendedData
-    if (other.extended_) {
-        ensureExtended();
-        if (other.extended_->long_string) {
-            extended_->long_string = new std::string(*other.extended_->long_string);
-        }
-        if (other.extended_->formula) {
-            extended_->formula = new std::string(*other.extended_->formula);
-        }
-        if (other.extended_->hyperlink) {
-            extended_->hyperlink = new std::string(*other.extended_->hyperlink);
-        }
-        extended_->format = other.extended_->format;
-        extended_->formula_result = other.extended_->formula_result;
-    }
+    deepCopyExtendedData(other);
 }
 
 Cell& Cell::operator=(const Cell& other) {
@@ -334,22 +321,7 @@ Cell& Cell::operator=(const Cell& other) {
         flags_ = other.flags_;
         value_ = other.value_;
         format_holder_ = other.format_holder_;
-        
-        // 深拷贝ExtendedData
-        if (other.extended_) {
-            ensureExtended();
-            if (other.extended_->long_string) {
-                extended_->long_string = new std::string(*other.extended_->long_string);
-            }
-            if (other.extended_->formula) {
-                extended_->formula = new std::string(*other.extended_->formula);
-            }
-            if (other.extended_->hyperlink) {
-                extended_->hyperlink = new std::string(*other.extended_->hyperlink);
-            }
-            extended_->format = other.extended_->format;
-            extended_->formula_result = other.extended_->formula_result;
-        }
+        deepCopyExtendedData(other);
     }
     return *this;
 }

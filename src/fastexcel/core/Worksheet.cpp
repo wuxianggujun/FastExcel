@@ -35,17 +35,23 @@ const Cell& Worksheet::getCell(int row, int col) const {
     return it->second;
 }
 
-void Worksheet::writeString(int row, int col, const std::string& value, std::shared_ptr<Format> format) {
+// 私有辅助方法：通用的单元格写入逻辑
+template<typename T>
+void Worksheet::writeCellValue(int row, int col, T&& value, std::shared_ptr<Format> format) {
     validateCellPosition(row, col);
     
     Cell cell;
-    if (sst_) {
-        // 使用共享字符串表
-        sst_->addString(value);
-        // 注意：这里需要修改Cell类来支持SST ID，暂时直接设置值
-        cell.setValue(value);
+    if constexpr (std::is_same_v<std::decay_t<T>, std::string>) {
+        if (sst_) {
+            // 使用共享字符串表
+            sst_->addString(value);
+            // 注意：这里需要修改Cell类来支持SST ID，暂时直接设置值
+            cell.setValue(value);
+        } else {
+            cell.setValue(value);
+        }
     } else {
-        cell.setValue(value);
+        cell.setValue(std::forward<T>(value));
     }
     
     if (optimize_mode_) {
@@ -58,42 +64,18 @@ void Worksheet::writeString(int row, int col, const std::string& value, std::sha
         }
         updateUsedRange(row, col);
     }
+}
+
+void Worksheet::writeString(int row, int col, const std::string& value, std::shared_ptr<Format> format) {
+    writeCellValue(row, col, value, format);
 }
 
 void Worksheet::writeNumber(int row, int col, double value, std::shared_ptr<Format> format) {
-    validateCellPosition(row, col);
-    
-    Cell cell;
-    cell.setValue(value);
-    
-    if (optimize_mode_) {
-        writeOptimizedCell(row, col, std::move(cell), format);
-    } else {
-        auto& target_cell = cells_[std::make_pair(row, col)];
-        target_cell = std::move(cell);
-        if (format) {
-            target_cell.setFormat(format);
-        }
-        updateUsedRange(row, col);
-    }
+    writeCellValue(row, col, value, format);
 }
 
 void Worksheet::writeBoolean(int row, int col, bool value, std::shared_ptr<Format> format) {
-    validateCellPosition(row, col);
-    
-    Cell cell;
-    cell.setValue(value);
-    
-    if (optimize_mode_) {
-        writeOptimizedCell(row, col, std::move(cell), format);
-    } else {
-        auto& target_cell = cells_[std::make_pair(row, col)];
-        target_cell = std::move(cell);
-        if (format) {
-            target_cell.setFormat(format);
-        }
-        updateUsedRange(row, col);
-    }
+    writeCellValue(row, col, value, format);
 }
 
 void Worksheet::writeFormula(int row, int col, const std::string& formula, std::shared_ptr<Format> format) {
@@ -379,15 +361,15 @@ void Worksheet::setTabSelected(bool selected) {
 
 void Worksheet::setActiveCell(int row, int col) {
     validateCellPosition(row, col);
-    active_cell_ = cellReference(row, col);
+    active_cell_ = utils::CommonUtils::cellReference(row, col);
 }
 
 void Worksheet::setSelection(int first_row, int first_col, int last_row, int last_col) {
     validateRange(first_row, first_col, last_row, last_col);
     if (first_row == last_row && first_col == last_col) {
-        selection_ = cellReference(first_row, first_col);
+        selection_ = utils::CommonUtils::cellReference(first_row, first_col);
     } else {
-        selection_ = rangeReference(first_row, first_col, last_row, last_col);
+        selection_ = utils::CommonUtils::rangeReference(first_row, first_col, last_row, last_col);
     }
 }
 
@@ -520,7 +502,7 @@ void Worksheet::generateXML(const std::function<void(const char*, size_t)>& call
     auto [max_row, max_col] = getUsedRange();
     if (max_row >= 0 && max_col >= 0) {
         writer.startElement("dimension");
-        std::string ref = "A1:" + cellReference(max_row, max_col);
+        std::string ref = "A1:" + utils::CommonUtils::cellReference(max_row, max_col);
         writer.writeAttribute("ref", ref.c_str());
         writer.endElement(); // dimension
     }
@@ -571,7 +553,7 @@ void Worksheet::generateXML(const std::function<void(const char*, size_t)>& call
             writer.writeAttribute("ySplit", std::to_string(freeze_panes_->row).c_str());
         }
         if (freeze_panes_->top_left_row >= 0 && freeze_panes_->top_left_col >= 0) {
-            std::string top_left = cellReference(freeze_panes_->top_left_row, freeze_panes_->top_left_col);
+            std::string top_left = utils::CommonUtils::cellReference(freeze_panes_->top_left_row, freeze_panes_->top_left_col);
             writer.writeAttribute("topLeftCell", top_left.c_str());
         }
         writer.writeAttribute("state", "frozen");
@@ -642,7 +624,7 @@ void Worksheet::generateXML(const std::function<void(const char*, size_t)>& call
         
         for (const auto& [col_num, cell] : row_cells) {
             writer.startElement("c");
-            writer.writeAttribute("r", cellReference(row_num, col_num).c_str());
+            writer.writeAttribute("r", utils::CommonUtils::cellReference(row_num, col_num).c_str());
             
             // 关键修复 #2: 应用单元格格式
             if (cell->hasFormat()) {
@@ -707,7 +689,7 @@ void Worksheet::generateXML(const std::function<void(const char*, size_t)>& call
     // 自动筛选
     if (autofilter_) {
         writer.startElement("autoFilter");
-        std::string ref = rangeReference(autofilter_->first_row, autofilter_->first_col,
+        std::string ref = utils::CommonUtils::rangeReference(autofilter_->first_row, autofilter_->first_col,
                                        autofilter_->last_row, autofilter_->last_col);
         writer.writeAttribute("ref", ref.c_str());
         writer.endElement(); // autoFilter
@@ -720,7 +702,7 @@ void Worksheet::generateXML(const std::function<void(const char*, size_t)>& call
         
         for (const auto& range : merge_ranges_) {
             writer.startElement("mergeCell");
-            std::string ref = rangeReference(range.first_row, range.first_col, range.last_row, range.last_col);
+            std::string ref = utils::CommonUtils::rangeReference(range.first_row, range.first_col, range.last_row, range.last_col);
             writer.writeAttribute("ref", ref.c_str());
             writer.endElement(); // mergeCell
         }
@@ -802,7 +784,7 @@ void Worksheet::generateXMLToFile(const std::string& filename) const {
     auto [max_row, max_col] = getUsedRange();
     if (max_row >= 0 && max_col >= 0) {
         writer.startElement("dimension");
-        std::string ref = "A1:" + cellReference(max_row, max_col);
+        std::string ref = "A1:" + utils::CommonUtils::cellReference(max_row, max_col);
         writer.writeAttribute("ref", ref.c_str());
         writer.endElement(); // dimension
     }
@@ -950,38 +932,13 @@ void Worksheet::deleteColumns(int col, int count) {
 
 // ========== 内部辅助方法 ==========
 
-std::string Worksheet::columnToLetter(int col) const {
-    std::string result;
-    while (col >= 0) {
-        result = static_cast<char>('A' + (col % 26)) + result;
-        col = col / 26 - 1;
-    }
-    return result;
-}
-
-std::string Worksheet::cellReference(int row, int col) const {
-    return columnToLetter(col) + std::to_string(row + 1);
-}
-
-std::string Worksheet::rangeReference(int first_row, int first_col, int last_row, int last_col) const {
-    return cellReference(first_row, first_col) + ":" + cellReference(last_row, last_col);
-}
 
 void Worksheet::validateCellPosition(int row, int col) const {
-    if (row < 0 || col < 0) {
-        throw std::invalid_argument("Cell position cannot be negative");
-    }
-    if (row > 1048575 || col > 16383) { // Excel 2007+ limits
-        throw std::invalid_argument("Cell position exceeds Excel limits");
-    }
+    FASTEXCEL_VALIDATE_CELL_POSITION(row, col);
 }
 
 void Worksheet::validateRange(int first_row, int first_col, int last_row, int last_col) const {
-    validateCellPosition(first_row, first_col);
-    validateCellPosition(last_row, last_col);
-    if (first_row > last_row || first_col > last_col) {
-        throw std::invalid_argument("Invalid range: first position must be before last position");
-    }
+    FASTEXCEL_VALIDATE_RANGE(first_row, first_col, last_row, last_col);
 }
 
 // ========== XML生成辅助方法 ==========
@@ -1017,7 +974,7 @@ void Worksheet::generateSheetDataXML(const std::function<void(const char*, size_
         
         for (const auto& [col_num, cell] : row_cells) {
             writer.startElement("c");
-            writer.writeAttribute("r", cellReference(row_num, col_num).c_str());
+            writer.writeAttribute("r", utils::CommonUtils::cellReference(row_num, col_num).c_str());
             
             // 关键修复 #2: 应用单元格格式
             if (cell->hasFormat()) {
@@ -1106,7 +1063,7 @@ void Worksheet::generateMergeCellsXML(const std::function<void(const char*, size
     
     for (const auto& range : merge_ranges_) {
         writer.startElement("mergeCell");
-        std::string ref = rangeReference(range.first_row, range.first_col, range.last_row, range.last_col);
+        std::string ref = utils::CommonUtils::rangeReference(range.first_row, range.first_col, range.last_row, range.last_col);
         writer.writeAttribute("ref", ref.c_str());
         writer.endElement(); // mergeCell
     }
@@ -1121,7 +1078,7 @@ void Worksheet::generateAutoFilterXML(const std::function<void(const char*, size
     
     xml::XMLStreamWriter writer(callback);
     writer.startElement("autoFilter");
-    std::string ref = rangeReference(autofilter_->first_row, autofilter_->first_col,
+    std::string ref = utils::CommonUtils::rangeReference(autofilter_->first_row, autofilter_->first_col,
                                    autofilter_->last_row, autofilter_->last_col);
     writer.writeAttribute("ref", ref.c_str());
     writer.endElement(); // autoFilter
@@ -1174,7 +1131,7 @@ void Worksheet::generateSheetViewsXML(const std::function<void(const char*, size
             writer.writeAttribute("ySplit", std::to_string(freeze_panes_->row).c_str());
         }
         if (freeze_panes_->top_left_row >= 0 && freeze_panes_->top_left_col >= 0) {
-            std::string top_left = cellReference(freeze_panes_->top_left_row, freeze_panes_->top_left_col);
+            std::string top_left = utils::CommonUtils::cellReference(freeze_panes_->top_left_row, freeze_panes_->top_left_col);
             writer.writeAttribute("topLeftCell", top_left.c_str());
         }
         writer.writeAttribute("state", "frozen");
@@ -1534,49 +1491,33 @@ void Worksheet::updateUsedRangeOptimized(int row, int col) {
 
 // ========== 单元格编辑功能实现 ==========
 
-void Worksheet::editCellValue(int row, int col, const std::string& value, bool preserve_format) {
+// 私有辅助方法：通用的单元格编辑逻辑
+template<typename T>
+void Worksheet::editCellValueImpl(int row, int col, T&& value, bool preserve_format) {
     validateCellPosition(row, col);
     
     auto& cell = getCell(row, col);
     auto old_format = preserve_format ? cell.getFormat() : nullptr;
     
-    cell.setValue(value);
+    cell.setValue(std::forward<T>(value));
     
     if (preserve_format && old_format) {
         cell.setFormat(old_format);
     }
     
     updateUsedRange(row, col);
+}
+
+void Worksheet::editCellValue(int row, int col, const std::string& value, bool preserve_format) {
+    editCellValueImpl(row, col, value, preserve_format);
 }
 
 void Worksheet::editCellValue(int row, int col, double value, bool preserve_format) {
-    validateCellPosition(row, col);
-    
-    auto& cell = getCell(row, col);
-    auto old_format = preserve_format ? cell.getFormat() : nullptr;
-    
-    cell.setValue(value);
-    
-    if (preserve_format && old_format) {
-        cell.setFormat(old_format);
-    }
-    
-    updateUsedRange(row, col);
+    editCellValueImpl(row, col, value, preserve_format);
 }
 
 void Worksheet::editCellValue(int row, int col, bool value, bool preserve_format) {
-    validateCellPosition(row, col);
-    
-    auto& cell = getCell(row, col);
-    auto old_format = preserve_format ? cell.getFormat() : nullptr;
-    
-    cell.setValue(value);
-    
-    if (preserve_format && old_format) {
-        cell.setFormat(old_format);
-    }
-    
-    updateUsedRange(row, col);
+    editCellValueImpl(row, col, value, preserve_format);
 }
 
 void Worksheet::editCellFormat(int row, int col, std::shared_ptr<Format> format) {

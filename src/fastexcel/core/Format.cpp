@@ -7,117 +7,121 @@
 namespace fastexcel {
 namespace core {
 
+// ========== 私有辅助方法 ==========
+
+// 模板化的属性设置方法，减少重复代码
+template<typename T>
+void Format::setPropertyWithMarker(T& property, const T& value, void (Format::*marker)()) {
+    property = value;
+    (this->*marker)();
+}
+
+// 带验证的属性设置方法
+template<typename T>
+void Format::setValidatedProperty(T& property, const T& value,
+                                 std::function<bool(const T&)> validator,
+                                 void (Format::*marker)()) {
+    if (!validator || validator(value)) {
+        property = value;
+        (this->*marker)();
+    }
+}
+
+// 重载版本，用于不需要验证器的情况
+template<typename T>
+void Format::setValidatedProperty(T& property, const T& value) {
+    property = value;
+}
+
 // ========== 字体设置 ==========
 
 void Format::setFontName(const std::string& name) {
-    font_name_ = name;
-    markFontChanged();
+    setPropertyWithMarker(font_name_, name, &Format::markFontChanged);
 }
 
 void Format::setFontSize(double size) {
-    // 限制字体大小范围
-    font_size_ = std::max(1.0, std::min(409.0, size));
-    markFontChanged();
+    // 直接验证字体大小范围
+    if (size >= 1.0 && size <= 409.0) {
+        setPropertyWithMarker(font_size_, size, &Format::markFontChanged);
+    }
 }
 
 void Format::setFontColor(Color color) {
-    font_color_ = color;
-    markFontChanged();
+    setPropertyWithMarker(font_color_, color, &Format::markFontChanged);
 }
 
 void Format::setBold(bool bold) {
-    bold_ = bold;
-    markFontChanged();
+    setPropertyWithMarker(bold_, bold, &Format::markFontChanged);
 }
 
 void Format::setItalic(bool italic) {
-    italic_ = italic;
-    markFontChanged();
+    setPropertyWithMarker(italic_, italic, &Format::markFontChanged);
 }
 
 void Format::setUnderline(UnderlineType underline) {
-    underline_ = underline;
-    markFontChanged();
+    setPropertyWithMarker(underline_, underline, &Format::markFontChanged);
 }
 
 void Format::setStrikeout(bool strikeout) {
-    strikeout_ = strikeout;
-    markFontChanged();
+    setPropertyWithMarker(strikeout_, strikeout, &Format::markFontChanged);
 }
 
 void Format::setFontOutline(bool outline) {
-    outline_ = outline;
-    markFontChanged();
+    setPropertyWithMarker(outline_, outline, &Format::markFontChanged);
 }
 
 void Format::setFontShadow(bool shadow) {
-    shadow_ = shadow;
-    markFontChanged();
+    setPropertyWithMarker(shadow_, shadow, &Format::markFontChanged);
 }
 
 void Format::setFontScript(FontScript script) {
-    script_ = script;
-    markFontChanged();
+    setPropertyWithMarker(script_, script, &Format::markFontChanged);
 }
 
 void Format::setFontFamily(uint8_t family) {
-    font_family_ = family;
-    markFontChanged();
+    setPropertyWithMarker(font_family_, family, &Format::markFontChanged);
 }
 
 void Format::setFontCharset(uint8_t charset) {
-    font_charset_ = charset;
-    markFontChanged();
+    setPropertyWithMarker(font_charset_, charset, &Format::markFontChanged);
 }
 
 void Format::setFontCondense(bool condense) {
-    font_condense_ = condense;
-    markFontChanged();
+    setPropertyWithMarker(font_condense_, condense, &Format::markFontChanged);
 }
 
 void Format::setFontExtend(bool extend) {
-    font_extend_ = extend;
-    markFontChanged();
+    setPropertyWithMarker(font_extend_, extend, &Format::markFontChanged);
 }
 
 void Format::setFontScheme(const std::string& scheme) {
-    font_scheme_ = scheme;
-    markFontChanged();
+    setPropertyWithMarker(font_scheme_, scheme, &Format::markFontChanged);
 }
 
 void Format::setTheme(uint8_t theme) {
-    theme_ = theme;
-    markFontChanged();
+    setPropertyWithMarker(theme_, theme, &Format::markFontChanged);
 }
 
 void Format::setSuperscript(bool superscript) {
-    if (superscript) {
-        script_ = FontScript::Superscript;
-    } else if (script_ == FontScript::Superscript) {
-        script_ = FontScript::None;
-    }
-    markFontChanged();
+    FontScript newScript = superscript ? FontScript::Superscript :
+                          (script_ == FontScript::Superscript ? FontScript::None : script_);
+    setPropertyWithMarker(script_, newScript, &Format::markFontChanged);
 }
 
 void Format::setSubscript(bool subscript) {
-    if (subscript) {
-        script_ = FontScript::Subscript;
-    } else if (script_ == FontScript::Subscript) {
-        script_ = FontScript::None;
-    }
-    markFontChanged();
+    FontScript newScript = subscript ? FontScript::Subscript :
+                          (script_ == FontScript::Subscript ? FontScript::None : script_);
+    setPropertyWithMarker(script_, newScript, &Format::markFontChanged);
 }
 
 // ========== 对齐设置 ==========
 
 void Format::setHorizontalAlign(HorizontalAlign align) {
-    horizontal_align_ = align;
-    markAlignmentChanged();
+    setPropertyWithMarker(horizontal_align_, align, &Format::markAlignmentChanged);
 }
 
 void Format::setVerticalAlign(VerticalAlign align) {
-    vertical_align_ = align;
-    markAlignmentChanged();
+    setPropertyWithMarker(vertical_align_, align, &Format::markAlignmentChanged);
 }
 
 void Format::setAlign(uint8_t alignment) {
@@ -130,26 +134,22 @@ void Format::setAlign(uint8_t alignment) {
 }
 
 void Format::setTextWrap(bool wrap) {
-    text_wrap_ = wrap;
-    markAlignmentChanged();
+    setPropertyWithMarker(text_wrap_, wrap, &Format::markAlignmentChanged);
 }
 
 void Format::setRotation(int16_t angle) {
-    // 限制角度范围
+    // 直接验证角度范围
     if (angle == 270 || (angle >= -90 && angle <= 90)) {
-        rotation_ = angle;
-        markAlignmentChanged();
+        setPropertyWithMarker(rotation_, angle, &Format::markAlignmentChanged);
     }
 }
 
 void Format::setIndent(uint8_t level) {
-    indent_ = level;
-    markAlignmentChanged();
+    setPropertyWithMarker(indent_, level, &Format::markAlignmentChanged);
 }
 
 void Format::setShrink(bool shrink) {
-    shrink_ = shrink;
-    markAlignmentChanged();
+    setPropertyWithMarker(shrink_, shrink, &Format::markAlignmentChanged);
 }
 
 void Format::setShrinkToFit(bool shrink) {
@@ -157,8 +157,7 @@ void Format::setShrinkToFit(bool shrink) {
 }
 
 void Format::setReadingOrder(uint8_t order) {
-    reading_order_ = order;
-    markAlignmentChanged();
+    setPropertyWithMarker(reading_order_, order, &Format::markAlignmentChanged);
 }
 
 // ========== 边框设置 ==========
@@ -169,23 +168,19 @@ void Format::setBorder(BorderStyle style) {
 }
 
 void Format::setLeftBorder(BorderStyle style) {
-    left_border_ = style;
-    markBorderChanged();
+    setPropertyWithMarker(left_border_, style, &Format::markBorderChanged);
 }
 
 void Format::setRightBorder(BorderStyle style) {
-    right_border_ = style;
-    markBorderChanged();
+    setPropertyWithMarker(right_border_, style, &Format::markBorderChanged);
 }
 
 void Format::setTopBorder(BorderStyle style) {
-    top_border_ = style;
-    markBorderChanged();
+    setPropertyWithMarker(top_border_, style, &Format::markBorderChanged);
 }
 
 void Format::setBottomBorder(BorderStyle style) {
-    bottom_border_ = style;
-    markBorderChanged();
+    setPropertyWithMarker(bottom_border_, style, &Format::markBorderChanged);
 }
 
 void Format::setBorderColor(Color color) {
@@ -194,38 +189,31 @@ void Format::setBorderColor(Color color) {
 }
 
 void Format::setLeftBorderColor(Color color) {
-    left_border_color_ = color;
-    markBorderChanged();
+    setPropertyWithMarker(left_border_color_, color, &Format::markBorderChanged);
 }
 
 void Format::setRightBorderColor(Color color) {
-    right_border_color_ = color;
-    markBorderChanged();
+    setPropertyWithMarker(right_border_color_, color, &Format::markBorderChanged);
 }
 
 void Format::setTopBorderColor(Color color) {
-    top_border_color_ = color;
-    markBorderChanged();
+    setPropertyWithMarker(top_border_color_, color, &Format::markBorderChanged);
 }
 
 void Format::setBottomBorderColor(Color color) {
-    bottom_border_color_ = color;
-    markBorderChanged();
+    setPropertyWithMarker(bottom_border_color_, color, &Format::markBorderChanged);
 }
 
 void Format::setDiagType(DiagonalBorderType type) {
-    diag_type_ = type;
-    markBorderChanged();
+    setPropertyWithMarker(diag_type_, type, &Format::markBorderChanged);
 }
 
 void Format::setDiagBorder(BorderStyle style) {
-    diag_border_ = style;
-    markBorderChanged();
+    setPropertyWithMarker(diag_border_, style, &Format::markBorderChanged);
 }
 
 void Format::setDiagColor(Color color) {
-    diag_border_color_ = color;
-    markBorderChanged();
+    setPropertyWithMarker(diag_border_color_, color, &Format::markBorderChanged);
 }
 
 void Format::setDiagonalBorder(BorderStyle style) {
@@ -243,8 +231,7 @@ void Format::setDiagonalType(DiagonalType type) {
 // ========== 填充设置 ==========
 
 void Format::setPattern(PatternType pattern) {
-    pattern_ = pattern;
-    markFillChanged();
+    setPropertyWithMarker(pattern_, pattern, &Format::markFillChanged);
 }
 
 void Format::setBackgroundColor(Color color) {
@@ -256,8 +243,7 @@ void Format::setBackgroundColor(Color color) {
 }
 
 void Format::setForegroundColor(Color color) {
-    fg_color_ = color;
-    markFillChanged();
+    setPropertyWithMarker(fg_color_, color, &Format::markFillChanged);
 }
 
 // ========== 数字格式设置 ==========
@@ -326,18 +312,15 @@ void Format::setNumberFormat(NumberFormatType type) {
 // ========== 保护设置 ==========
 
 void Format::setUnlocked(bool unlocked) {
-    locked_ = !unlocked;
-    markProtectionChanged();
+    setPropertyWithMarker(locked_, !unlocked, &Format::markProtectionChanged);
 }
 
 void Format::setLocked(bool locked) {
-    locked_ = locked;
-    markProtectionChanged();
+    setPropertyWithMarker(locked_, locked, &Format::markProtectionChanged);
 }
 
 void Format::setHidden(bool hidden) {
-    hidden_ = hidden;
-    markProtectionChanged();
+    setPropertyWithMarker(hidden_, hidden, &Format::markProtectionChanged);
 }
 
 // ========== 其他设置 ==========

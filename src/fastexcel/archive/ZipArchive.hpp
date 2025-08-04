@@ -115,6 +115,10 @@ private:
     void cleanup();
     bool initForWriting();
     bool initForReading();
+    
+    // 文件操作辅助方法 - 使用 void* 避免头文件依赖
+    void initializeFileInfo(void* file_info, const std::string& path, size_t size);
+    ZipError writeFileEntry(const std::string& internal_path, const void* data, size_t size);
 };
 
 }} // namespace fastexcel::archive

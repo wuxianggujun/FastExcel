@@ -3,6 +3,7 @@
 #include "fastexcel/core/Worksheet.hpp"
 #include "fastexcel/core/Format.hpp"
 #include "fastexcel/archive/FileManager.hpp"
+#include "fastexcel/utils/CommonUtils.hpp"
 #include <string>
 #include <vector>
 #include <map>
@@ -749,7 +750,6 @@ private:
     std::string hashPassword(const std::string& password) const;
     
     // 流式XML辅助方法
-    std::string columnToLetter(int col) const;
     std::string escapeXML(const std::string& text) const;
 };
 

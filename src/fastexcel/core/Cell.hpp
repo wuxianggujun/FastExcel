@@ -62,6 +62,10 @@ private:
     // 辅助方法
     void ensureExtended();
     void clearExtended();
+    void initializeFlags();
+    void deepCopyExtendedData(const Cell& other);
+    void copyStringField(std::string*& dest, const std::string* src);
+    void resetToEmpty();
     
 public:
     Cell();

@@ -4,6 +4,7 @@
 #include "fastexcel/core/Format.hpp"
 #include "fastexcel/core/SharedStringTable.hpp"
 #include "fastexcel/core/FormatPool.hpp"
+#include "fastexcel/utils/CommonUtils.hpp"
 #include <string>
 #include <vector>
 #include <map>
@@ -1048,11 +1049,15 @@ public:
 
 private:
     // 内部辅助方法
-    std::string columnToLetter(int col) const;
-    std::string cellReference(int row, int col) const;
-    std::string rangeReference(int first_row, int first_col, int last_row, int last_col) const;
     void validateCellPosition(int row, int col) const;
     void validateRange(int first_row, int first_col, int last_row, int last_col) const;
+    
+    // 模板化的单元格操作辅助方法
+    template<typename T>
+    void writeCellValue(int row, int col, T&& value, std::shared_ptr<Format> format);
+    
+    template<typename T>
+    void editCellValueImpl(int row, int col, T&& value, bool preserve_format);
     
     // 优化相关辅助方法
     void ensureCurrentRow(int row_num);

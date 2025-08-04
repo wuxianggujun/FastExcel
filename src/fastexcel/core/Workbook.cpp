@@ -1595,7 +1595,7 @@ bool Workbook::generateWorksheetXMLStreaming(const std::shared_ptr<Worksheet>& w
                 for (int col = 0; col <= max_col; ++col) {
                     if (worksheet->hasCellAt(row, col)) {
                         const auto& cell = worksheet->getCell(row, col);
-                        std::string cell_ref = columnToLetter(col) + std::to_string(row + 1);
+                        std::string cell_ref = utils::CommonUtils::cellReference(row, col);
                         
                         writer.startElement("c");
                         writer.writeAttribute("r", cell_ref);
@@ -1665,8 +1665,7 @@ bool Workbook::generateWorksheetXMLStreaming(const std::shared_ptr<Worksheet>& w
             
             for (const auto& range : merge_ranges) {
                 writer.startElement("mergeCell");
-                std::string range_ref = columnToLetter(range.first_col) + std::to_string(range.first_row + 1) +
-                                      ":" + columnToLetter(range.last_col) + std::to_string(range.last_row + 1);
+                std::string range_ref = utils::CommonUtils::rangeReference(range.first_row, range.first_col, range.last_row, range.last_col);
                 writer.writeAttribute("ref", range_ref);
                 writer.endElement(); // mergeCell
             }
@@ -1678,8 +1677,7 @@ bool Workbook::generateWorksheetXMLStreaming(const std::shared_ptr<Worksheet>& w
         if (worksheet->hasAutoFilter()) {
             auto filter_range = worksheet->getAutoFilterRange();
             writer.startElement("autoFilter");
-            std::string range_ref = columnToLetter(filter_range.first_col) + std::to_string(filter_range.first_row + 1) +
-                                  ":" + columnToLetter(filter_range.last_col) + std::to_string(filter_range.last_row + 1);
+            std::string range_ref = utils::CommonUtils::rangeReference(filter_range.first_row, filter_range.first_col, filter_range.last_row, filter_range.last_col);
             writer.writeAttribute("ref", range_ref);
             writer.endElement(); // autoFilter
         }
@@ -1707,15 +1705,6 @@ bool Workbook::generateWorksheetXMLStreaming(const std::shared_ptr<Worksheet>& w
     }
 }
 
-// 辅助方法：列号转字母
-std::string Workbook::columnToLetter(int col) const {
-    std::string result;
-    while (col >= 0) {
-        result = static_cast<char>('A' + (col % 26)) + result;
-        col = col / 26 - 1;
-    }
-    return result;
-}
 
 // 辅助方法：XML转义
 std::string Workbook::escapeXML(const std::string& text) const {

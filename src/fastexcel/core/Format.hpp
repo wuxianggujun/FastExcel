@@ -4,6 +4,7 @@
 #include <string>
 #include <memory>
 #include <cstdint>
+#include <functional>
 
 namespace fastexcel {
 namespace core {
@@ -683,6 +684,19 @@ private:
     void markBorderChanged() { has_border_ = true; }
     void markAlignmentChanged() { has_alignment_ = true; }
     void markProtectionChanged() { has_protection_ = true; }
+    
+    // 模板化的属性设置辅助方法
+    template<typename T>
+    void setPropertyWithMarker(T& property, const T& value, void (Format::*marker)());
+    
+    template<typename T>
+    void setValidatedProperty(T& property, const T& value,
+                             std::function<bool(const T&)> validator,
+                             void (Format::*marker)());
+    
+    // 重载版本，用于不需要验证器的情况
+    template<typename T>
+    void setValidatedProperty(T& property, const T& value);
     
     std::string borderStyleToString(BorderStyle style) const;
     std::string patternTypeToString(PatternType pattern) const;
