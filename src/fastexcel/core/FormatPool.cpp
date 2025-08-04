@@ -387,10 +387,13 @@ void FormatPool::generateStylesXML(const std::function<void(const char*, size_t)
     // 其他格式
     for (size_t i = 0; i < formats_.size(); ++i) {
         const auto& format = formats_[i];
-        // 设置格式索引
-        format->setFontIndex(i + 1);
-        format->setFillIndex(i + 2);
-        format->setBorderIndex(i + 1);
+        // 关键修复：正确设置格式索引
+        // 字体索引：默认字体(0) + 当前格式索引
+        format->setFontIndex(format->hasFont() ? (i + 1) : 0);
+        // 填充索引：默认填充(0,1) + 当前格式索引
+        format->setFillIndex(format->hasFill() ? (i + 2) : 0);
+        // 边框索引：默认边框(0) + 当前格式索引
+        format->setBorderIndex(format->hasBorder() ? (i + 1) : 0);
         
         std::string xfXML = format->generateXML();
         writer.writeRaw(xfXML);
@@ -418,7 +421,7 @@ void FormatPool::generateStylesXML(const std::function<void(const char*, size_t)
     // 添加tableStyles元素
     writer.startElement("tableStyles");
     writer.writeAttribute("count", "0");
-    writer.writeAttribute("defaultTableStyle", "TableStyleMedium9");
+    writer.writeAttribute("defaultTableStyle", "TableStyleMedium2");
     writer.writeAttribute("defaultPivotStyle", "PivotStyleLight16");
     writer.endElement(); // tableStyles
     
@@ -617,10 +620,13 @@ void FormatPool::generateStylesXMLToFile(const std::string& filename) const {
     // 其他格式
     for (size_t i = 0; i < formats_.size(); ++i) {
         const auto& format = formats_[i];
-        // 设置格式索引
-        format->setFontIndex(i + 1);
-        format->setFillIndex(i + 2);
-        format->setBorderIndex(i + 1);
+        // 关键修复：正确设置格式索引
+        // 字体索引：默认字体(0) + 当前格式索引
+        format->setFontIndex(format->hasFont() ? (i + 1) : 0);
+        // 填充索引：默认填充(0,1) + 当前格式索引
+        format->setFillIndex(format->hasFill() ? (i + 2) : 0);
+        // 边框索引：默认边框(0) + 当前格式索引
+        format->setBorderIndex(format->hasBorder() ? (i + 1) : 0);
         
         std::string xfXML = format->generateXML();
         writer.writeRaw(xfXML);
@@ -648,7 +654,7 @@ void FormatPool::generateStylesXMLToFile(const std::string& filename) const {
     // 添加tableStyles元素
     writer.startElement("tableStyles");
     writer.writeAttribute("count", "0");
-    writer.writeAttribute("defaultTableStyle", "TableStyleMedium9");
+    writer.writeAttribute("defaultTableStyle", "TableStyleMedium2");
     writer.writeAttribute("defaultPivotStyle", "PivotStyleLight16");
     writer.endElement(); // tableStyles
     

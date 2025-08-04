@@ -350,6 +350,10 @@ std::shared_ptr<Format> Workbook::createFormat() {
     // 将格式添加到格式池中，FormatPool会管理去重和索引
     Format* pool_format = format_pool_->addFormat(std::move(format));
     
+    // 关键修复：设置Format对象的XF索引
+    size_t format_index = format_pool_->getFormatIndex(pool_format);
+    pool_format->setXfIndex(static_cast<int32_t>(format_index));
+    
     // 返回一个共享指针，指向池中的格式
     // 使用空删除器，因为FormatPool管理Format的生命周期
     return std::shared_ptr<Format>(pool_format, [](Format*){
@@ -1377,6 +1381,11 @@ bool Workbook::generateWorksheetXMLStreaming(const std::shared_ptr<Worksheet>& w
                         
                         writer.startElement("c");
                         writer.writeAttribute("r", cell_ref);
+                        
+                        // 关键修复：应用单元格格式索引
+                        if (cell.hasFormat()) {
+                            writer.writeAttribute("s", std::to_string(cell.getFormat()->getXfIndex()));
+                        }
                         
                         // 根据单元格类型添加属性和内容
                         if (cell.isString()) {
