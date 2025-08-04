@@ -358,20 +358,14 @@ std::string Format::generateFontXML() const {
     std::ostringstream oss;
     oss << "<font>";
     
-    // 字体大小
-    if (font_size_ != 11.0) {
-        oss << "<sz val=\"" << font_size_ << "\"/>";
-    }
+    // 字体大小 - 总是包含
+    oss << "<sz val=\"" << font_size_ << "\"/>";
     
-    // 字体名称
-    if (!font_name_.empty() && font_name_ != "Calibri") {
-        oss << "<name val=\"" << font_name_ << "\"/>";
-    }
+    // 字体名称 - 总是包含
+    oss << "<name val=\"" << font_name_ << "\"/>";
     
-    // 字体族
-    if (font_family_ != 2) {
-        oss << "<family val=\"" << static_cast<int>(font_family_) << "\"/>";
-    }
+    // 字体族 - 总是包含
+    oss << "<family val=\"" << static_cast<int>(font_family_) << "\"/>";
     
     // 字符集
     if (font_charset_ != 1) {
@@ -428,7 +422,7 @@ std::string Format::generateFontXML() const {
     
     // 上标/下标
     if (script_ != FontScript::None) {
-        std::string script_str = (script_ == FontScript::Superscript) ? "1" : "2";
+        std::string script_str = (script_ == FontScript::Superscript) ? "superscript" : "subscript";
         oss << "<vertAlign val=\"" << script_str << "\"/>";
     }
     
@@ -437,10 +431,9 @@ std::string Format::generateFontXML() const {
         oss << font_color_.toXML();
     }
     
-    // 字体方案
-    if (!font_scheme_.empty()) {
-        oss << "<scheme val=\"" << font_scheme_ << "\"/>";
-    }
+    // 字体方案 - 总是包含
+    std::string scheme = font_scheme_.empty() ? "minor" : font_scheme_;
+    oss << "<scheme val=\"" << scheme << "\"/>";
     
     oss << "</font>";
     return oss.str();
@@ -579,7 +572,14 @@ std::string Format::generateAlignmentXML() const {
     
     // 文本旋转
     if (rotation_ != 0) {
-        oss << " textRotation=\"" << rotation_ << "\"";
+        // 处理旋转角度映射，与libxlsxwriter保持一致
+        int16_t rotation = rotation_;
+        if (rotation == 270) {
+            rotation = 255;
+        } else if (rotation < 0) {
+            rotation = -rotation + 90;
+        }
+        oss << " textRotation=\"" << rotation << "\"";
     }
     
     // 缩进
@@ -597,6 +597,7 @@ std::string Format::generateAlignmentXML() const {
         oss << " readingOrder=\"" << static_cast<int>(reading_order_) << "\"";
     }
     
+    // 返回自闭合标签
     oss << "/>";
     return oss.str();
 }
@@ -675,6 +676,7 @@ std::string Format::generateXML() const {
         oss << ">";
         
         if (has_alignment_) {
+            // 生成alignment元素作为xf的子元素（自闭合标签）
             oss << generateAlignmentXML();
         }
         

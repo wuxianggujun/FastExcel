@@ -974,7 +974,9 @@ void Workbook::generateStylesXML(const std::function<void(const char*, size_t)>&
     
     // 单元格XF
     writer.startElement("cellXfs");
-    writer.writeAttribute("count", std::to_string(next_xf_id_).c_str());
+    // 计算实际的XF数量：1个默认 + 用户定义的格式数量
+    size_t total_xf_count = 1 + formats_.size();
+    writer.writeAttribute("count", std::to_string(total_xf_count).c_str());
     
     // 默认XF
     writer.startElement("xf");
@@ -994,15 +996,41 @@ void Workbook::generateStylesXML(const std::function<void(const char*, size_t)>&
         writer.writeAttribute("borderId", std::to_string(format->getBorderIndex()).c_str());
         writer.writeAttribute("xfId", "0");
         
+        // 添加应用标志
+        if (format->hasFont()) {
+            writer.writeAttribute("applyFont", "1");
+        }
+        if (format->hasFill()) {
+            writer.writeAttribute("applyFill", "1");
+        }
+        if (format->hasBorder()) {
+            writer.writeAttribute("applyBorder", "1");
+        }
         if (format->hasAlignment()) {
-            writer.writeRaw(format->generateAlignmentXML().c_str());
+            writer.writeAttribute("applyAlignment", "1");
         }
-        
         if (format->hasProtection()) {
-            writer.writeRaw(format->generateProtectionXML().c_str());
+            writer.writeAttribute("applyProtection", "1");
+        }
+        if (!format->getNumberFormat().empty()) {
+            writer.writeAttribute("applyNumberFormat", "1");
         }
         
-        writer.endElement(); // xf
+        // 如果有对齐或保护设置，需要添加子元素
+        if (format->hasAlignment() || format->hasProtection()) {
+            writer.endElement(); // 结束 xf 开始标签
+            
+            if (format->hasAlignment()) {
+                writer.writeRaw(format->generateAlignmentXML().c_str());
+            }
+            if (format->hasProtection()) {
+                writer.writeRaw(format->generateProtectionXML().c_str());
+            }
+            
+            writer.endElement(); // 结束 xf 元素
+        } else {
+            writer.endElement(); // 自闭合 xf 元素
+        }
     }
     
     writer.endElement(); // cellXfs

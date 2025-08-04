@@ -135,9 +135,12 @@ std::string Color::toXML() const {
     std::ostringstream oss;
     
     switch (type_) {
-        case Type::RGB:
-            oss << "<color rgb=\"" << toHex() << "\"/>";
+        case Type::RGB: {
+            // 使用AARRGGBB格式（8位），与libxlsxwriter兼容
+            uint32_t rgb = getRGB();
+            oss << "<color rgb=\"FF" << std::hex << std::uppercase << std::setw(6) << std::setfill('0') << rgb << "\"/>";
             break;
+        }
         case Type::Theme:
             oss << "<color theme=\"" << value_ << "\"";
             if (tint_ != 0.0) {

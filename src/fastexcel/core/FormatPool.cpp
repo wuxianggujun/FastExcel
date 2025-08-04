@@ -224,16 +224,61 @@ void FormatPool::generateStylesXML(const std::function<void(const char*, size_t)
     writer.startElement("fonts");
     writer.writeAttribute("count", std::to_string(getFormatCount() + 1).c_str());
     
-    // 默认字体
-    writer.writeRaw(default_format_->generateFontXML());
+    // 默认字体 - 完整的Calibri 11定义
+    writer.startElement("font");
+    writer.startElement("sz");
+    writer.writeAttribute("val", "11");
+    writer.endElement(); // sz
+    writer.startElement("name");
+    writer.writeAttribute("val", "Calibri");
+    writer.endElement(); // name
+    writer.startElement("family");
+    writer.writeAttribute("val", "2");
+    writer.endElement(); // family
+    writer.startElement("scheme");
+    writer.writeAttribute("val", "minor");
+    writer.endElement(); // scheme
+    writer.endElement(); // font
     
     // 其他字体
     for (const auto& format : formats_) {
-        std::string fontXML = format->generateFontXML();
-        if (!fontXML.empty()) {
-            writer.writeRaw(fontXML);
+        if (format->hasFont()) {
+            std::string fontXML = format->generateFontXML();
+            if (!fontXML.empty()) {
+                writer.writeRaw(fontXML);
+            } else {
+                // 如果生成失败，使用默认字体
+                writer.startElement("font");
+                writer.startElement("sz");
+                writer.writeAttribute("val", "11");
+                writer.endElement(); // sz
+                writer.startElement("name");
+                writer.writeAttribute("val", "Calibri");
+                writer.endElement(); // name
+                writer.startElement("family");
+                writer.writeAttribute("val", "2");
+                writer.endElement(); // family
+                writer.startElement("scheme");
+                writer.writeAttribute("val", "minor");
+                writer.endElement(); // scheme
+                writer.endElement(); // font
+            }
         } else {
-            writer.writeRaw(default_format_->generateFontXML());
+            // 没有字体设置，使用默认字体
+            writer.startElement("font");
+            writer.startElement("sz");
+            writer.writeAttribute("val", "11");
+            writer.endElement(); // sz
+            writer.startElement("name");
+            writer.writeAttribute("val", "Calibri");
+            writer.endElement(); // name
+            writer.startElement("family");
+            writer.writeAttribute("val", "2");
+            writer.endElement(); // family
+            writer.startElement("scheme");
+            writer.writeAttribute("val", "minor");
+            writer.endElement(); // scheme
+            writer.endElement(); // font
         }
     }
     
@@ -364,6 +409,18 @@ void FormatPool::generateStylesXML(const std::function<void(const char*, size_t)
     writer.endElement(); // cellStyle
     
     writer.endElement(); // cellStyles
+    
+    // 添加dxfs元素（差异格式，即使为空也需要）
+    writer.startElement("dxfs");
+    writer.writeAttribute("count", "0");
+    writer.endElement(); // dxfs
+    
+    // 添加tableStyles元素
+    writer.startElement("tableStyles");
+    writer.writeAttribute("count", "0");
+    writer.writeAttribute("defaultTableStyle", "TableStyleMedium9");
+    writer.writeAttribute("defaultPivotStyle", "PivotStyleLight16");
+    writer.endElement(); // tableStyles
     
     writer.endElement(); // styleSheet
     writer.endDocument();
@@ -397,16 +454,61 @@ void FormatPool::generateStylesXMLToFile(const std::string& filename) const {
     writer.startElement("fonts");
     writer.writeAttribute("count", std::to_string(getFormatCount() + 1).c_str());
     
-    // 默认字体
-    writer.writeRaw(default_format_->generateFontXML());
+    // 默认字体 - 完整的Calibri 11定义
+    writer.startElement("font");
+    writer.startElement("sz");
+    writer.writeAttribute("val", "11");
+    writer.endElement(); // sz
+    writer.startElement("name");
+    writer.writeAttribute("val", "Calibri");
+    writer.endElement(); // name
+    writer.startElement("family");
+    writer.writeAttribute("val", "2");
+    writer.endElement(); // family
+    writer.startElement("scheme");
+    writer.writeAttribute("val", "minor");
+    writer.endElement(); // scheme
+    writer.endElement(); // font
     
     // 其他字体
     for (const auto& format : formats_) {
-        std::string fontXML = format->generateFontXML();
-        if (!fontXML.empty()) {
-            writer.writeRaw(fontXML);
+        if (format->hasFont()) {
+            std::string fontXML = format->generateFontXML();
+            if (!fontXML.empty()) {
+                writer.writeRaw(fontXML);
+            } else {
+                // 如果生成失败，使用默认字体
+                writer.startElement("font");
+                writer.startElement("sz");
+                writer.writeAttribute("val", "11");
+                writer.endElement(); // sz
+                writer.startElement("name");
+                writer.writeAttribute("val", "Calibri");
+                writer.endElement(); // name
+                writer.startElement("family");
+                writer.writeAttribute("val", "2");
+                writer.endElement(); // family
+                writer.startElement("scheme");
+                writer.writeAttribute("val", "minor");
+                writer.endElement(); // scheme
+                writer.endElement(); // font
+            }
         } else {
-            writer.writeRaw(default_format_->generateFontXML());
+            // 没有字体设置，使用默认字体
+            writer.startElement("font");
+            writer.startElement("sz");
+            writer.writeAttribute("val", "11");
+            writer.endElement(); // sz
+            writer.startElement("name");
+            writer.writeAttribute("val", "Calibri");
+            writer.endElement(); // name
+            writer.startElement("family");
+            writer.writeAttribute("val", "2");
+            writer.endElement(); // family
+            writer.startElement("scheme");
+            writer.writeAttribute("val", "minor");
+            writer.endElement(); // scheme
+            writer.endElement(); // font
         }
     }
     
@@ -537,6 +639,18 @@ void FormatPool::generateStylesXMLToFile(const std::string& filename) const {
     writer.endElement(); // cellStyle
     
     writer.endElement(); // cellStyles
+    
+    // 添加dxfs元素（差异格式，即使为空也需要）
+    writer.startElement("dxfs");
+    writer.writeAttribute("count", "0");
+    writer.endElement(); // dxfs
+    
+    // 添加tableStyles元素
+    writer.startElement("tableStyles");
+    writer.writeAttribute("count", "0");
+    writer.writeAttribute("defaultTableStyle", "TableStyleMedium9");
+    writer.writeAttribute("defaultPivotStyle", "PivotStyleLight16");
+    writer.endElement(); // tableStyles
     
     writer.endElement(); // styleSheet
     writer.endDocument();
