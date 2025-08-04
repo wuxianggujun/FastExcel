@@ -66,7 +66,7 @@ struct WorkbookOptions {
     bool encrypt_metadata = false;    // 加密元数据
     
     // 性能优化选项
-    bool use_shared_strings = false;  // 使用共享字符串（默认禁用以提高性能）
+    bool use_shared_strings = true;   // 使用共享字符串（默认启用以匹配Excel格式）
     bool streaming_xml = true;        // 流式XML写入（默认启用以优化内存）
     size_t row_buffer_size = 5000;    // 行缓冲大小（默认较大缓冲）
     int compression_level = 1;        // ZIP压缩级别（默认快速压缩）
@@ -736,6 +736,10 @@ private:
     
     // 流式XML辅助方法
     std::string escapeXML(const std::string& text) const;
+    
+    // 智能模式选择辅助方法
+    size_t estimateMemoryUsage() const;
+    size_t getTotalCellCount() const;
 };
 
 }} // namespace fastexcel::core

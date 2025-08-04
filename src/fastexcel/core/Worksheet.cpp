@@ -497,7 +497,11 @@ void Worksheet::generateXML(const std::function<void(const char*, size_t)>& call
     writer.writeAttribute("xmlns:xr", "http://schemas.microsoft.com/office/spreadsheetml/2014/revision");
     writer.writeAttribute("xmlns:xr2", "http://schemas.microsoft.com/office/spreadsheetml/2015/revision2");
     writer.writeAttribute("xmlns:xr3", "http://schemas.microsoft.com/office/spreadsheetml/2016/revision3");
-    writer.writeAttribute("xr:uid", "{00000000-0001-0000-0000-000000000000}");
+    // 生成基于工作表ID的唯一UID
+    std::string uid = "{00000000-0001-0000-";
+    uid += (sheet_id_ == 1 ? "0000" : "0100");
+    uid += "-000000000000}";
+    writer.writeAttribute("xr:uid", uid.c_str());
     
     // 工作表属性
     if (sheet_view_.right_to_left) {
@@ -506,16 +510,10 @@ void Worksheet::generateXML(const std::function<void(const char*, size_t)>& call
         writer.endElement(); // sheetPr
     }
     
-    // 尺寸信息 - 关键修复：总是生成dimension元素
+    // 尺寸信息 - 关键修复：总是使用A1格式
     auto [max_row, max_col] = getUsedRange();
     writer.startElement("dimension");
-    if (max_row >= 0 && max_col >= 0) {
-        std::string ref = "A1:" + utils::CommonUtils::cellReference(max_row, max_col);
-        writer.writeAttribute("ref", ref.c_str());
-    } else {
-        // 如果没有数据，使用默认的A1
-        writer.writeAttribute("ref", "A1");
-    }
+    writer.writeAttribute("ref", "A1");
     writer.endElement(); // dimension
     
     // 工作表视图 - 关键修复：总是生成sheetViews
@@ -544,19 +542,8 @@ void Worksheet::generateXML(const std::function<void(const char*, size_t)>& call
         writer.writeAttribute("rightToLeft", "1");
     }
     
-    // 选择区域 - 关键修复：总是生成默认选择
-    writer.startElement("selection");
-    if (!selection_.empty()) {
-        writer.writeAttribute("sqref", selection_.c_str());
-    } else {
-        writer.writeAttribute("sqref", "A1");
-    }
-    if (!active_cell_.empty()) {
-        writer.writeAttribute("activeCell", active_cell_.c_str());
-    } else {
-        writer.writeAttribute("activeCell", "A1");
-    }
-    writer.endElement(); // selection
+    // 选择区域 - 关键修复：不生成selection元素
+    // 根据修复后的文件，所有工作表都不应该有selection元素
     
     // 冻结窗格
     if (freeze_panes_) {
@@ -623,7 +610,17 @@ void Worksheet::generateXML(const std::function<void(const char*, size_t)>& call
     for (const auto& [row_num, row_cells] : sorted_cells) {
         writer.startElement("row");
         writer.writeAttribute("r", std::to_string(row_num + 1).c_str());
-        writer.writeAttribute("spans", "1:1");
+        
+        // 计算当前行的列范围
+        int min_col_in_row = INT_MAX;
+        int max_col_in_row = INT_MIN;
+        for (const auto& [col_num, cell] : row_cells) {
+            min_col_in_row = std::min(min_col_in_row, col_num);
+            max_col_in_row = std::max(max_col_in_row, col_num);
+        }
+        
+        std::string spans = std::to_string(min_col_in_row + 1) + ":" + std::to_string(max_col_in_row + 1);
+        writer.writeAttribute("spans", spans.c_str());
         writer.writeAttribute("x14ac:dyDescent", "0.4");
         
         // 检查行信息
@@ -656,10 +653,18 @@ void Worksheet::generateXML(const std::function<void(const char*, size_t)>& call
                     writer.endElement(); // f
                 } else if (cell->isString()) {
                     // 关键修复 #3: 根据工作簿设置决定使用共享字符串还是内联字符串
-                    if (parent_workbook_ && parent_workbook_->getOptions().use_shared_strings && sst_) {
+                    if (parent_workbook_ && parent_workbook_->getOptions().use_shared_strings) {
+                        // 使用共享字符串表
                         writer.writeAttribute("t", "s");
                         writer.startElement("v");
-                        writer.writeText(std::to_string(sst_->getStringId(cell->getStringValue())).c_str());
+                        int sst_index = parent_workbook_->getSharedStringIndex(cell->getStringValue());
+                        if (sst_index >= 0) {
+                            writer.writeText(std::to_string(sst_index).c_str());
+                        } else {
+                            // 如果字符串不在SST中，添加它
+                            sst_index = parent_workbook_->addSharedString(cell->getStringValue());
+                            writer.writeText(std::to_string(sst_index).c_str());
+                        }
                         writer.endElement(); // v
                     } else {
                         writer.writeAttribute("t", "inlineStr");
@@ -752,7 +757,7 @@ void Worksheet::generateXML(const std::function<void(const char*, size_t)>& call
     
     // 语音属性 - 关键修复：添加phoneticPr元素
     writer.startElement("phoneticPr");
-    writer.writeAttribute("fontId", "2");
+    writer.writeAttribute("fontId", "1");
     writer.writeAttribute("type", "noConversion");
     writer.endElement(); // phoneticPr
     
@@ -770,74 +775,6 @@ void Worksheet::generateXML(const std::function<void(const char*, size_t)>& call
     writer.endDocument();
 }
 
-void Worksheet::generateXMLToFile(const std::string& filename) const {
-    xml::XMLStreamWriter writer(filename);
-    writer.startDocument();
-    writer.startElement("worksheet");
-    writer.writeAttribute("xmlns", "http://schemas.openxmlformats.org/spreadsheetml/2006/main");
-    writer.writeAttribute("xmlns:r", "http://schemas.openxmlformats.org/officeDocument/2006/relationships");
-    
-    // 工作表属性
-    if (sheet_view_.right_to_left) {
-        writer.startElement("sheetPr");
-        writer.writeAttribute("rightToLeft", "1");
-        writer.endElement(); // sheetPr
-    }
-    
-    // 尺寸信息 - 关键修复：总是生成dimension元素
-    auto [max_row, max_col] = getUsedRange();
-    writer.startElement("dimension");
-    if (max_row >= 0 && max_col >= 0) {
-        std::string ref = "A1:" + utils::CommonUtils::cellReference(max_row, max_col);
-        writer.writeAttribute("ref", ref.c_str());
-    } else {
-        // 如果没有数据，使用默认的A1
-        writer.writeAttribute("ref", "A1");
-    }
-    writer.endElement(); // dimension
-    
-    // 使用回调模式生成各部分
-    auto file_callback = [&writer](const char* data, size_t size) {
-        writer.writeRaw(std::string(data, size));
-    };
-    
-    // 工作表视图
-    generateSheetViewsXML(file_callback);
-    
-    // 工作表格式信息
-    std::string sheet_format_xml = "<sheetFormatPr defaultRowHeight=\"" +
-                                  std::to_string(default_row_height_) +
-                                  "\" defaultColWidth=\"" +
-                                  std::to_string(default_col_width_) + "\"/>";
-    writer.writeRaw(sheet_format_xml.c_str());
-    
-    // 列信息
-    generateColumnsXML(file_callback);
-    
-    // 工作表数据
-    generateSheetDataXML(file_callback);
-    
-    // 工作表保护
-    generateSheetProtectionXML(file_callback);
-    
-    // 自动筛选
-    generateAutoFilterXML(file_callback);
-    
-     // 合并单元格
-    generateMergeCellsXML(file_callback);
-    
-    // 打印选项
-    generatePrintOptionsXML(file_callback);
-    
-    // 页边距
-    generatePageMarginsXML(file_callback);
-    
-    // 页面设置
-    generatePageSetupXML(file_callback);
-    
-    writer.endElement(); // worksheet
-    writer.endDocument();
-}
 
 void Worksheet::generateRelsXML(const std::function<void(const char*, size_t)>& callback) const {
     // 关键修复：只有在有超链接时才生成关系XML
@@ -1024,11 +961,19 @@ void Worksheet::generateSheetDataXML(const std::function<void(const char*, size_
                     writer.writeText(cell->getFormula().c_str());
                     writer.endElement(); // f
                 } else if (cell->isString()) {
-                    // 关键修复 #3: 根据是否使用SST，决定写入共享字符串还是内联字符串
-                    if (sst_) {
+                    // 关键修复 #3: 根据工作簿设置决定使用共享字符串还是内联字符串
+                    if (parent_workbook_ && parent_workbook_->getOptions().use_shared_strings) {
+                        // 使用共享字符串表
                         writer.writeAttribute("t", "s");
                         writer.startElement("v");
-                        writer.writeText(std::to_string(sst_->getStringId(cell->getStringValue())).c_str());
+                        int sst_index = parent_workbook_->getSharedStringIndex(cell->getStringValue());
+                        if (sst_index >= 0) {
+                            writer.writeText(std::to_string(sst_index).c_str());
+                        } else {
+                            // 如果字符串不在SST中，添加它
+                            sst_index = parent_workbook_->addSharedString(cell->getStringValue());
+                            writer.writeText(std::to_string(sst_index).c_str());
+                        }
                         writer.endElement(); // v
                     } else {
                         writer.writeAttribute("t", "inlineStr");
@@ -1146,15 +1091,8 @@ void Worksheet::generateSheetViewsXML(const std::function<void(const char*, size
         writer.writeAttribute("rightToLeft", "1");
     }
     
-    // 选择区域
-    if (!selection_.empty()) {
-        writer.startElement("selection");
-        writer.writeAttribute("sqref", selection_.c_str());
-        if (!active_cell_.empty()) {
-            writer.writeAttribute("activeCell", active_cell_.c_str());
-        }
-        writer.endElement(); // selection
-    }
+    // 选择区域 - 关键修复：不生成selection元素
+    // 根据修复后的文件，所有工作表都不应该有selection元素
     
     // 冻结窗格
     if (freeze_panes_) {

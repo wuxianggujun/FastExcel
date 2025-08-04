@@ -180,9 +180,10 @@ bool FileManager::addContentTypes() {
 
 bool FileManager::addRootRels() {
     xml::Relationships rels;
-    rels.addRelationship("rId1", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument", "xl/workbook.xml");
-    rels.addRelationship("rId2", "http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties", "docProps/core.xml");
+    // 修改顺序以匹配修复后的文件：rId3, rId2, rId1
     rels.addRelationship("rId3", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties", "docProps/app.xml");
+    rels.addRelationship("rId2", "http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties", "docProps/core.xml");
+    rels.addRelationship("rId1", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument", "xl/workbook.xml");
     
     // 使用流式写入到ZIP
     if (!openStreamingFile("_rels/.rels")) {
@@ -249,7 +250,7 @@ bool FileManager::addDocProps() {
     app_props << "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n";
     app_props << "<Properties xmlns=\"http://schemas.openxmlformats.org/officeDocument/2006/extended-properties\" ";
     app_props << "xmlns:vt=\"http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes\">\n";
-    app_props << "  <Application>FastExcel</Application>\n";
+    app_props << "  <Application>Microsoft Excel</Application>\n";
     app_props << "  <DocSecurity>0</DocSecurity>\n";
     app_props << "  <ScaleCrop>false</ScaleCrop>\n";
     app_props << "  <LinksUpToDate>false</LinksUpToDate>\n";

@@ -885,11 +885,6 @@ public:
      */
     void generateXML(const std::function<void(const char*, size_t)>& callback) const;
     
-    /**
-     * @brief 生成工作表XML到文件（流式写入）
-     * @param filename 输出文件名
-     */
-    void generateXMLToFile(const std::string& filename) const;
     
     /**
      * @brief 生成工作表关系XML到回调函数（流式写入）
