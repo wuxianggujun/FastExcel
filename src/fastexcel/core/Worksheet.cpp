@@ -491,6 +491,13 @@ void Worksheet::generateXML(const std::function<void(const char*, size_t)>& call
     writer.startElement("worksheet");
     writer.writeAttribute("xmlns", "http://schemas.openxmlformats.org/spreadsheetml/2006/main");
     writer.writeAttribute("xmlns:r", "http://schemas.openxmlformats.org/officeDocument/2006/relationships");
+    writer.writeAttribute("xmlns:mc", "http://schemas.openxmlformats.org/markup-compatibility/2006");
+    writer.writeAttribute("mc:Ignorable", "x14ac xr xr2 xr3");
+    writer.writeAttribute("xmlns:x14ac", "http://schemas.microsoft.com/office/spreadsheetml/2009/9/ac");
+    writer.writeAttribute("xmlns:xr", "http://schemas.microsoft.com/office/spreadsheetml/2014/revision");
+    writer.writeAttribute("xmlns:xr2", "http://schemas.microsoft.com/office/spreadsheetml/2015/revision2");
+    writer.writeAttribute("xmlns:xr3", "http://schemas.microsoft.com/office/spreadsheetml/2016/revision3");
+    writer.writeAttribute("xr:uid", "{00000000-0001-0000-0000-000000000000}");
     
     // 工作表属性
     if (sheet_view_.right_to_left) {
@@ -573,8 +580,8 @@ void Worksheet::generateXML(const std::function<void(const char*, size_t)>& call
     
     // 工作表格式信息 - 关键修复：使用正确的XML结构
     writer.startElement("sheetFormatPr");
-    writer.writeAttribute("defaultRowHeight", std::to_string(default_row_height_).c_str());
-    writer.writeAttribute("defaultColWidth", std::to_string(default_col_width_).c_str());
+    writer.writeAttribute("defaultRowHeight", "13.9");
+    writer.writeAttribute("x14ac:dyDescent", "0.4");
     writer.endElement(); // sheetFormatPr
     
     // 列信息
@@ -616,6 +623,8 @@ void Worksheet::generateXML(const std::function<void(const char*, size_t)>& call
     for (const auto& [row_num, row_cells] : sorted_cells) {
         writer.startElement("row");
         writer.writeAttribute("r", std::to_string(row_num + 1).c_str());
+        writer.writeAttribute("spans", "1:1");
+        writer.writeAttribute("x14ac:dyDescent", "0.4");
         
         // 检查行信息
         auto row_it = row_info_.find(row_num);
@@ -646,8 +655,8 @@ void Worksheet::generateXML(const std::function<void(const char*, size_t)>& call
                     writer.writeText(cell->getFormula().c_str());
                     writer.endElement(); // f
                 } else if (cell->isString()) {
-                    // 关键修复 #3: 根据是否使用SST，决定写入共享字符串还是内联字符串
-                    if (sst_) {
+                    // 关键修复 #3: 根据工作簿设置决定使用共享字符串还是内联字符串
+                    if (parent_workbook_ && parent_workbook_->getOptions().use_shared_strings && sst_) {
                         writer.writeAttribute("t", "s");
                         writer.startElement("v");
                         writer.writeText(std::to_string(sst_->getStringId(cell->getStringValue())).c_str());
@@ -741,14 +750,20 @@ void Worksheet::generateXML(const std::function<void(const char*, size_t)>& call
         writer.endElement(); // printOptions
     }
     
+    // 语音属性 - 关键修复：添加phoneticPr元素
+    writer.startElement("phoneticPr");
+    writer.writeAttribute("fontId", "2");
+    writer.writeAttribute("type", "noConversion");
+    writer.endElement(); // phoneticPr
+    
     // 页边距 - 关键修复：总是生成pageMargins
     writer.startElement("pageMargins");
-    writer.writeAttribute("left", std::to_string(print_settings_.left_margin).c_str());
-    writer.writeAttribute("right", std::to_string(print_settings_.right_margin).c_str());
-    writer.writeAttribute("top", std::to_string(print_settings_.top_margin).c_str());
-    writer.writeAttribute("bottom", std::to_string(print_settings_.bottom_margin).c_str());
-    writer.writeAttribute("header", std::to_string(print_settings_.header_margin).c_str());
-    writer.writeAttribute("footer", std::to_string(print_settings_.footer_margin).c_str());
+    writer.writeAttribute("left", "0.7");
+    writer.writeAttribute("right", "0.7");
+    writer.writeAttribute("top", "0.75");
+    writer.writeAttribute("bottom", "0.75");
+    writer.writeAttribute("header", "0.3");
+    writer.writeAttribute("footer", "0.3");
     writer.endElement(); // pageMargins
     
     writer.endElement(); // worksheet

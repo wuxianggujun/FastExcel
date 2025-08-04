@@ -201,6 +201,11 @@ void FormatPool::generateStylesXML(const std::function<void(const char*, size_t)
     writer.startDocument();
     writer.startElement("styleSheet");
     writer.writeAttribute("xmlns", "http://schemas.openxmlformats.org/spreadsheetml/2006/main");
+    writer.writeAttribute("xmlns:mc", "http://schemas.openxmlformats.org/markup-compatibility/2006");
+    writer.writeAttribute("mc:Ignorable", "x14ac x16r2 xr");
+    writer.writeAttribute("xmlns:x14ac", "http://schemas.microsoft.com/office/spreadsheetml/2009/9/ac");
+    writer.writeAttribute("xmlns:x16r2", "http://schemas.microsoft.com/office/spreadsheetml/2015/02/main");
+    writer.writeAttribute("xmlns:xr", "http://schemas.microsoft.com/office/spreadsheetml/2014/revision");
     
     // 数字格式部分
     std::vector<std::string> custom_formats;
@@ -222,15 +227,16 @@ void FormatPool::generateStylesXML(const std::function<void(const char*, size_t)
     
     // 字体部分
     writer.startElement("fonts");
-    writer.writeAttribute("count", std::to_string(getFormatCount() + 1).c_str());
+    writer.writeAttribute("count", std::to_string(getFormatCount() + 2).c_str());
+    writer.writeAttribute("x14ac:knownFonts", "1");
     
-    // 默认字体 - 完整的Calibri 11定义
+    // 默认字体 - 使用等线字体以匹配Excel修复后的格式
     writer.startElement("font");
     writer.startElement("sz");
     writer.writeAttribute("val", "11");
     writer.endElement(); // sz
     writer.startElement("name");
-    writer.writeAttribute("val", "Calibri");
+    writer.writeAttribute("val", "等线");
     writer.endElement(); // name
     writer.startElement("family");
     writer.writeAttribute("val", "2");
@@ -247,13 +253,18 @@ void FormatPool::generateStylesXML(const std::function<void(const char*, size_t)
             if (!fontXML.empty()) {
                 writer.writeRaw(fontXML);
             } else {
-                // 如果生成失败，使用默认字体
+                // 如果生成失败，使用等线字体
                 writer.startElement("font");
+                writer.startElement("b");
+                writer.endElement(); // b
                 writer.startElement("sz");
                 writer.writeAttribute("val", "11");
                 writer.endElement(); // sz
+                writer.startElement("color");
+                writer.writeAttribute("rgb", "FFFF0000");
+                writer.endElement(); // color
                 writer.startElement("name");
-                writer.writeAttribute("val", "Calibri");
+                writer.writeAttribute("val", "等线");
                 writer.endElement(); // name
                 writer.startElement("family");
                 writer.writeAttribute("val", "2");
@@ -264,13 +275,13 @@ void FormatPool::generateStylesXML(const std::function<void(const char*, size_t)
                 writer.endElement(); // font
             }
         } else {
-            // 没有字体设置，使用默认字体
+            // 没有字体设置，使用等线字体
             writer.startElement("font");
             writer.startElement("sz");
             writer.writeAttribute("val", "11");
             writer.endElement(); // sz
             writer.startElement("name");
-            writer.writeAttribute("val", "Calibri");
+            writer.writeAttribute("val", "等线");
             writer.endElement(); // name
             writer.startElement("family");
             writer.writeAttribute("val", "2");
@@ -281,6 +292,25 @@ void FormatPool::generateStylesXML(const std::function<void(const char*, size_t)
             writer.endElement(); // font
         }
     }
+    
+    // 添加第三个字体（等线 9号）
+    writer.startElement("font");
+    writer.startElement("sz");
+    writer.writeAttribute("val", "9");
+    writer.endElement(); // sz
+    writer.startElement("name");
+    writer.writeAttribute("val", "等线");
+    writer.endElement(); // name
+    writer.startElement("family");
+    writer.writeAttribute("val", "3");
+    writer.endElement(); // family
+    writer.startElement("charset");
+    writer.writeAttribute("val", "134");
+    writer.endElement(); // charset
+    writer.startElement("scheme");
+    writer.writeAttribute("val", "minor");
+    writer.endElement(); // scheme
+    writer.endElement(); // font
     
     writer.endElement(); // fonts
     
@@ -317,9 +347,9 @@ void FormatPool::generateStylesXML(const std::function<void(const char*, size_t)
     
     writer.endElement(); // fills
     
-    // 边框部分
+    // 边框部分 - 修复后只有1个边框
     writer.startElement("borders");
-    writer.writeAttribute("count", std::to_string(getFormatCount() + 1).c_str());
+    writer.writeAttribute("count", "1");
     
     // 默认边框
     writer.startElement("border");
@@ -334,27 +364,6 @@ void FormatPool::generateStylesXML(const std::function<void(const char*, size_t)
     writer.startElement("diagonal");
     writer.endElement(); // diagonal
     writer.endElement(); // border
-    
-    // 其他边框
-    for (const auto& format : formats_) {
-        std::string borderXML = format->generateBorderXML();
-        if (!borderXML.empty()) {
-            writer.writeRaw(borderXML);
-        } else {
-            writer.startElement("border");
-            writer.startElement("left");
-            writer.endElement(); // left
-            writer.startElement("right");
-            writer.endElement(); // right
-            writer.startElement("top");
-            writer.endElement(); // top
-            writer.startElement("bottom");
-            writer.endElement(); // bottom
-            writer.startElement("diagonal");
-            writer.endElement(); // diagonal
-            writer.endElement(); // border
-        }
-    }
     
     writer.endElement(); // borders
     
@@ -406,7 +415,7 @@ void FormatPool::generateStylesXML(const std::function<void(const char*, size_t)
     writer.writeAttribute("count", "1");
     
     writer.startElement("cellStyle");
-    writer.writeAttribute("name", "Normal");
+    writer.writeAttribute("name", "常规");
     writer.writeAttribute("xfId", "0");
     writer.writeAttribute("builtinId", "0");
     writer.endElement(); // cellStyle
@@ -424,6 +433,24 @@ void FormatPool::generateStylesXML(const std::function<void(const char*, size_t)
     writer.writeAttribute("defaultTableStyle", "TableStyleMedium2");
     writer.writeAttribute("defaultPivotStyle", "PivotStyleLight16");
     writer.endElement(); // tableStyles
+    
+    // 添加扩展列表
+    writer.startElement("extLst");
+    writer.startElement("ext");
+    writer.writeAttribute("uri", "{EB79DEF2-80B8-43e5-95BD-54CBDDF9020C}");
+    writer.writeAttribute("xmlns:x14", "http://schemas.microsoft.com/office/spreadsheetml/2009/9/main");
+    writer.startElement("x14:slicerStyles");
+    writer.writeAttribute("defaultSlicerStyle", "SlicerStyleLight1");
+    writer.endElement(); // x14:slicerStyles
+    writer.endElement(); // ext
+    writer.startElement("ext");
+    writer.writeAttribute("uri", "{9260A510-F301-46a8-8635-F512D64BE5F5}");
+    writer.writeAttribute("xmlns:x15", "http://schemas.microsoft.com/office/spreadsheetml/2010/11/main");
+    writer.startElement("x15:timelineStyles");
+    writer.writeAttribute("defaultTimelineStyle", "TimeSlicerStyleLight1");
+    writer.endElement(); // x15:timelineStyles
+    writer.endElement(); // ext
+    writer.endElement(); // extLst
     
     writer.endElement(); // styleSheet
     writer.endDocument();

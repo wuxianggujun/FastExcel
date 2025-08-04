@@ -805,13 +805,29 @@ void Workbook::generateWorkbookXML(const std::function<void(const char*, size_t)
     writer.startElement("workbook");
     writer.writeAttribute("xmlns", "http://schemas.openxmlformats.org/spreadsheetml/2006/main");
     writer.writeAttribute("xmlns:r", "http://schemas.openxmlformats.org/officeDocument/2006/relationships");
+    writer.writeAttribute("xmlns:mc", "http://schemas.openxmlformats.org/markup-compatibility/2006");
+    writer.writeAttribute("mc:Ignorable", "x15 xr xr6 xr10 xr2");
+    writer.writeAttribute("xmlns:x15", "http://schemas.microsoft.com/office/spreadsheetml/2010/11/main");
+    writer.writeAttribute("xmlns:xr", "http://schemas.microsoft.com/office/spreadsheetml/2014/revision");
+    writer.writeAttribute("xmlns:xr6", "http://schemas.microsoft.com/office/spreadsheetml/2016/revision6");
+    writer.writeAttribute("xmlns:xr10", "http://schemas.microsoft.com/office/spreadsheetml/2016/revision10");
+    writer.writeAttribute("xmlns:xr2", "http://schemas.microsoft.com/office/spreadsheetml/2015/revision2");
+    
+    // 文件版本信息
+    writer.startElement("fileVersion");
+    writer.writeAttribute("appName", "xl");
+    writer.writeAttribute("lastEdited", "7");
+    writer.writeAttribute("lowestEdited", "7");
+    writer.writeAttribute("rupBuild", "29029");
+    if (options_.read_only_recommended) {
+        writer.writeAttribute("readOnlyRecommended", "1");
+    }
+    writer.endElement(); // fileVersion
     
     // 工作簿属性
-    if (options_.read_only_recommended) {
-        writer.startElement("fileVersion");
-        writer.writeAttribute("readOnlyRecommended", "1");
-        writer.endElement(); // fileVersion
-    }
+    writer.startElement("workbookPr");
+    writer.writeAttribute("defaultThemeVersion", "202300");
+    writer.endElement(); // workbookPr
     
     // 工作簿保护
     if (protected_) {
@@ -831,10 +847,11 @@ void Workbook::generateWorkbookXML(const std::function<void(const char*, size_t)
     // 工作簿视图
     writer.startElement("bookViews");
     writer.startElement("workbookView");
-    writer.writeAttribute("xWindow", "240");
-    writer.writeAttribute("yWindow", "15");
-    writer.writeAttribute("windowWidth", "16095");
-    writer.writeAttribute("windowHeight", "9660");
+    writer.writeAttribute("xWindow", "2475");
+    writer.writeAttribute("yWindow", "98");
+    writer.writeAttribute("windowWidth", "18195");
+    writer.writeAttribute("windowHeight", "14032");
+    writer.writeAttribute("xr2:uid", "{00000000-000D-0000-FFFF-FFFF00000000}");
     writer.endElement(); // workbookView
     writer.endElement(); // bookViews
     
@@ -869,7 +886,7 @@ void Workbook::generateWorkbookXML(const std::function<void(const char*, size_t)
     
     // 计算属性
     writer.startElement("calcPr");
-    writer.writeAttribute("calcId", "124519");
+    writer.writeAttribute("calcId", "0");
     if (!options_.calc_on_load) {
         writer.writeAttribute("calcMode", "manual");
     }
@@ -877,6 +894,11 @@ void Workbook::generateWorkbookXML(const std::function<void(const char*, size_t)
         writer.writeAttribute("fullCalcOnLoad", "1");
     }
     writer.endElement(); // calcPr
+    
+    // 文件恢复属性
+    writer.startElement("fileRecoveryPr");
+    writer.writeAttribute("repairLoad", "1");
+    writer.endElement(); // fileRecoveryPr
     
     writer.endElement(); // workbook
     writer.endDocument();
@@ -1089,6 +1111,12 @@ void Workbook::generateContentTypesXML(const std::function<void(const char*, siz
         writer.endElement(); // Override
     }
     
+    // 添加主题文件引用
+    writer.startElement("Override");
+    writer.writeAttribute("PartName", "/xl/theme/theme1.xml");
+    writer.writeAttribute("ContentType", "application/vnd.openxmlformats-officedocument.theme+xml");
+    writer.endElement(); // Override
+    
     writer.startElement("Override");
     writer.writeAttribute("PartName", "/xl/styles.xml");
     writer.writeAttribute("ContentType", "application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml");
@@ -1171,16 +1199,23 @@ void Workbook::generateWorkbookRelsXML(const std::function<void(const char*, siz
         writer.endElement(); // Relationship
     }
     
-    // 样式关系
+    // 主题关系 - 添加在工作表之后
     writer.startElement("Relationship");
     writer.writeAttribute("Id", ("rId" + std::to_string(worksheets_.size() + 1)).c_str());
+    writer.writeAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme");
+    writer.writeAttribute("Target", "theme/theme1.xml");
+    writer.endElement(); // Relationship
+    
+    // 样式关系
+    writer.startElement("Relationship");
+    writer.writeAttribute("Id", ("rId" + std::to_string(worksheets_.size() + 2)).c_str());
     writer.writeAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles");
     writer.writeAttribute("Target", "styles.xml");
     writer.endElement(); // Relationship
     
     // 共享字符串关系
     writer.startElement("Relationship");
-    writer.writeAttribute("Id", ("rId" + std::to_string(worksheets_.size() + 2)).c_str());
+    writer.writeAttribute("Id", ("rId" + std::to_string(worksheets_.size() + 3)).c_str());
     writer.writeAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings");
     writer.writeAttribute("Target", "sharedStrings.xml");
     writer.endElement(); // Relationship
