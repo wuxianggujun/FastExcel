@@ -491,24 +491,14 @@ void Worksheet::generateXML(const std::function<void(const char*, size_t)>& call
     writer.startElement("worksheet");
     writer.writeAttribute("xmlns", "http://schemas.openxmlformats.org/spreadsheetml/2006/main");
     writer.writeAttribute("xmlns:r", "http://schemas.openxmlformats.org/officeDocument/2006/relationships");
+    writer.writeAttribute("xmlns:xdr", "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing");
+    writer.writeAttribute("xmlns:x14", "http://schemas.microsoft.com/office/spreadsheetml/2009/9/main");
     writer.writeAttribute("xmlns:mc", "http://schemas.openxmlformats.org/markup-compatibility/2006");
-    writer.writeAttribute("mc:Ignorable", "x14ac xr xr2 xr3");
-    writer.writeAttribute("xmlns:x14ac", "http://schemas.microsoft.com/office/spreadsheetml/2009/9/ac");
-    writer.writeAttribute("xmlns:xr", "http://schemas.microsoft.com/office/spreadsheetml/2014/revision");
-    writer.writeAttribute("xmlns:xr2", "http://schemas.microsoft.com/office/spreadsheetml/2015/revision2");
-    writer.writeAttribute("xmlns:xr3", "http://schemas.microsoft.com/office/spreadsheetml/2016/revision3");
-    // 生成基于工作表ID的唯一UID
-    std::string uid = "{00000000-0001-0000-";
-    uid += (sheet_id_ == 1 ? "0000" : "0100");
-    uid += "-000000000000}";
-    writer.writeAttribute("xr:uid", uid.c_str());
+    writer.writeAttribute("xmlns:etc", "http://www.wps.cn/officeDocument/2017/etCustomData");
     
-    // 工作表属性
-    if (sheet_view_.right_to_left) {
-        writer.startElement("sheetPr");
-        writer.writeAttribute("rightToLeft", "1");
-        writer.endElement(); // sheetPr
-    }
+    // 简化的工作表属性 - 根据WPS修复后的版本
+    writer.startElement("sheetPr");
+    writer.endElement(); // sheetPr
     
     // 尺寸信息 - 关键修复：总是使用A1格式
     auto [max_row, max_col] = getUsedRange();
@@ -516,7 +506,7 @@ void Worksheet::generateXML(const std::function<void(const char*, size_t)>& call
     writer.writeAttribute("ref", "A1");
     writer.endElement(); // dimension
     
-    // 工作表视图 - 关键修复：总是生成sheetViews
+    // 简化的工作表视图 - 根据WPS修复后的版本
     writer.startElement("sheetViews");
     writer.startElement("sheetView");
     
@@ -526,24 +516,11 @@ void Worksheet::generateXML(const std::function<void(const char*, size_t)>& call
     
     writer.writeAttribute("workbookViewId", "0");
     
-    if (sheet_view_.zoom_scale != 100) {
-        writer.writeAttribute("zoomScale", std::to_string(sheet_view_.zoom_scale).c_str());
-    }
-    
-    if (!sheet_view_.show_gridlines) {
-        writer.writeAttribute("showGridLines", "0");
-    }
-    
-    if (!sheet_view_.show_row_col_headers) {
-        writer.writeAttribute("showRowColHeaders", "0");
-    }
-    
-    if (sheet_view_.right_to_left) {
-        writer.writeAttribute("rightToLeft", "1");
-    }
-    
-    // 选择区域 - 关键修复：不生成selection元素
-    // 根据修复后的文件，所有工作表都不应该有selection元素
+    // 添加selection元素 - 根据WPS修复后的版本
+    writer.startElement("selection");
+    writer.writeAttribute("activeCell", "A1");
+    writer.writeAttribute("sqref", "A1");
+    writer.endElement(); // selection
     
     // 冻结窗格
     if (freeze_panes_) {
@@ -565,10 +542,10 @@ void Worksheet::generateXML(const std::function<void(const char*, size_t)>& call
     writer.endElement(); // sheetView
     writer.endElement(); // sheetViews
     
-    // 工作表格式信息 - 关键修复：使用正确的XML结构
+    // 简化的工作表格式信息 - 根据WPS修复后的版本
     writer.startElement("sheetFormatPr");
-    writer.writeAttribute("defaultRowHeight", "13.9");
-    writer.writeAttribute("x14ac:dyDescent", "0.4");
+    writer.writeAttribute("defaultColWidth", "9");
+    writer.writeAttribute("defaultRowHeight", "13.85");
     writer.endElement(); // sheetFormatPr
     
     // 列信息
@@ -621,7 +598,6 @@ void Worksheet::generateXML(const std::function<void(const char*, size_t)>& call
         
         std::string spans = std::to_string(min_col_in_row + 1) + ":" + std::to_string(max_col_in_row + 1);
         writer.writeAttribute("spans", spans.c_str());
-        writer.writeAttribute("x14ac:dyDescent", "0.4");
         
         // 检查行信息
         auto row_it = row_info_.find(row_num);
@@ -755,13 +731,11 @@ void Worksheet::generateXML(const std::function<void(const char*, size_t)>& call
         writer.endElement(); // printOptions
     }
     
-    // 语音属性 - 关键修复：添加phoneticPr元素
-    writer.startElement("phoneticPr");
-    writer.writeAttribute("fontId", "1");
-    writer.writeAttribute("type", "noConversion");
-    writer.endElement(); // phoneticPr
+    // 关键修复：删除phoneticPr标签
+    // 这个标签声明了注音格式，但实际内容没有注音信息，会导致数据与声明不一致
+    // 简单的Excel文件不需要这个标签
     
-    // 页边距 - 关键修复：总是生成pageMargins
+    // 页边距 - 根据WPS修复后的版本
     writer.startElement("pageMargins");
     writer.writeAttribute("left", "0.7");
     writer.writeAttribute("right", "0.7");
@@ -770,6 +744,10 @@ void Worksheet::generateXML(const std::function<void(const char*, size_t)>& call
     writer.writeAttribute("header", "0.3");
     writer.writeAttribute("footer", "0.3");
     writer.endElement(); // pageMargins
+    
+    // 添加headerFooter元素 - 根据WPS修复后的版本
+    writer.startElement("headerFooter");
+    writer.endElement(); // headerFooter
     
     writer.endElement(); // worksheet
     writer.endDocument();

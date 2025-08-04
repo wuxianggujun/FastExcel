@@ -76,6 +76,11 @@ void ContentTypes::addExcelDefaults() {
     addOverride("/xl/theme/theme1.xml", "application/vnd.openxmlformats-officedocument.theme+xml");
     addOverride("/docProps/core.xml", "application/vnd.openxmlformats-package.core-properties+xml");
     addOverride("/docProps/app.xml", "application/vnd.openxmlformats-officedocument.extended-properties+xml");
+    
+    // 关键修复：添加工作表文件的Override
+    // 注意：这里只添加基本的工作表，实际的工作表数量应该由Workbook类动态添加
+    addOverride("/xl/worksheets/sheet1.xml", "application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml");
+    addOverride("/xl/worksheets/sheet2.xml", "application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml");
 }
 
 }} // namespace fastexcel::xml

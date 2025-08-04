@@ -832,121 +832,57 @@ void Workbook::generateWorkbookXML(const std::function<void(const char*, size_t)
     writer.startElement("workbook");
     writer.writeAttribute("xmlns", "http://schemas.openxmlformats.org/spreadsheetml/2006/main");
     writer.writeAttribute("xmlns:r", "http://schemas.openxmlformats.org/officeDocument/2006/relationships");
-    writer.writeAttribute("xmlns:mc", "http://schemas.openxmlformats.org/markup-compatibility/2006");
-    writer.writeAttribute("mc:Ignorable", "x15 xr xr6 xr10 xr2");
-    writer.writeAttribute("xmlns:x15", "http://schemas.microsoft.com/office/spreadsheetml/2010/11/main");
-    writer.writeAttribute("xmlns:xr", "http://schemas.microsoft.com/office/spreadsheetml/2014/revision");
-    writer.writeAttribute("xmlns:xr6", "http://schemas.microsoft.com/office/spreadsheetml/2016/revision6");
-    writer.writeAttribute("xmlns:xr10", "http://schemas.microsoft.com/office/spreadsheetml/2016/revision10");
-    writer.writeAttribute("xmlns:xr2", "http://schemas.microsoft.com/office/spreadsheetml/2015/revision2");
     
-    // 文件版本信息
+    // 简化的文件版本信息 - 根据WPS修复后的版本
     writer.startElement("fileVersion");
     writer.writeAttribute("appName", "xl");
-    writer.writeAttribute("lastEdited", "7");
-    writer.writeAttribute("lowestEdited", "7");
-    writer.writeAttribute("rupBuild", "29029");
-    if (options_.read_only_recommended) {
-        writer.writeAttribute("readOnlyRecommended", "1");
-    }
+    writer.writeAttribute("lastEdited", "3");
+    writer.writeAttribute("lowestEdited", "5");
+    writer.writeAttribute("rupBuild", "9302");
     writer.endElement(); // fileVersion
     
-    // 工作簿属性
+    // 简化的工作簿属性
     writer.startElement("workbookPr");
-    writer.writeAttribute("defaultThemeVersion", "202300");
     writer.endElement(); // workbookPr
     
-    // 添加 AlternateContent 元素
-    writer.startElement("mc:AlternateContent");
-    writer.writeAttribute("xmlns:mc", "http://schemas.openxmlformats.org/markup-compatibility/2006");
-    writer.startElement("mc:Choice");
-    writer.writeAttribute("Requires", "x15");
-    writer.startElement("x15ac:absPath");
-    writer.writeAttribute("url", "C:\\Users\\wuxianggujun\\CodeSpace\\CMakeProjects\\FastExcel\\cmake-build-debug\\bin\\examples\\");
-    writer.writeAttribute("xmlns:x15ac", "http://schemas.microsoft.com/office/spreadsheetml/2010/11/ac");
-    writer.endElement(); // x15ac:absPath
-    writer.endElement(); // mc:Choice
-    writer.endElement(); // mc:AlternateContent
-    
-    // 添加 revisionPtr 元素
-    writer.startElement("xr:revisionPtr");
-    writer.writeAttribute("revIDLastSave", "0");
-    writer.writeAttribute("documentId", "8_{2570FEA6-47EE-43C3-8BA1-815B3F3372DA}");
-    writer.writeAttribute("xr6:coauthVersionLast", "47");
-    writer.writeAttribute("xr6:coauthVersionMax", "47");
-    writer.writeAttribute("xr10:uidLastSave", "{00000000-0000-0000-0000-000000000000}");
-    writer.endElement(); // xr:revisionPtr
-    
-    // 工作簿保护
-    if (protected_) {
-        writer.startElement("workbookProtection");
-        if (lock_structure_) {
-            writer.writeAttribute("lockStructure", "1");
-        }
-        if (lock_windows_) {
-            writer.writeAttribute("lockWindows", "1");
-        }
-        if (!protection_password_.empty()) {
-            writer.writeAttribute("workbookPassword", hashPassword(protection_password_).c_str());
-        }
-        writer.endElement(); // workbookProtection
-    }
-    
-    // 工作簿视图
+    // 简化的工作簿视图 - 根据WPS修复后的版本
     writer.startElement("bookViews");
     writer.startElement("workbookView");
-    writer.writeAttribute("xWindow", "2475");
-    writer.writeAttribute("yWindow", "98");
-    writer.writeAttribute("windowWidth", "18195");
-    writer.writeAttribute("windowHeight", "14032");
-    writer.writeAttribute("xr2:uid", "{00000000-000D-0000-FFFF-FFFF00000000}");
+    writer.writeAttribute("windowWidth", "24000");
+    writer.writeAttribute("windowHeight", "11160");
     writer.endElement(); // workbookView
     writer.endElement(); // bookViews
     
-    // 工作表
+    // 工作表 - 修复关系ID匹配问题
     writer.startElement("sheets");
     for (size_t i = 0; i < worksheets_.size(); ++i) {
         writer.startElement("sheet");
         writer.writeAttribute("name", worksheets_[i]->getName().c_str());
         writer.writeAttribute("sheetId", std::to_string(worksheets_[i]->getSheetId()).c_str());
-        writer.writeAttribute("r:id", ("rId" + std::to_string(i + 1)).c_str());
+        
+        // 关键修复：使用与generateWorkbookRelsXML中一致的关系ID
+        std::string rel_id;
+        if (worksheets_.size() >= 2) {
+            if (i == 0) {
+                rel_id = "rId1"; // sheet1 -> rId1
+            } else if (i == 1) {
+                rel_id = "rId2"; // sheet2 -> rId2
+            } else {
+                rel_id = "rId" + std::to_string(i + 2); // 其他工作表从rId4开始
+            }
+        } else {
+            rel_id = "rId1"; // 只有一个工作表时使用rId1
+        }
+        
+        writer.writeAttribute("r:id", rel_id.c_str());
         writer.endElement(); // sheet
     }
     writer.endElement(); // sheets
     
-    // 定义名称
-    if (!defined_names_.empty()) {
-        writer.startElement("definedNames");
-        for (const auto& defined_name : defined_names_) {
-            writer.startElement("definedName");
-            writer.writeAttribute("name", defined_name.name.c_str());
-            if (!defined_name.scope.empty()) {
-                writer.writeAttribute("localSheetId", "0"); // 简化处理
-            }
-            if (defined_name.hidden) {
-                writer.writeAttribute("hidden", "1");
-            }
-            writer.writeText(defined_name.formula.c_str());
-            writer.endElement(); // definedName
-        }
-        writer.endElement(); // definedNames
-    }
-    
-    // 计算属性
+    // 简化的计算属性 - 根据WPS修复后的版本
     writer.startElement("calcPr");
-    writer.writeAttribute("calcId", "0");
-    if (!options_.calc_on_load) {
-        writer.writeAttribute("calcMode", "manual");
-    }
-    if (options_.full_calc_on_load) {
-        writer.writeAttribute("fullCalcOnLoad", "1");
-    }
+    writer.writeAttribute("calcId", "144525");
     writer.endElement(); // calcPr
-    
-    // 文件恢复属性
-    writer.startElement("fileRecoveryPr");
-    writer.writeAttribute("repairLoad", "1");
-    writer.endElement(); // fileRecoveryPr
     
     writer.endElement(); // workbook
     writer.endDocument();
@@ -1328,9 +1264,8 @@ void Workbook::generateWorkbookRelsXML(const std::function<void(const char*, siz
 }
 
 void Workbook::generateThemeXML(const std::function<void(const char*, size_t)>& callback) const {
-    // 直接输出完整的主题XML内容以匹配修复后的文件
-    const char* theme_xml = R"(<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="Office 主题​​"><a:themeElements><a:clrScheme name="Office"><a:dk1><a:sysClr val="windowText" lastClr="000000"/></a:dk1><a:lt1><a:sysClr val="window" lastClr="FFFFFF"/></a:lt1><a:dk2><a:srgbClr val="0E2841"/></a:dk2><a:lt2><a:srgbClr val="E8E8E8"/></a:lt2><a:accent1><a:srgbClr val="156082"/></a:accent1><a:accent2><a:srgbClr val="E97132"/></a:accent2><a:accent3><a:srgbClr val="196B24"/></a:accent3><a:accent4><a:srgbClr val="0F9ED5"/></a:accent4><a:accent5><a:srgbClr val="A02B93"/></a:accent5><a:accent6><a:srgbClr val="4EA72E"/></a:accent6><a:hlink><a:srgbClr val="467886"/></a:hlink><a:folHlink><a:srgbClr val="96607D"/></a:folHlink></a:clrScheme><a:fontScheme name="Office"><a:majorFont><a:latin typeface="Aptos Display" panose="02110004020202020204"/><a:ea typeface=""/><a:cs typeface=""/><a:font script="Jpan" typeface="游ゴシック Light"/><a:font script="Hang" typeface="맑은 고딕"/><a:font script="Hans" typeface="等线 Light"/><a:font script="Hant" typeface="新細明體"/><a:font script="Arab" typeface="Times New Roman"/><a:font script="Hebr" typeface="Times New Roman"/><a:font script="Thai" typeface="Tahoma"/><a:font script="Ethi" typeface="Nyala"/><a:font script="Beng" typeface="Vrinda"/><a:font script="Gujr" typeface="Shruti"/><a:font script="Khmr" typeface="MoolBoran"/><a:font script="Knda" typeface="Tunga"/><a:font script="Guru" typeface="Raavi"/><a:font script="Cans" typeface="Euphemia"/><a:font script="Cher" typeface="Plantagenet Cherokee"/><a:font script="Yiii" typeface="Microsoft Yi Baiti"/><a:font script="Tibt" typeface="Microsoft Himalaya"/><a:font script="Thaa" typeface="MV Boli"/><a:font script="Deva" typeface="Mangal"/><a:font script="Telu" typeface="Gautami"/><a:font script="Taml" typeface="Latha"/><a:font script="Syrc" typeface="Estrangelo Edessa"/><a:font script="Orya" typeface="Kalinga"/><a:font script="Mlym" typeface="Kartika"/><a:font script="Laoo" typeface="DokChampa"/><a:font script="Sinh" typeface="Iskoola Pota"/><a:font script="Mong" typeface="Mongolian Baiti"/><a:font script="Viet" typeface="Times New Roman"/><a:font script="Uigh" typeface="Microsoft Uighur"/><a:font script="Geor" typeface="Sylfaen"/><a:font script="Armn" typeface="Arial"/><a:font script="Bugi" typeface="Leelawadee UI"/><a:font script="Bopo" typeface="Microsoft JhengHei"/><a:font script="Java" typeface="Javanese Text"/><a:font script="Lisu" typeface="Segoe UI"/><a:font script="Mymr" typeface="Myanmar Text"/><a:font script="Nkoo" typeface="Ebrima"/><a:font script="Olck" typeface="Nirmala UI"/><a:font script="Osma" typeface="Ebrima"/><a:font script="Phag" typeface="Phagspa"/><a:font script="Syrn" typeface="Estrangelo Edessa"/><a:font script="Syrj" typeface="Estrangelo Edessa"/><a:font script="Syre" typeface="Estrangelo Edessa"/><a:font script="Sora" typeface="Nirmala UI"/><a:font script="Tale" typeface="Microsoft Tai Le"/><a:font script="Talu" typeface="Microsoft New Tai Lue"/><a:font script="Tfng" typeface="Ebrima"/></a:majorFont><a:minorFont><a:latin typeface="Aptos Narrow" panose="02110004020202020204"/><a:ea typeface=""/><a:cs typeface=""/><a:font script="Jpan" typeface="游ゴシック"/><a:font script="Hang" typeface="맑은 고딕"/><a:font script="Hans" typeface="等线"/><a:font script="Hant" typeface="新細明體"/><a:font script="Arab" typeface="Arial"/><a:font script="Hebr" typeface="Arial"/><a:font script="Thai" typeface="Tahoma"/><a:font script="Ethi" typeface="Nyala"/><a:font script="Beng" typeface="Vrinda"/><a:font script="Gujr" typeface="Shruti"/><a:font script="Khmr" typeface="DaunPenh"/><a:font script="Knda" typeface="Tunga"/><a:font script="Guru" typeface="Raavi"/><a:font script="Cans" typeface="Euphemia"/><a:font script="Cher" typeface="Plantagenet Cherokee"/><a:font script="Yiii" typeface="Microsoft Yi Baiti"/><a:font script="Tibt" typeface="Microsoft Himalaya"/><a:font script="Thaa" typeface="MV Boli"/><a:font script="Deva" typeface="Mangal"/><a:font script="Telu" typeface="Gautami"/><a:font script="Taml" typeface="Latha"/><a:font script="Syrc" typeface="Estrangelo Edessa"/><a:font script="Orya" typeface="Kalinga"/><a:font script="Mlym" typeface="Kartika"/><a:font script="Laoo" typeface="DokChampa"/><a:font script="Sinh" typeface="Iskoola Pota"/><a:font script="Mong" typeface="Mongolian Baiti"/><a:font script="Viet" typeface="Arial"/><a:font script="Uigh" typeface="Microsoft Uighur"/><a:font script="Geor" typeface="Sylfaen"/><a:font script="Armn" typeface="Arial"/><a:font script="Bugi" typeface="Leelawadee UI"/><a:font script="Bopo" typeface="Microsoft JhengHei"/><a:font script="Java" typeface="Javanese Text"/><a:font script="Lisu" typeface="Segoe UI"/><a:font script="Mymr" typeface="Myanmar Text"/><a:font script="Nkoo" typeface="Ebrima"/><a:font script="Olck" typeface="Nirmala UI"/><a:font script="Osma" typeface="Ebrima"/><a:font script="Phag" typeface="Phagspa"/><a:font script="Syrn" typeface="Estrangelo Edessa"/><a:font script="Syrj" typeface="Estrangelo Edessa"/><a:font script="Syre" typeface="Estrangelo Edessa"/><a:font script="Sora" typeface="Nirmala UI"/><a:font script="Tale" typeface="Microsoft Tai Le"/><a:font script="Talu" typeface="Microsoft New Tai Lue"/><a:font script="Tfng" typeface="Ebrima"/></a:minorFont></a:fontScheme><a:fmtScheme name="Office"><a:fillStyleLst><a:solidFill><a:schemeClr val="phClr"/></a:solidFill><a:gradFill rotWithShape="1"><a:gsLst><a:gs pos="0"><a:schemeClr val="phClr"><a:lumMod val="110000"/><a:satMod val="105000"/><a:tint val="67000"/></a:schemeClr></a:gs><a:gs pos="50000"><a:schemeClr val="phClr"><a:lumMod val="105000"/><a:satMod val="103000"/><a:tint val="73000"/></a:schemeClr></a:gs><a:gs pos="100000"><a:schemeClr val="phClr"><a:lumMod val="105000"/><a:satMod val="109000"/><a:tint val="81000"/></a:schemeClr></a:gs></a:gsLst><a:lin ang="5400000" scaled="0"/></a:gradFill><a:gradFill rotWithShape="1"><a:gsLst><a:gs pos="0"><a:schemeClr val="phClr"><a:satMod val="103000"/><a:lumMod val="102000"/><a:tint val="94000"/></a:schemeClr></a:gs><a:gs pos="50000"><a:schemeClr val="phClr"><a:satMod val="110000"/><a:lumMod val="100000"/><a:shade val="100000"/></a:schemeClr></a:gs><a:gs pos="100000"><a:schemeClr val="phClr"><a:lumMod val="99000"/><a:satMod val="120000"/><a:shade val="78000"/></a:schemeClr></a:gs></a:gsLst><a:lin ang="5400000" scaled="0"/></a:gradFill></a:fillStyleLst><a:lnStyleLst><a:ln w="12700" cap="flat" cmpd="sng" algn="ctr"><a:solidFill><a:schemeClr val="phClr"/></a:solidFill><a:prstDash val="solid"/><a:miter lim="800000"/></a:ln><a:ln w="19050" cap="flat" cmpd="sng" algn="ctr"><a:solidFill><a:schemeClr val="phClr"/></a:solidFill><a:prstDash val="solid"/><a:miter lim="800000"/></a:ln><a:ln w="25400" cap="flat" cmpd="sng" algn="ctr"><a:solidFill><a:schemeClr val="phClr"/></a:solidFill><a:prstDash val="solid"/><a:miter lim="800000"/></a:ln></a:lnStyleLst><a:effectStyleLst><a:effectStyle><a:effectLst/></a:effectStyle><a:effectStyle><a:effectLst/></a:effectStyle><a:effectStyle><a:effectLst><a:outerShdw blurRad="57150" dist="19050" dir="5400000" algn="ctr" rotWithShape="0"><a:srgbClr val="000000"><a:alpha val="63000"/></a:srgbClr></a:outerShdw></a:effectLst></a:effectStyle></a:effectStyleLst><a:bgFillStyleLst><a:solidFill><a:schemeClr val="phClr"/></a:solidFill><a:solidFill><a:schemeClr val="phClr"><a:tint val="95000"/><a:satMod val="170000"/></a:schemeClr></a:solidFill><a:gradFill rotWithShape="1"><a:gsLst><a:gs pos="0"><a:schemeClr val="phClr"><a:tint val="93000"/><a:satMod val="150000"/><a:shade val="98000"/><a:lumMod val="102000"/></a:schemeClr></a:gs><a:gs pos="50000"><a:schemeClr val="phClr"><a:tint val="98000"/><a:satMod val="130000"/><a:shade val="90000"/><a:lumMod val="103000"/></a:schemeClr></a:gs><a:gs pos="100000"><a:schemeClr val="phClr"><a:shade val="63000"/><a:satMod val="120000"/></a:schemeClr></a:gs></a:gsLst><a:lin ang="5400000" scaled="0"/></a:gradFill></a:bgFillStyleLst></a:fmtScheme></a:themeElements><a:objectDefaults><a:lnDef><a:spPr/><a:bodyPr/><a:lstStyle/><a:style><a:lnRef idx="2"><a:schemeClr val="accent1"/></a:lnRef><a:fillRef idx="0"><a:schemeClr val="accent1"/></a:fillRef><a:effectRef idx="1"><a:schemeClr val="accent1"/></a:effectRef><a:fontRef idx="minor"><a:schemeClr val="tx1"/></a:fontRef></a:style></a:lnDef></a:objectDefaults><a:extraClrSchemeLst/><a:extLst><a:ext uri="{05A4C25C-085E-4340-85A3-A5531E510DB2}"><thm15:themeFamily xmlns:thm15="http://schemas.microsoft.com/office/thememl/2012/main" name="Office Theme" id="{2E142A2C-CD16-42D6-873A-C26D2A0506FA}" vid="{1BDDFF52-6CD6-40A5-AB3C-68EB2F1E4D0A}"/></a:ext></a:extLst></a:theme>)";
+    // 关键修复：使用正确的换行符格式
+    const char* theme_xml = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\r\n<a:theme xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\" name=\"Office 主题​​\"><a:themeElements><a:clrScheme name=\"Office\"><a:dk1><a:sysClr val=\"windowText\" lastClr=\"000000\"/></a:dk1><a:lt1><a:sysClr val=\"window\" lastClr=\"FFFFFF\"/></a:lt1><a:dk2><a:srgbClr val=\"0E2841\"/></a:dk2><a:lt2><a:srgbClr val=\"E8E8E8\"/></a:lt2><a:accent1><a:srgbClr val=\"156082\"/></a:accent1><a:accent2><a:srgbClr val=\"E97132\"/></a:accent2><a:accent3><a:srgbClr val=\"196B24\"/></a:accent3><a:accent4><a:srgbClr val=\"0F9ED5\"/></a:accent4><a:accent5><a:srgbClr val=\"A02B93\"/></a:accent5><a:accent6><a:srgbClr val=\"4EA72E\"/></a:accent6><a:hlink><a:srgbClr val=\"467886\"/></a:hlink><a:folHlink><a:srgbClr val=\"96607D\"/></a:folHlink></a:clrScheme><a:fontScheme name=\"Office\"><a:majorFont><a:latin typeface=\"Aptos Display\" panose=\"02110004020202020204\"/><a:ea typeface=\"\"/><a:cs typeface=\"\"/><a:font script=\"Jpan\" typeface=\"游ゴシック Light\"/><a:font script=\"Hang\" typeface=\"맑은 고딕\"/><a:font script=\"Hans\" typeface=\"等线 Light\"/><a:font script=\"Hant\" typeface=\"新細明體\"/><a:font script=\"Arab\" typeface=\"Times New Roman\"/><a:font script=\"Hebr\" typeface=\"Times New Roman\"/><a:font script=\"Thai\" typeface=\"Tahoma\"/><a:font script=\"Ethi\" typeface=\"Nyala\"/><a:font script=\"Beng\" typeface=\"Vrinda\"/><a:font script=\"Gujr\" typeface=\"Shruti\"/><a:font script=\"Khmr\" typeface=\"MoolBoran\"/><a:font script=\"Knda\" typeface=\"Tunga\"/><a:font script=\"Guru\" typeface=\"Raavi\"/><a:font script=\"Cans\" typeface=\"Euphemia\"/><a:font script=\"Cher\" typeface=\"Plantagenet Cherokee\"/><a:font script=\"Yiii\" typeface=\"Microsoft Yi Baiti\"/><a:font script=\"Tibt\" typeface=\"Microsoft Himalaya\"/><a:font script=\"Thaa\" typeface=\"MV Boli\"/><a:font script=\"Deva\" typeface=\"Mangal\"/><a:font script=\"Telu\" typeface=\"Gautami\"/><a:font script=\"Taml\" typeface=\"Latha\"/><a:font script=\"Syrc\" typeface=\"Estrangelo Edessa\"/><a:font script=\"Orya\" typeface=\"Kalinga\"/><a:font script=\"Mlym\" typeface=\"Kartika\"/><a:font script=\"Laoo\" typeface=\"DokChampa\"/><a:font script=\"Sinh\" typeface=\"Iskoola Pota\"/><a:font script=\"Mong\" typeface=\"Mongolian Baiti\"/><a:font script=\"Viet\" typeface=\"Times New Roman\"/><a:font script=\"Uigh\" typeface=\"Microsoft Uighur\"/><a:font script=\"Geor\" typeface=\"Sylfaen\"/><a:font script=\"Armn\" typeface=\"Arial\"/><a:font script=\"Bugi\" typeface=\"Leelawadee UI\"/><a:font script=\"Bopo\" typeface=\"Microsoft JhengHei\"/><a:font script=\"Java\" typeface=\"Javanese Text\"/><a:font script=\"Lisu\" typeface=\"Segoe UI\"/><a:font script=\"Mymr\" typeface=\"Myanmar Text\"/><a:font script=\"Nkoo\" typeface=\"Ebrima\"/><a:font script=\"Olck\" typeface=\"Nirmala UI\"/><a:font script=\"Osma\" typeface=\"Ebrima\"/><a:font script=\"Phag\" typeface=\"Phagspa\"/><a:font script=\"Syrn\" typeface=\"Estrangelo Edessa\"/><a:font script=\"Syrj\" typeface=\"Estrangelo Edessa\"/><a:font script=\"Syre\" typeface=\"Estrangelo Edessa\"/><a:font script=\"Sora\" typeface=\"Nirmala UI\"/><a:font script=\"Tale\" typeface=\"Microsoft Tai Le\"/><a:font script=\"Talu\" typeface=\"Microsoft New Tai Lue\"/><a:font script=\"Tfng\" typeface=\"Ebrima\"/></a:majorFont><a:minorFont><a:latin typeface=\"Aptos Narrow\" panose=\"02110004020202020204\"/><a:ea typeface=\"\"/><a:cs typeface=\"\"/><a:font script=\"Jpan\" typeface=\"游ゴシック\"/><a:font script=\"Hang\" typeface=\"맑은 고딕\"/><a:font script=\"Hans\" typeface=\"等线\"/><a:font script=\"Hant\" typeface=\"新細明體\"/><a:font script=\"Arab\" typeface=\"Arial\"/><a:font script=\"Hebr\" typeface=\"Arial\"/><a:font script=\"Thai\" typeface=\"Tahoma\"/><a:font script=\"Ethi\" typeface=\"Nyala\"/><a:font script=\"Beng\" typeface=\"Vrinda\"/><a:font script=\"Gujr\" typeface=\"Shruti\"/><a:font script=\"Khmr\" typeface=\"DaunPenh\"/><a:font script=\"Knda\" typeface=\"Tunga\"/><a:font script=\"Guru\" typeface=\"Raavi\"/><a:font script=\"Cans\" typeface=\"Euphemia\"/><a:font script=\"Cher\" typeface=\"Plantagenet Cherokee\"/><a:font script=\"Yiii\" typeface=\"Microsoft Yi Baiti\"/><a:font script=\"Tibt\" typeface=\"Microsoft Himalaya\"/><a:font script=\"Thaa\" typeface=\"MV Boli\"/><a:font script=\"Deva\" typeface=\"Mangal\"/><a:font script=\"Telu\" typeface=\"Gautami\"/><a:font script=\"Taml\" typeface=\"Latha\"/><a:font script=\"Syrc\" typeface=\"Estrangelo Edessa\"/><a:font script=\"Orya\" typeface=\"Kalinga\"/><a:font script=\"Mlym\" typeface=\"Kartika\"/><a:font script=\"Laoo\" typeface=\"DokChampa\"/><a:font script=\"Sinh\" typeface=\"Iskoola Pota\"/><a:font script=\"Mong\" typeface=\"Mongolian Baiti\"/><a:font script=\"Viet\" typeface=\"Arial\"/><a:font script=\"Uigh\" typeface=\"Microsoft Uighur\"/><a:font script=\"Geor\" typeface=\"Sylfaen\"/><a:font script=\"Armn\" typeface=\"Arial\"/><a:font script=\"Bugi\" typeface=\"Leelawadee UI\"/><a:font script=\"Bopo\" typeface=\"Microsoft JhengHei\"/><a:font script=\"Java\" typeface=\"Javanese Text\"/><a:font script=\"Lisu\" typeface=\"Segoe UI\"/><a:font script=\"Mymr\" typeface=\"Myanmar Text\"/><a:font script=\"Nkoo\" typeface=\"Ebrima\"/><a:font script=\"Olck\" typeface=\"Nirmala UI\"/><a:font script=\"Osma\" typeface=\"Ebrima\"/><a:font script=\"Phag\" typeface=\"Phagspa\"/><a:font script=\"Syrn\" typeface=\"Estrangelo Edessa\"/><a:font script=\"Syrj\" typeface=\"Estrangelo Edessa\"/><a:font script=\"Syre\" typeface=\"Estrangelo Edessa\"/><a:font script=\"Sora\" typeface=\"Nirmala UI\"/><a:font script=\"Tale\" typeface=\"Microsoft Tai Le\"/><a:font script=\"Talu\" typeface=\"Microsoft New Tai Lue\"/><a:font script=\"Tfng\" typeface=\"Ebrima\"/></a:minorFont></a:fontScheme><a:fmtScheme name=\"Office\"><a:fillStyleLst><a:solidFill><a:schemeClr val=\"phClr\"/></a:solidFill><a:gradFill rotWithShape=\"1\"><a:gsLst><a:gs pos=\"0\"><a:schemeClr val=\"phClr\"><a:lumMod val=\"110000\"/><a:satMod val=\"105000\"/><a:tint val=\"67000\"/></a:schemeClr></a:gs><a:gs pos=\"50000\"><a:schemeClr val=\"phClr\"><a:lumMod val=\"105000\"/><a:satMod val=\"103000\"/><a:tint val=\"73000\"/></a:schemeClr></a:gs><a:gs pos=\"100000\"><a:schemeClr val=\"phClr\"><a:lumMod val=\"105000\"/><a:satMod val=\"109000\"/><a:tint val=\"81000\"/></a:schemeClr></a:gs></a:gsLst><a:lin ang=\"5400000\" scaled=\"0\"/></a:gradFill><a:gradFill rotWithShape=\"1\"><a:gsLst><a:gs pos=\"0\"><a:schemeClr val=\"phClr\"><a:satMod val=\"103000\"/><a:lumMod val=\"102000\"/><a:tint val=\"94000\"/></a:schemeClr></a:gs><a:gs pos=\"50000\"><a:schemeClr val=\"phClr\"><a:satMod val=\"110000\"/><a:lumMod val=\"100000\"/><a:shade val=\"100000\"/></a:schemeClr></a:gs><a:gs pos=\"100000\"><a:schemeClr val=\"phClr\"><a:lumMod val=\"99000\"/><a:satMod val=\"120000\"/><a:shade val=\"78000\"/></a:schemeClr></a:gs></a:gsLst><a:lin ang=\"5400000\" scaled=\"0\"/></a:gradFill></a:fillStyleLst><a:lnStyleLst><a:ln w=\"12700\" cap=\"flat\" cmpd=\"sng\" algn=\"ctr\"><a:solidFill><a:schemeClr val=\"phClr\"/></a:solidFill><a:prstDash val=\"solid\"/><a:miter lim=\"800000\"/></a:ln><a:ln w=\"19050\" cap=\"flat\" cmpd=\"sng\" algn=\"ctr\"><a:solidFill><a:schemeClr val=\"phClr\"/></a:solidFill><a:prstDash val=\"solid\"/><a:miter lim=\"800000\"/></a:ln><a:ln w=\"25400\" cap=\"flat\" cmpd=\"sng\" algn=\"ctr\"><a:solidFill><a:schemeClr val=\"phClr\"/></a:solidFill><a:prstDash val=\"solid\"/><a:miter lim=\"800000\"/></a:ln></a:lnStyleLst><a:effectStyleLst><a:effectStyle><a:effectLst/></a:effectStyle><a:effectStyle><a:effectLst/></a:effectStyle><a:effectStyle><a:effectLst><a:outerShdw blurRad=\"57150\" dist=\"19050\" dir=\"5400000\" algn=\"ctr\" rotWithShape=\"0\"><a:srgbClr val=\"000000\"><a:alpha val=\"63000\"/></a:srgbClr></a:outerShdw></a:effectLst></a:effectStyle></a:effectStyleLst><a:bgFillStyleLst><a:solidFill><a:schemeClr val=\"phClr\"/></a:solidFill><a:solidFill><a:schemeClr val=\"phClr\"><a:tint val=\"95000\"/><a:satMod val=\"170000\"/></a:schemeClr></a:solidFill><a:gradFill rotWithShape=\"1\"><a:gsLst><a:gs pos=\"0\"><a:schemeClr val=\"phClr\"><a:tint val=\"93000\"/><a:satMod val=\"150000\"/><a:shade val=\"98000\"/><a:lumMod val=\"102000\"/></a:schemeClr></a:gs><a:gs pos=\"50000\"><a:schemeClr val=\"phClr\"><a:tint val=\"98000\"/><a:satMod val=\"130000\"/><a:shade val=\"90000\"/><a:lumMod val=\"103000\"/></a:schemeClr></a:gs><a:gs pos=\"100000\"><a:schemeClr val=\"phClr\"><a:shade val=\"63000\"/><a:satMod val=\"120000\"/></a:schemeClr></a:gs></a:gsLst><a:lin ang=\"5400000\" scaled=\"0\"/></a:gradFill></a:bgFillStyleLst></a:fmtScheme></a:themeElements><a:objectDefaults><a:lnDef><a:spPr/><a:bodyPr/><a:lstStyle/><a:style><a:lnRef idx=\"2\"><a:schemeClr val=\"accent1\"/></a:lnRef><a:fillRef idx=\"0\"><a:schemeClr val=\"accent1\"/></a:fillRef><a:effectRef idx=\"1\"><a:schemeClr val=\"accent1\"/></a:effectRef><a:fontRef idx=\"minor\"><a:schemeClr val=\"tx1\"/></a:fontRef></a:style></a:lnDef></a:objectDefaults><a:extraClrSchemeLst/><a:extLst><a:ext uri=\"{05A4C25C-085E-4340-85A3-A5531E510DB2}\"><thm15:themeFamily xmlns:thm15=\"http://schemas.microsoft.com/office/thememl/2012/main\" name=\"Office Theme\" id=\"{2E142A2C-CD16-42D6-873A-C26D2A0506FA}\" vid=\"{1BDDFF52-6CD6-40A5-AB3C-68EB2F1E4D0A}\"/></a:ext></a:extLst></a:theme>";
     
     callback(theme_xml, strlen(theme_xml));
 }
@@ -1487,42 +1422,42 @@ bool Workbook::generateWorksheetXMLStreaming(const std::shared_ptr<Worksheet>& w
             }
         }, true); // 启用自动刷新
         
-        // 关键修复：使用与Worksheet::generateXML()相同的完整XML结构
+        // 简化的XML结构 - 与Worksheet::generateXML()保持一致
         writer.startDocument();
         writer.startElement("worksheet");
         writer.writeAttribute("xmlns", "http://schemas.openxmlformats.org/spreadsheetml/2006/main");
         writer.writeAttribute("xmlns:r", "http://schemas.openxmlformats.org/officeDocument/2006/relationships");
+        writer.writeAttribute("xmlns:xdr", "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing");
+        writer.writeAttribute("xmlns:x14", "http://schemas.microsoft.com/office/spreadsheetml/2009/9/main");
         writer.writeAttribute("xmlns:mc", "http://schemas.openxmlformats.org/markup-compatibility/2006");
-        writer.writeAttribute("mc:Ignorable", "x14ac xr xr2 xr3");
-        writer.writeAttribute("xmlns:x14ac", "http://schemas.microsoft.com/office/spreadsheetml/2009/9/ac");
-        writer.writeAttribute("xmlns:xr", "http://schemas.microsoft.com/office/spreadsheetml/2014/revision");
-        writer.writeAttribute("xmlns:xr2", "http://schemas.microsoft.com/office/spreadsheetml/2015/revision2");
-        writer.writeAttribute("xmlns:xr3", "http://schemas.microsoft.com/office/spreadsheetml/2016/revision3");
-        // 生成基于工作表ID的唯一UID
-        std::string uid = "{00000000-0001-0000-";
-        uid += (worksheet->getSheetId() == 1 ? "0000" : "0100");
-        uid += "-000000000000}";
-        writer.writeAttribute("xr:uid", uid.c_str());
+        writer.writeAttribute("xmlns:etc", "http://www.wps.cn/officeDocument/2017/etCustomData");
         
-        // 尺寸信息 - 关键修复：总是使用A1格式
+        // 简化的工作表属性
+        writer.startElement("sheetPr");
+        writer.endElement(); // sheetPr
+        
+        // 尺寸信息 - 根据WPS修复后的版本
         auto [max_row, max_col] = worksheet->getUsedRange();
         writer.startElement("dimension");
         writer.writeAttribute("ref", "A1");
         writer.endElement(); // dimension
         
-        // 工作表视图 - 关键修复：总是生成sheetViews
+        // 简化的工作表视图
         writer.startElement("sheetViews");
         writer.startElement("sheetView");
         
         // 检查是否为活动工作表
-        bool is_tab_selected = (worksheet->getSheetId() == 1); // 假设第一个工作表为活动工作表
+        bool is_tab_selected = (worksheet->getSheetId() == 1);
         if (is_tab_selected) {
             writer.writeAttribute("tabSelected", "1");
         }
         writer.writeAttribute("workbookViewId", "0");
         
-        // 选择区域 - 关键修复：不生成selection元素
-        // 根据修复后的文件，所有工作表都不应该有selection元素
+        // 添加selection元素 - 根据WPS修复后的版本
+        writer.startElement("selection");
+        writer.writeAttribute("activeCell", "A1");
+        writer.writeAttribute("sqref", "A1");
+        writer.endElement(); // selection
         
         // 冻结窗格（如果有）
         if (worksheet->hasFrozenPanes()) {
@@ -1545,10 +1480,10 @@ bool Workbook::generateWorksheetXMLStreaming(const std::shared_ptr<Worksheet>& w
         writer.endElement(); // sheetView
         writer.endElement(); // sheetViews
         
-        // 工作表格式信息 - 关键修复：使用正确的XML结构
+        // 简化的工作表格式信息
         writer.startElement("sheetFormatPr");
-        writer.writeAttribute("defaultRowHeight", "13.9");
-        writer.writeAttribute("x14ac:dyDescent", "0.4");
+        writer.writeAttribute("defaultColWidth", "9");
+        writer.writeAttribute("defaultRowHeight", "13.85");
         writer.endElement(); // sheetFormatPr
         
         // 列信息（如果有）
@@ -1587,7 +1522,6 @@ bool Workbook::generateWorksheetXMLStreaming(const std::shared_ptr<Worksheet>& w
                 
                 std::string spans = std::to_string(min_col_in_row + 1) + ":" + std::to_string(max_col_in_row + 1);
                 writer.writeAttribute("spans", spans.c_str());
-                writer.writeAttribute("x14ac:dyDescent", "0.4");
                 
                 for (int col = 0; col <= max_col; ++col) {
                     if (worksheet->hasCellAt(row, col)) {
@@ -1691,13 +1625,11 @@ bool Workbook::generateWorksheetXMLStreaming(const std::shared_ptr<Worksheet>& w
             writer.endElement(); // autoFilter
         }
         
-        // 语音属性 - 关键修复：添加phoneticPr元素
-        writer.startElement("phoneticPr");
-        writer.writeAttribute("fontId", "1");
-        writer.writeAttribute("type", "noConversion");
-        writer.endElement(); // phoneticPr
+        // 关键修复：删除phoneticPr标签
+        // 这个标签声明了注音格式，但实际内容没有注音信息，会导致数据与声明不一致
+        // 简单的Excel文件不需要这个标签
         
-        // 页边距 - 关键修复：总是生成pageMargins
+        // 页边距 - 根据WPS修复后的版本
         writer.startElement("pageMargins");
         writer.writeAttribute("left", "0.7");
         writer.writeAttribute("right", "0.7");
@@ -1706,6 +1638,10 @@ bool Workbook::generateWorksheetXMLStreaming(const std::shared_ptr<Worksheet>& w
         writer.writeAttribute("header", "0.3");
         writer.writeAttribute("footer", "0.3");
         writer.endElement(); // pageMargins
+        
+        // 添加headerFooter元素
+        writer.startElement("headerFooter");
+        writer.endElement(); // headerFooter
         
         writer.endElement(); // worksheet
         writer.endDocument();

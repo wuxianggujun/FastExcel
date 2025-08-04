@@ -100,7 +100,7 @@ void XMLStreamWriter::flushBuffer() {
 
 void XMLStreamWriter::startDocument() {
     buffer_pos_ = 0;
-    const char* xml_decl = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n";
+    const char* xml_decl = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\r\n";
     size_t xml_decl_len = strlen(xml_decl);
     writeRawDirect(xml_decl, xml_decl_len);
 }

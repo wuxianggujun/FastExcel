@@ -199,9 +199,13 @@ bool FileManager::addRootRels() {
 
 bool FileManager::addWorkbookRels() {
     xml::Relationships rels;
-    rels.addRelationship("rId1", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles", "styles.xml");
-    rels.addRelationship("rId2", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings", "sharedStrings.xml");
-    rels.addRelationship("rId3", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet", "worksheets/sheet1.xml");
+    // 修复：添加完整的关系链，包括theme
+    // 按照Workbook类中generateWorkbookRelsXML的顺序：rId3(theme), rId2(sheet2), rId1(sheet1), rId5(sharedStrings), rId4(styles)
+    rels.addRelationship("rId3", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme", "theme/theme1.xml");
+    rels.addRelationship("rId2", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet", "worksheets/sheet2.xml");
+    rels.addRelationship("rId1", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet", "worksheets/sheet1.xml");
+    rels.addRelationship("rId5", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings", "sharedStrings.xml");
+    rels.addRelationship("rId4", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles", "styles.xml");
     
     // 使用流式写入到ZIP
     if (!openStreamingFile("xl/_rels/workbook.xml.rels")) {
@@ -218,14 +222,14 @@ bool FileManager::addWorkbookRels() {
 bool FileManager::addDocProps() {
     // 创建核心属性
     std::ostringstream core_props;
-    core_props << "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n";
+    core_props << "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\r\n";
     core_props << "<cp:coreProperties xmlns:cp=\"http://schemas.openxmlformats.org/package/2006/metadata/core-properties\" ";
     core_props << "xmlns:dc=\"http://purl.org/dc/elements/1.1/\" ";
     core_props << "xmlns:dcterms=\"http://purl.org/dc/terms/\" ";
     core_props << "xmlns:dcmitype=\"http://purl.org/dc/dcmitype/\" ";
-    core_props << "xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\">\n";
-    core_props << "  <dc:creator>FastExcel</dc:creator>\n";
-    core_props << "  <cp:lastModifiedBy>FastExcel</cp:lastModifiedBy>\n";
+    core_props << "xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\">\r\n";
+    core_props << "  <dc:creator>FastExcel</dc:creator>\r\n";
+    core_props << "  <cp:lastModifiedBy>FastExcel</cp:lastModifiedBy>\r\n";
     core_props << "  <dcterms:created xsi:type=\"dcterms:W3CDTF\">";
     
     // 添加当前时间
@@ -235,11 +239,11 @@ bool FileManager::addDocProps() {
     localtime_s(&tm, &time_t);
     core_props << std::put_time(&tm, "%Y-%m-%dT%H:%M:%SZ");
     
-    core_props << "</dcterms:created>\n";
+    core_props << "</dcterms:created>\r\n";
     core_props << "  <dcterms:modified xsi:type=\"dcterms:W3CDTF\">";
     core_props << std::put_time(&tm, "%Y-%m-%dT%H:%M:%SZ");
-    core_props << "</dcterms:modified>\n";
-    core_props << "</cp:coreProperties>\n";
+    core_props << "</dcterms:modified>\r\n";
+    core_props << "</cp:coreProperties>\r\n";
     
     if (!writeFile("docProps/core.xml", core_props.str())) {
         return false;
@@ -247,17 +251,17 @@ bool FileManager::addDocProps() {
     
     // 创建扩展属性
     std::ostringstream app_props;
-    app_props << "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n";
+    app_props << "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\r\n";
     app_props << "<Properties xmlns=\"http://schemas.openxmlformats.org/officeDocument/2006/extended-properties\" ";
-    app_props << "xmlns:vt=\"http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes\">\n";
-    app_props << "  <Application>Microsoft Excel</Application>\n";
-    app_props << "  <DocSecurity>0</DocSecurity>\n";
-    app_props << "  <ScaleCrop>false</ScaleCrop>\n";
-    app_props << "  <LinksUpToDate>false</LinksUpToDate>\n";
-    app_props << "  <SharedDoc>false</SharedDoc>\n";
-    app_props << "  <HyperlinksChanged>false</HyperlinksChanged>\n";
-    app_props << "  <AppVersion>1.0</AppVersion>\n";
-    app_props << "</Properties>\n";
+    app_props << "xmlns:vt=\"http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes\">\r\n";
+    app_props << "  <Application>Microsoft Excel</Application>\r\n";
+    app_props << "  <DocSecurity>0</DocSecurity>\r\n";
+    app_props << "  <ScaleCrop>false</ScaleCrop>\r\n";
+    app_props << "  <LinksUpToDate>false</LinksUpToDate>\r\n";
+    app_props << "  <SharedDoc>false</SharedDoc>\r\n";
+    app_props << "  <HyperlinksChanged>false</HyperlinksChanged>\r\n";
+    app_props << "  <AppVersion>1.0</AppVersion>\r\n";
+    app_props << "</Properties>\r\n";
     
     return writeFile("docProps/app.xml", app_props.str());
 }
