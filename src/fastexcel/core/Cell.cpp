@@ -14,6 +14,52 @@ Cell::Cell() : extended_(nullptr) {
     flags_.reserved = 0;
 }
 
+// 便利构造函数实现
+Cell::Cell(const std::string& value) : extended_(nullptr) {
+    flags_.type = CellType::Empty;
+    flags_.has_format = false;
+    flags_.has_hyperlink = false;
+    flags_.has_formula_result = false;
+    flags_.reserved = 0;
+    setValue(value);
+}
+
+Cell::Cell(const char* value) : extended_(nullptr) {
+    flags_.type = CellType::Empty;
+    flags_.has_format = false;
+    flags_.has_hyperlink = false;
+    flags_.has_formula_result = false;
+    flags_.reserved = 0;
+    setValue(std::string(value));
+}
+
+Cell::Cell(double value) : extended_(nullptr) {
+    flags_.type = CellType::Empty;
+    flags_.has_format = false;
+    flags_.has_hyperlink = false;
+    flags_.has_formula_result = false;
+    flags_.reserved = 0;
+    setValue(value);
+}
+
+Cell::Cell(int value) : extended_(nullptr) {
+    flags_.type = CellType::Empty;
+    flags_.has_format = false;
+    flags_.has_hyperlink = false;
+    flags_.has_formula_result = false;
+    flags_.reserved = 0;
+    setValue(static_cast<double>(value));
+}
+
+Cell::Cell(bool value) : extended_(nullptr) {
+    flags_.type = CellType::Empty;
+    flags_.has_format = false;
+    flags_.has_hyperlink = false;
+    flags_.has_formula_result = false;
+    flags_.reserved = 0;
+    setValue(value);
+}
+
 Cell::~Cell() {
     clearExtended();
 }

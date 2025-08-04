@@ -87,7 +87,7 @@ struct Error {
     
     Error() : code(ErrorCode::Ok) {}
     
-    explicit Error(ErrorCode c) : code(c), message(toString(c)) {}
+    explicit Error(ErrorCode c);
     
     Error(ErrorCode c, const std::string& msg) : code(c), message(msg) {}
     
@@ -134,12 +134,6 @@ inline Error success() {
     return Error(ErrorCode::Ok);
 }
 
-// 编译时开关：是否启用异常
-#ifndef FASTEXCEL_USE_EXCEPTIONS
-#define FASTEXCEL_USE_EXCEPTIONS 1
-#endif
-
-#if FASTEXCEL_USE_EXCEPTIONS
 #include <stdexcept>
 
 /**
@@ -182,7 +176,5 @@ public:
 [[noreturn]] inline void throwError(ErrorCode code, const std::string& message) {
     throw FastExcelException(code, message);
 }
-
-#endif // FASTEXCEL_USE_EXCEPTIONS
 
 }} // namespace fastexcel::core

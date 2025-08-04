@@ -67,6 +67,13 @@ public:
     Cell();
     ~Cell();
     
+    // 便利构造函数
+    explicit Cell(const std::string& value);
+    explicit Cell(const char* value);
+    explicit Cell(double value);
+    explicit Cell(int value);
+    explicit Cell(bool value);
+    
     // 基本值设置
     void setValue(double value);
     void setValue(bool value);

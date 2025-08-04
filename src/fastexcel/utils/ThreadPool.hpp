@@ -40,8 +40,8 @@ public:
      * @return std::future 用于获取任务结果
      */
     template<class F, class... Args>
-    auto enqueue(F&& f, Args&&... args) 
-        -> std::future<typename std::result_of<F(Args...)>::type>;
+    auto enqueue(F&& f, Args&&... args)
+        -> std::future<typename std::invoke_result<F, Args...>::type>;
     
     /**
      * @brief 获取线程池大小
@@ -82,10 +82,10 @@ private:
 
 // 模板方法实现
 template<class F, class... Args>
-auto ThreadPool::enqueue(F&& f, Args&&... args) 
-    -> std::future<typename std::result_of<F(Args...)>::type> {
+auto ThreadPool::enqueue(F&& f, Args&&... args)
+    -> std::future<typename std::invoke_result<F, Args...>::type> {
     
-    using return_type = typename std::result_of<F(Args...)>::type;
+    using return_type = typename std::invoke_result<F, Args...>::type;
     
     auto task = std::make_shared<std::packaged_task<return_type()>>(
         std::bind(std::forward<F>(f), std::forward<Args>(args)...)

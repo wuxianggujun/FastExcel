@@ -239,7 +239,6 @@ public:
         }
     }
 
-#if FASTEXCEL_USE_EXCEPTIONS
     /**
      * @brief 抛出异常（如果是错误）
      */
@@ -278,7 +277,6 @@ public:
             }
         }
     }
-#endif
 };
 
 // ========== 便利函数 ==========
@@ -327,7 +325,6 @@ public:
     E&& error() && noexcept { return std::move(error_); }
     const E&& error() const && noexcept { return std::move(error_); }
 
-#if FASTEXCEL_USE_EXCEPTIONS
     void valueOrThrow() const {
         if (!has_value_) {
             if constexpr (std::is_same_v<E, Error>) {
@@ -337,7 +334,6 @@ public:
             }
         }
     }
-#endif
 };
 
 // ========== 类型别名 ==========

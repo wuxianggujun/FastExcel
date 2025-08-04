@@ -3,6 +3,9 @@
 namespace fastexcel {
 namespace core {
 
+// Error类构造函数实现
+Error::Error(ErrorCode c) : code(c), message(toString(c)) {}
+
 const char* toString(ErrorCode code) noexcept {
     switch (code) {
         // 成功

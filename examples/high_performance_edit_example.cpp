@@ -70,17 +70,15 @@ void demonstrateErrorHandling() {
         std::cout << "✗ 加载失败: " << result.error().fullMessage() << std::endl;
     }
 
-#if FASTEXCEL_USE_EXCEPTIONS
-    // 方式2：异常模式（可选）
+    // 方式2：异常模式
     try {
         auto result2 = loadResult("");
         auto& workbook = result2.valueOrThrow(); // 自动抛异常
         std::cout << "✓ 工作簿加载成功（异常模式）" << std::endl;
     } catch (const FastExcelException& e) {
-        std::cout << "✗ 异常捕获: " << e.what() << " (错误码: " 
+        std::cout << "✗ 异常捕获: " << e.what() << " (错误码: "
                   << static_cast<int>(e.code()) << ")" << std::endl;
     }
-#endif
 }
 
 /**
@@ -220,7 +218,7 @@ void demonstrateMemoryOptimizedEditing() {
         
         // 设置标题行格式
         for (int col = 0; col < 3; ++col) {
-            worksheet->setCellFormat(0, col, format);
+            worksheet->editCellFormat(0, col, format);
         }
         
         std::cout << "✓ 格式设置完成" << std::endl;
@@ -246,11 +244,9 @@ void demonstrateStreamingProcessing() {
     workbook->open();
     
     // 确保启用流式模式
-    auto options = workbook->getOptions();
-    options.streaming_xml = true;
-    options.use_shared_strings = false;  // 禁用共享字符串以获得最佳性能
-    options.row_buffer_size = 10000;     // 大缓冲区
-    workbook->setOptions(options);
+    workbook->setStreamingXML(true);
+    workbook->setUseSharedStrings(false);  // 禁用共享字符串以获得最佳性能
+    workbook->setRowBufferSize(10000);     // 大缓冲区
     
     std::cout << "✓ 流式模式配置完成" << std::endl;
     
@@ -301,12 +297,7 @@ void demonstrateStreamingProcessing() {
 int main() {
     std::cout << "FastExcel 高性能编辑示例" << std::endl;
     std::cout << "=========================" << std::endl;
-    
-#if FASTEXCEL_USE_EXCEPTIONS
-    std::cout << "异常模式: 启用" << std::endl;
-#else
-    std::cout << "异常模式: 禁用（纯错误码模式）" << std::endl;
-#endif
+    std::cout << "错误处理: Expected<T> + 异常支持" << std::endl;
     
     try {
         // 运行所有示例
