@@ -1417,31 +1417,22 @@ bool Workbook::generateWorksheetXMLStreaming(const std::shared_ptr<Worksheet>& w
     LOG_DEBUG("Generating worksheet XML using streaming mode: {}", path);
     
     try {
-        // 恢复真正的流式写入：打开流式ZIP写入
-        if (!file_manager_->openStreamingFile(path)) {
-            LOG_ERROR("Failed to open streaming file: {}", path);
+        // 关键修复：先生成XML内容到字符串，获取准确的文件大小
+        std::string xml_content;
+        worksheet->generateXML([&xml_content](const char* data, size_t size) {
+            xml_content.append(data, size);
+        });
+        
+        LOG_DEBUG("Generated XML content size: {} bytes for {}", xml_content.size(), path);
+        
+        // 使用标准的addFile方法写入，确保ZIP结构正确
+        if (!file_manager_->writeFile(path, xml_content)) {
+            LOG_ERROR("Failed to write worksheet XML file: {}", path);
             return false;
         }
         
-        // 使用流式XML生成：通过回调函数将XML内容直接写入ZIP流
-        bool write_success = true;
-        worksheet->generateXML([this, &write_success](const char* data, size_t size) {
-            if (!file_manager_->writeStreamingChunk(data, size)) {
-                LOG_ERROR("Failed to write streaming chunk to ZIP");
-                write_success = false;
-            }
-        });
-        
-        // 关闭流式ZIP写入
-        bool close_success = file_manager_->closeStreamingFile();
-        
-        if (write_success && close_success) {
-            LOG_INFO("Successfully generated streaming worksheet XML: {}", path);
-        } else {
-            LOG_ERROR("Failed to write streaming worksheet XML: {}", path);
-        }
-        
-        return write_success && close_success;
+        LOG_INFO("Successfully generated worksheet XML: {}", path);
+        return true;
         
     } catch (const std::exception& e) {
         LOG_ERROR("Exception in streaming worksheet XML generation: {}", e.what());

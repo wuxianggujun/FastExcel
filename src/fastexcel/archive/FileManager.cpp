@@ -166,16 +166,14 @@ bool FileManager::addContentTypes() {
     xml::ContentTypes content_types;
     content_types.addExcelDefaults();
     
-    // 使用流式写入到ZIP
-    if (!openStreamingFile("[Content_Types].xml")) {
-        return false;
-    }
-    
-    content_types.generate([this](const char* data, size_t size) {
-        writeStreamingChunk(data, size);
+    // 关键修复：先生成内容到字符串，确保文件大小正确
+    std::string xml_content;
+    content_types.generate([&xml_content](const char* data, size_t size) {
+        xml_content.append(data, size);
     });
     
-    return closeStreamingFile();
+    // 使用标准writeFile方法，确保ZIP结构正确
+    return writeFile("[Content_Types].xml", xml_content);
 }
 
 bool FileManager::addRootRels() {
@@ -185,16 +183,14 @@ bool FileManager::addRootRels() {
     rels.addRelationship("rId2", "http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties", "docProps/core.xml");
     rels.addRelationship("rId1", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument", "xl/workbook.xml");
     
-    // 使用流式写入到ZIP
-    if (!openStreamingFile("_rels/.rels")) {
-        return false;
-    }
-    
-    rels.generate([this](const char* data, size_t size) {
-        writeStreamingChunk(data, size);
+    // 关键修复：先生成内容到字符串，确保文件大小正确
+    std::string xml_content;
+    rels.generate([&xml_content](const char* data, size_t size) {
+        xml_content.append(data, size);
     });
     
-    return closeStreamingFile();
+    // 使用标准writeFile方法，确保ZIP结构正确
+    return writeFile("_rels/.rels", xml_content);
 }
 
 bool FileManager::addWorkbookRels() {
@@ -207,16 +203,14 @@ bool FileManager::addWorkbookRels() {
     rels.addRelationship("rId5", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings", "sharedStrings.xml");
     rels.addRelationship("rId4", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles", "styles.xml");
     
-    // 使用流式写入到ZIP
-    if (!openStreamingFile("xl/_rels/workbook.xml.rels")) {
-        return false;
-    }
-    
-    rels.generate([this](const char* data, size_t size) {
-        writeStreamingChunk(data, size);
+    // 关键修复：先生成内容到字符串，确保文件大小正确
+    std::string xml_content;
+    rels.generate([&xml_content](const char* data, size_t size) {
+        xml_content.append(data, size);
     });
     
-    return closeStreamingFile();
+    // 使用标准writeFile方法，确保ZIP结构正确
+    return writeFile("xl/_rels/workbook.xml.rels", xml_content);
 }
 
 bool FileManager::addDocProps() {
