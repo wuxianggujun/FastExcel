@@ -564,8 +564,8 @@ void Worksheet::generateXMLBatch(const std::function<void(const char*, size_t)>&
 void Worksheet::generateXMLStreaming(const std::function<void(const char*, size_t)>& callback) const {
     // 真正的流式XML生成：直接写入，不缓存完整XML
     
-    // XML头部
-    const char* xml_header = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>";
+    // XML头部 - 关键修复：添加换行符以匹配libxlsxwriter格式
+    const char* xml_header = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n";
     callback(xml_header, strlen(xml_header));
     
     // 工作表开始标签
@@ -576,12 +576,9 @@ void Worksheet::generateXMLStreaming(const std::function<void(const char*, size_
     const char* dimension = "<dimension ref=\"A1\"/>";
     callback(dimension, strlen(dimension));
     
-    // 工作表视图
-    callback("<sheetViews><sheetView", 23);
-    if (sheet_view_.tab_selected) {
-        callback(" tabSelected=\"1\"", 16);
-    }
-    callback(" workbookViewId=\"0\"", 19);
+    // 关键修复：确保流式模式也生成正确的sheetViews（按照libxlsxwriter模版）
+    const char* sheet_views_start = "<sheetViews><sheetView tabSelected=\"1\" workbookViewId=\"0\"";
+    callback(sheet_views_start, strlen(sheet_views_start));
     
     // 冻结窗格
     if (freeze_panes_) {
@@ -598,9 +595,12 @@ void Worksheet::generateXMLStreaming(const std::function<void(const char*, size_
             std::string top_left = " topLeftCell=\"" + utils::CommonUtils::cellReference(freeze_panes_->top_left_row, freeze_panes_->top_left_col) + "\"";
             callback(top_left.c_str(), top_left.length());
         }
-        callback(" state=\"frozen\"/></sheetView></sheetViews>", 42);
+        const char* sheet_views_end_with_pane = " state=\"frozen\"/></sheetView></sheetViews>";
+        callback(sheet_views_end_with_pane, strlen(sheet_views_end_with_pane));
     } else {
-        callback("/></sheetViews>", 14);
+        // 关键修复：修正XML标签结构，确保正确闭合
+        const char* sheet_views_end = "/></sheetViews>";
+        callback(sheet_views_end, strlen(sheet_views_end));
     }
     
     // 工作表格式信息
@@ -624,13 +624,20 @@ void Worksheet::generateXMLStreaming(const std::function<void(const char*, size_
         callback("</cols>", 7);
     }
     
-    // 工作表数据开始
-    callback("<sheetData>", 11);
+    // 关键修复：确保始终生成sheetData元素（即使为空）
+    callback("<sheetData", 10);
     
-    // 真正的流式处理：按行处理，不在内存中缓存所有数据
-    generateSheetDataStreaming(callback);
-    
-    callback("</sheetData>", 12);
+    // 检查是否有数据需要生成
+    auto [max_row, max_col] = getUsedRange();
+    if (max_row >= 0 && max_col >= 0) {
+        callback(">", 1);
+        // 真正的流式处理：按行处理，不在内存中缓存所有数据
+        generateSheetDataStreaming(callback);
+        callback("</sheetData>", 12);
+    } else {
+        // 空的sheetData元素
+        callback("/>", 2);
+    }
     
     // 工作表保护
     if (protected_) {
@@ -676,7 +683,7 @@ void Worksheet::generateXMLStreaming(const std::function<void(const char*, size_
         callback(print_opts.c_str(), print_opts.length());
     }
     
-    // 页边距
+    // 关键修复：确保始终生成pageMargins元素（按照libxlsxwriter模版）
     const char* margins = "<pageMargins left=\"0.7\" right=\"0.7\" top=\"0.75\" bottom=\"0.75\" header=\"0.3\" footer=\"0.3\"/>";
     callback(margins, strlen(margins));
     
