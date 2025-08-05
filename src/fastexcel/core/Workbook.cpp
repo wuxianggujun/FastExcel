@@ -718,105 +718,141 @@ bool Workbook::generateExcelStructureStreaming() {
     LOG_INFO("Starting Excel structure generation with streaming mode");
     
     try {
-        // 基础文件（这些通常较小，直接生成）
-        std::string content_types_xml;
-        generateContentTypesXML([&content_types_xml](const char* data, size_t size) {
-            content_types_xml.append(data, size);
+        // 🎯 纯流式模式：所有文件都使用流式写入（flag=DATA_DESCRIPTOR）
+        LOG_INFO("Using pure streaming mode: all files use streaming write with Data Descriptor");
+        
+        // Content_Types.xml - 流式写入
+        if (!file_manager_->openStreamingFile("[Content_Types].xml")) {
+            LOG_ERROR("Failed to open streaming file: [Content_Types].xml");
+            return false;
+        }
+        generateContentTypesXML([this](const char* data, size_t size) {
+            file_manager_->writeStreamingChunk(data, size);
         });
-        if (!file_manager_->writeFile("[Content_Types].xml", content_types_xml)) {
-            LOG_ERROR("Failed to write Content_Types.xml");
+        if (!file_manager_->closeStreamingFile()) {
+            LOG_ERROR("Failed to close streaming file: [Content_Types].xml");
             return false;
         }
         
-        std::string rels_xml;
-        generateRelsXML([&rels_xml](const char* data, size_t size) {
-            rels_xml.append(data, size);
+        // _rels/.rels - 流式写入
+        if (!file_manager_->openStreamingFile("_rels/.rels")) {
+            LOG_ERROR("Failed to open streaming file: _rels/.rels");
+            return false;
+        }
+        generateRelsXML([this](const char* data, size_t size) {
+            file_manager_->writeStreamingChunk(data, size);
         });
-        if (!file_manager_->writeFile("_rels/.rels", rels_xml)) {
-            LOG_ERROR("Failed to write _rels/.rels");
+        if (!file_manager_->closeStreamingFile()) {
+            LOG_ERROR("Failed to close streaming file: _rels/.rels");
             return false;
         }
         
-        // 文档属性文件（这些通常较小，直接生成）
-        std::string app_xml;
-        generateDocPropsAppXML([&app_xml](const char* data, size_t size) {
-            app_xml.append(data, size);
+        // docProps/app.xml - 流式写入
+        if (!file_manager_->openStreamingFile("docProps/app.xml")) {
+            LOG_ERROR("Failed to open streaming file: docProps/app.xml");
+            return false;
+        }
+        generateDocPropsAppXML([this](const char* data, size_t size) {
+            file_manager_->writeStreamingChunk(data, size);
         });
-        if (!file_manager_->writeFile("docProps/app.xml", app_xml)) {
-            LOG_ERROR("Failed to write docProps/app.xml");
+        if (!file_manager_->closeStreamingFile()) {
+            LOG_ERROR("Failed to close streaming file: docProps/app.xml");
             return false;
         }
         
-        std::string core_xml;
-        generateDocPropsCoreXML([&core_xml](const char* data, size_t size) {
-            core_xml.append(data, size);
+        // docProps/core.xml - 流式写入
+        if (!file_manager_->openStreamingFile("docProps/core.xml")) {
+            LOG_ERROR("Failed to open streaming file: docProps/core.xml");
+            return false;
+        }
+        generateDocPropsCoreXML([this](const char* data, size_t size) {
+            file_manager_->writeStreamingChunk(data, size);
         });
-        if (!file_manager_->writeFile("docProps/core.xml", core_xml)) {
-            LOG_ERROR("Failed to write docProps/core.xml");
+        if (!file_manager_->closeStreamingFile()) {
+            LOG_ERROR("Failed to close streaming file: docProps/core.xml");
             return false;
         }
         
-        // 自定义属性（如果有）
+        // 自定义属性（如果有）- 流式写入
         if (!custom_properties_.empty()) {
-            std::string custom_xml;
-            generateDocPropsCustomXML([&custom_xml](const char* data, size_t size) {
-                custom_xml.append(data, size);
+            if (!file_manager_->openStreamingFile("docProps/custom.xml")) {
+                LOG_ERROR("Failed to open streaming file: docProps/custom.xml");
+                return false;
+            }
+            generateDocPropsCustomXML([this](const char* data, size_t size) {
+                file_manager_->writeStreamingChunk(data, size);
             });
-            if (!file_manager_->writeFile("docProps/custom.xml", custom_xml)) {
-                LOG_ERROR("Failed to write docProps/custom.xml");
+            if (!file_manager_->closeStreamingFile()) {
+                LOG_ERROR("Failed to close streaming file: docProps/custom.xml");
                 return false;
             }
         }
         
-        // Excel核心文件
-        std::string workbook_rels_xml;
-        generateWorkbookRelsXML([&workbook_rels_xml](const char* data, size_t size) {
-            workbook_rels_xml.append(data, size);
+        // xl/_rels/workbook.xml.rels - 流式写入
+        if (!file_manager_->openStreamingFile("xl/_rels/workbook.xml.rels")) {
+            LOG_ERROR("Failed to open streaming file: xl/_rels/workbook.xml.rels");
+            return false;
+        }
+        generateWorkbookRelsXML([this](const char* data, size_t size) {
+            file_manager_->writeStreamingChunk(data, size);
         });
-        if (!file_manager_->writeFile("xl/_rels/workbook.xml.rels", workbook_rels_xml)) {
-            LOG_ERROR("Failed to write xl/_rels/workbook.xml.rels");
+        if (!file_manager_->closeStreamingFile()) {
+            LOG_ERROR("Failed to close streaming file: xl/_rels/workbook.xml.rels");
             return false;
         }
         
-        // Excel核心文件
-        std::string workbook_xml;
-        generateWorkbookXML([&workbook_xml](const char* data, size_t size) {
-            workbook_xml.append(data, size);
+        // xl/workbook.xml - 流式写入
+        if (!file_manager_->openStreamingFile("xl/workbook.xml")) {
+            LOG_ERROR("Failed to open streaming file: xl/workbook.xml");
+            return false;
+        }
+        generateWorkbookXML([this](const char* data, size_t size) {
+            file_manager_->writeStreamingChunk(data, size);
         });
-        if (!file_manager_->writeFile("xl/workbook.xml", workbook_xml)) {
-            LOG_ERROR("Failed to write xl/workbook.xml");
+        if (!file_manager_->closeStreamingFile()) {
+            LOG_ERROR("Failed to close streaming file: xl/workbook.xml");
             return false;
         }
         
-        std::string styles_xml;
-        generateStylesXML([&styles_xml](const char* data, size_t size) {
-            styles_xml.append(data, size);
+        // xl/styles.xml - 流式写入
+        if (!file_manager_->openStreamingFile("xl/styles.xml")) {
+            LOG_ERROR("Failed to open streaming file: xl/styles.xml");
+            return false;
+        }
+        generateStylesXML([this](const char* data, size_t size) {
+            file_manager_->writeStreamingChunk(data, size);
         });
-        if (!file_manager_->writeFile("xl/styles.xml", styles_xml)) {
-            LOG_ERROR("Failed to write xl/styles.xml");
+        if (!file_manager_->closeStreamingFile()) {
+            LOG_ERROR("Failed to close streaming file: xl/styles.xml");
             return false;
         }
         
-        // 只有启用共享字符串且有内容时才生成sharedStrings.xml文件
+        // xl/theme/theme1.xml - 流式写入
+        if (!file_manager_->openStreamingFile("xl/theme/theme1.xml")) {
+            LOG_ERROR("Failed to open streaming file: xl/theme/theme1.xml");
+            return false;
+        }
+        generateThemeXML([this](const char* data, size_t size) {
+            file_manager_->writeStreamingChunk(data, size);
+        });
+        if (!file_manager_->closeStreamingFile()) {
+            LOG_ERROR("Failed to close streaming file: xl/theme/theme1.xml");
+            return false;
+        }
+        
+        // xl/sharedStrings.xml - 流式写入（如果需要）
         if (options_.use_shared_strings && !shared_strings_list_.empty()) {
-            std::string shared_strings_xml;
-            generateSharedStringsXML([&shared_strings_xml](const char* data, size_t size) {
-                shared_strings_xml.append(data, size);
-            });
-            if (!file_manager_->writeFile("xl/sharedStrings.xml", shared_strings_xml)) {
-                LOG_ERROR("Failed to write xl/sharedStrings.xml");
+            if (!file_manager_->openStreamingFile("xl/sharedStrings.xml")) {
+                LOG_ERROR("Failed to open streaming file: xl/sharedStrings.xml");
                 return false;
             }
-        }
-        
-        // Theme文件
-        std::string theme_xml;
-        generateThemeXML([&theme_xml](const char* data, size_t size) {
-            theme_xml.append(data, size);
-        });
-        if (!file_manager_->writeFile("xl/theme/theme1.xml", theme_xml)) {
-            LOG_ERROR("Failed to write xl/theme/theme1.xml");
-            return false;
+            generateSharedStringsXML([this](const char* data, size_t size) {
+                file_manager_->writeStreamingChunk(data, size);
+            });
+            if (!file_manager_->closeStreamingFile()) {
+                LOG_ERROR("Failed to close streaming file: xl/sharedStrings.xml");
+                return false;
+            }
         }
         
         // 工作表文件（流式写入）
@@ -829,15 +865,23 @@ bool Workbook::generateExcelStructureStreaming() {
                 return false;
             }
             
-            // 工作表关系文件（如果有超链接等）
+            // 工作表关系文件（如果有超链接等）- 流式写入
             std::string worksheet_rels_xml;
             worksheets_[i]->generateRelsXML([&worksheet_rels_xml](const char* data, size_t size) {
                 worksheet_rels_xml.append(data, size);
             });
             if (!worksheet_rels_xml.empty()) {
                 std::string rels_path = "xl/worksheets/_rels/sheet" + std::to_string(i + 1) + ".xml.rels";
-                if (!file_manager_->writeFile(rels_path, worksheet_rels_xml)) {
-                    LOG_ERROR("Failed to write worksheet relations {}", rels_path);
+                if (!file_manager_->openStreamingFile(rels_path)) {
+                    LOG_ERROR("Failed to open streaming file: {}", rels_path);
+                    return false;
+                }
+                if (!file_manager_->writeStreamingChunk(worksheet_rels_xml.data(), worksheet_rels_xml.size())) {
+                    LOG_ERROR("Failed to write streaming chunk for: {}", rels_path);
+                    return false;
+                }
+                if (!file_manager_->closeStreamingFile()) {
+                    LOG_ERROR("Failed to close streaming file: {}", rels_path);
                     return false;
                 }
             }

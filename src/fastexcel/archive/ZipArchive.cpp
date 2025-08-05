@@ -104,10 +104,10 @@ void ZipArchive::initializeFileInfo(void* file_info_ptr, const std::string& path
     file_info.uncompressed_size = static_cast<uint64_t>(size);
     file_info.compressed_size = 0; // 让minizip自动计算
     
-    // 关键修复1：使用STORE方法（无压缩）来匹配Excel生成的文件
-    // Excel通常对小文件使用STORE方法
+    // 关键修复1：批量模式使用STORE方法（无压缩）来匹配Excel生成的文件
+    // Excel通常对小文件使用STORE方法，批量模式不使用Data Descriptor
     file_info.compression_method = MZ_COMPRESS_METHOD_STORE;
-    LOG_DEBUG("Using STORE compression method (no compression) to match Excel");
+    LOG_DEBUG("Batch mode: Using STORE compression method (no compression) to match Excel");
     
     // 关键修复2：使用DOS时间格式而不是Unix时间戳
     // Excel使用DOS时间格式，这是ZIP标准的一部分
@@ -128,8 +128,9 @@ void ZipArchive::initializeFileInfo(void* file_info_ptr, const std::string& path
     
     LOG_DEBUG("Using local time for file timestamps");
     
-    // 关键修复3：不设置任何标志，保持为0
+    // 关键修复3：批量模式不使用Data Descriptor，保持为0
     file_info.flag = 0;
+    LOG_DEBUG("Batch mode: flag = 0 (no Data Descriptor)");
     
     // 关键修复4：设置正确的版本信息
     // Windows系统上应该使用 (10 << 8) | 20 = 0x0A14 (2580)
@@ -303,17 +304,18 @@ ZipError ZipArchive::addFiles(std::vector<FileEntry>&& files) {
         file_info.uncompressed_size = static_cast<uint64_t>(file.content.size());
         file_info.compressed_size = 0; // 让minizip自动计算
         
-        // 使用STORE方法（无压缩）来匹配Excel
+        // 批量模式（移动语义）：使用STORE方法（无压缩）来匹配Excel
         file_info.compression_method = MZ_COMPRESS_METHOD_STORE;
-        LOG_DEBUG("Using STORE compression method (no compression) to match Excel");
+        LOG_DEBUG("Batch mode (move semantics): Using STORE compression method (no compression) to match Excel");
         
         // 使用本地时间
         std::time_t now = std::time(nullptr);
         file_info.modified_date = now;
         file_info.creation_date = now;
         
-        // 不设置任何标志
+        // 批量模式（移动语义）：不使用Data Descriptor
         file_info.flag = 0;
+        LOG_DEBUG("Batch mode (move semantics): flag = 0 (no Data Descriptor)");
         
         // 设置正确的版本信息
 #ifdef _WIN32
@@ -526,11 +528,11 @@ bool ZipArchive::initForWriting() {
     }
     LOG_DEBUG("ZIP writer handle created successfully: {}", (void*)zip_handle_);
     
-    // 关键修复：设置为STORE方法（无压缩）作为默认值
-    // 这样可以避免压缩算法导致的差异
-    mz_zip_writer_set_compress_method(zip_handle_, MZ_COMPRESS_METHOD_STORE);
-    mz_zip_writer_set_compress_level(zip_handle_, 0);
-    LOG_DEBUG("Set default compression to STORE (no compression) to match Excel");
+    // 关键修复：设置为DEFLATE方法并使用压缩级别1，实现真正的流式写入
+    // 压缩级别0会被minizip自动降级为STORE，必须使用级别1或更高
+    mz_zip_writer_set_compress_method(zip_handle_, MZ_COMPRESS_METHOD_DEFLATE);
+    mz_zip_writer_set_compress_level(zip_handle_, 1);  // 最小的DEFLATE压缩级别
+    LOG_DEBUG("Set default compression to DEFLATE with level 1 for streaming compatibility");
     
     // 设置覆盖回调函数，总是覆盖已存在的文件
     LOG_DEBUG("Setting overwrite callback");
@@ -565,18 +567,24 @@ bool ZipArchive::initForWriting() {
         return false;
     }
     
-    // 关键修复：暂时禁用全局Data Descriptor设置，只在流式写入时使用
-    // 这样可以避免全局设置对批量写入的潜在影响
-    LOG_DEBUG("Skipping global data descriptor setting to avoid conflicts with batch writes");
-    LOG_DEBUG("Data descriptor will only be used for streaming entries via file_info.flag");
+    // 关键修复：不设置全局Data Descriptor，让每个条目自己控制
+    // 这样批量写入可以使用flag=0，流式写入可以使用flag=DATA_DESCRIPTOR
+    LOG_DEBUG("Skipping global data descriptor setting to allow per-entry control");
+    LOG_DEBUG("Each entry will control its own Data Descriptor flag:");
+    LOG_DEBUG("  - Batch writes: flag=0 (no Data Descriptor)");
+    LOG_DEBUG("  - Streaming writes: flag=MZ_ZIP_FLAG_DATA_DESCRIPTOR");
     
-    // 注释掉全局设置，改为仅在需要时在条目级别设置
-    // result = mz_zip_set_data_descriptor(zip_handle_, 1);
-    // if (result != MZ_OK) {
-    //     LOG_ERROR("Failed to set global data descriptor: {}", result);
-    // } else {
-    //     LOG_DEBUG("Successfully enabled global data descriptor for streaming entries");
-    // }
+    // 关键修复：彻底关闭Data Descriptor以解决minizip-ng v4.0.5的issue #830
+    // 该bug导致"DEFLATE + Data Descriptor + 签名"时中央目录偏移少4字节
+    // 解决方案：全局禁用Data Descriptor，让minizip在关闭条目时回补本地头
+    void* zip_handle = nullptr;
+    if (mz_zip_writer_get_zip_handle(zip_handle_, &zip_handle) == MZ_OK && zip_handle) {
+        mz_zip_set_data_descriptor(zip_handle, 0);  // 0 = 完全不使用Data Descriptor
+        LOG_DEBUG("Disabled Data Descriptor globally to fix minizip-ng v4.0.5 issue #830");
+        LOG_DEBUG("minizip will seek back to update local headers when closing entries");
+    } else {
+        LOG_WARN("Failed to get bottom-level ZIP handle, may encounter 'extra 4 bytes' issue");
+    }
     
     is_writable_ = true;
     LOG_DEBUG("ZIP archive successfully opened for writing: {}", filename_);
@@ -634,6 +642,14 @@ ZipError ZipArchive::openEntry(std::string_view internal_path) {
         return ZipError::Ok;  // 跳过重复条目，但不报错
     }
     
+    // 关键修复：确保Data Descriptor已全局禁用
+    // 这是为了避免minizip-ng v4.0.5的issue #830（中央目录偏移错误）
+    void* zip_handle = nullptr;
+    if (mz_zip_writer_get_zip_handle(zip_handle_, &zip_handle) == MZ_OK && zip_handle) {
+        mz_zip_set_data_descriptor(zip_handle, 0);  // 确保禁用Data Descriptor
+        LOG_DEBUG("Confirmed Data Descriptor is disabled for this streaming entry");
+    }
+    
     // 注意：使用mz_zip_writer_entry_close时不需要手动跟踪CRC32和大小
     // minizip-ng会自动处理这些信息
     
@@ -641,20 +657,22 @@ ZipError ZipArchive::openEntry(std::string_view internal_path) {
     mz_zip_file file_info = {};
     file_info.filename = path_str.c_str();
     
-    // 对于流式写入，使用STORE方法以匹配Excel
+    // 对于流式写入，使用DEFLATE方法配合Data Descriptor实现真正的纯流式
     file_info.uncompressed_size = 0;  // 流式写入时未知大小
     file_info.compressed_size = 0;    // 流式写入时未知大小
-    file_info.compression_method = MZ_COMPRESS_METHOD_STORE;
+    file_info.compression_method = MZ_COMPRESS_METHOD_DEFLATE;
     
     // 使用本地时间
     std::time_t now = std::time(nullptr);
     file_info.modified_date = now;
     file_info.creation_date = now;
     
-    // 关键修复：使用Data Descriptor标志进行真正的流式写入
-    // 这允许在不预知文件大小的情况下写入数据
-    file_info.flag = MZ_ZIP_FLAG_DATA_DESCRIPTOR;
-    LOG_DEBUG("Using MZ_ZIP_FLAG_DATA_DESCRIPTOR for true streaming write");
+    // 关键修复：绝不使用Data Descriptor flag (bit 3 = 0x0008)
+    // 这是为了避免minizip-ng v4.0.5的issue #830
+    // minizip会在entry_close时seek回本地头写入CRC和大小信息
+    file_info.flag = 0;  // 绝不能包含MZ_ZIP_FLAG_DATA_DESCRIPTOR (0x0008)
+    LOG_DEBUG("Streaming mode: flag = 0 (no Data Descriptor) to avoid minizip-ng issue #830");
+    LOG_DEBUG("minizip will seek back to update local header when closing entry");
     
     // 设置正确的版本信息
 #ifdef _WIN32
@@ -770,16 +788,18 @@ ZipError ZipArchive::closeEntry() {
         return ZipError::InvalidParameter;
     }
     
-    // 关键修复：对于mz_zip_writer_entry_open/write，应该使用mz_zip_writer_entry_close
-    // mz_zip_entry_close_raw是用于mz_zip_entry_read_write的不同API
-    LOG_DEBUG("Calling mz_zip_writer_entry_close for streaming entry...");
+    // 关键修复：根据minizip-ng文档，当使用Data Descriptor时，
+    // 应该使用mz_zip_writer_entry_close而不是mz_zip_entry_write_close
+    // mz_zip_writer_entry_close会自动处理Data Descriptor的写入
+    LOG_DEBUG("Calling mz_zip_writer_entry_close for streaming entry with Data Descriptor...");
     int32_t result = mz_zip_writer_entry_close(zip_handle_);
     LOG_DEBUG("mz_zip_writer_entry_close returned: {} (MZ_OK = {})", result, MZ_OK);
     
     if (result != MZ_OK) {
-        LOG_ERROR("Critical error: Failed to close streaming entry with raw data, error: {}", result);
+        LOG_ERROR("Critical error: Failed to close streaming entry, error: {}", result);
         LOG_ERROR("This usually means:");
-        LOG_ERROR("  - Invalid CRC32 or size information");
+        LOG_ERROR("  - Data Descriptor write failure");
+        LOG_ERROR("  - CRC32 calculation error");
         LOG_ERROR("  - ZIP writer internal error");
         LOG_ERROR("  - Memory or disk space issues");
         stream_entry_open_ = false;  // 重置状态，避免后续操作被阻塞
@@ -787,7 +807,7 @@ ZipError ZipArchive::closeEntry() {
     }
     
     stream_entry_open_ = false;
-    LOG_DEBUG("Successfully closed streaming entry");
+    LOG_DEBUG("Successfully closed streaming entry with Data Descriptor");
     LOG_DEBUG("Stream entry state updated: stream_entry_open_ = {}", stream_entry_open_);
     LOG_DEBUG("=== STREAMING ENTRY CLOSE DEBUG END ===");
     return ZipError::Ok;
