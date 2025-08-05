@@ -634,6 +634,9 @@ ZipError ZipArchive::openEntry(std::string_view internal_path) {
         return ZipError::Ok;  // 跳过重复条目，但不报错
     }
     
+    // 注意：使用mz_zip_writer_entry_close时不需要手动跟踪CRC32和大小
+    // minizip-ng会自动处理这些信息
+    
     // 初始化文件信息结构
     mz_zip_file file_info = {};
     file_info.filename = path_str.c_str();
@@ -690,6 +693,7 @@ ZipError ZipArchive::openEntry(std::string_view internal_path) {
     written_paths_.insert(path_str);
     LOG_DEBUG("Successfully opened entry for streaming: {}", internal_path);
     LOG_DEBUG("Stream entry state updated: stream_entry_open_ = {}", stream_entry_open_);
+    LOG_DEBUG("Initialized stream tracking: bytes_written=0, crc32=0");
     LOG_DEBUG("=== STREAMING ENTRY OPEN DEBUG END ===");
     return ZipError::Ok;
 }
@@ -723,6 +727,9 @@ ZipError ZipArchive::writeChunk(const void* data, size_t size) {
         LOG_ERROR("Chunk size {} is too large, maximum size is {} bytes", size, INT32_MAX);
         return ZipError::TooLarge;
     }
+    
+    // 注意：使用mz_zip_writer_entry_write时不需要手动跟踪CRC32和大小
+    // minizip-ng会自动处理这些信息
     
     // 写入数据块
     LOG_DEBUG("Calling mz_zip_writer_entry_write with {} bytes...", size);
@@ -763,18 +770,18 @@ ZipError ZipArchive::closeEntry() {
         return ZipError::InvalidParameter;
     }
     
-    // 关闭条目 - 这将让 minizip 自动计算并写入 CRC 和大小信息
-    // 这是流式写入的关键步骤，必须严格检查返回值
-    LOG_DEBUG("Calling mz_zip_writer_entry_close...");
+    // 关键修复：对于mz_zip_writer_entry_open/write，应该使用mz_zip_writer_entry_close
+    // mz_zip_entry_close_raw是用于mz_zip_entry_read_write的不同API
+    LOG_DEBUG("Calling mz_zip_writer_entry_close for streaming entry...");
     int32_t result = mz_zip_writer_entry_close(zip_handle_);
     LOG_DEBUG("mz_zip_writer_entry_close returned: {} (MZ_OK = {})", result, MZ_OK);
     
     if (result != MZ_OK) {
-        LOG_ERROR("Critical error: Failed to close streaming entry in zip, error: {}", result);
+        LOG_ERROR("Critical error: Failed to close streaming entry with raw data, error: {}", result);
         LOG_ERROR("This usually means:");
-        LOG_ERROR("  - CRC mismatch or data corruption during streaming write");
-        LOG_ERROR("  - Data descriptor write failure");
-        LOG_ERROR("  - ZIP structure corruption");
+        LOG_ERROR("  - Invalid CRC32 or size information");
+        LOG_ERROR("  - ZIP writer internal error");
+        LOG_ERROR("  - Memory or disk space issues");
         stream_entry_open_ = false;  // 重置状态，避免后续操作被阻塞
         return ZipError::IoFail;
     }

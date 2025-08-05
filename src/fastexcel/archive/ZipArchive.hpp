@@ -73,6 +73,7 @@ private:
     mutable std::mutex mutex_;  // 线程安全互斥锁
     std::unordered_set<std::string> written_paths_;  // 跟踪已写入的路径，防止重复
     
+    
 public:
     explicit ZipArchive(const std::string& filename);
     ~ZipArchive();

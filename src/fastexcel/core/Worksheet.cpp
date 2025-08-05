@@ -486,245 +486,68 @@ std::pair<int, int> Worksheet::getFitToPages() const {
 // ========== XML生成 ==========
 
 void Worksheet::generateXML(const std::function<void(const char*, size_t)>& callback) const {
+    // 检查是否为流式模式：通过检查parent_workbook的模式
+    bool is_streaming_mode = false;
+    if (parent_workbook_) {
+        auto mode = parent_workbook_->getOptions().mode;
+        is_streaming_mode = (mode == WorkbookMode::STREAMING);
+    }
+    
+    if (is_streaming_mode) {
+        // 流式模式：直接字符串拼接，真正的流式处理
+        generateXMLStreaming(callback);
+    } else {
+        // 批量模式：使用XMLStreamWriter生成标准XML
+        generateXMLBatch(callback);
+    }
+}
+
+void Worksheet::generateXMLBatch(const std::function<void(const char*, size_t)>& callback) const {
+    // 批量模式：使用XMLStreamWriter生成标准XML
     xml::XMLStreamWriter writer(callback);
     writer.startDocument();
     writer.startElement("worksheet");
-    // 严格按照libxlsxwriter的命名空间：只有两个
     writer.writeAttribute("xmlns", "http://schemas.openxmlformats.org/spreadsheetml/2006/main");
     writer.writeAttribute("xmlns:r", "http://schemas.openxmlformats.org/officeDocument/2006/relationships");
     
-    // libxlsxwriter没有sheetPr元素，直接跳过
-    
-    // 尺寸信息 - 严格按照libxlsxwriter格式
+    // 尺寸信息
     writer.startElement("dimension");
     writer.writeAttribute("ref", "A1");
     writer.endElement(); // dimension
     
-    // 工作表视图 - 严格按照libxlsxwriter格式
+    // 关键修复：确保始终生成sheetViews元素（按照libxlsxwriter模版）
     writer.startElement("sheetViews");
     writer.startElement("sheetView");
-    
-    if (sheet_view_.tab_selected) {
-        writer.writeAttribute("tabSelected", "1");
-    }
-    
+    writer.writeAttribute("tabSelected", "1");
     writer.writeAttribute("workbookViewId", "0");
-    
-    // libxlsxwriter没有selection元素，跳过
-    
-    // 冻结窗格
-    if (freeze_panes_) {
-        writer.startElement("pane");
-        if (freeze_panes_->col > 0) {
-            writer.writeAttribute("xSplit", std::to_string(freeze_panes_->col).c_str());
-        }
-        if (freeze_panes_->row > 0) {
-            writer.writeAttribute("ySplit", std::to_string(freeze_panes_->row).c_str());
-        }
-        if (freeze_panes_->top_left_row >= 0 && freeze_panes_->top_left_col >= 0) {
-            std::string top_left = utils::CommonUtils::cellReference(freeze_panes_->top_left_row, freeze_panes_->top_left_col);
-            writer.writeAttribute("topLeftCell", top_left.c_str());
-        }
-        writer.writeAttribute("state", "frozen");
-        writer.endElement(); // pane
-    }
-    
     writer.endElement(); // sheetView
     writer.endElement(); // sheetViews
     
-    // 工作表格式信息 - 严格按照libxlsxwriter格式：只有defaultRowHeight
+    // 工作表格式信息
     writer.startElement("sheetFormatPr");
     writer.writeAttribute("defaultRowHeight", "15");
     writer.endElement(); // sheetFormatPr
     
     // 列信息
-    if (!column_info_.empty()) {
-        writer.startElement("cols");
-        
-        for (const auto& [col_num, col_info] : column_info_) {
-            writer.startElement("col");
-            writer.writeAttribute("min", std::to_string(col_num + 1).c_str());
-            writer.writeAttribute("max", std::to_string(col_num + 1).c_str());
-            
-            if (col_info.width > 0) {
-                writer.writeAttribute("width", std::to_string(col_info.width).c_str());
-                writer.writeAttribute("customWidth", "1");
-            }
-            
-            if (col_info.hidden) {
-                writer.writeAttribute("hidden", "1");
-            }
-            
-            writer.endElement(); // col
-        }
-        
-        writer.endElement(); // cols
-    }
+    generateColumnsXML(callback);
     
-    // 工作表数据
+    // 关键修复：确保始终生成sheetData元素（即使为空）
     writer.startElement("sheetData");
-    
-    // 按行排序输出单元格数据
-    std::map<int, std::map<int, const Cell*>> sorted_cells;
-    // 关键修复 #1: 只要单元格有值或有格式，就必须处理
-    for (const auto& [pos, cell] : cells_) {
-        if (!cell.isEmpty() || cell.hasFormat()) {
-            sorted_cells[pos.first][pos.second] = &cell;
-        }
-    }
-    
-    for (const auto& [row_num, row_cells] : sorted_cells) {
-        writer.startElement("row");
-        writer.writeAttribute("r", std::to_string(row_num + 1).c_str());
-        
-        // 计算当前行的列范围
-        int min_col_in_row = INT_MAX;
-        int max_col_in_row = INT_MIN;
-        for (const auto& [col_num, cell] : row_cells) {
-            min_col_in_row = std::min(min_col_in_row, col_num);
-            max_col_in_row = std::max(max_col_in_row, col_num);
-        }
-        
-        std::string spans = std::to_string(min_col_in_row + 1) + ":" + std::to_string(max_col_in_row + 1);
-        writer.writeAttribute("spans", spans.c_str());
-        
-        // 检查行信息
-        auto row_it = row_info_.find(row_num);
-        if (row_it != row_info_.end()) {
-            if (row_it->second.height > 0) {
-                writer.writeAttribute("ht", std::to_string(row_it->second.height).c_str());
-                writer.writeAttribute("customHeight", "1");
-            }
-            if (row_it->second.hidden) {
-                writer.writeAttribute("hidden", "1");
-            }
-        }
-        
-        for (const auto& [col_num, cell] : row_cells) {
-            writer.startElement("c");
-            writer.writeAttribute("r", utils::CommonUtils::cellReference(row_num, col_num).c_str());
-            
-            // 关键修复 #2: 应用单元格格式
-            if (cell->hasFormat()) {
-                writer.writeAttribute("s", std::to_string(cell->getFormat()->getXfIndex()).c_str());
-            }
-            
-            // 只有在单元格不为空时才写入值
-            if (!cell->isEmpty()) {
-                if (cell->isFormula()) {
-                    writer.writeAttribute("t", "str");
-                    writer.startElement("f");
-                    writer.writeText(cell->getFormula().c_str());
-                    writer.endElement(); // f
-                } else if (cell->isString()) {
-                    // 关键修复 #3: 根据工作簿设置决定使用共享字符串还是内联字符串
-                    if (parent_workbook_ && parent_workbook_->getOptions().use_shared_strings) {
-                        // 使用共享字符串表
-                        writer.writeAttribute("t", "s");
-                        writer.startElement("v");
-                        int sst_index = parent_workbook_->getSharedStringIndex(cell->getStringValue());
-                        if (sst_index >= 0) {
-                            writer.writeText(std::to_string(sst_index).c_str());
-                        } else {
-                            // 如果字符串不在SST中，添加它
-                            sst_index = parent_workbook_->addSharedString(cell->getStringValue());
-                            writer.writeText(std::to_string(sst_index).c_str());
-                        }
-                        writer.endElement(); // v
-                    } else {
-                        writer.writeAttribute("t", "inlineStr");
-                        writer.startElement("is");
-                        writer.startElement("t");
-                        writer.writeText(cell->getStringValue().c_str());
-                        writer.endElement(); // t
-                        writer.endElement(); // is
-                    }
-                } else if (cell->isNumber()) {
-                    writer.startElement("v");
-                    writer.writeText(std::to_string(cell->getNumberValue()).c_str());
-                    writer.endElement(); // v
-                } else if (cell->isBoolean()) {
-                    writer.writeAttribute("t", "b");
-                    writer.startElement("v");
-                    writer.writeText(cell->getBooleanValue() ? "1" : "0");
-                    writer.endElement(); // v
-                }
-            }
-            
-            writer.endElement(); // c
-        }
-        
-        writer.endElement(); // row
-    }
-    
     writer.endElement(); // sheetData
     
     // 工作表保护
-    if (protected_) {
-        writer.startElement("sheetProtection");
-        writer.writeAttribute("sheet", "1");
-        
-        if (!protection_password_.empty()) {
-            // 这里应该实现密码哈希，简化处理
-            writer.writeAttribute("password", protection_password_.c_str());
-        }
-        
-        writer.endElement(); // sheetProtection
-    }
+    generateSheetProtectionXML(callback);
     
     // 自动筛选
-    if (autofilter_) {
-        writer.startElement("autoFilter");
-        std::string ref = utils::CommonUtils::rangeReference(autofilter_->first_row, autofilter_->first_col,
-                                       autofilter_->last_row, autofilter_->last_col);
-        writer.writeAttribute("ref", ref.c_str());
-        writer.endElement(); // autoFilter
-    }
+    generateAutoFilterXML(callback);
     
     // 合并单元格
-    if (!merge_ranges_.empty()) {
-        writer.startElement("mergeCells");
-        writer.writeAttribute("count", std::to_string(merge_ranges_.size()).c_str());
-        
-        for (const auto& range : merge_ranges_) {
-            writer.startElement("mergeCell");
-            std::string ref = utils::CommonUtils::rangeReference(range.first_row, range.first_col, range.last_row, range.last_col);
-            writer.writeAttribute("ref", ref.c_str());
-            writer.endElement(); // mergeCell
-        }
-        
-        writer.endElement(); // mergeCells
-    }
+    generateMergeCellsXML(callback);
     
     // 打印选项
-    if (print_settings_.print_gridlines || print_settings_.print_headings ||
-        print_settings_.center_horizontally || print_settings_.center_vertically) {
-        writer.startElement("printOptions");
-        
-        if (print_settings_.print_gridlines) {
-            writer.writeAttribute("gridLines", "1");
-        }
-        
-        if (print_settings_.print_headings) {
-            writer.writeAttribute("headings", "1");
-        }
-        
-        if (print_settings_.center_horizontally) {
-            writer.writeAttribute("horizontalCentered", "1");
-        }
-        
-        if (print_settings_.center_vertically) {
-            writer.writeAttribute("verticalCentered", "1");
-        }
-        
-        writer.endElement(); // printOptions
-    }
+    generatePrintOptionsXML(callback);
     
-    // 关键修复：删除phoneticPr标签
-    // 这个标签声明了注音格式，但实际内容没有注音信息，会导致数据与声明不一致
-    // 简单的Excel文件不需要这个标签
-    
-    // 页边距 - 严格按照libxlsxwriter格式
+    // 关键修复：确保始终生成pageMargins元素（按照libxlsxwriter模版）
     writer.startElement("pageMargins");
     writer.writeAttribute("left", "0.7");
     writer.writeAttribute("right", "0.7");
@@ -734,12 +557,133 @@ void Worksheet::generateXML(const std::function<void(const char*, size_t)>& call
     writer.writeAttribute("footer", "0.3");
     writer.endElement(); // pageMargins
     
-    // libxlsxwriter没有headerFooter元素，跳过
-    
     writer.endElement(); // worksheet
     writer.endDocument();
 }
 
+void Worksheet::generateXMLStreaming(const std::function<void(const char*, size_t)>& callback) const {
+    // 真正的流式XML生成：直接写入，不缓存完整XML
+    
+    // XML头部
+    const char* xml_header = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>";
+    callback(xml_header, strlen(xml_header));
+    
+    // 工作表开始标签
+    const char* worksheet_start = "<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\">";
+    callback(worksheet_start, strlen(worksheet_start));
+    
+    // 尺寸信息
+    const char* dimension = "<dimension ref=\"A1\"/>";
+    callback(dimension, strlen(dimension));
+    
+    // 工作表视图
+    callback("<sheetViews><sheetView", 23);
+    if (sheet_view_.tab_selected) {
+        callback(" tabSelected=\"1\"", 16);
+    }
+    callback(" workbookViewId=\"0\"", 19);
+    
+    // 冻结窗格
+    if (freeze_panes_) {
+        callback("><pane", 7);
+        if (freeze_panes_->col > 0) {
+            std::string xsplit = " xSplit=\"" + std::to_string(freeze_panes_->col) + "\"";
+            callback(xsplit.c_str(), xsplit.length());
+        }
+        if (freeze_panes_->row > 0) {
+            std::string ysplit = " ySplit=\"" + std::to_string(freeze_panes_->row) + "\"";
+            callback(ysplit.c_str(), ysplit.length());
+        }
+        if (freeze_panes_->top_left_row >= 0 && freeze_panes_->top_left_col >= 0) {
+            std::string top_left = " topLeftCell=\"" + utils::CommonUtils::cellReference(freeze_panes_->top_left_row, freeze_panes_->top_left_col) + "\"";
+            callback(top_left.c_str(), top_left.length());
+        }
+        callback(" state=\"frozen\"/></sheetView></sheetViews>", 42);
+    } else {
+        callback("/></sheetViews>", 14);
+    }
+    
+    // 工作表格式信息
+    const char* sheet_format = "<sheetFormatPr defaultRowHeight=\"15\"/>";
+    callback(sheet_format, strlen(sheet_format));
+    
+    // 列信息（如果有）
+    if (!column_info_.empty()) {
+        callback("<cols>", 6);
+        for (const auto& [col_num, col_info] : column_info_) {
+            std::string col_xml = "<col min=\"" + std::to_string(col_num + 1) + "\" max=\"" + std::to_string(col_num + 1) + "\"";
+            if (col_info.width > 0) {
+                col_xml += " width=\"" + std::to_string(col_info.width) + "\" customWidth=\"1\"";
+            }
+            if (col_info.hidden) {
+                col_xml += " hidden=\"1\"";
+            }
+            col_xml += "/>";
+            callback(col_xml.c_str(), col_xml.length());
+        }
+        callback("</cols>", 7);
+    }
+    
+    // 工作表数据开始
+    callback("<sheetData>", 11);
+    
+    // 真正的流式处理：按行处理，不在内存中缓存所有数据
+    generateSheetDataStreaming(callback);
+    
+    callback("</sheetData>", 12);
+    
+    // 工作表保护
+    if (protected_) {
+        std::string protection = "<sheetProtection sheet=\"1\"";
+        if (!protection_password_.empty()) {
+            protection += " password=\"" + protection_password_ + "\"";
+        }
+        protection += "/>";
+        callback(protection.c_str(), protection.length());
+    }
+    
+    // 自动筛选
+    if (autofilter_) {
+        std::string autofilter = "<autoFilter ref=\"" +
+            utils::CommonUtils::rangeReference(autofilter_->first_row, autofilter_->first_col,
+                                             autofilter_->last_row, autofilter_->last_col) + "\"/>";
+        callback(autofilter.c_str(), autofilter.length());
+    }
+    
+    // 合并单元格
+    if (!merge_ranges_.empty()) {
+        std::string merge_start = "<mergeCells count=\"" + std::to_string(merge_ranges_.size()) + "\">";
+        callback(merge_start.c_str(), merge_start.length());
+        
+        for (const auto& range : merge_ranges_) {
+            std::string merge_cell = "<mergeCell ref=\"" +
+                utils::CommonUtils::rangeReference(range.first_row, range.first_col, range.last_row, range.last_col) + "\"/>";
+            callback(merge_cell.c_str(), merge_cell.length());
+        }
+        
+        callback("</mergeCells>", 13);
+    }
+    
+    // 打印选项
+    if (print_settings_.print_gridlines || print_settings_.print_headings ||
+        print_settings_.center_horizontally || print_settings_.center_vertically) {
+        std::string print_opts = "<printOptions";
+        if (print_settings_.print_gridlines) print_opts += " gridLines=\"1\"";
+        if (print_settings_.print_headings) print_opts += " headings=\"1\"";
+        if (print_settings_.center_horizontally) print_opts += " horizontalCentered=\"1\"";
+        if (print_settings_.center_vertically) print_opts += " verticalCentered=\"1\"";
+        print_opts += "/>";
+        callback(print_opts.c_str(), print_opts.length());
+    }
+    
+    // 页边距
+    const char* margins = "<pageMargins left=\"0.7\" right=\"0.7\" top=\"0.75\" bottom=\"0.75\" header=\"0.3\" footer=\"0.3\"/>";
+    callback(margins, strlen(margins));
+    
+    // 工作表结束标签
+    const char* worksheet_end = "</worksheet>";
+    callback(worksheet_end, strlen(worksheet_end));
+}
 
 void Worksheet::generateRelsXML(const std::function<void(const char*, size_t)>& callback) const {
     // 关键修复：只有在有超链接时才生成关系XML
@@ -1772,6 +1716,125 @@ void Worksheet::sortRange(int first_row, int first_col, int last_row, int last_c
             cells_[std::make_pair(target_row, col)] = std::move(const_cast<Cell&>(cell));
             updateUsedRange(target_row, col);
         }
+    }
+}
+
+void Worksheet::generateSheetDataStreaming(const std::function<void(const char*, size_t)>& callback) const {
+    // 真正的流式处理：分块处理数据，常量内存使用
+    
+    // 获取数据范围
+    auto [max_row, max_col] = getUsedRange();
+    if (max_row < 0 || max_col < 0) {
+        return; // 没有数据
+    }
+    
+    // 分块处理：每次处理一定数量的行，避免内存占用过大
+    const int CHUNK_SIZE = 1000; // 每次处理1000行
+    
+    for (int chunk_start = 0; chunk_start <= max_row; chunk_start += CHUNK_SIZE) {
+        int chunk_end = std::min(chunk_start + CHUNK_SIZE - 1, max_row);
+        
+        // 处理当前块的行
+        for (int row_num = chunk_start; row_num <= chunk_end; ++row_num) {
+            // 检查这一行是否有数据
+            bool has_data = false;
+            int min_col_in_row = INT_MAX;
+            int max_col_in_row = INT_MIN;
+            
+            // 快速扫描这一行的列范围
+            for (int col = 0; col <= max_col; ++col) {
+                auto it = cells_.find(std::make_pair(row_num, col));
+                if (it != cells_.end() && (!it->second.isEmpty() || it->second.hasFormat())) {
+                    has_data = true;
+                    min_col_in_row = std::min(min_col_in_row, col);
+                    max_col_in_row = std::max(max_col_in_row, col);
+                }
+            }
+            
+            if (!has_data) {
+                continue; // 跳过空行
+            }
+            
+            // 生成行开始标签
+            std::string row_start = "<row r=\"" + std::to_string(row_num + 1) + "\"";
+            
+            // 添加spans属性
+            std::string spans = " spans=\"" + std::to_string(min_col_in_row + 1) + ":" + std::to_string(max_col_in_row + 1) + "\"";
+            row_start += spans;
+            
+            // 检查行信息
+            auto row_it = row_info_.find(row_num);
+            if (row_it != row_info_.end()) {
+                if (row_it->second.height > 0) {
+                    row_start += " ht=\"" + std::to_string(row_it->second.height) + "\" customHeight=\"1\"";
+                }
+                if (row_it->second.hidden) {
+                    row_start += " hidden=\"1\"";
+                }
+            }
+            
+            row_start += ">";
+            callback(row_start.c_str(), row_start.length());
+            
+            // 生成单元格数据
+            for (int col = min_col_in_row; col <= max_col_in_row; ++col) {
+                auto it = cells_.find(std::make_pair(row_num, col));
+                if (it == cells_.end() || (it->second.isEmpty() && !it->second.hasFormat())) {
+                    continue; // 跳过空单元格
+                }
+                
+                const Cell& cell = it->second;
+                
+                // 生成单元格XML
+                std::string cell_xml = "<c r=\"" + utils::CommonUtils::cellReference(row_num, col) + "\"";
+                
+                // 应用单元格格式
+                if (cell.hasFormat()) {
+                    cell_xml += " s=\"" + std::to_string(cell.getFormat()->getXfIndex()) + "\"";
+                }
+                
+                // 只有在单元格不为空时才写入值
+                if (!cell.isEmpty()) {
+                    if (cell.isFormula()) {
+                        cell_xml += " t=\"str\"><f>" + cell.getFormula() + "</f></c>";
+                    } else if (cell.isString()) {
+                        // 根据工作簿设置决定使用共享字符串还是内联字符串
+                        if (parent_workbook_ && parent_workbook_->getOptions().use_shared_strings) {
+                            // 使用共享字符串表
+                            cell_xml += " t=\"s\"><v>";
+                            int sst_index = parent_workbook_->getSharedStringIndex(cell.getStringValue());
+                            if (sst_index >= 0) {
+                                cell_xml += std::to_string(sst_index);
+                            } else {
+                                // 如果字符串不在SST中，添加它
+                                sst_index = parent_workbook_->addSharedString(cell.getStringValue());
+                                cell_xml += std::to_string(sst_index);
+                            }
+                            cell_xml += "</v></c>";
+                        } else {
+                            cell_xml += " t=\"inlineStr\"><is><t>" + cell.getStringValue() + "</t></is></c>";
+                        }
+                    } else if (cell.isNumber()) {
+                        cell_xml += "><v>" + std::to_string(cell.getNumberValue()) + "</v></c>";
+                    } else if (cell.isBoolean()) {
+                        cell_xml += " t=\"b\"><v>" + std::string(cell.getBooleanValue() ? "1" : "0") + "</v></c>";
+                    } else {
+                        cell_xml += "/>";
+                    }
+                } else {
+                    cell_xml += "/>";
+                }
+                
+                callback(cell_xml.c_str(), cell_xml.length());
+            }
+            
+            // 行结束标签
+            const char* row_end = "</row>";
+            callback(row_end, strlen(row_end));
+        }
+        
+        // 可选：在处理完每个块后，可以进行垃圾回收或内存清理
+        // 这里保持简单，让系统自动管理内存
     }
 }
 

@@ -1165,7 +1165,8 @@ void Workbook::generateContentTypesXML(const std::function<void(const char*, siz
         writer.endElement(); // Override
     }
     
-    // 只有启用共享字符串且有内容时才添加sharedStrings.xml的内容类型
+    // 关键修复：严格按照libxlsxwriter模版，空文件不应该包含sharedStrings.xml引用
+    // 只有在实际有共享字符串数据时才添加
     if (options_.use_shared_strings && !shared_strings_list_.empty()) {
         writer.startElement("Override");
         writer.writeAttribute("PartName", "/xl/sharedStrings.xml");
@@ -1416,250 +1417,31 @@ bool Workbook::generateWorksheetXMLStreaming(const std::shared_ptr<Worksheet>& w
     LOG_DEBUG("Generating worksheet XML using streaming mode: {}", path);
     
     try {
-        // 打开流式ZIP写入
+        // 恢复真正的流式写入：打开流式ZIP写入
         if (!file_manager_->openStreamingFile(path)) {
             LOG_ERROR("Failed to open streaming file: {}", path);
             return false;
         }
         
-        // 创建XMLStreamWriter并设置为回调模式，直接写入ZIP
-        xml::XMLStreamWriter writer;
-        
-        // 设置回调模式，直接将XML块写入ZIP文件
-        writer.setCallbackMode([this](const std::string& chunk) {
-            // 直接写入ZIP，实现真正的流式处理
-            if (!file_manager_->writeStreamingChunk(chunk)) {
+        // 使用流式XML生成：通过回调函数将XML内容直接写入ZIP流
+        bool write_success = true;
+        worksheet->generateXML([this, &write_success](const char* data, size_t size) {
+            if (!file_manager_->writeStreamingChunk(data, size)) {
                 LOG_ERROR("Failed to write streaming chunk to ZIP");
+                write_success = false;
             }
-        }, true); // 启用自动刷新
-        
-        // 严格按照libxlsxwriter的XML结构
-        writer.startDocument();
-        writer.startElement("worksheet");
-        // 严格按照libxlsxwriter的命名空间：只有两个
-        writer.writeAttribute("xmlns", "http://schemas.openxmlformats.org/spreadsheetml/2006/main");
-        writer.writeAttribute("xmlns:r", "http://schemas.openxmlformats.org/officeDocument/2006/relationships");
-        
-        // libxlsxwriter没有sheetPr元素，跳过
-        
-        // 尺寸信息 - 严格按照libxlsxwriter格式
-        writer.startElement("dimension");
-        writer.writeAttribute("ref", "A1");
-        writer.endElement(); // dimension
-        
-        // 工作表视图 - 严格按照libxlsxwriter格式
-        writer.startElement("sheetViews");
-        writer.startElement("sheetView");
-        
-        // 检查是否为活动工作表
-        bool is_tab_selected = (worksheet->getSheetId() == 1);
-        if (is_tab_selected) {
-            writer.writeAttribute("tabSelected", "1");
-        }
-        writer.writeAttribute("workbookViewId", "0");
-        
-        // libxlsxwriter没有selection元素，跳过
-        
-        // 冻结窗格（如果有）
-        if (worksheet->hasFrozenPanes()) {
-            auto freeze_info = worksheet->getFreezeInfo();
-            writer.startElement("pane");
-            if (freeze_info.col > 0) {
-                writer.writeAttribute("xSplit", std::to_string(freeze_info.col));
-            }
-            if (freeze_info.row > 0) {
-                writer.writeAttribute("ySplit", std::to_string(freeze_info.row));
-            }
-            if (freeze_info.top_left_row >= 0 && freeze_info.top_left_col >= 0) {
-                std::string top_left = utils::CommonUtils::cellReference(freeze_info.top_left_row, freeze_info.top_left_col);
-                writer.writeAttribute("topLeftCell", top_left.c_str());
-            }
-            writer.writeAttribute("state", "frozen");
-            writer.endElement(); // pane
-        }
-        
-        writer.endElement(); // sheetView
-        writer.endElement(); // sheetViews
-        
-        // 工作表格式信息 - 严格按照libxlsxwriter格式：只有defaultRowHeight
-        writer.startElement("sheetFormatPr");
-        writer.writeAttribute("defaultRowHeight", "15");
-        writer.endElement(); // sheetFormatPr
-        
-        // 列信息（如果有）
-        // 这里简化处理，实际需要从worksheet获取列信息
-        
-        // 获取工作表使用范围
-        auto [max_row, max_col] = worksheet->getUsedRange();
-        
-        // 工作表数据 - 这是最重要的部分，需要流式处理
-        writer.startElement("sheetData");
-        
-        // 按行处理数据，实现真正的流式写入
-        size_t rows_processed = 0;
-        for (int row = 0; row <= max_row; ++row) {
-            bool has_data_in_row = false;
-            
-            // 检查这一行是否有数据
-            for (int col = 0; col <= max_col; ++col) {
-                if (worksheet->hasCellAt(row, col)) {
-                    has_data_in_row = true;
-                    break;
-                }
-            }
-            
-            if (has_data_in_row) {
-                // 写入行开始标签
-                writer.startElement("row");
-                writer.writeAttribute("r", std::to_string(row + 1));
-                
-                // 计算当前行的列范围
-                int min_col_in_row = INT_MAX;
-                int max_col_in_row = INT_MIN;
-                for (int col = 0; col <= max_col; ++col) {
-                    if (worksheet->hasCellAt(row, col)) {
-                        min_col_in_row = std::min(min_col_in_row, col);
-                        max_col_in_row = std::max(max_col_in_row, col);
-                    }
-                }
-                
-                std::string spans = std::to_string(min_col_in_row + 1) + ":" + std::to_string(max_col_in_row + 1);
-                writer.writeAttribute("spans", spans.c_str());
-                
-                for (int col = 0; col <= max_col; ++col) {
-                    if (worksheet->hasCellAt(row, col)) {
-                        const auto& cell = worksheet->getCell(row, col);
-                        std::string cell_ref = utils::CommonUtils::cellReference(row, col);
-                        
-                        writer.startElement("c");
-                        writer.writeAttribute("r", cell_ref);
-                        
-                        // 关键修复：应用单元格格式索引
-                        if (cell.hasFormat()) {
-                            auto format = cell.getFormat();
-                            if (format) {
-                                // 获取格式在FormatPool中的索引
-                                size_t format_index = format_pool_->getFormatIndex(format.get());
-                                writer.writeAttribute("s", std::to_string(format_index));
-                            }
-                        }
-                        
-                        // 只有在单元格不为空时才写入值
-                        if (!cell.isEmpty()) {
-                            if (cell.isFormula()) {
-                                writer.writeAttribute("t", "str");
-                                writer.startElement("f");
-                                writer.writeText(cell.getFormula().c_str());
-                                writer.endElement(); // f
-                            } else if (cell.isString()) {
-                                // 关键修复：根据工作簿设置决定使用共享字符串还是内联字符串
-                                if (options_.use_shared_strings) {
-                                    // 使用共享字符串表
-                                    writer.writeAttribute("t", "s");
-                                    writer.startElement("v");
-                                    int sst_index = getSharedStringIndex(cell.getStringValue());
-                                    if (sst_index >= 0) {
-                                        writer.writeText(std::to_string(sst_index).c_str());
-                                    } else {
-                                        // 如果字符串不在SST中，添加它
-                                        sst_index = const_cast<Workbook*>(this)->addSharedString(cell.getStringValue());
-                                        writer.writeText(std::to_string(sst_index).c_str());
-                                    }
-                                    writer.endElement(); // v
-                                } else {
-                                    writer.writeAttribute("t", "inlineStr");
-                                    writer.startElement("is");
-                                    writer.startElement("t");
-                                    writer.writeText(cell.getStringValue().c_str());
-                                    writer.endElement(); // t
-                                    writer.endElement(); // is
-                                }
-                            } else if (cell.isNumber()) {
-                                writer.startElement("v");
-                                writer.writeText(std::to_string(cell.getNumberValue()).c_str());
-                                writer.endElement(); // v
-                            } else if (cell.isBoolean()) {
-                                writer.writeAttribute("t", "b");
-                                writer.startElement("v");
-                                writer.writeText(cell.getBooleanValue() ? "1" : "0");
-                                writer.endElement(); // v
-                            }
-                        }
-                        
-                        writer.endElement(); // c
-                    }
-                }
-                
-                writer.endElement(); // row
-                rows_processed++;
-                
-                // 每处理一定数量的行就刷新缓冲区
-                if (rows_processed % options_.row_buffer_size == 0) {
-                    writer.flushBuffer();
-                    LOG_DEBUG("Processed {} rows, flushed buffer", rows_processed);
-                }
-            }
-        }
-        
-        writer.endElement(); // sheetData
-        
-        // 合并单元格（如果有）
-        const auto& merge_ranges = worksheet->getMergeRanges();
-        if (!merge_ranges.empty()) {
-            writer.startElement("mergeCells");
-            writer.writeAttribute("count", std::to_string(merge_ranges.size()));
-            
-            for (const auto& range : merge_ranges) {
-                writer.startElement("mergeCell");
-                std::string range_ref = utils::CommonUtils::rangeReference(range.first_row, range.first_col, range.last_row, range.last_col);
-                writer.writeAttribute("ref", range_ref);
-                writer.endElement(); // mergeCell
-            }
-            
-            writer.endElement(); // mergeCells
-        }
-        
-        // 自动筛选（如果有）
-        if (worksheet->hasAutoFilter()) {
-            auto filter_range = worksheet->getAutoFilterRange();
-            writer.startElement("autoFilter");
-            std::string range_ref = utils::CommonUtils::rangeReference(filter_range.first_row, filter_range.first_col, filter_range.last_row, filter_range.last_col);
-            writer.writeAttribute("ref", range_ref);
-            writer.endElement(); // autoFilter
-        }
-        
-        // 关键修复：删除phoneticPr标签
-        // 这个标签声明了注音格式，但实际内容没有注音信息，会导致数据与声明不一致
-        // 简单的Excel文件不需要这个标签
-        
-        // 页边距 - 严格按照libxlsxwriter格式
-        writer.startElement("pageMargins");
-        writer.writeAttribute("left", "0.7");
-        writer.writeAttribute("right", "0.7");
-        writer.writeAttribute("top", "0.75");
-        writer.writeAttribute("bottom", "0.75");
-        writer.writeAttribute("header", "0.3");
-        writer.writeAttribute("footer", "0.3");
-        writer.endElement(); // pageMargins
-        
-        // libxlsxwriter没有headerFooter元素，跳过
-        
-        writer.endElement(); // worksheet
-        writer.endDocument();
-        
-        // 最终刷新
-        writer.flushBuffer();
+        });
         
         // 关闭流式ZIP写入
-        bool success = file_manager_->closeStreamingFile();
+        bool close_success = file_manager_->closeStreamingFile();
         
-        if (success) {
-            LOG_INFO("Successfully generated streaming worksheet XML: {}, {} rows processed", path, rows_processed);
+        if (write_success && close_success) {
+            LOG_INFO("Successfully generated streaming worksheet XML: {}", path);
         } else {
             LOG_ERROR("Failed to write streaming worksheet XML: {}", path);
         }
         
-        return success;
+        return write_success && close_success;
         
     } catch (const std::exception& e) {
         LOG_ERROR("Exception in streaming worksheet XML generation: {}", e.what());

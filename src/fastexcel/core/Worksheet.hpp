@@ -884,7 +884,8 @@ public:
      * @param callback 数据写入回调函数
      */
     void generateXML(const std::function<void(const char*, size_t)>& callback) const;
-    
+    void generateXMLBatch(const std::function<void(const char*, size_t)>& callback) const;
+    void generateXMLStreaming(const std::function<void(const char*, size_t)>& callback) const;
     
     /**
      * @brief 生成工作表关系XML到回调函数（流式写入）
@@ -1062,6 +1063,7 @@ private:
     
     // XML生成辅助方法（流式写入）
     void generateSheetDataXML(const std::function<void(const char*, size_t)>& callback) const;
+    void generateSheetDataStreaming(const std::function<void(const char*, size_t)>& callback) const;
     void generateColumnsXML(const std::function<void(const char*, size_t)>& callback) const;
     void generateRowsXML(const std::function<void(const char*, size_t)>& callback) const;
     void generateMergeCellsXML(const std::function<void(const char*, size_t)>& callback) const;
