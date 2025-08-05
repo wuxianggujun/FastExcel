@@ -3,6 +3,7 @@
 #include "fastexcel/core/Worksheet.hpp"
 #include "fastexcel/core/Format.hpp"
 #include "fastexcel/core/FormatPool.hpp"
+#include "fastexcel/core/WorkbookModeSelector.hpp"
 #include "fastexcel/archive/FileManager.hpp"
 #include "fastexcel/utils/CommonUtils.hpp"
 #include <string>
@@ -67,10 +68,15 @@ struct WorkbookOptions {
     
     // 性能优化选项
     bool use_shared_strings = true;   // 使用共享字符串（默认启用以匹配Excel格式）
-    bool streaming_xml = false;       // 流式XML写入（默认禁用，让系统自动选择）
+    WorkbookMode mode = WorkbookMode::AUTO;  // 工作簿模式（默认自动选择）
+    bool streaming_xml = true;        // 流式XML写入（已废弃，使用mode代替）
     size_t row_buffer_size = 5000;    // 行缓冲大小（默认较大缓冲）
     int compression_level = 0;        // ZIP压缩级别（默认无压缩，匹配Excel生成的文件）
     size_t xml_buffer_size = 4 * 1024 * 1024; // XML缓冲区大小（4MB）
+    
+    // 自动模式阈值
+    size_t auto_mode_cell_threshold = 1000000;     // 100万单元格
+    size_t auto_mode_memory_threshold = 100 * 1024 * 1024; // 100MB
 };
 
 // 定义名称
@@ -519,10 +525,45 @@ public:
     void setUseSharedStrings(bool enable) { options_.use_shared_strings = enable; }
     
     /**
-     * @brief 启用/禁用流式XML写入
-     * @param enable 是否启用流式XML写入
+     * @brief 设置工作簿模式
+     * @param mode 工作簿模式（AUTO/BATCH/STREAMING）
      */
-    void setStreamingXML(bool enable) { options_.streaming_xml = enable; }
+    void setMode(WorkbookMode mode) {
+        options_.mode = mode;
+        // 为了向后兼容，同步更新streaming_xml
+        options_.streaming_xml = (mode == WorkbookMode::STREAMING);
+    }
+    
+    /**
+     * @brief 获取当前工作簿模式
+     * @return 当前模式
+     */
+    WorkbookMode getMode() const { return options_.mode; }
+    
+    /**
+     * @brief 启用/禁用流式XML写入（已废弃，请使用setMode）
+     * @param enable 是否启用流式XML写入
+     * @deprecated 使用 setMode() 代替
+     */
+    void setStreamingXML(bool enable) {
+        options_.streaming_xml = enable;
+        // 同步更新mode
+        if (enable) {
+            options_.mode = WorkbookMode::STREAMING;
+        } else {
+            options_.mode = WorkbookMode::BATCH;
+        }
+    }
+    
+    /**
+     * @brief 设置自动模式阈值
+     * @param cell_threshold 单元格数量阈值
+     * @param memory_threshold 内存使用阈值（字节）
+     */
+    void setAutoModeThresholds(size_t cell_threshold, size_t memory_threshold) {
+        options_.auto_mode_cell_threshold = cell_threshold;
+        options_.auto_mode_memory_threshold = memory_threshold;
+    }
     
     /**
      * @brief 设置行缓冲大小

@@ -547,27 +547,45 @@ bool Workbook::generateExcelStructure() {
     size_t estimated_memory = estimateMemoryUsage();
     size_t total_cells = getTotalCellCount();
     
-    // 决策逻辑：
-    // 1. 如果用户强制指定了模式，使用用户指定的模式
-    // 2. 如果数据量小（<100万单元格且<100MB），使用批量模式（更快）
-    // 3. 如果数据量大，使用流式模式（节省内存）
+    bool use_streaming = false;
     
-    bool use_streaming = options_.streaming_xml;
-    
-    if (!options_.streaming_xml && !options_.constant_memory) {
-        // 自动模式：根据数据量智能选择
-        const size_t CELL_THRESHOLD = 1000000;  // 100万单元格
-        const size_t MEMORY_THRESHOLD = 100 * 1024 * 1024;  // 100MB
-        
-        if (total_cells > CELL_THRESHOLD || estimated_memory > MEMORY_THRESHOLD) {
-            use_streaming = true;
-            LOG_INFO("Auto-selected streaming mode: {} cells, {}MB estimated memory",
-                    total_cells, estimated_memory / (1024*1024));
-        } else {
+    // 新的决策逻辑：基于WorkbookMode
+    switch (options_.mode) {
+        case WorkbookMode::AUTO:
+            // 自动模式：根据数据量智能选择
+            if (total_cells > options_.auto_mode_cell_threshold ||
+                estimated_memory > options_.auto_mode_memory_threshold) {
+                use_streaming = true;
+                LOG_INFO("Auto-selected streaming mode: {} cells, {}MB estimated memory (thresholds: {} cells, {}MB)",
+                        total_cells, estimated_memory / (1024*1024),
+                        options_.auto_mode_cell_threshold, options_.auto_mode_memory_threshold / (1024*1024));
+            } else {
+                use_streaming = false;
+                LOG_INFO("Auto-selected batch mode: {} cells, {}MB estimated memory (thresholds: {} cells, {}MB)",
+                        total_cells, estimated_memory / (1024*1024),
+                        options_.auto_mode_cell_threshold, options_.auto_mode_memory_threshold / (1024*1024));
+            }
+            break;
+            
+        case WorkbookMode::BATCH:
+            // 强制批量模式
             use_streaming = false;
-            LOG_INFO("Auto-selected batch mode: {} cells, {}MB estimated memory",
+            LOG_INFO("Using forced batch mode: {} cells, {}MB estimated memory",
                     total_cells, estimated_memory / (1024*1024));
-        }
+            break;
+            
+        case WorkbookMode::STREAMING:
+            // 强制流式模式
+            use_streaming = true;
+            LOG_INFO("Using forced streaming mode: {} cells, {}MB estimated memory",
+                    total_cells, estimated_memory / (1024*1024));
+            break;
+    }
+    
+    // 如果设置了constant_memory，强制使用流式模式
+    if (options_.constant_memory) {
+        use_streaming = true;
+        LOG_INFO("Constant memory mode enabled, forcing streaming mode");
     }
     
     if (use_streaming) {
@@ -1368,21 +1386,29 @@ void Workbook::setHighPerformanceMode(bool enable) {
         options_.row_buffer_size = 10000;
         options_.xml_buffer_size = 8 * 1024 * 1024;  // 8MB
         
-        // 确保流式模式，但保持共享字符串启用以匹配Excel格式
+        // 使用AUTO模式，让系统根据数据量自动选择
+        options_.mode = WorkbookMode::AUTO;
         options_.use_shared_strings = true;
-        options_.streaming_xml = true;
         
-        LOG_INFO("Ultra high performance mode configured: Compression=OFF, RowBuffer={}, XMLBuffer={}MB",
+        // 调整自动模式阈值，更倾向于使用批量模式以获得更好的性能
+        options_.auto_mode_cell_threshold = 2000000;  // 200万单元格
+        options_.auto_mode_memory_threshold = 200 * 1024 * 1024;  // 200MB
+        
+        LOG_INFO("Ultra high performance mode configured: Mode=AUTO, Compression=OFF, RowBuffer={}, XMLBuffer={}MB",
                 options_.row_buffer_size, options_.xml_buffer_size / (1024*1024));
     } else {
         LOG_INFO("Using standard high performance mode (default settings)");
         
         // 恢复到默认的高性能设置
-        options_.use_shared_strings = true;   // 默认启用以匹配Excel格式
-        options_.streaming_xml = true;        // 默认启用
-        options_.row_buffer_size = 5000;      // 默认较大缓冲
-        options_.compression_level = 0;       // 使用无压缩模式排除压缩算法影响
+        options_.mode = WorkbookMode::AUTO;           // 默认自动模式
+        options_.use_shared_strings = true;           // 默认启用以匹配Excel格式
+        options_.row_buffer_size = 5000;              // 默认较大缓冲
+        options_.compression_level = 0;               // 使用无压缩模式排除压缩算法影响
         options_.xml_buffer_size = 4 * 1024 * 1024;  // 默认4MB
+        
+        // 恢复默认阈值
+        options_.auto_mode_cell_threshold = 1000000;     // 100万单元格
+        options_.auto_mode_memory_threshold = 100 * 1024 * 1024; // 100MB
     }
 }
 

@@ -648,8 +648,10 @@ ZipError ZipArchive::openEntry(std::string_view internal_path) {
     file_info.modified_date = now;
     file_info.creation_date = now;
     
-    // 对于流式写入，设置Data Descriptor标志
-    file_info.flag = MZ_ZIP_FLAG_DATA_DESCRIPTOR;
+    // 关键修复：即使是流式写入，也不使用Data Descriptor标志
+    // Excel期望所有文件都使用相同的标志设置（0x0000）
+    file_info.flag = 0;
+    LOG_DEBUG("Using flag 0x0000 for streaming entry to match batch mode and Excel expectations");
     
     // 设置正确的版本信息
 #ifdef _WIN32
