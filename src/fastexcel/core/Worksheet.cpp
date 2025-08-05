@@ -489,24 +489,18 @@ void Worksheet::generateXML(const std::function<void(const char*, size_t)>& call
     xml::XMLStreamWriter writer(callback);
     writer.startDocument();
     writer.startElement("worksheet");
+    // 严格按照libxlsxwriter的命名空间：只有两个
     writer.writeAttribute("xmlns", "http://schemas.openxmlformats.org/spreadsheetml/2006/main");
     writer.writeAttribute("xmlns:r", "http://schemas.openxmlformats.org/officeDocument/2006/relationships");
-    writer.writeAttribute("xmlns:xdr", "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing");
-    writer.writeAttribute("xmlns:x14", "http://schemas.microsoft.com/office/spreadsheetml/2009/9/main");
-    writer.writeAttribute("xmlns:mc", "http://schemas.openxmlformats.org/markup-compatibility/2006");
-    writer.writeAttribute("xmlns:etc", "http://www.wps.cn/officeDocument/2017/etCustomData");
     
-    // 简化的工作表属性 - 根据WPS修复后的版本
-    writer.startElement("sheetPr");
-    writer.endElement(); // sheetPr
+    // libxlsxwriter没有sheetPr元素，直接跳过
     
-    // 尺寸信息 - 关键修复：总是使用A1格式
-    auto [max_row, max_col] = getUsedRange();
+    // 尺寸信息 - 严格按照libxlsxwriter格式
     writer.startElement("dimension");
     writer.writeAttribute("ref", "A1");
     writer.endElement(); // dimension
     
-    // 简化的工作表视图 - 根据WPS修复后的版本
+    // 工作表视图 - 严格按照libxlsxwriter格式
     writer.startElement("sheetViews");
     writer.startElement("sheetView");
     
@@ -516,11 +510,7 @@ void Worksheet::generateXML(const std::function<void(const char*, size_t)>& call
     
     writer.writeAttribute("workbookViewId", "0");
     
-    // 添加selection元素 - 根据WPS修复后的版本
-    writer.startElement("selection");
-    writer.writeAttribute("activeCell", "A1");
-    writer.writeAttribute("sqref", "A1");
-    writer.endElement(); // selection
+    // libxlsxwriter没有selection元素，跳过
     
     // 冻结窗格
     if (freeze_panes_) {
@@ -542,10 +532,9 @@ void Worksheet::generateXML(const std::function<void(const char*, size_t)>& call
     writer.endElement(); // sheetView
     writer.endElement(); // sheetViews
     
-    // 简化的工作表格式信息 - 根据WPS修复后的版本
+    // 工作表格式信息 - 严格按照libxlsxwriter格式：只有defaultRowHeight
     writer.startElement("sheetFormatPr");
-    writer.writeAttribute("defaultColWidth", "9");
-    writer.writeAttribute("defaultRowHeight", "13.85");
+    writer.writeAttribute("defaultRowHeight", "15");
     writer.endElement(); // sheetFormatPr
     
     // 列信息
@@ -735,7 +724,7 @@ void Worksheet::generateXML(const std::function<void(const char*, size_t)>& call
     // 这个标签声明了注音格式，但实际内容没有注音信息，会导致数据与声明不一致
     // 简单的Excel文件不需要这个标签
     
-    // 页边距 - 根据WPS修复后的版本
+    // 页边距 - 严格按照libxlsxwriter格式
     writer.startElement("pageMargins");
     writer.writeAttribute("left", "0.7");
     writer.writeAttribute("right", "0.7");
@@ -745,9 +734,7 @@ void Worksheet::generateXML(const std::function<void(const char*, size_t)>& call
     writer.writeAttribute("footer", "0.3");
     writer.endElement(); // pageMargins
     
-    // 添加headerFooter元素 - 根据WPS修复后的版本
-    writer.startElement("headerFooter");
-    writer.endElement(); // headerFooter
+    // libxlsxwriter没有headerFooter元素，跳过
     
     writer.endElement(); // worksheet
     writer.endDocument();
@@ -1176,6 +1163,8 @@ void Worksheet::generateSheetProtectionXML(const std::function<void(const char*,
 void Worksheet::updateUsedRange(int row, int col) {
     // 这个方法在写入数据时被调用，用于跟踪使用范围
     // 实际实现中可以优化性能
+    (void)row; // 避免未使用参数警告
+    (void)col; // 避免未使用参数警告
 }
 
 void Worksheet::shiftCellsForRowInsertion(int row, int count) {
@@ -1421,7 +1410,7 @@ void Worksheet::writeOptimizedCell(int row, int col, Cell&& cell, std::shared_pt
     if (format) {
         if (format_pool_) {
             // 使用格式池去重
-            size_t format_index = format_pool_->getFormatIndex(format.get());
+            format_pool_->getFormatIndex(format.get()); // 确保格式在池中
             cell.setFormat(format);
         } else {
             cell.setFormat(format);
@@ -1611,8 +1600,10 @@ int Worksheet::findAndReplace(const std::string& find_text, const std::string& r
         
         // 处理大小写敏感性
         if (!match_case) {
-            std::transform(search_text.begin(), search_text.end(), search_text.begin(), ::tolower);
-            std::transform(target_text.begin(), target_text.end(), target_text.begin(), ::tolower);
+            std::transform(search_text.begin(), search_text.end(), search_text.begin(),
+                         [](unsigned char c) { return std::tolower(c); });
+            std::transform(target_text.begin(), target_text.end(), target_text.begin(),
+                         [](unsigned char c) { return std::tolower(c); });
         }
         
         if (match_entire_cell) {
@@ -1637,7 +1628,8 @@ int Worksheet::findAndReplace(const std::string& find_text, const std::string& r
                         for (size_t i = 0; i <= cell_text.length() - find_text.length(); ++i) {
                             bool match = true;
                             for (size_t j = 0; j < find_text.length(); ++j) {
-                                if (::tolower(cell_text[i + j]) != ::tolower(find_text[j])) {
+                                if (std::tolower(static_cast<unsigned char>(cell_text[i + j])) !=
+                                    std::tolower(static_cast<unsigned char>(find_text[j]))) {
                                     match = false;
                                     break;
                                 }
@@ -1678,8 +1670,10 @@ std::vector<std::pair<int, int>> Worksheet::findCells(const std::string& search_
         
         // 处理大小写敏感性
         if (!match_case) {
-            std::transform(find_text.begin(), find_text.end(), find_text.begin(), ::tolower);
-            std::transform(target_text.begin(), target_text.end(), target_text.begin(), ::tolower);
+            std::transform(find_text.begin(), find_text.end(), find_text.begin(),
+                         [](unsigned char c) { return std::tolower(c); });
+            std::transform(target_text.begin(), target_text.end(), target_text.begin(),
+                         [](unsigned char c) { return std::tolower(c); });
         }
         
         bool found = false;

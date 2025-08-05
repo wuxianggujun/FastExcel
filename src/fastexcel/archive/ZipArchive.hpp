@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <string_view>
 #include <mutex>
+#include <unordered_set>
 
 namespace fastexcel {
 namespace archive {
@@ -70,6 +71,7 @@ private:
     bool stream_entry_open_ = false;  // 流式写入条目是否已打开
     int compression_level_ = 6;  // 压缩级别，默认为6
     mutable std::mutex mutex_;  // 线程安全互斥锁
+    std::unordered_set<std::string> written_paths_;  // 跟踪已写入的路径，防止重复
     
 public:
     explicit ZipArchive(const std::string& filename);

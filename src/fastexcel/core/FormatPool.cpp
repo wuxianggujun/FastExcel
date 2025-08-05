@@ -200,43 +200,23 @@ void FormatPool::generateStylesXML(const std::function<void(const char*, size_t)
     xml::XMLStreamWriter writer(callback);
     writer.startDocument();
     writer.startElement("styleSheet");
+    // 严格按照libxlsxwriter：只有一个命名空间
     writer.writeAttribute("xmlns", "http://schemas.openxmlformats.org/spreadsheetml/2006/main");
-    writer.writeAttribute("xmlns:mc", "http://schemas.openxmlformats.org/markup-compatibility/2006");
-    writer.writeAttribute("mc:Ignorable", "x14ac x16r2 xr");
-    writer.writeAttribute("xmlns:x14ac", "http://schemas.microsoft.com/office/spreadsheetml/2009/9/ac");
-    writer.writeAttribute("xmlns:x16r2", "http://schemas.microsoft.com/office/spreadsheetml/2015/02/main");
-    writer.writeAttribute("xmlns:xr", "http://schemas.microsoft.com/office/spreadsheetml/2014/revision");
     
-    // 数字格式部分
-    std::vector<std::string> custom_formats;
-    for (const auto& format : formats_) {
-        std::string numFmt = format->generateNumberFormatXML();
-        if (!numFmt.empty()) {
-            custom_formats.push_back(numFmt);
-        }
-    }
-    
-    if (!custom_formats.empty()) {
-        writer.startElement("numFmts");
-        writer.writeAttribute("count", std::to_string(custom_formats.size()).c_str());
-        for (const auto& fmt : custom_formats) {
-            writer.writeRaw(fmt);
-        }
-        writer.endElement(); // numFmts
-    }
-    
-    // 字体部分
+    // 字体部分 - 严格按照libxlsxwriter格式
     writer.startElement("fonts");
-    writer.writeAttribute("count", std::to_string(getFormatCount() + 2).c_str());
-    writer.writeAttribute("x14ac:knownFonts", "1");
+    writer.writeAttribute("count", "1");
     
-    // 默认字体 - 使用等线字体以匹配Excel修复后的格式
+    // 默认字体 - 使用Calibri以匹配libxlsxwriter
     writer.startElement("font");
     writer.startElement("sz");
     writer.writeAttribute("val", "11");
     writer.endElement(); // sz
+    writer.startElement("color");
+    writer.writeAttribute("theme", "1");
+    writer.endElement(); // color
     writer.startElement("name");
-    writer.writeAttribute("val", "等线");
+    writer.writeAttribute("val", "Calibri");
     writer.endElement(); // name
     writer.startElement("family");
     writer.writeAttribute("val", "2");
@@ -246,77 +226,11 @@ void FormatPool::generateStylesXML(const std::function<void(const char*, size_t)
     writer.endElement(); // scheme
     writer.endElement(); // font
     
-    // 其他字体
-    for (const auto& format : formats_) {
-        if (format->hasFont()) {
-            std::string fontXML = format->generateFontXML();
-            if (!fontXML.empty()) {
-                writer.writeRaw(fontXML);
-            } else {
-                // 如果生成失败，使用等线字体
-                writer.startElement("font");
-                writer.startElement("b");
-                writer.endElement(); // b
-                writer.startElement("sz");
-                writer.writeAttribute("val", "11");
-                writer.endElement(); // sz
-                writer.startElement("color");
-                writer.writeAttribute("rgb", "FFFF0000");
-                writer.endElement(); // color
-                writer.startElement("name");
-                writer.writeAttribute("val", "等线");
-                writer.endElement(); // name
-                writer.startElement("family");
-                writer.writeAttribute("val", "2");
-                writer.endElement(); // family
-                writer.startElement("scheme");
-                writer.writeAttribute("val", "minor");
-                writer.endElement(); // scheme
-                writer.endElement(); // font
-            }
-        } else {
-            // 没有字体设置，使用等线字体
-            writer.startElement("font");
-            writer.startElement("sz");
-            writer.writeAttribute("val", "11");
-            writer.endElement(); // sz
-            writer.startElement("name");
-            writer.writeAttribute("val", "等线");
-            writer.endElement(); // name
-            writer.startElement("family");
-            writer.writeAttribute("val", "2");
-            writer.endElement(); // family
-            writer.startElement("scheme");
-            writer.writeAttribute("val", "minor");
-            writer.endElement(); // scheme
-            writer.endElement(); // font
-        }
-    }
-    
-    // 添加第三个字体（等线 9号）
-    writer.startElement("font");
-    writer.startElement("sz");
-    writer.writeAttribute("val", "9");
-    writer.endElement(); // sz
-    writer.startElement("name");
-    writer.writeAttribute("val", "等线");
-    writer.endElement(); // name
-    writer.startElement("family");
-    writer.writeAttribute("val", "3");
-    writer.endElement(); // family
-    writer.startElement("charset");
-    writer.writeAttribute("val", "134");
-    writer.endElement(); // charset
-    writer.startElement("scheme");
-    writer.writeAttribute("val", "minor");
-    writer.endElement(); // scheme
-    writer.endElement(); // font
-    
     writer.endElement(); // fonts
     
-    // 填充部分
+    // 填充部分 - 严格按照libxlsxwriter格式
     writer.startElement("fills");
-    writer.writeAttribute("count", std::to_string(getFormatCount() + 2).c_str());
+    writer.writeAttribute("count", "2");
     
     // 默认填充
     writer.startElement("fill");
@@ -331,23 +245,9 @@ void FormatPool::generateStylesXML(const std::function<void(const char*, size_t)
     writer.endElement(); // patternFill
     writer.endElement(); // fill
     
-    // 其他填充
-    for (const auto& format : formats_) {
-        std::string fillXML = format->generateFillXML();
-        if (!fillXML.empty()) {
-            writer.writeRaw(fillXML);
-        } else {
-            writer.startElement("fill");
-            writer.startElement("patternFill");
-            writer.writeAttribute("patternType", "none");
-            writer.endElement(); // patternFill
-            writer.endElement(); // fill
-        }
-    }
-    
     writer.endElement(); // fills
     
-    // 边框部分 - 修复后只有1个边框
+    // 边框部分 - 严格按照libxlsxwriter格式
     writer.startElement("borders");
     writer.writeAttribute("count", "1");
     
@@ -367,7 +267,7 @@ void FormatPool::generateStylesXML(const std::function<void(const char*, size_t)
     
     writer.endElement(); // borders
     
-    // 单元格样式格式
+    // 单元格样式格式 - 严格按照libxlsxwriter格式
     writer.startElement("cellStyleXfs");
     writer.writeAttribute("count", "1");
     
@@ -380,9 +280,9 @@ void FormatPool::generateStylesXML(const std::function<void(const char*, size_t)
     
     writer.endElement(); // cellStyleXfs
     
-    // 单元格格式
+    // 单元格格式 - 严格按照libxlsxwriter格式
     writer.startElement("cellXfs");
-    writer.writeAttribute("count", std::to_string(getFormatCount() + 1).c_str());
+    writer.writeAttribute("count", "1");
     
     // 默认格式
     writer.startElement("xf");
@@ -393,64 +293,31 @@ void FormatPool::generateStylesXML(const std::function<void(const char*, size_t)
     writer.writeAttribute("xfId", "0");
     writer.endElement(); // xf
     
-    // 其他格式
-    for (size_t i = 0; i < formats_.size(); ++i) {
-        const auto& format = formats_[i];
-        // 关键修复：正确设置格式索引
-        // 字体索引：默认字体(0) + 当前格式索引
-        format->setFontIndex(format->hasFont() ? (i + 1) : 0);
-        // 填充索引：默认填充(0,1) + 当前格式索引
-        format->setFillIndex(format->hasFill() ? (i + 2) : 0);
-        // 边框索引：默认边框(0) + 当前格式索引
-        format->setBorderIndex(format->hasBorder() ? (i + 1) : 0);
-        
-        std::string xfXML = format->generateXML();
-        writer.writeRaw(xfXML);
-    }
-    
     writer.endElement(); // cellXfs
     
-    // 单元格样式
+    // 单元格样式 - 严格按照libxlsxwriter格式
     writer.startElement("cellStyles");
     writer.writeAttribute("count", "1");
     
     writer.startElement("cellStyle");
-    writer.writeAttribute("name", "常规");
+    writer.writeAttribute("name", "Normal");
     writer.writeAttribute("xfId", "0");
     writer.writeAttribute("builtinId", "0");
     writer.endElement(); // cellStyle
     
     writer.endElement(); // cellStyles
     
-    // 添加dxfs元素（差异格式，即使为空也需要）
+    // dxfs元素 - 严格按照libxlsxwriter格式
     writer.startElement("dxfs");
     writer.writeAttribute("count", "0");
     writer.endElement(); // dxfs
     
-    // 添加tableStyles元素
+    // tableStyles元素 - 严格按照libxlsxwriter格式
     writer.startElement("tableStyles");
     writer.writeAttribute("count", "0");
-    writer.writeAttribute("defaultTableStyle", "TableStyleMedium2");
+    writer.writeAttribute("defaultTableStyle", "TableStyleMedium9");
     writer.writeAttribute("defaultPivotStyle", "PivotStyleLight16");
     writer.endElement(); // tableStyles
-    
-    // 添加扩展列表
-    writer.startElement("extLst");
-    writer.startElement("ext");
-    writer.writeAttribute("uri", "{EB79DEF2-80B8-43e5-95BD-54CBDDF9020C}");
-    writer.writeAttribute("xmlns:x14", "http://schemas.microsoft.com/office/spreadsheetml/2009/9/main");
-    writer.startElement("x14:slicerStyles");
-    writer.writeAttribute("defaultSlicerStyle", "SlicerStyleLight1");
-    writer.endElement(); // x14:slicerStyles
-    writer.endElement(); // ext
-    writer.startElement("ext");
-    writer.writeAttribute("uri", "{9260A510-F301-46a8-8635-F512D64BE5F5}");
-    writer.writeAttribute("xmlns:x15", "http://schemas.microsoft.com/office/spreadsheetml/2010/11/main");
-    writer.startElement("x15:timelineStyles");
-    writer.writeAttribute("defaultTimelineStyle", "TimeSlicerStyleLight1");
-    writer.endElement(); // x15:timelineStyles
-    writer.endElement(); // ext
-    writer.endElement(); // extLst
     
     writer.endElement(); // styleSheet
     writer.endDocument();

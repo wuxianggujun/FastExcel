@@ -23,7 +23,7 @@ ZipArchive::ZipArchive(const std::string& filename) : filename_(filename) {
     is_writable_ = false;
     is_readable_ = false;
     stream_entry_open_ = false;
-    compression_level_ = 1;  // 使用较低的压缩级别以提高性能
+    compression_level_ = 6;  // 使用中等压缩级别，平衡压缩率和速度
 }
 
 ZipArchive::~ZipArchive() {
@@ -64,16 +64,27 @@ void ZipArchive::initializeFileInfo(void* file_info_ptr, const std::string& path
     file_info.filename = path.c_str();
     file_info.uncompressed_size = static_cast<uint64_t>(size);
     file_info.compressed_size = 0; // 让minizip自动计算
-    file_info.compression_method = MZ_COMPRESS_METHOD_DEFLATE;
+    // 对于较大的文件使用Deflate压缩，小文件使用STORE
+    file_info.compression_method = (size > 1024) ? MZ_COMPRESS_METHOD_DEFLATE : MZ_COMPRESS_METHOD_STORE;
     
-    // 使用固定时间戳以确保兼容性
-    file_info.modified_date = 1704067200; // 2024-01-01 00:00:00 UTC
-    file_info.creation_date = 1704067200;
-    file_info.flag = MZ_ZIP_FLAG_UTF8;
+    // 严格按照libxlsxwriter：使用当前时间而不是固定时间戳
+    std::time_t now = std::time(nullptr);
+    file_info.modified_date = static_cast<time_t>(now);
+    file_info.creation_date = static_cast<time_t>(now);
+    
+    // 不强制设置flag为0，让minizip自己决定需要的位
+    // 对于已知大小的文件，minizip会自动处理正确的标志
+    // file_info.flag = 0; // 删除这行，让minizip自动处理
 }
 
 // 私有辅助方法：写入单个文件条目
 ZipError ZipArchive::writeFileEntry(const std::string& internal_path, const void* data, size_t size) {
+    // 检查是否已经写入过该路径
+    if (written_paths_.find(internal_path) != written_paths_.end()) {
+        LOG_WARN("File {} already exists in zip, skipping duplicate entry", internal_path);
+        return ZipError::Ok;  // 跳过重复条目，但不报错
+    }
+    
     // 检查文件大小
     if (size > INT32_MAX) {
         LOG_ERROR("File {} is too large ({} bytes), maximum size is {} bytes",
@@ -109,6 +120,9 @@ ZipError ZipArchive::writeFileEntry(const std::string& internal_path, const void
         LOG_ERROR("Failed to close entry for file {} in zip, error: {}", internal_path, result);
         return ZipError::IoFail;
     }
+    
+    // 记录已写入的路径
+    written_paths_.insert(internal_path);
     
     LOG_DEBUG("Added file {} to zip, size: {} bytes", internal_path, size);
     return ZipError::Ok;
@@ -165,6 +179,12 @@ ZipError ZipArchive::addFiles(std::vector<FileEntry>&& files) {
     
     // 批量写入所有文件（移动语义版本）
     for (auto& file : files) {
+        // 检查是否已经写入过该路径
+        if (written_paths_.find(file.internal_path) != written_paths_.end()) {
+            LOG_WARN("File {} already exists in zip, skipping duplicate entry", file.internal_path);
+            continue;  // 跳过重复条目
+        }
+        
         // 检查文件大小
         if (file.content.size() > INT32_MAX) {
             LOG_ERROR("File {} is too large ({} bytes), maximum size is {} bytes",
@@ -179,14 +199,17 @@ ZipError ZipArchive::addFiles(std::vector<FileEntry>&& files) {
         // 设置文件大小信息
         file_info.uncompressed_size = static_cast<uint64_t>(file.content.size());
         file_info.compressed_size = 0; // 让minizip自动计算
-        file_info.compression_method = MZ_COMPRESS_METHOD_DEFLATE;
+        // 对于较大的文件使用Deflate压缩，小文件使用STORE
+        file_info.compression_method = (file.content.size() > 1024) ? MZ_COMPRESS_METHOD_DEFLATE : MZ_COMPRESS_METHOD_STORE;
         
-        // 使用固定时间戳以确保兼容性
-        file_info.modified_date = 1704067200; // 2024-01-01 00:00:00 UTC
-        file_info.creation_date = 1704067200;
+        // 严格按照libxlsxwriter：使用当前时间而不是固定时间戳
+        std::time_t now = std::time(nullptr);
+        file_info.modified_date = static_cast<time_t>(now);
+        file_info.creation_date = static_cast<time_t>(now);
         
-        file_info.flag = MZ_ZIP_FLAG_UTF8;
-        // 不使用 DATA_DESCRIPTOR 标志以提高兼容性
+        // 不强制设置flag为0，让minizip自己决定需要的位
+        // 对于已知大小的文件，minizip会自动处理正确的标志
+        // file_info.flag = 0; // 删除这行，让minizip自动处理
         
         // 打开条目
         int32_t result = mz_zip_writer_entry_open(zip_handle_, &file_info);
@@ -214,6 +237,9 @@ ZipError ZipArchive::addFiles(std::vector<FileEntry>&& files) {
             LOG_ERROR("Failed to close entry for file {} in zip, error: {}", file.internal_path, result);
             return ZipError::IoFail;
         }
+        
+        // 记录已写入的路径
+        written_paths_.insert(file.internal_path);
         
         LOG_DEBUG("Added file {} to zip, size: {} bytes", file.internal_path, file.content.size());
         
@@ -350,6 +376,7 @@ void ZipArchive::cleanup() {
     is_writable_ = false;
     is_readable_ = false;
     stream_entry_open_ = false;
+    written_paths_.clear();  // 清空已写入路径集合
 }
 
 bool ZipArchive::initForWriting() {
@@ -359,7 +386,7 @@ bool ZipArchive::initForWriting() {
         return false;
     }
     
-    // 设置压缩级别和方法
+    // 设置压缩级别和方法 - 使用Deflate压缩
     mz_zip_writer_set_compress_level(zip_handle_, static_cast<int16_t>(compression_level_));
     mz_zip_writer_set_compress_method(zip_handle_, MZ_COMPRESS_METHOD_DEFLATE);
     
@@ -429,24 +456,32 @@ ZipError ZipArchive::openEntry(std::string_view internal_path) {
         return ZipError::InvalidParameter;
     }
     
-    // 初始化文件信息结构
-    mz_zip_file file_info = {};
-    
     // 将 string_view 转换为 null 终止的字符串以供 minizip 使用
     std::string path_str(internal_path);
+    
+    // 检查是否已经写入过该路径
+    if (written_paths_.find(path_str) != written_paths_.end()) {
+        LOG_WARN("File {} already exists in zip, skipping duplicate entry", path_str);
+        return ZipError::Ok;  // 跳过重复条目，但不报错
+    }
+    
+    // 初始化文件信息结构
+    mz_zip_file file_info = {};
     file_info.filename = path_str.c_str();
     
-    // 对于流式写入，我们不知道最终大小，让minizip处理
+    // 对于流式写入，我们不知道最终大小，使用Deflate压缩
     file_info.uncompressed_size = 0;
     file_info.compressed_size = 0;
     file_info.compression_method = MZ_COMPRESS_METHOD_DEFLATE;
     
-    // 使用固定时间戳以确保兼容性
-    file_info.modified_date = 1704067200; // 2024-01-01 00:00:00 UTC
-    file_info.creation_date = 1704067200;
+    // 严格按照libxlsxwriter：使用当前时间而不是固定时间戳
+    std::time_t now = std::time(nullptr);
+    file_info.modified_date = static_cast<time_t>(now);
+    file_info.creation_date = static_cast<time_t>(now);
     
-    file_info.flag = MZ_ZIP_FLAG_UTF8;
-    // 不使用 DATA_DESCRIPTOR 标志以提高兼容性
+    // 关键修复：对于流式写入，必须设置Data Descriptor标志
+    // 因为我们不知道CRC和最终大小，需要告诉读者稍后会用Data Descriptor
+    file_info.flag = MZ_ZIP_FLAG_DATA_DESCRIPTOR;
     
     // 打开条目
     int32_t result = mz_zip_writer_entry_open(zip_handle_, &file_info);
@@ -456,6 +491,8 @@ ZipError ZipArchive::openEntry(std::string_view internal_path) {
     }
     
     stream_entry_open_ = true;
+    // 记录已写入的路径（对于流式写入，在打开时就记录）
+    written_paths_.insert(path_str);
     LOG_DEBUG("Opened entry for streaming: {}", internal_path);
     return ZipError::Ok;
 }
