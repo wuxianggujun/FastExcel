@@ -45,8 +45,38 @@ bool ZipArchive::open(bool create) {
 
 bool ZipArchive::close() {
     std::lock_guard<std::mutex> lock(mutex_);
-    cleanup();
-    return true;
+    
+    bool success = true;
+    
+    // 严格检查 mz_zip_writer_close() 的返回值
+    if (zip_handle_) {
+        int32_t result = mz_zip_writer_close(zip_handle_);
+        if (result != MZ_OK) {
+            LOG_ERROR("Failed to finalize ZIP file: {}, error code: {}", filename_, result);
+            LOG_ERROR("This usually means the ZIP central directory was not written properly");
+            success = false;
+        } else {
+            LOG_DEBUG("ZIP file finalized successfully: {}", filename_);
+        }
+        
+        // 删除writer句柄
+        mz_zip_writer_delete(&zip_handle_);
+        zip_handle_ = nullptr;
+    }
+    
+    // 清理其他资源
+    if (unzip_handle_) {
+        mz_zip_reader_close(unzip_handle_);
+        mz_zip_reader_delete(&unzip_handle_);
+        unzip_handle_ = nullptr;
+    }
+    
+    is_writable_ = false;
+    is_readable_ = false;
+    stream_entry_open_ = false;
+    written_paths_.clear();
+    
+    return success;
 }
 
 ZipError ZipArchive::addFile(std::string_view internal_path, std::string_view content) {
@@ -360,8 +390,10 @@ std::vector<std::string> ZipArchive::listFiles() const {
 }
 
 void ZipArchive::cleanup() {
+    // 注意：这个函数主要用于析构函数和异常情况
+    // 正常关闭应该使用 close() 函数以检查返回值
     if (zip_handle_) {
-        // 确保所有数据都被写入磁盘
+        // 尝试关闭，但不检查返回值（因为可能在异常情况下调用）
         mz_zip_writer_close(zip_handle_);
         mz_zip_writer_delete(&zip_handle_);
         zip_handle_ = nullptr;
@@ -376,7 +408,7 @@ void ZipArchive::cleanup() {
     is_writable_ = false;
     is_readable_ = false;
     stream_entry_open_ = false;
-    written_paths_.clear();  // 清空已写入路径集合
+    written_paths_.clear();
 }
 
 bool ZipArchive::initForWriting() {
@@ -389,6 +421,19 @@ bool ZipArchive::initForWriting() {
     // 设置压缩级别和方法 - 使用Deflate压缩
     mz_zip_writer_set_compress_level(zip_handle_, static_cast<int16_t>(compression_level_));
     mz_zip_writer_set_compress_method(zip_handle_, MZ_COMPRESS_METHOD_DEFLATE);
+    
+    // 关键修复：设置Data Descriptor标志
+    // 根据文档，参数0表示在本地文件头中写入CRC和大小（推荐）
+    // 参数1表示使用data descriptor（用于流式写入）
+    // 注意：需要获取底层的zip handle
+    void* zip_handle = nullptr;
+    if (mz_zip_writer_get_zip_handle(zip_handle_, &zip_handle) == MZ_OK) {
+        // 设置为0，让本地文件头包含正确的CRC和大小信息
+        mz_zip_set_data_descriptor(zip_handle, 0);
+        LOG_DEBUG("Set data descriptor to 0 (write CRC and sizes in local header)");
+    } else {
+        LOG_ERROR("Failed to get zip handle for setting data descriptor");
+    }
     
     // 设置覆盖回调函数，总是覆盖已存在的文件
     mz_zip_writer_set_overwrite_cb(zip_handle_, this, [](void* handle, void* userdata, const char* filename) -> int32_t {
@@ -479,9 +524,9 @@ ZipError ZipArchive::openEntry(std::string_view internal_path) {
     file_info.modified_date = static_cast<time_t>(now);
     file_info.creation_date = static_cast<time_t>(now);
     
-    // 关键修复：对于流式写入，必须设置Data Descriptor标志
-    // 因为我们不知道CRC和最终大小，需要告诉读者稍后会用Data Descriptor
-    file_info.flag = MZ_ZIP_FLAG_DATA_DESCRIPTOR;
+    // 由于已经设置了全局Data Descriptor，不需要单独设置标志
+    // minizip会自动处理Data Descriptor的添加
+    // 让minizip自动决定需要的标志位
     
     // 打开条目
     int32_t result = mz_zip_writer_entry_open(zip_handle_, &file_info);
