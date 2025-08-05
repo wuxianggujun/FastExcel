@@ -19,16 +19,18 @@ void ContentTypes::generate(const std::function<void(const char*, size_t)>& call
     
     // 写入默认类型
     for (const auto& def : default_types_) {
-        writer.writeEmptyElement("Default");
+        writer.startElement("Default");
         writer.writeAttribute("Extension", def.extension.c_str());
         writer.writeAttribute("ContentType", def.content_type.c_str());
+        writer.endElement(); // Default
     }
     
     // 写入覆盖类型
     for (const auto& override : override_types_) {
-        writer.writeEmptyElement("Override");
+        writer.startElement("Override");
         writer.writeAttribute("PartName", override.part_name.c_str());
         writer.writeAttribute("ContentType", override.content_type.c_str());
+        writer.endElement(); // Override
     }
     
     writer.endElement(); // Types
@@ -43,16 +45,18 @@ void ContentTypes::generateToFile(const std::string& filename) const {
     
     // 写入默认类型
     for (const auto& def : default_types_) {
-        writer.writeEmptyElement("Default");
+        writer.startElement("Default");
         writer.writeAttribute("Extension", def.extension.c_str());
         writer.writeAttribute("ContentType", def.content_type.c_str());
+        writer.endElement(); // Default
     }
     
     // 写入覆盖类型
     for (const auto& override : override_types_) {
-        writer.writeEmptyElement("Override");
+        writer.startElement("Override");
         writer.writeAttribute("PartName", override.part_name.c_str());
         writer.writeAttribute("ContentType", override.content_type.c_str());
+        writer.endElement(); // Override
     }
     
     writer.endElement(); // Types
@@ -69,18 +73,8 @@ void ContentTypes::addExcelDefaults() {
     addDefault("rels", "application/vnd.openxmlformats-package.relationships+xml");
     addDefault("xml", "application/xml");
     
-    // 添加Excel特定的覆盖类型
-    addOverride("/xl/workbook.xml", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml");
-    addOverride("/xl/styles.xml", "application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml");
-    addOverride("/xl/sharedStrings.xml", "application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml");
-    addOverride("/xl/theme/theme1.xml", "application/vnd.openxmlformats-officedocument.theme+xml");
-    addOverride("/docProps/core.xml", "application/vnd.openxmlformats-package.core-properties+xml");
-    addOverride("/docProps/app.xml", "application/vnd.openxmlformats-officedocument.extended-properties+xml");
-    
-    // 关键修复：添加工作表文件的Override
-    // 注意：这里只添加基本的工作表，实际的工作表数量应该由Workbook类动态添加
-    addOverride("/xl/worksheets/sheet1.xml", "application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml");
-    addOverride("/xl/worksheets/sheet2.xml", "application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml");
+    // 注意：不在这里添加具体的Override类型，应该由Workbook类根据实际内容动态添加
+    // 这样可以避免添加不存在的文件引用
 }
 
 }} // namespace fastexcel::xml

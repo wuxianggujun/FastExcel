@@ -19,13 +19,14 @@ void Relationships::generate(const std::function<void(const char*, size_t)>& cal
     writer.writeAttribute("xmlns", "http://schemas.openxmlformats.org/package/2006/relationships");
     
     for (const auto& rel : relationships_) {
-        writer.writeEmptyElement("Relationship");
+        writer.startElement("Relationship");
         writer.writeAttribute("Id", rel.id.c_str());
         writer.writeAttribute("Type", rel.type.c_str());
         writer.writeAttribute("Target", rel.target.c_str());
         if (!rel.target_mode.empty() && rel.target_mode != "Internal") {
             writer.writeAttribute("TargetMode", rel.target_mode.c_str());
         }
+        writer.endElement(); // Relationship
     }
     
     writer.endElement(); // Relationships
@@ -39,13 +40,14 @@ void Relationships::generateToFile(const std::string& filename) const {
     writer.writeAttribute("xmlns", "http://schemas.openxmlformats.org/package/2006/relationships");
     
     for (const auto& rel : relationships_) {
-        writer.writeEmptyElement("Relationship");
+        writer.startElement("Relationship");
         writer.writeAttribute("Id", rel.id.c_str());
         writer.writeAttribute("Type", rel.type.c_str());
         writer.writeAttribute("Target", rel.target.c_str());
         if (!rel.target_mode.empty() && rel.target_mode != "Internal") {
             writer.writeAttribute("TargetMode", rel.target_mode.c_str());
         }
+        writer.endElement(); // Relationship
     }
     
     writer.endElement(); // Relationships

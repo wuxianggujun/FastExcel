@@ -642,8 +642,8 @@ ZipError ZipArchive::openEntry(std::string_view internal_path) {
     file_info.filename = path_str.c_str();
     
     // 对于流式写入，使用STORE方法以匹配Excel
-    file_info.uncompressed_size = 0;
-    file_info.compressed_size = 0;
+    file_info.uncompressed_size = 0;  // 流式写入时未知大小
+    file_info.compressed_size = 0;    // 流式写入时未知大小
     file_info.compression_method = MZ_COMPRESS_METHOD_STORE;
     
     // 使用本地时间
@@ -651,10 +651,10 @@ ZipError ZipArchive::openEntry(std::string_view internal_path) {
     file_info.modified_date = now;
     file_info.creation_date = now;
     
-    // 关键修复：即使是流式写入，也不使用Data Descriptor标志
-    // Excel期望所有文件都使用相同的标志设置（0x0000）
-    file_info.flag = 0;
-    LOG_DEBUG("Using flag 0x0000 for streaming entry to match batch mode and Excel expectations");
+    // 关键修复：使用Data Descriptor标志进行真正的流式写入
+    // 这允许在不预知文件大小的情况下写入数据
+    file_info.flag = MZ_ZIP_FLAG_DATA_DESCRIPTOR;
+    LOG_DEBUG("Using MZ_ZIP_FLAG_DATA_DESCRIPTOR for true streaming write");
     
     // 设置正确的版本信息
 #ifdef _WIN32

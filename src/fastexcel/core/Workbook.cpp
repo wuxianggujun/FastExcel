@@ -737,6 +737,7 @@ bool Workbook::generateExcelStructureStreaming() {
             return false;
         }
         
+        // 文档属性文件（这些通常较小，直接生成）
         std::string app_xml;
         generateDocPropsAppXML([&app_xml](const char* data, size_t size) {
             app_xml.append(data, size);
@@ -777,6 +778,7 @@ bool Workbook::generateExcelStructureStreaming() {
             return false;
         }
         
+        // Excel核心文件
         std::string workbook_xml;
         generateWorkbookXML([&workbook_xml](const char* data, size_t size) {
             workbook_xml.append(data, size);
@@ -1414,25 +1416,47 @@ void Workbook::setHighPerformanceMode(bool enable) {
 }
 
 bool Workbook::generateWorksheetXMLStreaming(const std::shared_ptr<Worksheet>& worksheet, const std::string& path) {
-    LOG_DEBUG("Generating worksheet XML using streaming mode: {}", path);
+    LOG_DEBUG("Generating worksheet XML using true streaming mode: {}", path);
     
     try {
-        // 关键修复：先生成XML内容到字符串，获取准确的文件大小
-        std::string xml_content;
-        worksheet->generateXML([&xml_content](const char* data, size_t size) {
-            xml_content.append(data, size);
-        });
-        
-        LOG_DEBUG("Generated XML content size: {} bytes for {}", xml_content.size(), path);
-        
-        // 使用标准的addFile方法写入，确保ZIP结构正确
-        if (!file_manager_->writeFile(path, xml_content)) {
-            LOG_ERROR("Failed to write worksheet XML file: {}", path);
+        // 真正的流式写入：使用Data Descriptor标志
+        if (!file_manager_->openStreamingFile(path)) {
+            LOG_ERROR("Failed to open streaming file: {}", path);
             return false;
         }
         
-        LOG_INFO("Successfully generated worksheet XML: {}", path);
-        return true;
+        // 跟踪写入的数据用于计算CRC和大小
+        size_t total_bytes_written = 0;
+        uint32_t crc32 = 0;
+        bool write_success = true;
+        
+        // 使用流式XML生成：通过回调函数将XML内容直接写入ZIP流
+        worksheet->generateXML([this, &total_bytes_written, &crc32, &write_success](const char* data, size_t size) {
+            if (!write_success) return; // 如果之前已经失败，跳过后续写入
+            
+            if (!file_manager_->writeStreamingChunk(data, size)) {
+                LOG_ERROR("Failed to write streaming chunk to ZIP");
+                write_success = false;
+                return;
+            }
+            
+            // 更新CRC32和总字节数
+            // 注意：这里使用简单的CRC计算，实际应该使用zlib的crc32函数
+            total_bytes_written += size;
+            // TODO: 实现正确的CRC32计算
+            crc32 = 0; // 暂时设为0，让minizip-ng自动计算
+        });
+        
+        // 关闭流式ZIP写入，提供最终的大小信息
+        bool close_success = file_manager_->closeStreamingFile();
+        
+        if (write_success && close_success) {
+            LOG_INFO("Successfully generated streaming worksheet XML: {} ({} bytes)", path, total_bytes_written);
+        } else {
+            LOG_ERROR("Failed to write streaming worksheet XML: {}", path);
+        }
+        
+        return write_success && close_success;
         
     } catch (const std::exception& e) {
         LOG_ERROR("Exception in streaming worksheet XML generation: {}", e.what());

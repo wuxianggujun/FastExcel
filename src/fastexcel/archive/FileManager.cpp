@@ -163,54 +163,21 @@ bool FileManager::createExcelStructure() {
 }
 
 bool FileManager::addContentTypes() {
-    xml::ContentTypes content_types;
-    content_types.addExcelDefaults();
-    
-    // 关键修复：先生成内容到字符串，确保文件大小正确
-    std::string xml_content;
-    content_types.generate([&xml_content](const char* data, size_t size) {
-        xml_content.append(data, size);
-    });
-    
-    // 使用标准writeFile方法，确保ZIP结构正确
-    return writeFile("[Content_Types].xml", xml_content);
+    // 不使用addExcelDefaults()，而是让Workbook类动态生成正确的Content_Types.xml
+    // 这个方法现在只是一个占位符，实际内容由Workbook类的generateContentTypesXML生成
+    return true;
 }
 
 bool FileManager::addRootRels() {
-    xml::Relationships rels;
-    // 修改顺序以匹配修复后的文件：rId3, rId2, rId1
-    rels.addRelationship("rId3", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties", "docProps/app.xml");
-    rels.addRelationship("rId2", "http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties", "docProps/core.xml");
-    rels.addRelationship("rId1", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument", "xl/workbook.xml");
-    
-    // 关键修复：先生成内容到字符串，确保文件大小正确
-    std::string xml_content;
-    rels.generate([&xml_content](const char* data, size_t size) {
-        xml_content.append(data, size);
-    });
-    
-    // 使用标准writeFile方法，确保ZIP结构正确
-    return writeFile("_rels/.rels", xml_content);
+    // 不在这里生成，让Workbook类动态生成正确的_rels/.rels
+    // 这个方法现在只是一个占位符，实际内容由Workbook类的generateRelsXML生成
+    return true;
 }
 
 bool FileManager::addWorkbookRels() {
-    xml::Relationships rels;
-    // 修复：添加完整的关系链，包括theme
-    // 按照Workbook类中generateWorkbookRelsXML的顺序：rId3(theme), rId2(sheet2), rId1(sheet1), rId5(sharedStrings), rId4(styles)
-    rels.addRelationship("rId3", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme", "theme/theme1.xml");
-    rels.addRelationship("rId2", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet", "worksheets/sheet2.xml");
-    rels.addRelationship("rId1", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet", "worksheets/sheet1.xml");
-    rels.addRelationship("rId5", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings", "sharedStrings.xml");
-    rels.addRelationship("rId4", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles", "styles.xml");
-    
-    // 关键修复：先生成内容到字符串，确保文件大小正确
-    std::string xml_content;
-    rels.generate([&xml_content](const char* data, size_t size) {
-        xml_content.append(data, size);
-    });
-    
-    // 使用标准writeFile方法，确保ZIP结构正确
-    return writeFile("xl/_rels/workbook.xml.rels", xml_content);
+    // 不在这里生成，让Workbook类动态生成正确的xl/_rels/workbook.xml.rels
+    // 这个方法现在只是一个占位符，实际内容由Workbook类的generateWorkbookRelsXML生成
+    return true;
 }
 
 bool FileManager::addDocProps() {

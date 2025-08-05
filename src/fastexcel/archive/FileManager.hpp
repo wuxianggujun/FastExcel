@@ -51,12 +51,13 @@ public:
     // 压缩设置
     bool setCompressionLevel(int level);
     
-private:
-    // Excel文件结构管理
-    bool createExcelStructure();
+    // Excel文件结构管理 - 公开给Workbook使用
     bool addContentTypes();
     bool addWorkbookRels();
     bool addRootRels();
+    
+private:
+    bool createExcelStructure();
     bool addDocProps();
 };
 
