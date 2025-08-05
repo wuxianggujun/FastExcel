@@ -28,6 +28,7 @@ set(UNIT_TEST_SOURCES
     unit/test_workbook.cpp
     unit/test_xml_writer.cpp
     unit/test_xml_streaming.cpp
+    unit/test_excel_zip_compatibility.cpp
 )
 
 # 集成测试源文件
