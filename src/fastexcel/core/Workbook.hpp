@@ -67,9 +67,9 @@ struct WorkbookOptions {
     
     // 性能优化选项
     bool use_shared_strings = true;   // 使用共享字符串（默认启用以匹配Excel格式）
-    bool streaming_xml = true;        // 流式XML写入（默认启用以优化内存）
+    bool streaming_xml = false;       // 流式XML写入（默认禁用，让系统自动选择）
     size_t row_buffer_size = 5000;    // 行缓冲大小（默认较大缓冲）
-    int compression_level = 1;        // ZIP压缩级别（默认快速压缩）
+    int compression_level = 0;        // ZIP压缩级别（默认无压缩，匹配Excel生成的文件）
     size_t xml_buffer_size = 4 * 1024 * 1024; // XML缓冲区大小（4MB）
 };
 

@@ -646,8 +646,8 @@ bool Workbook::generateExcelStructureBatch() {
     });
     files.emplace_back("xl/styles.xml", std::move(styles_xml));
     
-    // 只有启用共享字符串时才生成sharedStrings.xml文件
-    if (options_.use_shared_strings) {
+    // 只有启用共享字符串且有内容时才生成sharedStrings.xml文件
+    if (options_.use_shared_strings && !shared_strings_list_.empty()) {
         std::string shared_strings_xml;
         generateSharedStringsXML([&shared_strings_xml](const char* data, size_t size) {
             shared_strings_xml.append(data, size);
@@ -777,8 +777,8 @@ bool Workbook::generateExcelStructureStreaming() {
             return false;
         }
         
-        // 只有启用共享字符串时才生成sharedStrings.xml文件
-        if (options_.use_shared_strings) {
+        // 只有启用共享字符串且有内容时才生成sharedStrings.xml文件
+        if (options_.use_shared_strings && !shared_strings_list_.empty()) {
             std::string shared_strings_xml;
             generateSharedStringsXML([&shared_strings_xml](const char* data, size_t size) {
                 shared_strings_xml.append(data, size);
@@ -868,7 +868,8 @@ void Workbook::generateWorkbookXML(const std::function<void(const char*, size_t)
         writer.startElement("sheet");
         writer.writeAttribute("name", worksheets_[i]->getName().c_str());
         writer.writeAttribute("sheetId", std::to_string(worksheets_[i]->getSheetId()).c_str());
-        writer.writeAttribute("r:id", "rId1"); // 对于单个工作表，始终使用rId1
+        // 修复：每个工作表使用正确的rId
+        writer.writeAttribute("r:id", ("rId" + std::to_string(i + 1)).c_str());
         writer.endElement(); // sheet
     }
     writer.endElement(); // sheets
@@ -1146,8 +1147,8 @@ void Workbook::generateContentTypesXML(const std::function<void(const char*, siz
         writer.endElement(); // Override
     }
     
-    // 只有启用共享字符串时才添加sharedStrings.xml的内容类型
-    if (options_.use_shared_strings) {
+    // 只有启用共享字符串且有内容时才添加sharedStrings.xml的内容类型
+    if (options_.use_shared_strings && !shared_strings_list_.empty()) {
         writer.startElement("Override");
         writer.writeAttribute("PartName", "/xl/sharedStrings.xml");
         writer.writeAttribute("ContentType", "application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml");
@@ -1209,42 +1210,35 @@ void Workbook::generateWorkbookRelsXML(const std::function<void(const char*, siz
     writer.startElement("Relationships");
     writer.writeAttribute("xmlns", "http://schemas.openxmlformats.org/package/2006/relationships");
     
-    // 严格按照libxlsxwriter的顺序：rId1(worksheet), rId2(theme), rId3(styles)
+    int rId = 1;
     
-    // 工作表关系 - rId1
-    writer.startElement("Relationship");
-    writer.writeAttribute("Id", "rId1");
-    writer.writeAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet");
-    writer.writeAttribute("Target", "worksheets/sheet1.xml");
-    writer.endElement(); // Relationship
+    // 工作表关系 - 为每个工作表分配正确的rId
+    for (size_t i = 0; i < worksheets_.size(); ++i) {
+        writer.startElement("Relationship");
+        writer.writeAttribute("Id", ("rId" + std::to_string(rId++)).c_str());
+        writer.writeAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet");
+        writer.writeAttribute("Target", ("worksheets/sheet" + std::to_string(i + 1) + ".xml").c_str());
+        writer.endElement(); // Relationship
+    }
     
-    // 主题关系 - rId2
+    // 主题关系
     writer.startElement("Relationship");
-    writer.writeAttribute("Id", "rId2");
+    writer.writeAttribute("Id", ("rId" + std::to_string(rId++)).c_str());
     writer.writeAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme");
     writer.writeAttribute("Target", "theme/theme1.xml");
     writer.endElement(); // Relationship
     
-    // 样式关系 - rId3
+    // 样式关系
     writer.startElement("Relationship");
-    writer.writeAttribute("Id", "rId3");
+    writer.writeAttribute("Id", ("rId" + std::to_string(rId++)).c_str());
     writer.writeAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles");
     writer.writeAttribute("Target", "styles.xml");
     writer.endElement(); // Relationship
     
-    // 其他工作表（如果有多个）
-    for (size_t i = 1; i < worksheets_.size(); ++i) {
+    // 只有启用共享字符串且有内容时才添加共享字符串关系
+    if (options_.use_shared_strings && !shared_strings_list_.empty()) {
         writer.startElement("Relationship");
-        writer.writeAttribute("Id", ("rId" + std::to_string(i + 3)).c_str()); // 从rId4开始
-        writer.writeAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet");
-        writer.writeAttribute("Target", getWorksheetRelPath(static_cast<int>(i + 1)).c_str());
-        writer.endElement(); // Relationship
-    }
-    
-    // 只有启用共享字符串时才添加共享字符串关系
-    if (options_.use_shared_strings) {
-        writer.startElement("Relationship");
-        writer.writeAttribute("Id", ("rId" + std::to_string(worksheets_.size() + 3)).c_str());
+        writer.writeAttribute("Id", ("rId" + std::to_string(rId++)).c_str());
         writer.writeAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings");
         writer.writeAttribute("Target", "sharedStrings.xml");
         writer.endElement(); // Relationship
