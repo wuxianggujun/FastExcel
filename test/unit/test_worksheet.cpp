@@ -478,6 +478,9 @@ TEST_F(WorksheetTest, InsertDeleteRowsColumns) {
 
 // 测试XML生成
 TEST_F(WorksheetTest, XMLGeneration) {
+    // 禁用共享字符串表以便在XML中直接找到字符串
+    workbook->setUseSharedStrings(false);
+    
     // 添加一些内容
     worksheet->writeString(0, 0, "Hello");
     worksheet->writeNumber(0, 1, 123.45);
