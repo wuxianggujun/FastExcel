@@ -32,7 +32,16 @@ std::unique_ptr<Workbook> Workbook::create(const Path& path) {
 }
 
 Workbook::Workbook(const Path& path) : filename_(path.string()) {
-    file_manager_ = std::make_unique<archive::FileManager>(path);
+    // 检查是否为内存模式（任何以::memory::开头的路径）
+    if (path.string().find("::memory::") == 0) {
+        // 内存模式：不创建FileManager，保持纯内存操作
+        file_manager_ = nullptr;
+        LOG_DEBUG("Created workbook in memory mode: {}", filename_);
+    } else {
+        // 文件模式：创建FileManager处理文件操作
+        file_manager_ = std::make_unique<archive::FileManager>(path);
+    }
+    
     format_pool_ = std::make_unique<FormatPool>();
     
     // 设置默认文档属性
@@ -51,6 +60,14 @@ bool Workbook::open() {
         return true;
     }
     
+    // 内存模式直接标记为已打开，无需文件操作
+    if (!file_manager_) {
+        is_open_ = true;
+        LOG_DEBUG("Memory workbook opened: {}", filename_);
+        return true;
+    }
+    
+    // 文件模式需要打开FileManager
     is_open_ = file_manager_->open(true);
     if (is_open_) {
         LOG_INFO("Workbook opened: {}", filename_);
@@ -120,9 +137,16 @@ bool Workbook::saveAs(const std::string& filename) {
 
 bool Workbook::close() {
     if (is_open_) {
-        file_manager_->close();
-        is_open_ = false;
-        LOG_INFO("Workbook closed: {}", filename_);
+        // 内存模式只需要重置状态
+        if (!file_manager_) {
+            is_open_ = false;
+            LOG_DEBUG("Memory workbook closed: {}", filename_);
+        } else {
+            // 文件模式需要关闭FileManager
+            file_manager_->close();
+            is_open_ = false;
+            LOG_INFO("Workbook closed: {}", filename_);
+        }
     }
     return true;
 }

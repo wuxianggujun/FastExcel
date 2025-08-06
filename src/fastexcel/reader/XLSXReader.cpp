@@ -101,13 +101,16 @@ std::unique_ptr<core::Workbook> XLSXReader::loadWorkbook() {
     }
     
     try {
-        // 创建新的工作簿，使用Path::create来正确处理Unicode
-        core::Path temp_path("temp_workbook_" + std::to_string(reinterpret_cast<uintptr_t>(this)));
-        auto workbook = core::Workbook::create(temp_path);
+        // 利用现有的XMLStreamReader进行流式解析，无需临时文件
+        // 直接在内存中构建Workbook对象，避免磁盘I/O
         
-        // 打开工作簿以便添加工作表
+        // 创建内存工作簿容器（绝不创建文件）
+        core::Path memory_path("::memory::reader_" + std::to_string(reinterpret_cast<uintptr_t>(this)));
+        auto workbook = std::make_unique<core::Workbook>(memory_path);
+        
+        // 确保内存工作簿正确初始化
         if (!workbook->open()) {
-            std::cerr << "无法打开工作簿进行写入" << std::endl;
+            std::cerr << "无法初始化内存工作簿" << std::endl;
             return nullptr;
         }
         
@@ -130,12 +133,14 @@ std::unique_ptr<core::Workbook> XLSXReader::loadWorkbook() {
             // 文档属性解析失败不影响主要功能，继续执行
         }
         
-        // 为每个工作表创建Worksheet对象
+        // 利用现有的XMLStreamReader解析工作表
+        // 直接在内存中构建数据结构，无需临时文件
         for (const auto& sheet_name : worksheet_names_) {
             auto worksheet = workbook->addWorksheet(sheet_name);
             if (worksheet) {
                 auto it = worksheet_paths_.find(sheet_name);
                 if (it != worksheet_paths_.end()) {
+                    // 使用流式XML解析器处理工作表数据
                     if (!parseWorksheetXML(it->second, worksheet.get())) {
                         std::cerr << "解析工作表 " << sheet_name << " 失败" << std::endl;
                         // 继续处理其他工作表
@@ -185,8 +190,16 @@ std::shared_ptr<core::Worksheet> XLSXReader::loadWorksheet(const std::string& na
             parseStylesXML();  // 忽略错误，某些文件可能没有自定义样式
         }
         
-        // 创建临时工作簿来容纳工作表
-        auto temp_workbook = std::make_shared<core::Workbook>(core::Path("temp"));
+        // 创建轻量级内存工作簿来容纳单个工作表
+        core::Path memory_path("::memory::" + std::to_string(reinterpret_cast<uintptr_t>(this)) + "_" + name);
+        auto temp_workbook = std::make_shared<core::Workbook>(memory_path);
+        
+        // 确保内存工作簿处于打开状态
+        if (!temp_workbook->open()) {
+            std::cerr << "无法打开内存工作簿用于工作表: " << name << std::endl;
+            return nullptr;
+        }
+        
         auto worksheet = std::make_shared<core::Worksheet>(name, temp_workbook);
         
         // 解析工作表数据
