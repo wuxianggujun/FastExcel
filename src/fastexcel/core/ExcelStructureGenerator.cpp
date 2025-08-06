@@ -213,7 +213,7 @@ bool ExcelStructureGenerator::generateWorksheets() {
                 return false;
             }
         } else {
-            LOG_DEBUG("Using batch mode for small worksheet: {}", worksheet->getName());
+            LOG_BATCH_DEBUG("Using batch mode for small worksheet: {}", worksheet->getName());
             if (!generateWorksheetBatch(worksheet, worksheet_path)) {
                 LOG_ERROR("Failed to generate worksheet {} in batch mode", worksheet->getName());
                 return false;
@@ -245,7 +245,7 @@ bool ExcelStructureGenerator::generateWorksheets() {
 bool ExcelStructureGenerator::finalize() {
     // 对于批量模式，需要调用flush
     if (auto batch_writer = dynamic_cast<BatchFileWriter*>(writer_.get())) {
-        LOG_DEBUG("Flushing batch writer");
+        LOG_BATCH_DEBUG("Flushing batch writer");
         return batch_writer->flush();
     }
     

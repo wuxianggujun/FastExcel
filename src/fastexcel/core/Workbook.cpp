@@ -1,16 +1,17 @@
 #include "fastexcel/core/Workbook.hpp"
 #include "fastexcel/reader/XLSXReader.hpp"
-#include "fastexcel/xml/XMLStreamWriter.hpp"
-#include "fastexcel/xml/Relationships.hpp"
-#include "fastexcel/xml/SharedStrings.hpp"
+#include "fastexcel/utils/LogConfig.hpp"
 #include "fastexcel/utils/Logger.hpp"
 #include "fastexcel/utils/TimeUtils.hpp"
-#include <sstream>
+#include "fastexcel/xml/Relationships.hpp"
+#include "fastexcel/xml/SharedStrings.hpp"
+#include "fastexcel/xml/XMLStreamWriter.hpp"
 #include <algorithm>
-#include <iomanip>
-#include <functional>
 #include <ctime>
 #include <fstream>
+#include <functional>
+#include <iomanip>
+#include <sstream>
 
 namespace fastexcel {
 namespace core {
@@ -71,7 +72,7 @@ bool Workbook::save() {
             if (!file_manager_->setCompressionLevel(options_.compression_level)) {
                 LOG_WARN("Failed to set compression level to {}", options_.compression_level);
             } else {
-                LOG_DEBUG("Set ZIP compression level to {}", options_.compression_level);
+                LOG_ZIP_DEBUG("Set ZIP compression level to {}", options_.compression_level);
             }
         }
         

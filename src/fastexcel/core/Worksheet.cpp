@@ -5,6 +5,7 @@
 #include "fastexcel/xml/XMLStreamWriter.hpp"
 #include "fastexcel/xml/SharedStrings.hpp"
 #include "fastexcel/utils/Logger.hpp"
+#include "fastexcel/utils/LogConfig.hpp"
 #include "fastexcel/utils/TimeUtils.hpp"
 #include <sstream>
 #include <stdexcept>
@@ -516,8 +517,90 @@ void Worksheet::generateXMLBatch(const std::function<void(const char*, size_t)>&
     // 列信息
     generateColumnsXML(callback);
     
-    // 关键修复：确保始终生成sheetData元素（即使为空）
+    // 关键修复：使用XMLStreamWriter生成sheetData，而不是直接调用generateSheetDataXML
     writer.startElement("sheetData");
+    
+    // 按行排序输出单元格数据
+    std::map<int, std::map<int, const Cell*>> sorted_cells;
+    for (const auto& [pos, cell] : cells_) {
+        if (!cell.isEmpty() || cell.hasFormat()) {
+            sorted_cells[pos.first][pos.second] = &cell;
+        }
+    }
+    
+    for (const auto& [row_num, row_cells] : sorted_cells) {
+        writer.startElement("row");
+        writer.writeAttribute("r", std::to_string(row_num + 1).c_str());
+        
+        // 检查行信息
+        auto row_it = row_info_.find(row_num);
+        if (row_it != row_info_.end()) {
+            if (row_it->second.height > 0) {
+                writer.writeAttribute("ht", std::to_string(row_it->second.height).c_str());
+                writer.writeAttribute("customHeight", "1");
+            }
+            if (row_it->second.hidden) {
+                writer.writeAttribute("hidden", "1");
+            }
+        }
+        
+        for (const auto& [col_num, cell] : row_cells) {
+            writer.startElement("c");
+            writer.writeAttribute("r", utils::CommonUtils::cellReference(row_num, col_num).c_str());
+            
+            // 应用单元格格式
+            if (cell->hasFormat()) {
+                writer.writeAttribute("s", std::to_string(cell->getFormat()->getXfIndex()).c_str());
+            }
+            
+            // 只有在单元格不为空时才写入值
+            if (!cell->isEmpty()) {
+                if (cell->isFormula()) {
+                    writer.writeAttribute("t", "str");
+                    writer.startElement("f");
+                    writer.writeText(cell->getFormula().c_str());
+                    writer.endElement(); // f
+                } else if (cell->isString()) {
+                    // 根据工作簿设置决定使用共享字符串还是内联字符串
+                    if (parent_workbook_ && parent_workbook_->getOptions().use_shared_strings) {
+                        // 使用共享字符串表
+                        writer.writeAttribute("t", "s");
+                        writer.startElement("v");
+                        int sst_index = parent_workbook_->getSharedStringIndex(cell->getStringValue());
+                        if (sst_index >= 0) {
+                            writer.writeText(std::to_string(sst_index).c_str());
+                        } else {
+                            // 如果字符串不在SST中，添加它
+                            sst_index = parent_workbook_->addSharedString(cell->getStringValue());
+                            writer.writeText(std::to_string(sst_index).c_str());
+                        }
+                        writer.endElement(); // v
+                    } else {
+                        writer.writeAttribute("t", "inlineStr");
+                        writer.startElement("is");
+                        writer.startElement("t");
+                        writer.writeText(cell->getStringValue().c_str());
+                        writer.endElement(); // t
+                        writer.endElement(); // is
+                    }
+                } else if (cell->isNumber()) {
+                    writer.startElement("v");
+                    writer.writeText(std::to_string(cell->getNumberValue()).c_str());
+                    writer.endElement(); // v
+                } else if (cell->isBoolean()) {
+                    writer.writeAttribute("t", "b");
+                    writer.startElement("v");
+                    writer.writeText(cell->getBooleanValue() ? "1" : "0");
+                    writer.endElement(); // v
+                }
+            }
+            
+            writer.endElement(); // c
+        }
+        
+        writer.endElement(); // row
+    }
+    
     writer.endElement(); // sheetData
     
     // 工作表保护
@@ -817,92 +900,105 @@ void Worksheet::validateRange(int first_row, int first_col, int last_row, int la
 // ========== XML生成辅助方法 ==========
 
 void Worksheet::generateSheetDataXML(const std::function<void(const char*, size_t)>& callback) const {
-    xml::XMLStreamWriter writer(callback);
-    writer.startElement("sheetData");
+    LOG_WORKSHEET_DEBUG("=== WORKSHEET XML GENERATION DEBUG START ===");
+    LOG_WORKSHEET_DEBUG("Worksheet name: {}", name_);
+    LOG_WORKSHEET_DEBUG("Total cells in worksheet: {}", cells_.size());
+    
+    // 直接使用字符串拼接，避免XMLStreamWriter的问题
+    std::string xml_content = "<sheetData>";
     
     // 按行排序输出单元格数据
     std::map<int, std::map<int, const Cell*>> sorted_cells;
-    // 关键修复 #1: 只要单元格有值或有格式，就必须处理
     for (const auto& [pos, cell] : cells_) {
+        LOG_WORKSHEET_DEBUG("Processing cell at ({}, {}): isEmpty={}, hasFormat={}",
+                           pos.first, pos.second, cell.isEmpty(), cell.hasFormat());
         if (!cell.isEmpty() || cell.hasFormat()) {
             sorted_cells[pos.first][pos.second] = &cell;
+            LOG_WORKSHEET_DEBUG("Added cell ({}, {}) to sorted_cells", pos.first, pos.second);
         }
     }
     
+    LOG_WORKSHEET_DEBUG("Grouped cells into {} rows", sorted_cells.size());
+    
     for (const auto& [row_num, row_cells] : sorted_cells) {
-        writer.startElement("row");
-        writer.writeAttribute("r", std::to_string(row_num + 1).c_str());
+        LOG_WORKSHEET_DEBUG("Generating row {}: {} cells", row_num, row_cells.size());
+        xml_content += "<row r=\"" + std::to_string(row_num + 1) + "\"";
         
         // 检查行信息
         auto row_it = row_info_.find(row_num);
         if (row_it != row_info_.end()) {
             if (row_it->second.height > 0) {
-                writer.writeAttribute("ht", std::to_string(row_it->second.height).c_str());
-                writer.writeAttribute("customHeight", "1");
+                xml_content += " ht=\"" + std::to_string(row_it->second.height) + "\" customHeight=\"1\"";
             }
             if (row_it->second.hidden) {
-                writer.writeAttribute("hidden", "1");
+                xml_content += " hidden=\"1\"";
             }
         }
+        xml_content += ">";
         
         for (const auto& [col_num, cell] : row_cells) {
-            writer.startElement("c");
-            writer.writeAttribute("r", utils::CommonUtils::cellReference(row_num, col_num).c_str());
+            LOG_WORKSHEET_DEBUG("Generating cell ({}, {}): isEmpty={}, isString={}, isNumber={}",
+                               row_num, col_num, cell->isEmpty(), cell->isString(), cell->isNumber());
             
-            // 关键修复 #2: 应用单元格格式
+            xml_content += "<c r=\"" + utils::CommonUtils::cellReference(row_num, col_num) + "\"";
+            
+            // 应用单元格格式
             if (cell->hasFormat()) {
-                writer.writeAttribute("s", std::to_string(cell->getFormat()->getXfIndex()).c_str());
+                xml_content += " s=\"" + std::to_string(cell->getFormat()->getXfIndex()) + "\"";
             }
             
             // 只有在单元格不为空时才写入值
             if (!cell->isEmpty()) {
                 if (cell->isFormula()) {
-                    writer.writeAttribute("t", "str");
-                    writer.startElement("f");
-                    writer.writeText(cell->getFormula().c_str());
-                    writer.endElement(); // f
+                    xml_content += " t=\"str\"><f>" + cell->getFormula() + "</f></c>";
+                    LOG_WORKSHEET_DEBUG("Added formula cell: ({}, {})", row_num, col_num);
                 } else if (cell->isString()) {
-                    // 关键修复 #3: 根据工作簿设置决定使用共享字符串还是内联字符串
+                    // 根据工作簿设置决定使用共享字符串还是内联字符串
                     if (parent_workbook_ && parent_workbook_->getOptions().use_shared_strings) {
                         // 使用共享字符串表
-                        writer.writeAttribute("t", "s");
-                        writer.startElement("v");
+                        xml_content += " t=\"s\"><v>";
                         int sst_index = parent_workbook_->getSharedStringIndex(cell->getStringValue());
                         if (sst_index >= 0) {
-                            writer.writeText(std::to_string(sst_index).c_str());
+                            xml_content += std::to_string(sst_index);
                         } else {
                             // 如果字符串不在SST中，添加它
                             sst_index = parent_workbook_->addSharedString(cell->getStringValue());
-                            writer.writeText(std::to_string(sst_index).c_str());
+                            xml_content += std::to_string(sst_index);
                         }
-                        writer.endElement(); // v
+                        xml_content += "</v></c>";
+                        LOG_WORKSHEET_DEBUG("Added shared string cell: ({}, {}) with SST index {}", row_num, col_num, sst_index);
                     } else {
-                        writer.writeAttribute("t", "inlineStr");
-                        writer.startElement("is");
-                        writer.startElement("t");
-                        writer.writeText(cell->getStringValue().c_str());
-                        writer.endElement(); // t
-                        writer.endElement(); // is
+                        xml_content += " t=\"inlineStr\"><is><t>" + cell->getStringValue() + "</t></is></c>";
+                        LOG_WORKSHEET_DEBUG("Added inline string cell: ({}, {}) with value '{}'", row_num, col_num, cell->getStringValue());
                     }
                 } else if (cell->isNumber()) {
-                    writer.startElement("v");
-                    writer.writeText(std::to_string(cell->getNumberValue()).c_str());
-                    writer.endElement(); // v
+                    xml_content += "><v>" + std::to_string(cell->getNumberValue()) + "</v></c>";
+                    LOG_WORKSHEET_DEBUG("Added number cell: ({}, {}) with value {}", row_num, col_num, cell->getNumberValue());
                 } else if (cell->isBoolean()) {
-                    writer.writeAttribute("t", "b");
-                    writer.startElement("v");
-                    writer.writeText(cell->getBooleanValue() ? "1" : "0");
-                    writer.endElement(); // v
+                    xml_content += " t=\"b\"><v>" + std::string(cell->getBooleanValue() ? "1" : "0") + "</v></c>";
+                    LOG_WORKSHEET_DEBUG("Added boolean cell: ({}, {}) with value {}", row_num, col_num, cell->getBooleanValue());
+                } else {
+                    xml_content += "/>";
+                    LOG_WORKSHEET_DEBUG("Added empty cell with format: ({}, {})", row_num, col_num);
                 }
+            } else {
+                xml_content += "/>";
+                LOG_WORKSHEET_DEBUG("Added empty cell: ({}, {})", row_num, col_num);
             }
-            
-            writer.endElement(); // c
         }
         
-        writer.endElement(); // row
+        xml_content += "</row>";
+        LOG_WORKSHEET_DEBUG("Completed row {}", row_num);
     }
     
-    writer.endElement(); // sheetData
+    xml_content += "</sheetData>";
+    
+    LOG_WORKSHEET_DEBUG("Generated XML length: {} characters", xml_content.length());
+    LOG_WORKSHEET_DEBUG("XML preview (first 500 chars): {}",
+                       xml_content.length() > 500 ? xml_content.substr(0, 500) + "..." : xml_content);
+    LOG_WORKSHEET_DEBUG("=== WORKSHEET XML GENERATION DEBUG END ===");
+    
+    callback(xml_content.c_str(), xml_content.length());
 }
 
 void Worksheet::generateColumnsXML(const std::function<void(const char*, size_t)>& callback) const {

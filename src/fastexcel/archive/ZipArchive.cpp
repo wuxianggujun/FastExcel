@@ -1,18 +1,20 @@
 #include "fastexcel/archive/ZipArchive.hpp"
+
+#include "fastexcel/utils/LogConfig.hpp"
 #include "fastexcel/utils/Logger.hpp"
-#include <mz.h>
-#include <mz_zip.h>
-#include <mz_strm.h>
-#include <mz_zip_rw.h>
-#include <mz_crypt.h>
-#include <mz_os.h>
-#include <cstring>
-#include <cstdio>
-#include <filesystem>
-#include <ctime>
-#include <ostream>
 #include <array>
 #include <cstddef>
+#include <cstdio>
+#include <cstring>
+#include <ctime>
+#include <filesystem>
+#include <mz.h>
+#include <mz_crypt.h>
+#include <mz_os.h>
+#include <mz_strm.h>
+#include <mz_zip.h>
+#include <mz_zip_rw.h>
+#include <ostream>
 
 // 添加Windows平台特定的时间处理
 #ifdef _WIN32
@@ -61,7 +63,7 @@ bool ZipArchive::close() {
             LOG_ERROR("This usually means the ZIP central directory was not written properly");
             success = false;
         } else {
-            LOG_DEBUG("ZIP file finalized successfully: {}", filename_);
+            LOG_ZIP_DEBUG("ZIP file finalized successfully: {}", filename_);
         }
         
         // 删除writer句柄
@@ -107,7 +109,7 @@ void ZipArchive::initializeFileInfo(void* file_info_ptr, const std::string& path
     // 关键修复1：批量模式使用STORE方法（无压缩）来匹配Excel生成的文件
     // Excel通常对小文件使用STORE方法，批量模式不使用Data Descriptor
     file_info.compression_method = MZ_COMPRESS_METHOD_STORE;
-    LOG_DEBUG("Batch mode: Using STORE compression method (no compression) to match Excel");
+    LOG_ZIP_DEBUG("Batch mode: Using STORE compression method (no compression) to match Excel");
     
     // 关键修复2：使用DOS时间格式而不是Unix时间戳
     // Excel使用DOS时间格式，这是ZIP标准的一部分
@@ -130,7 +132,7 @@ void ZipArchive::initializeFileInfo(void* file_info_ptr, const std::string& path
     
     // 关键修复3：批量模式不使用Data Descriptor，保持为0
     file_info.flag = 0;
-    LOG_DEBUG("Batch mode: flag = 0 (no Data Descriptor)");
+    LOG_ZIP_DEBUG("Batch mode: flag = 0 (no Data Descriptor)");
     
     // 关键修复4：设置正确的版本信息
     // Windows系统上应该使用 (10 << 8) | 20 = 0x0A14 (2580)
@@ -156,8 +158,8 @@ void ZipArchive::initializeFileInfo(void* file_info_ptr, const std::string& path
 ZipError ZipArchive::writeFileEntry(const std::string& internal_path, const void* data, size_t size) {
     LOG_DEBUG("=== BATCH WRITE FILE ENTRY DEBUG ===");
     LOG_DEBUG("Writing file entry: {}", internal_path);
-    LOG_DEBUG("Data size: {} bytes", size);
-    LOG_DEBUG("Archive state - writable: {}, zip_handle: {}", is_writable_, (zip_handle_ != nullptr));
+    LOG_ZIP_DEBUG("Data size: {} bytes", size);
+    LOG_ZIP_DEBUG("Archive state - writable: {}, zip_handle: {}", is_writable_, (zip_handle_ != nullptr));
     
     // 检查是否已经写入过该路径
     if (written_paths_.find(internal_path) != written_paths_.end()) {
@@ -177,9 +179,9 @@ ZipError ZipArchive::writeFileEntry(const std::string& internal_path, const void
     initializeFileInfo(&file_info, internal_path, size);
     
     // 打开条目
-    LOG_DEBUG("Calling mz_zip_writer_entry_open for batch write...");
+    LOG_ZIP_DEBUG("Calling mz_zip_writer_entry_open for batch write...");
     int32_t result = mz_zip_writer_entry_open(zip_handle_, &file_info);
-    LOG_DEBUG("mz_zip_writer_entry_open returned: {} (MZ_OK = {})", result, MZ_OK);
+    LOG_ZIP_DEBUG("mz_zip_writer_entry_open returned: {} (MZ_OK = {})", result, MZ_OK);
     
     if (result != MZ_OK) {
         LOG_ERROR("Failed to open entry for file {} in zip, error: {}", internal_path, result);
@@ -194,7 +196,7 @@ ZipError ZipArchive::writeFileEntry(const std::string& internal_path, const void
     if (size > 0) {
         LOG_DEBUG("Writing {} bytes of data...", size);
         int32_t bytes_written = mz_zip_writer_entry_write(zip_handle_, data, static_cast<int32_t>(size));
-        LOG_DEBUG("mz_zip_writer_entry_write returned: {} bytes (expected: {})", bytes_written, size);
+        LOG_ZIP_DEBUG("mz_zip_writer_entry_write returned: {} bytes (expected: {})", bytes_written, size);
         
         if (bytes_written != static_cast<int32_t>(size)) {
             LOG_ERROR("Failed to write complete data for file {} to zip, written: {} bytes, expected: {} bytes",
@@ -207,9 +209,9 @@ ZipError ZipArchive::writeFileEntry(const std::string& internal_path, const void
     }
     
     // 关闭条目
-    LOG_DEBUG("Calling mz_zip_writer_entry_close for batch write...");
+    LOG_ZIP_DEBUG("Calling mz_zip_writer_entry_close for batch write...");
     result = mz_zip_writer_entry_close(zip_handle_);
-    LOG_DEBUG("mz_zip_writer_entry_close returned: {} (MZ_OK = {})", result, MZ_OK);
+    LOG_ZIP_DEBUG("mz_zip_writer_entry_close returned: {} (MZ_OK = {})", result, MZ_OK);
     
     if (result != MZ_OK) {
         LOG_ERROR("Failed to close entry for file {} in zip, error: {}", internal_path, result);
@@ -223,8 +225,8 @@ ZipError ZipArchive::writeFileEntry(const std::string& internal_path, const void
     // 记录已写入的路径
     written_paths_.insert(internal_path);
     
-    LOG_DEBUG("Successfully added file {} to zip, size: {} bytes", internal_path, size);
-    LOG_DEBUG("=== BATCH WRITE FILE ENTRY DEBUG END ===");
+    LOG_ZIP_DEBUG("Successfully added file {} to zip, size: {} bytes", internal_path, size);
+    LOG_ZIP_DEBUG("=== BATCH WRITE FILE ENTRY DEBUG END ===");
     return ZipError::Ok;
 }
 
@@ -250,7 +252,7 @@ ZipError ZipArchive::addFiles(const std::vector<FileEntry>& files) {
         return ZipError::Ok;
     }
     
-    LOG_DEBUG("Starting batch write of {} files", files.size());
+    LOG_ZIP_DEBUG("Starting batch write of {} files", files.size());
     
     // 批量写入所有文件
     for (const auto& file : files) {
@@ -275,7 +277,7 @@ ZipError ZipArchive::addFiles(std::vector<FileEntry>&& files) {
         return ZipError::Ok;
     }
     
-    LOG_DEBUG("Starting batch write of {} files (move semantics)", files.size());
+    LOG_ZIP_DEBUG("Starting batch write of {} files (move semantics)", files.size());
     
     // 批量写入所有文件（移动语义版本）
     for (auto& file : files) {
@@ -306,7 +308,7 @@ ZipError ZipArchive::addFiles(std::vector<FileEntry>&& files) {
         
         // 批量模式（移动语义）：使用STORE方法（无压缩）来匹配Excel
         file_info.compression_method = MZ_COMPRESS_METHOD_STORE;
-        LOG_DEBUG("Batch mode (move semantics): Using STORE compression method (no compression) to match Excel");
+        LOG_ZIP_DEBUG("Batch mode (move semantics): Using STORE compression method (no compression) to match Excel");
         
         // 使用本地时间
         std::time_t now = std::time(nullptr);
@@ -315,7 +317,7 @@ ZipError ZipArchive::addFiles(std::vector<FileEntry>&& files) {
         
         // 批量模式（移动语义）：不使用Data Descriptor
         file_info.flag = 0;
-        LOG_DEBUG("Batch mode (move semantics): flag = 0 (no Data Descriptor)");
+        LOG_ZIP_DEBUG("Batch mode (move semantics): flag = 0 (no Data Descriptor)");
         
         // 设置正确的版本信息
 #ifdef _WIN32
@@ -334,9 +336,9 @@ ZipError ZipArchive::addFiles(std::vector<FileEntry>&& files) {
         LOG_DEBUG("  modified_date: {}", file_info.modified_date);
         
         // 打开条目
-        LOG_DEBUG("Calling mz_zip_writer_entry_open for batch write (move semantics)...");
+        LOG_ZIP_DEBUG("Calling mz_zip_writer_entry_open for batch write (move semantics)...");
         int32_t result = mz_zip_writer_entry_open(zip_handle_, &file_info);
-        LOG_DEBUG("mz_zip_writer_entry_open returned: {} (MZ_OK = {})", result, MZ_OK);
+        LOG_ZIP_DEBUG("mz_zip_writer_entry_open returned: {} (MZ_OK = {})", result, MZ_OK);
         
         if (result != MZ_OK) {
             LOG_ERROR("Failed to open entry for file {} in zip, error: {}", file.internal_path, result);
@@ -350,7 +352,7 @@ ZipError ZipArchive::addFiles(std::vector<FileEntry>&& files) {
             int32_t bytes_written = mz_zip_writer_entry_write(zip_handle_,
                                                             file.content.data(),
                                                             static_cast<int32_t>(file.content.size()));
-            LOG_DEBUG("mz_zip_writer_entry_write returned: {} bytes (expected: {})", bytes_written, file.content.size());
+            LOG_ZIP_DEBUG("mz_zip_writer_entry_write returned: {} bytes (expected: {})", bytes_written, file.content.size());
             
             if (bytes_written != static_cast<int32_t>(file.content.size())) {
                 LOG_ERROR("Failed to write complete data for file {} to zip, written: {} bytes, expected: {} bytes",
@@ -363,9 +365,9 @@ ZipError ZipArchive::addFiles(std::vector<FileEntry>&& files) {
         }
         
         // 关闭条目
-        LOG_DEBUG("Calling mz_zip_writer_entry_close for batch write (move semantics)...");
+        LOG_ZIP_DEBUG("Calling mz_zip_writer_entry_close for batch write (move semantics)...");
         result = mz_zip_writer_entry_close(zip_handle_);
-        LOG_DEBUG("mz_zip_writer_entry_close returned: {} (MZ_OK = {})", result, MZ_OK);
+        LOG_ZIP_DEBUG("mz_zip_writer_entry_close returned: {} (MZ_OK = {})", result, MZ_OK);
         
         if (result != MZ_OK) {
             LOG_ERROR("Failed to close entry for file {} in zip, error: {}", file.internal_path, result);
@@ -376,8 +378,8 @@ ZipError ZipArchive::addFiles(std::vector<FileEntry>&& files) {
         // 记录已写入的路径
         written_paths_.insert(file.internal_path);
         
-        LOG_DEBUG("Successfully added file {} to zip, size: {} bytes (move semantics)", file.internal_path, file.content.size());
-        LOG_DEBUG("=== BATCH WRITE MOVE SEMANTICS FILE INFO DEBUG END ===");
+        LOG_ZIP_DEBUG("Successfully added file {} to zip, size: {} bytes (move semantics)", file.internal_path, file.content.size());
+        LOG_ZIP_DEBUG("=== BATCH WRITE MOVE SEMANTICS FILE INFO DEBUG END ===");
         
         // 清空内容以释放内存（移动语义优化）
         file.content.clear();
@@ -440,7 +442,7 @@ ZipError ZipArchive::extractFile(std::string_view internal_path, std::vector<uin
         return ZipError::FileNotFound;
     }
     data.swap(latest);
-    LOG_DEBUG("Extracted file {} from zip, size: {} bytes", internal_path, data.size());
+    LOG_ZIP_DEBUG("Extracted file {} from zip, size: {} bytes", internal_path, data.size());
     return ZipError::Ok;
 }
 
@@ -518,15 +520,15 @@ void ZipArchive::cleanup() {
 }
 
 bool ZipArchive::initForWriting() {
-    LOG_DEBUG("=== ZIP WRITER INITIALIZATION DEBUG ===");
-    LOG_DEBUG("Initializing ZIP writer for file: {}", filename_);
+    LOG_ZIP_DEBUG("=== ZIP WRITER INITIALIZATION DEBUG ===");
+    LOG_ZIP_DEBUG("Initializing ZIP writer for file: {}", filename_);
     
     zip_handle_ = mz_zip_writer_create();
     if (!zip_handle_) {
         LOG_ERROR("Failed to create zip writer");
         return false;
     }
-    LOG_DEBUG("ZIP writer handle created successfully: {}", (void*)zip_handle_);
+    LOG_ZIP_DEBUG("ZIP writer handle created successfully: {}", (void*)zip_handle_);
     
     // 关键修复：设置为DEFLATE方法并使用压缩级别1，实现真正的流式写入
     // 压缩级别0会被minizip自动降级为STORE，必须使用级别1或更高
@@ -551,13 +553,13 @@ bool ZipArchive::initForWriting() {
     // 如果文件已存在，先删除它以确保完全覆盖
     if (file_exists) {
         std::filesystem::remove(filename_);
-        LOG_DEBUG("Removed existing zip file: {}", filename_);
+        LOG_ZIP_DEBUG("Removed existing zip file: {}", filename_);
     }
     
     // 打开文件进行写入，总是创建新文件（覆盖模式）
-    LOG_DEBUG("Opening ZIP file for writing...");
+    LOG_ZIP_DEBUG("Opening ZIP file for writing...");
     int32_t result = mz_zip_writer_open_file(zip_handle_, filename_.c_str(), 0, 0);
-    LOG_DEBUG("mz_zip_writer_open_file returned: {} (MZ_OK = {})", result, MZ_OK);
+    LOG_ZIP_DEBUG("mz_zip_writer_open_file returned: {} (MZ_OK = {})", result, MZ_OK);
     
     if (result != MZ_OK) {
         LOG_ERROR("Failed to open zip file for writing: {}, error: {}", filename_, result);
@@ -570,9 +572,9 @@ bool ZipArchive::initForWriting() {
     // 关键修复：不设置全局Data Descriptor，让每个条目自己控制
     // 这样批量写入可以使用flag=0，流式写入可以使用flag=DATA_DESCRIPTOR
     LOG_DEBUG("Skipping global data descriptor setting to allow per-entry control");
-    LOG_DEBUG("Each entry will control its own Data Descriptor flag:");
-    LOG_DEBUG("  - Batch writes: flag=0 (no Data Descriptor)");
-    LOG_DEBUG("  - Streaming writes: flag=MZ_ZIP_FLAG_DATA_DESCRIPTOR");
+    LOG_ZIP_DEBUG("Each entry will control its own Data Descriptor flag:");
+    LOG_ZIP_DEBUG("  - Batch writes: flag=0 (no Data Descriptor)");
+    LOG_ZIP_DEBUG("  - Streaming writes: flag=MZ_ZIP_FLAG_DATA_DESCRIPTOR");
     
     // 关键修复：彻底关闭Data Descriptor以解决minizip-ng v4.0.5的issue #830
     // 该bug导致"DEFLATE + Data Descriptor + 签名"时中央目录偏移少4字节
@@ -580,16 +582,16 @@ bool ZipArchive::initForWriting() {
     void* zip_handle = nullptr;
     if (mz_zip_writer_get_zip_handle(zip_handle_, &zip_handle) == MZ_OK && zip_handle) {
         mz_zip_set_data_descriptor(zip_handle, 0);  // 0 = 完全不使用Data Descriptor
-        LOG_DEBUG("Disabled Data Descriptor globally to fix minizip-ng v4.0.5 issue #830");
-        LOG_DEBUG("minizip will seek back to update local headers when closing entries");
+        LOG_ZIP_DEBUG("Disabled Data Descriptor globally to fix minizip-ng v4.0.5 issue #830");
+        LOG_ZIP_DEBUG("minizip will seek back to update local headers when closing entries");
     } else {
         LOG_WARN("Failed to get bottom-level ZIP handle, may encounter 'extra 4 bytes' issue");
     }
     
     is_writable_ = true;
-    LOG_DEBUG("ZIP archive successfully opened for writing: {}", filename_);
-    LOG_DEBUG("Final state - is_writable_: {}, zip_handle_: {}", is_writable_, (void*)zip_handle_);
-    LOG_DEBUG("=== ZIP WRITER INITIALIZATION DEBUG END ===");
+    LOG_ZIP_DEBUG("ZIP archive successfully opened for writing: {}", filename_);
+    LOG_ZIP_DEBUG("Final state - is_writable_: {}, zip_handle_: {}", is_writable_, (void*)zip_handle_);
+    LOG_ZIP_DEBUG("=== ZIP WRITER INITIALIZATION DEBUG END ===");
     return true;
 }
 
@@ -618,9 +620,9 @@ ZipError ZipArchive::openEntry(std::string_view internal_path) {
     std::lock_guard<std::mutex> lock(mutex_);
     
     LOG_DEBUG("=== STREAMING ENTRY OPEN DEBUG ===");
-    LOG_DEBUG("Attempting to open streaming entry: {}", internal_path);
-    LOG_DEBUG("Archive state - writable: {}, zip_handle: {}", is_writable_, (zip_handle_ != nullptr));
-    LOG_DEBUG("Stream state - entry_open: {}", stream_entry_open_);
+    LOG_ZIP_DEBUG("Attempting to open streaming entry: {}", internal_path);
+    LOG_ZIP_DEBUG("Archive state - writable: {}, zip_handle: {}", is_writable_, (zip_handle_ != nullptr));
+    LOG_ZIP_DEBUG("Stream state - entry_open: {}", stream_entry_open_);
     
     if (!is_writable_ || !zip_handle_) {
         LOG_ERROR("Zip archive not opened for writing");
@@ -671,8 +673,8 @@ ZipError ZipArchive::openEntry(std::string_view internal_path) {
     // 这是为了避免minizip-ng v4.0.5的issue #830
     // minizip会在entry_close时seek回本地头写入CRC和大小信息
     file_info.flag = 0;  // 绝不能包含MZ_ZIP_FLAG_DATA_DESCRIPTOR (0x0008)
-    LOG_DEBUG("Streaming mode: flag = 0 (no Data Descriptor) to avoid minizip-ng issue #830");
-    LOG_DEBUG("minizip will seek back to update local header when closing entry");
+    LOG_ZIP_DEBUG("Streaming mode: flag = 0 (no Data Descriptor) to avoid minizip-ng issue #830");
+    LOG_ZIP_DEBUG("minizip will seek back to update local header when closing entry");
     
     // 设置正确的版本信息
 #ifdef _WIN32
@@ -686,16 +688,16 @@ ZipError ZipArchive::openEntry(std::string_view internal_path) {
     LOG_DEBUG("  filename: {}", file_info.filename);
     LOG_DEBUG("  uncompressed_size: {}", file_info.uncompressed_size);
     LOG_DEBUG("  compressed_size: {}", file_info.compressed_size);
-    LOG_DEBUG("  compression_method: {}", file_info.compression_method);
-    LOG_DEBUG("  flag: 0x{:04X} (MZ_ZIP_FLAG_DATA_DESCRIPTOR = 0x{:04X})",
+    LOG_ZIP_DEBUG("  compression_method: {}", file_info.compression_method);
+    LOG_ZIP_DEBUG("  flag: 0x{:04X} (MZ_ZIP_FLAG_DATA_DESCRIPTOR = 0x{:04X})",
               file_info.flag, MZ_ZIP_FLAG_DATA_DESCRIPTOR);
     LOG_DEBUG("  version_madeby: 0x{:04X}", file_info.version_madeby);
     LOG_DEBUG("  modified_date: {}", file_info.modified_date);
     
     // 打开条目
-    LOG_DEBUG("Calling mz_zip_writer_entry_open...");
+    LOG_ZIP_DEBUG("Calling mz_zip_writer_entry_open...");
     int32_t result = mz_zip_writer_entry_open(zip_handle_, &file_info);
-    LOG_DEBUG("mz_zip_writer_entry_open returned: {} (MZ_OK = {})", result, MZ_OK);
+    LOG_ZIP_DEBUG("mz_zip_writer_entry_open returned: {} (MZ_OK = {})", result, MZ_OK);
     
     if (result != MZ_OK) {
         LOG_ERROR("Failed to open entry for file {} in zip, error: {}", internal_path, result);
@@ -720,9 +722,9 @@ ZipError ZipArchive::writeChunk(const void* data, size_t size) {
     std::lock_guard<std::mutex> lock(mutex_);
     
     LOG_DEBUG("=== STREAMING WRITE CHUNK DEBUG ===");
-    LOG_DEBUG("Writing chunk of size: {} bytes", size);
-    LOG_DEBUG("Archive state - writable: {}, zip_handle: {}", is_writable_, (zip_handle_ != nullptr));
-    LOG_DEBUG("Stream state - entry_open: {}", stream_entry_open_);
+    LOG_ZIP_DEBUG("Writing chunk of size: {} bytes", size);
+    LOG_ZIP_DEBUG("Archive state - writable: {}, zip_handle: {}", is_writable_, (zip_handle_ != nullptr));
+    LOG_ZIP_DEBUG("Stream state - entry_open: {}", stream_entry_open_);
     
     if (!is_writable_ || !zip_handle_) {
         LOG_ERROR("Zip archive not opened for writing");
@@ -750,9 +752,9 @@ ZipError ZipArchive::writeChunk(const void* data, size_t size) {
     // minizip-ng会自动处理这些信息
     
     // 写入数据块
-    LOG_DEBUG("Calling mz_zip_writer_entry_write with {} bytes...", size);
+    LOG_ZIP_DEBUG("Calling mz_zip_writer_entry_write with {} bytes...", size);
     int32_t bytes_written = mz_zip_writer_entry_write(zip_handle_, data, static_cast<int32_t>(size));
-    LOG_DEBUG("mz_zip_writer_entry_write returned: {} bytes (expected: {})", bytes_written, size);
+    LOG_ZIP_DEBUG("mz_zip_writer_entry_write returned: {} bytes (expected: {})", bytes_written, size);
     
     if (bytes_written != static_cast<int32_t>(size)) {
         LOG_ERROR("Failed to write complete chunk to zip, written: {} bytes, expected: {} bytes",
@@ -773,9 +775,9 @@ ZipError ZipArchive::closeEntry() {
     std::lock_guard<std::mutex> lock(mutex_);
     
     LOG_DEBUG("=== STREAMING ENTRY CLOSE DEBUG ===");
-    LOG_DEBUG("Attempting to close streaming entry");
-    LOG_DEBUG("Archive state - writable: {}, zip_handle: {}", is_writable_, (zip_handle_ != nullptr));
-    LOG_DEBUG("Stream state - entry_open: {}", stream_entry_open_);
+    LOG_ZIP_DEBUG("Attempting to close streaming entry");
+    LOG_ZIP_DEBUG("Archive state - writable: {}, zip_handle: {}", is_writable_, (zip_handle_ != nullptr));
+    LOG_ZIP_DEBUG("Stream state - entry_open: {}", stream_entry_open_);
     
     if (!is_writable_ || !zip_handle_) {
         LOG_ERROR("Zip archive not opened for writing");
@@ -791,9 +793,9 @@ ZipError ZipArchive::closeEntry() {
     // 关键修复：根据minizip-ng文档，当使用Data Descriptor时，
     // 应该使用mz_zip_writer_entry_close而不是mz_zip_entry_write_close
     // mz_zip_writer_entry_close会自动处理Data Descriptor的写入
-    LOG_DEBUG("Calling mz_zip_writer_entry_close for streaming entry with Data Descriptor...");
+    LOG_ZIP_DEBUG("Calling mz_zip_writer_entry_close for streaming entry with Data Descriptor...");
     int32_t result = mz_zip_writer_entry_close(zip_handle_);
-    LOG_DEBUG("mz_zip_writer_entry_close returned: {} (MZ_OK = {})", result, MZ_OK);
+    LOG_ZIP_DEBUG("mz_zip_writer_entry_close returned: {} (MZ_OK = {})", result, MZ_OK);
     
     if (result != MZ_OK) {
         LOG_ERROR("Critical error: Failed to close streaming entry, error: {}", result);
