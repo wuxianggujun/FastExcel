@@ -12,20 +12,31 @@
 namespace fastexcel {
 namespace archive {
 
-std::unique_ptr<CompressionEngine> CompressionEngine::create(Backend backend, int compression_level) {
-    switch (backend) {
-        case Backend::ZLIB:
-            return std::make_unique<ZlibEngine>(compression_level);
-        
-        case Backend::LIBDEFLATE:
+Result<std::unique_ptr<CompressionEngine>> CompressionEngine::create(Backend backend, int compression_level) {
+    try {
+        switch (backend) {
+            case Backend::ZLIB: {
+                auto engine = std::make_unique<ZlibEngine>(compression_level);
+                // 显式转换为基类指针
+                std::unique_ptr<CompressionEngine> base_engine = std::move(engine);
+                return makeExpected(std::move(base_engine));
+            }
+            
+            case Backend::LIBDEFLATE: {
 #ifdef FASTEXCEL_HAS_LIBDEFLATE
-            return std::make_unique<LibDeflateEngine>(compression_level);
+                auto engine = std::make_unique<LibDeflateEngine>(compression_level);
+                std::unique_ptr<CompressionEngine> base_engine = std::move(engine);
+                return makeExpected(std::move(base_engine));
 #else
-            throw std::runtime_error("LibDeflate backend not compiled in. Rebuild with FASTEXCEL_USE_LIBDEFLATE=ON");
+                return makeError(ErrorCode::NotImplemented, "LibDeflate backend not compiled in. Rebuild with FASTEXCEL_USE_LIBDEFLATE=ON");
 #endif
-        
-        default:
-            throw std::invalid_argument("Unknown compression backend");
+            }
+            
+            default:
+                return makeError(ErrorCode::InvalidArgument, "Unknown compression backend");
+        }
+    } catch (const std::exception& e) {
+        return makeError(ErrorCode::InternalError, "Failed to create compression engine: " + std::string(e.what()));
     }
 }
 
@@ -54,16 +65,16 @@ std::string CompressionEngine::backendToString(Backend backend) {
     }
 }
 
-CompressionEngine::Backend CompressionEngine::stringToBackend(const std::string& name) {
+Result<CompressionEngine::Backend> CompressionEngine::stringToBackend(const std::string& name) {
     std::string lower_name = name;
     std::transform(lower_name.begin(), lower_name.end(), lower_name.begin(), ::tolower);
     
     if (lower_name == "zlib") {
-        return Backend::ZLIB;
+        return makeExpected(Backend::ZLIB);
     } else if (lower_name == "libdeflate") {
-        return Backend::LIBDEFLATE;
+        return makeExpected(Backend::LIBDEFLATE);
     } else {
-        throw std::invalid_argument("Unknown backend name: " + name);
+        return makeError(ErrorCode::InvalidArgument, "Unknown backend name: " + name);
     }
 }
 

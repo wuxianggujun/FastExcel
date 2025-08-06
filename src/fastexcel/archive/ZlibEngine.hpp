@@ -25,16 +25,16 @@ public:
     ~ZlibEngine() override;
     
     // CompressionEngine 接口实现
-    CompressionResult compress(const void* input, size_t input_size,
-                             void* output, size_t output_capacity) override;
+    Result<size_t> compress(const void* input, size_t input_size,
+                           void* output, size_t output_capacity) override;
     
-    void reset() override;
+    VoidResult reset() override;
     const char* name() const override { return "zlib"; }
     int getCompressionLevel() const override { return compression_level_; }
-    bool setCompressionLevel(int level) override;
+    VoidResult setCompressionLevel(int level) override;
     size_t getMaxCompressedSize(size_t input_size) const override;
     Statistics getStatistics() const override { return stats_; }
-    void resetStatistics() override;
+    VoidResult resetStatistics() override;
 
 private:
     std::unique_ptr<z_stream> stream_;
@@ -44,9 +44,9 @@ private:
     
     /**
      * @brief 初始化 zlib 流
-     * @return 是否成功
+     * @return VoidResult 成功或失败信息
      */
-    bool initializeStream();
+    VoidResult initializeStream();
     
     /**
      * @brief 清理 zlib 流

@@ -4,6 +4,7 @@
 #include <type_traits>
 #include <utility>
 #include <new>
+#include <functional>
 
 namespace fastexcel {
 namespace core {
@@ -16,9 +17,14 @@ namespace core {
  * - 移动语义优化：避免不必要的拷贝
  * - 内存布局优化：最小化内存占用
  * - 链式操作：支持函数式编程风格
+ * 
+ * 注意：不支持引用类型T，请使用指针或std::reference_wrapper
  */
 template<typename T, typename E = Error>
 class Expected {
+    static_assert(!std::is_reference_v<T>, "Expected does not support reference types. Use pointer or std::reference_wrapper instead.");
+    static_assert(!std::is_void_v<T>, "Use Expected<void, E> specialization for void type.");
+    
 private:
     union {
         T value_;
@@ -285,8 +291,8 @@ public:
  * @brief 创建成功结果
  */
 template<typename T>
-Expected<T> makeExpected(T&& value) {
-    return Expected<T>(std::forward<T>(value));
+Expected<std::remove_reference_t<T>> makeExpected(T&& value) {
+    return Expected<std::remove_reference_t<T>>(std::forward<T>(value));
 }
 
 /**

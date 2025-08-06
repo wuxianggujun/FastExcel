@@ -12,8 +12,10 @@ ZlibEngine::ZlibEngine(int compression_level)
     , initialized_(false)
     , stats_{} {
     
-    if (!initializeStream()) {
-        throw std::runtime_error("Failed to initialize zlib stream");
+    auto result = initializeStream();
+    if (result.hasError()) {
+        initialized_ = false;
+        // 构造函数中无法返回Result，保留初始化失败的状态
     }
 }
 
@@ -21,7 +23,7 @@ ZlibEngine::~ZlibEngine() {
     cleanupStream();
 }
 
-bool ZlibEngine::initializeStream() {
+VoidResult ZlibEngine::initializeStream() {
     if (initialized_) {
         cleanupStream();
     }
@@ -34,11 +36,11 @@ bool ZlibEngine::initializeStream() {
                           -15, 8, Z_DEFAULT_STRATEGY);
     
     if (ret != Z_OK) {
-        return false;
+        return makeError(ErrorCode::ZipCompressionError, "Failed to initialize zlib deflate: " + std::to_string(ret));
     }
     
     initialized_ = true;
-    return true;
+    return success();
 }
 
 void ZlibEngine::cleanupStream() {
@@ -48,20 +50,16 @@ void ZlibEngine::cleanupStream() {
     }
 }
 
-CompressionEngine::CompressionResult ZlibEngine::compress(
+Result<size_t> ZlibEngine::compress(
     const void* input, size_t input_size,
     void* output, size_t output_capacity) {
     
-    CompressionResult result;
-    
     if (!initialized_) {
-        result.error_message = "Engine not initialized";
-        return result;
+        return makeError(ErrorCode::InternalError, "Engine not initialized");
     }
     
     if (!input || input_size == 0 || !output || output_capacity == 0) {
-        result.error_message = "Invalid input parameters";
-        return result;
+        return makeError(ErrorCode::InvalidArgument, "Invalid input parameters");
     }
     
     auto start_time = std::chrono::high_resolution_clock::now();
@@ -69,8 +67,7 @@ CompressionEngine::CompressionResult ZlibEngine::compress(
     // 重置流状态以重用
     int ret = deflateReset(stream_.get());
     if (ret != Z_OK) {
-        result.error_message = "Failed to reset deflate stream";
-        return result;
+        return makeError(ErrorCode::ZipCompressionError, "Failed to reset deflate stream");
     }
     
     // 设置输入和输出
@@ -82,34 +79,33 @@ CompressionEngine::CompressionResult ZlibEngine::compress(
     // 执行压缩
     ret = deflate(stream_.get(), Z_FINISH);
     if (ret != Z_STREAM_END) {
-        result.error_message = "Deflate failed with code: " + std::to_string(ret);
-        return result;
+        return makeError(ErrorCode::ZipCompressionError, "Deflate failed with code: " + std::to_string(ret));
     }
     
     // 获取压缩后的大小
-    result.compressed_size = output_capacity - stream_->avail_out;
-    result.success = true;
+    size_t compressed_size = output_capacity - stream_->avail_out;
     
     auto end_time = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
     double time_ms = duration.count() / 1000.0;
     
     // 更新统计信息
-    updateStatistics(input_size, result.compressed_size, time_ms);
+    updateStatistics(input_size, compressed_size, time_ms);
     
-    return result;
+    return makeExpected(compressed_size);
 }
 
-void ZlibEngine::reset() {
+VoidResult ZlibEngine::reset() {
     if (initialized_) {
         deflateReset(stream_.get());
     }
+    return success();
 }
 
-bool ZlibEngine::setCompressionLevel(int level) {
+VoidResult ZlibEngine::setCompressionLevel(int level) {
     int new_level = std::clamp(level, 1, 9);
     if (new_level == compression_level_) {
-        return true;
+        return success();
     }
     
     compression_level_ = new_level;
@@ -124,8 +120,9 @@ size_t ZlibEngine::getMaxCompressedSize(size_t input_size) const {
     return input_size + (input_size >> 8) + 64;
 }
 
-void ZlibEngine::resetStatistics() {
+VoidResult ZlibEngine::resetStatistics() {
     stats_ = Statistics{};
+    return success();
 }
 
 void ZlibEngine::updateStatistics(size_t input_size, size_t output_size, double time_ms) {

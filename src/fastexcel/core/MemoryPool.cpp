@@ -20,12 +20,13 @@ MemoryPool::MemoryPool(size_t block_size, size_t initial_blocks)
     blocks_.reserve(initial_blocks * 2); // 预留更多空间避免频繁重分配
     
     for (size_t i = 0; i < initial_blocks; ++i) {
-        try {
-            addNewBlock(block_size_);
-        } catch (const std::bad_alloc&) {
+        auto result = addNewBlock(block_size_);
+        if (result.hasError()) {
             // 如果无法分配所有初始块，至少确保有一个块
             if (blocks_.empty()) {
-                throw;
+                // 如果连一个块都分配不了，这是致命错误
+                // 但我们需要优雅地处理这种情况
+                return;
             }
             break;
         }
@@ -33,12 +34,13 @@ MemoryPool::MemoryPool(size_t block_size, size_t initial_blocks)
 }
 
 MemoryPool::~MemoryPool() {
-    clear();
+    auto result = clear();
+    // 析构函数中忽略错误
 }
 
-void* MemoryPool::allocate(size_t size) {
+Result<void*> MemoryPool::allocate(size_t size) {
     if (size == 0) {
-        return nullptr;
+        return makeError(ErrorCode::InvalidArgument, "Cannot allocate zero bytes");
     }
     
     std::lock_guard<std::mutex> lock(mutex_);
@@ -53,26 +55,25 @@ void* MemoryPool::allocate(size_t size) {
     Block* block = findAvailableBlock(size);
     if (!block) {
         // 没有可用块，创建新块
-        try {
-            size_t new_block_size = std::max(size, block_size_);
-            addNewBlock(new_block_size);
-            block = blocks_.back().get();
-        } catch (const std::bad_alloc&) {
+        size_t new_block_size = std::max(size, block_size_);
+        auto result = addNewBlock(new_block_size);
+        if (result.hasError()) {
             // 内存分配失败，回滚统计信息
             stats_.allocation_count--;
             stats_.total_allocated -= size;
             stats_.current_usage -= size;
-            return nullptr;
+            return makeError(ErrorCode::OutOfMemory, "Failed to allocate new memory block");
         }
+        block = blocks_.back().get();
     }
     
     block->in_use = true;
-    return block->data;
+    return makeExpected(block->data);
 }
 
-void MemoryPool::deallocate(void* ptr) {
+VoidResult MemoryPool::deallocate(void* ptr) {
     if (!ptr) {
-        return;
+        return makeError(ErrorCode::InvalidArgument, "Cannot deallocate null pointer");
     }
     
     std::lock_guard<std::mutex> lock(mutex_);
@@ -86,19 +87,21 @@ void MemoryPool::deallocate(void* ptr) {
                 stats_.total_deallocated += block->size;
                 stats_.current_usage -= block->size;
             }
-            return;
+            return VoidResult();
         }
     }
     
     // 如果没找到对应的块，可能是外部分配的内存
     // 这种情况下直接释放
     std::free(ptr);
+    return VoidResult();
 }
 
-void MemoryPool::clear() {
+VoidResult MemoryPool::clear() {
     std::lock_guard<std::mutex> lock(mutex_);
     blocks_.clear();
     stats_ = {};
+    return VoidResult();
 }
 
 MemoryPool::Statistics MemoryPool::getStatistics() const {
@@ -120,8 +123,13 @@ MemoryPool::Block* MemoryPool::findAvailableBlock(size_t size) {
     return nullptr;
 }
 
-void MemoryPool::addNewBlock(size_t size) {
-    blocks_.emplace_back(std::make_unique<Block>(size));
+VoidResult MemoryPool::addNewBlock(size_t size) {
+    auto result = Block::create(size);
+    if (result.hasError()) {
+        return makeError(result.error().code, "Failed to create new memory block: " + result.error().message);
+    }
+    blocks_.emplace_back(std::move(result.value()));
+    return VoidResult();
 }
 
 // MemoryManager 实现
@@ -130,7 +138,8 @@ MemoryManager::MemoryManager()
 }
 
 MemoryManager::~MemoryManager() {
-    cleanup();
+    auto result = cleanup();
+    // 析构函数中忽略错误
 }
 
 MemoryManager& MemoryManager::getInstance() {
@@ -142,30 +151,38 @@ MemoryPool& MemoryManager::getDefaultPool() {
     return *default_pool_;
 }
 
-MemoryPool& MemoryManager::getPool(size_t block_size) {
+Result<std::reference_wrapper<MemoryPool>> MemoryManager::getPool(size_t block_size) {
     std::lock_guard<std::mutex> lock(mutex_);
     
     // 查找现有的池
     for (auto& [size, pool] : pools_) {
         if (size == block_size) {
-            return *pool;
+            return makeExpected(std::ref(*pool));
         }
     }
     
     // 创建新的池
     auto new_pool = std::make_unique<MemoryPool>(block_size, 8);
+    if (!new_pool) {
+        return makeError(ErrorCode::OutOfMemory, "Failed to create new memory pool");
+    }
+    
     MemoryPool* pool_ptr = new_pool.get();
     pools_.emplace_back(block_size, std::move(new_pool));
     
-    return *pool_ptr;
+    return makeExpected(std::ref(*pool_ptr));
 }
 
-void MemoryManager::cleanup() {
+VoidResult MemoryManager::cleanup() {
     std::lock_guard<std::mutex> lock(mutex_);
     pools_.clear();
     if (default_pool_) {
-        default_pool_->clear();
+        auto result = default_pool_->clear();
+        if (result.hasError()) {
+            return result;
+        }
     }
+    return VoidResult();
 }
 
 MemoryManager::GlobalStatistics MemoryManager::getGlobalStatistics() const {

@@ -353,6 +353,23 @@ std::shared_ptr<Format> Workbook::createFormat() {
     });
 }
 
+std::shared_ptr<Format> Workbook::getFormat(size_t format_id) const {
+    if (!is_open_) {
+        return nullptr;
+    }
+    
+    // 从格式池中根据索引获取格式
+    Format* format = format_pool_->getFormatByIndex(format_id);
+    if (!format) {
+        return nullptr;
+    }
+    
+    // 返回共享指针，使用空删除器
+    return std::shared_ptr<Format>(format, [](Format*){
+        // 空删除器，FormatPool负责管理生命周期
+    });
+}
+
 // ========== 自定义属性 ==========
 
 void Workbook::setCustomProperty(const std::string& name, const std::string& value) {
@@ -1503,7 +1520,7 @@ bool Workbook::generateWorksheetXMLStreaming(const std::shared_ptr<Worksheet>& w
 // 辅助方法：XML转义
 std::string Workbook::escapeXML(const std::string& text) const {
     std::string result;
-    result.reserve(text.size() * 1.2);
+    result.reserve(static_cast<size_t>(text.size() * 1.2));
     
     for (char c : text) {
         switch (c) {

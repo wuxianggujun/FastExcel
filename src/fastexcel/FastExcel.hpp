@@ -47,6 +47,22 @@ inline std::string getVersion() {
     return FASTEXCEL_VERSION_STRING;
 }
 
+/**
+ * @brief 初始化FastExcel库
+ * 
+ * 初始化日志系统、内存池、全局资源等
+ * 在使用FastExcel任何功能前调用
+ */
+void initialize();
+
+/**
+ * @brief 清理FastExcel库
+ * 
+ * 清理全局资源、日志系统等
+ * 程序结束前调用
+ */
+void cleanup();
+
 // 日志便捷宏定义
 #define LOG_TRACE(...)    fastexcel::Logger::getInstance().trace(__VA_ARGS__)
 #define LOG_DEBUG(...)    fastexcel::Logger::getInstance().debug(__VA_ARGS__)

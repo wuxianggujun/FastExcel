@@ -31,16 +31,16 @@ public:
     ~LibDeflateEngine() override;
     
     // CompressionEngine 接口实现
-    CompressionResult compress(const void* input, size_t input_size,
-                             void* output, size_t output_capacity) override;
+    Result<size_t> compress(const void* input, size_t input_size,
+                           void* output, size_t output_capacity) override;
     
-    void reset() override;
+    VoidResult reset() override;
     const char* name() const override { return "libdeflate"; }
     int getCompressionLevel() const override { return compression_level_; }
-    bool setCompressionLevel(int level) override;
+    VoidResult setCompressionLevel(int level) override;
     size_t getMaxCompressedSize(size_t input_size) const override;
     Statistics getStatistics() const override { return stats_; }
-    void resetStatistics() override;
+    VoidResult resetStatistics() override;
 
 private:
     struct libdeflate_compressor* compressor_;
@@ -49,9 +49,9 @@ private:
     
     /**
      * @brief 初始化 libdeflate 压缩器
-     * @return 是否成功
+     * @return VoidResult 成功或失败信息
      */
-    bool initializeCompressor();
+    VoidResult initializeCompressor();
     
     /**
      * @brief 清理 libdeflate 压缩器
@@ -83,20 +83,22 @@ namespace archive {
 class LibDeflateEngine : public CompressionEngine {
 public:
     explicit LibDeflateEngine(int) {
-        throw std::runtime_error("LibDeflateEngine: libdeflate support not compiled in");
+        // 不再抛出异常，而是在调用时返回错误
     }
     
-    CompressionResult compress(const void*, size_t, void*, size_t) override {
-        throw std::runtime_error("LibDeflateEngine: libdeflate support not compiled in");
+    Result<size_t> compress(const void*, size_t, void*, size_t) override {
+        return makeError(ErrorCode::NotImplemented, "LibDeflateEngine: libdeflate support not compiled in");
     }
     
-    void reset() override {}
+    VoidResult reset() override { return success(); }
     const char* name() const override { return "libdeflate (unavailable)"; }
     int getCompressionLevel() const override { return 0; }
-    bool setCompressionLevel(int) override { return false; }
+    VoidResult setCompressionLevel(int) override { 
+        return makeError(ErrorCode::NotImplemented, "LibDeflateEngine not available");
+    }
     size_t getMaxCompressedSize(size_t) const override { return 0; }
     Statistics getStatistics() const override { return Statistics{}; }
-    void resetStatistics() override {}
+    VoidResult resetStatistics() override { return success(); }
 };
 
 } // namespace archive

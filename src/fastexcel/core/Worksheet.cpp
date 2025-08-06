@@ -1633,9 +1633,9 @@ int Worksheet::findAndReplace(const std::string& find_text, const std::string& r
         // 处理大小写敏感性
         if (!match_case) {
             std::transform(search_text.begin(), search_text.end(), search_text.begin(),
-                         [](unsigned char c) { return std::tolower(c); });
+                         [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
             std::transform(target_text.begin(), target_text.end(), target_text.begin(),
-                         [](unsigned char c) { return std::tolower(c); });
+                         [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
         }
         
         if (match_entire_cell) {
@@ -1703,9 +1703,9 @@ std::vector<std::pair<int, int>> Worksheet::findCells(const std::string& search_
         // 处理大小写敏感性
         if (!match_case) {
             std::transform(find_text.begin(), find_text.end(), find_text.begin(),
-                         [](unsigned char c) { return std::tolower(c); });
+                         [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
             std::transform(target_text.begin(), target_text.end(), target_text.begin(),
-                         [](unsigned char c) { return std::tolower(c); });
+                         [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
         }
         
         bool found = false;

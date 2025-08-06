@@ -8,6 +8,8 @@
 #include "fastexcel/archive/ZipArchive.hpp"
 #include "fastexcel/core/Workbook.hpp"
 #include "fastexcel/utils/Logger.hpp"
+#include "fastexcel/utils/TimeUtils.hpp"
+#include "fastexcel/FastExcel.hpp"
 #include <gtest/gtest.h>
 #include <filesystem>
 #include <fstream>
@@ -102,18 +104,16 @@ protected:
 </Properties>)";
         EXPECT_EQ(zip.addFile("docProps/app.xml", app_props), ZipError::Ok);
         
-        // docProps/core.xml
-        std::time_t now = std::time(nullptr);
-        std::tm* tm_info = std::localtime(&now);
-        char time_buffer[100];
-        std::strftime(time_buffer, sizeof(time_buffer), "%Y-%m-%dT%H:%M:%SZ", tm_info);
+        // docProps/core.xml - 使用封装的TimeUtils类
+        std::tm current_time = utils::TimeUtils::getCurrentUTCTime();
+        std::string iso_time = utils::TimeUtils::formatTimeISO8601(current_time);
         
         std::string core_props = R"(<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:dcmitype="http://purl.org/dc/dcmitype/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <dc:creator>FastExcel Test</dc:creator>
   <cp:lastModifiedBy>FastExcel Test</cp:lastModifiedBy>
-  <dcterms:created xsi:type="dcterms:W3CDTF">)" + std::string(time_buffer) + R"(</dcterms:created>
-  <dcterms:modified xsi:type="dcterms:W3CDTF">)" + std::string(time_buffer) + R"(</dcterms:modified>
+  <dcterms:created xsi:type="dcterms:W3CDTF">)" + iso_time + R"(</dcterms:created>
+  <dcterms:modified xsi:type="dcterms:W3CDTF">)" + iso_time + R"(</dcterms:modified>
 </cp:coreProperties>)";
         EXPECT_EQ(zip.addFile("docProps/core.xml", core_props), ZipError::Ok);
         
@@ -316,8 +316,9 @@ TEST_F(ExcelZipCompatibilityTest, CreateWithFastExcelAPI) {
     
     std::string filename = test_file_prefix_ + "_api.xlsx";
     
-    // 初始化FastExcel
-    fastexcel::initialize();
+    // 初始化FastExcel - 使用void版本
+    void (*init_func)() = fastexcel::initialize;
+    init_func();
     
     // 创建工作簿
     auto workbook = core::Workbook::create(filename);

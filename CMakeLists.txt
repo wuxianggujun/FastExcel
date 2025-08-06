@@ -57,6 +57,7 @@ set(FASTEXCEL_SOURCES
         src/fastexcel/core/Worksheet.cpp
         src/fastexcel/core/SharedStringTable.cpp
         src/fastexcel/core/FormatPool.cpp
+        src/fastexcel/core/MemoryPool.cpp
         src/fastexcel/core/ErrorCode.cpp
         src/fastexcel/reader/XLSXReader.cpp
         src/fastexcel/reader/StylesParser.cpp

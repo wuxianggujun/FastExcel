@@ -14,8 +14,11 @@ LibDeflateEngine::LibDeflateEngine(int compression_level)
     , compression_level_(std::clamp(compression_level, 1, 12))  // libdeflate 支持 1-12
     , stats_{} {
     
-    if (!initializeCompressor()) {
-        throw std::runtime_error("Failed to initialize libdeflate compressor");
+    auto result = initializeCompressor();
+    if (result.hasError()) {
+        // 无法在构造函数中返回Result，但我们可以记录错误状态
+        // 或者保留异常作为最后手段
+        compressor_ = nullptr;
     }
 }
 
@@ -23,17 +26,20 @@ LibDeflateEngine::~LibDeflateEngine() {
     cleanupCompressor();
 }
 
-bool LibDeflateEngine::initializeCompressor() {
+VoidResult LibDeflateEngine::initializeCompressor() {
     if (compressor_) {
         cleanupCompressor();
     }
     
     if (!isValidCompressionLevel(compression_level_)) {
-        return false;
+        return makeError(ErrorCode::InvalidArgument, "Invalid compression level");
     }
     
     compressor_ = libdeflate_alloc_compressor(compression_level_);
-    return compressor_ != nullptr;
+    if (!compressor_) {
+        return makeError(ErrorCode::OutOfMemory, "Failed to allocate libdeflate compressor");
+    }
+    return success();
 }
 
 void LibDeflateEngine::cleanupCompressor() {
@@ -43,20 +49,16 @@ void LibDeflateEngine::cleanupCompressor() {
     }
 }
 
-CompressionEngine::CompressionResult LibDeflateEngine::compress(
+Result<size_t> LibDeflateEngine::compress(
     const void* input, size_t input_size,
     void* output, size_t output_capacity) {
     
-    CompressionResult result;
-    
     if (!compressor_) {
-        result.error_message = "Compressor not initialized";
-        return result;
+        return makeError(ErrorCode::InternalError, "Compressor not initialized");
     }
     
     if (!input || input_size == 0 || !output || output_capacity == 0) {
-        result.error_message = "Invalid input parameters";
-        return result;
+        return makeError(ErrorCode::InvalidArgument, "Invalid input parameters");
     }
     
     auto start_time = std::chrono::high_resolution_clock::now();
@@ -74,31 +76,28 @@ CompressionEngine::CompressionResult LibDeflateEngine::compress(
     double time_ms = duration.count() / 1000.0;
     
     if (compressed_size == 0) {
-        result.error_message = "Compression failed - output buffer too small or compression error";
-        return result;
+        return makeError(ErrorCode::ZipCompressionError, "Compression failed - output buffer too small or compression error");
     }
-    
-    result.compressed_size = compressed_size;
-    result.success = true;
     
     // 更新统计信息
     updateStatistics(input_size, compressed_size, time_ms);
     
-    return result;
+    return makeExpected(compressed_size);
 }
 
-void LibDeflateEngine::reset() {
+VoidResult LibDeflateEngine::reset() {
     // libdeflate 的压缩器是无状态的，不需要重置
     // 每次调用 libdeflate_deflate_compress 都是独立的
+    return success();
 }
 
-bool LibDeflateEngine::setCompressionLevel(int level) {
+VoidResult LibDeflateEngine::setCompressionLevel(int level) {
     if (!isValidCompressionLevel(level)) {
-        return false;
+        return makeError(ErrorCode::InvalidArgument, "Invalid compression level");
     }
     
     if (level == compression_level_) {
-        return true;
+        return success();
     }
     
     compression_level_ = level;
@@ -117,8 +116,9 @@ size_t LibDeflateEngine::getMaxCompressedSize(size_t input_size) const {
     return libdeflate_deflate_compress_bound(compressor_, input_size);
 }
 
-void LibDeflateEngine::resetStatistics() {
+VoidResult LibDeflateEngine::resetStatistics() {
     stats_ = Statistics{};
+    return success();
 }
 
 void LibDeflateEngine::updateStatistics(size_t input_size, size_t output_size, double time_ms) {

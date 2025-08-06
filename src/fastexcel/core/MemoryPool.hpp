@@ -11,6 +11,27 @@
 #include <mutex>
 #include <cstddef>
 #include <new>
+#include "Expected.hpp"
+#include "ErrorCode.hpp"
+
+// 平台兼容的aligned_alloc
+#ifdef _MSC_VER
+    #include <malloc.h>
+    inline void* aligned_alloc_compat(size_t alignment, size_t size) {
+        return _aligned_malloc(size, alignment);
+    }
+    inline void aligned_free_compat(void* ptr) {
+        _aligned_free(ptr);
+    }
+#else
+    #include <cstdlib>
+    inline void* aligned_alloc_compat(size_t alignment, size_t size) {
+        return std::aligned_alloc(alignment, size);
+    }
+    inline void aligned_free_compat(void* ptr) {
+        std::free(ptr);
+    }
+#endif
 
 namespace fastexcel {
 namespace core {
@@ -37,20 +58,22 @@ public:
     /**
      * @brief 分配内存
      * @param size 需要分配的内存大小
-     * @return 分配的内存指针，失败返回nullptr
+     * @return Result<void*> 成功返回内存指针，失败返回错误
      */
-    void* allocate(size_t size);
+    Result<void*> allocate(size_t size);
     
     /**
      * @brief 释放内存
      * @param ptr 要释放的内存指针
+     * @return VoidResult 成功或失败信息
      */
-    void deallocate(void* ptr);
+    VoidResult deallocate(void* ptr);
     
     /**
      * @brief 清空内存池
+     * @return VoidResult 成功或失败信息
      */
-    void clear();
+    VoidResult clear();
     
     /**
      * @brief 获取内存池统计信息
@@ -77,16 +100,23 @@ private:
         size_t size;
         bool in_use;
         
-        Block(size_t s) : size(s), in_use(false) {
-            data = std::aligned_alloc(alignof(std::max_align_t), s);
-            if (!data) {
-                throw std::bad_alloc();
+        static Result<std::unique_ptr<Block>> create(size_t s) {
+            auto block = std::make_unique<Block>();
+            block->size = s;
+            block->in_use = false;
+            block->data = aligned_alloc_compat(alignof(std::max_align_t), s);
+            if (!block->data) {
+                return makeError(ErrorCode::OutOfMemory, "Failed to allocate memory block");
             }
+            return makeExpected(std::move(block));
         }
+        
+        Block() = default;
         
         ~Block() {
             if (data) {
-                std::free(data);
+                aligned_free_compat(data);
+                data = nullptr;
             }
         }
     };
@@ -100,7 +130,7 @@ private:
     
     // 辅助方法
     Block* findAvailableBlock(size_t size);
-    void addNewBlock(size_t size);
+    VoidResult addNewBlock(size_t size);
 };
 
 /**
@@ -131,9 +161,9 @@ public:
     
     pointer allocate(size_type n) {
         if (pool_) {
-            void* ptr = pool_->allocate(n * sizeof(T));
-            if (ptr) {
-                return static_cast<pointer>(ptr);
+            auto result = pool_->allocate(n * sizeof(T));
+            if (result.hasValue()) {
+                return static_cast<pointer>(result.value());
             }
         }
         return static_cast<pointer>(std::malloc(n * sizeof(T)));
@@ -181,13 +211,15 @@ public:
     
     /**
      * @brief 获取指定大小的内存池
+     * @return Result<MemoryPool&> 成功返回内存池引用，失败返回错误
      */
-    MemoryPool& getPool(size_t block_size);
+    Result<std::reference_wrapper<MemoryPool>> getPool(size_t block_size);
     
     /**
      * @brief 清理所有内存池
+     * @return VoidResult 成功或失败信息
      */
-    void cleanup();
+    VoidResult cleanup();
     
     /**
      * @brief 获取总体统计信息

@@ -307,6 +307,13 @@ public:
     std::shared_ptr<Format> createFormat();
     
     /**
+     * @brief 根据ID获取格式
+     * @param format_id 格式ID
+     * @return 格式指针，如果不存在返回nullptr
+     */
+    std::shared_ptr<Format> getFormat(size_t format_id) const;
+    
+    /**
      * @brief 获取格式池
      * @return 格式池指针
      */

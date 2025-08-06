@@ -4,9 +4,13 @@
 #include <string>
 #include <vector>
 #include <cstdint>
+#include "../core/Expected.hpp"
+#include "../core/ErrorCode.hpp"
 
 namespace fastexcel {
 namespace archive {
+
+using namespace fastexcel::core;
 
 /**
  * @brief 压缩引擎抽象接口
@@ -24,21 +28,12 @@ public:
     };
     
     /**
-     * @brief 压缩结果结构
-     */
-    struct CompressionResult {
-        bool success = false;
-        size_t compressed_size = 0;
-        std::string error_message;
-    };
-    
-    /**
      * @brief 创建压缩引擎实例
      * @param backend 压缩后端类型
      * @param compression_level 压缩级别 (1-9)
-     * @return 压缩引擎实例
+     * @return Result<std::unique_ptr<CompressionEngine>> 成功返回引擎实例
      */
-    static std::unique_ptr<CompressionEngine> create(Backend backend, int compression_level = 6);
+    static Result<std::unique_ptr<CompressionEngine>> create(Backend backend, int compression_level = 6);
     
     /**
      * @brief 获取可用的后端列表
@@ -50,7 +45,7 @@ public:
      * @brief 后端名称转换
      */
     static std::string backendToString(Backend backend);
-    static Backend stringToBackend(const std::string& name);
+    static Result<Backend> stringToBackend(const std::string& name);
     
     virtual ~CompressionEngine() = default;
     
@@ -60,15 +55,16 @@ public:
      * @param input_size 输入数据大小
      * @param output 输出缓冲区
      * @param output_capacity 输出缓冲区容量
-     * @return 压缩结果
+     * @return Result<size_t> 成功返回压缩后的数据大小
      */
-    virtual CompressionResult compress(const void* input, size_t input_size,
-                                     void* output, size_t output_capacity) = 0;
+    virtual Result<size_t> compress(const void* input, size_t input_size,
+                                   void* output, size_t output_capacity) = 0;
     
     /**
      * @brief 重置压缩器状态（用于重用）
+     * @return VoidResult 成功或失败信息
      */
-    virtual void reset() = 0;
+    virtual VoidResult reset() = 0;
     
     /**
      * @brief 获取引擎名称
@@ -83,9 +79,9 @@ public:
     /**
      * @brief 设置压缩级别
      * @param level 压缩级别 (1-9)
-     * @return 是否成功
+     * @return VoidResult 成功或失败信息
      */
-    virtual bool setCompressionLevel(int level) = 0;
+    virtual VoidResult setCompressionLevel(int level) = 0;
     
     /**
      * @brief 估算压缩后的最大大小
@@ -115,7 +111,7 @@ public:
     };
     
     virtual Statistics getStatistics() const = 0;
-    virtual void resetStatistics() = 0;
+    virtual VoidResult resetStatistics() = 0;
 
 protected:
     CompressionEngine() = default;

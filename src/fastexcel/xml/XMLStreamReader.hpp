@@ -8,12 +8,16 @@
 #include <unordered_map>
 #include <cstdio>
 #include <expat.h>
+#include "../core/Expected.hpp"
+#include "../core/ErrorCode.hpp"
 
 // 项目日志头文件
 #include "fastexcel/utils/Logger.hpp"
 
 namespace fastexcel {
 namespace xml {
+
+using namespace fastexcel::core;
 
 /**
  * @brief 高性能流式XML解析器，基于libexpat
