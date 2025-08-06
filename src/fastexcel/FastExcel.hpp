@@ -6,15 +6,13 @@
 
 // === 新架构组件 (推荐使用) ===
 // 核心组件 - 新架构
-#include "core/FormatDescriptor.hpp"    // 不可变格式描述符
-#include "core/FormatRepository.hpp"    // 线程安全格式仓储  
-#include "core/StyleBuilder.hpp"        // 流畅样式构建器
-#include "core/StyleTransferContext.hpp" // 跨工作簿样式传输
-#include "core/WorkbookNew.hpp"         // 新工作簿API
-#include "core/WorksheetNew.hpp"        // 新工作表API
+#include "fastexcel/core/FormatDescriptor.hpp"    // 不可变格式描述符
+#include "fastexcel/core/FormatRepository.hpp"    // 线程安全格式仓储  
+#include "fastexcel/core/StyleBuilder.hpp"        // 流畅样式构建器
+#include "fastexcel/core/StyleTransferContext.hpp" // 跨工作簿样式传输
 
 // XML序列化层 - 新架构
-#include "xml/StyleSerializer.hpp"      // XLSX样式序列化器
+#include "fastexcel/xml/StyleSerializer.hpp"      // XLSX样式序列化器
 
 // === 旧架构组件 (向后兼容) ===
 
@@ -156,23 +154,21 @@ FASTEXCEL_API void cleanup();
 
 /**
  * @namespace fastexcel::core
- * @brief 新架构的核心命名空间
+ * @brief 核心命名空间
  * 
- * 采用现代C++设计模式：
+ * 包含现代C++设计的核心类：
  * - 不可变值对象 (FormatDescriptor)
- * - Repository模式 (FormatRepository)
+ * - Repository模式 (FormatRepository)  
  * - Builder模式 (StyleBuilder)
  * - 线程安全设计
  * - 自动样式去重
  */
 namespace core {
-    // 前向声明新架构类型
+    // 前向声明核心类型
     class FormatDescriptor;
     class FormatRepository;  
     class StyleBuilder;
     class StyleTransferContext;
-    class NewWorkbook;
-    class NewWorksheet;
 }
 
 /**
@@ -186,21 +182,7 @@ struct NewArchitectureVersion {
     static constexpr const char* DESCRIPTION = "Modern C++ Architecture with immutable design patterns";
 };
 
-// ========== 新架构便捷工厂函数 ==========
-
-/**
- * @brief 创建新架构的Excel工作簿
- * @param filename 文件名
- * @return 工作簿智能指针
- */
-FASTEXCEL_API std::unique_ptr<core::NewWorkbook> createWorkbook(const std::string& filename);
-
-/**
- * @brief 打开现有Excel文件(新架构)
- * @param filename 文件名  
- * @return 工作簿智能指针
- */
-FASTEXCEL_API std::unique_ptr<core::NewWorkbook> openWorkbook(const std::string& filename);
+// ========== 样式构建便捷函数 ==========
 
 /**
  * @brief 创建样式构建器
@@ -208,46 +190,17 @@ FASTEXCEL_API std::unique_ptr<core::NewWorkbook> openWorkbook(const std::string&
  */
 FASTEXCEL_API core::StyleBuilder createStyle();
 
-/**
- * @brief 创建命名样式
- * @param name 样式名称
- * @param builder 样式构建器
- * @return 命名样式
- */
-FASTEXCEL_API core::NamedStyle createNamedStyle(const std::string& name, const core::StyleBuilder& builder);
-
-// ========== 预定义样式工厂 ==========
-
-/**
- * @brief 预定义样式命名空间
- */
-namespace styles {
-    FASTEXCEL_API core::StyleBuilder title();      // 标题样式
-    FASTEXCEL_API core::StyleBuilder header();     // 表头样式  
-    FASTEXCEL_API core::StyleBuilder money();      // 货币样式
-    FASTEXCEL_API core::StyleBuilder percent();    // 百分比样式
-    FASTEXCEL_API core::StyleBuilder date();       // 日期样式
-    
-    // 便捷样式创建函数
-    FASTEXCEL_API core::StyleBuilder border(core::BorderStyle style, core::Color color = core::Color::BLACK);
-    FASTEXCEL_API core::StyleBuilder fill(core::Color color);
-    FASTEXCEL_API core::StyleBuilder font(const std::string& name, double size, bool bold = false);
-}
-
 // ========== 类型别名 (便于使用) ==========
 
-// 新架构类型别名
+// 核心类型别名
 using StyleBuilder = core::StyleBuilder;
-using NamedStyle = core::NamedStyle; 
 using FormatDescriptor = core::FormatDescriptor;
 using FormatRepository = core::FormatRepository;
 using StyleTransferContext = core::StyleTransferContext;
-using NewWorkbook = core::NewWorkbook;      // 新工作簿类型
-using NewWorksheet = core::NewWorksheet;    // 新工作表类型
 
-// 保持旧架构别名(向后兼容)
-using LegacyWorkbook = fastexcel::core::Workbook;   // 旧工作簿类型
-using LegacyWorksheet = fastexcel::core::Worksheet; // 旧工作表类型
+// 保持向后兼容的别名
+using LegacyWorkbook = fastexcel::core::Workbook;   // 当前工作簿类型
+using LegacyWorksheet = fastexcel::core::Worksheet; // 当前工作表类型
 
 // 枚举类型别名
 using BorderStyle = core::BorderStyle;
@@ -281,29 +234,6 @@ class FASTEXCEL_API StyleException : public FastExcelException {
 public:
     explicit StyleException(const std::string& message)
         : FastExcelException("Style error: " + message) {}
-};
-
-// ========== 功能特性检测 ==========
-
-/**
- * @brief 检查新架构功能是否可用
- * @return 是否支持新架构功能
- */
-FASTEXCEL_API bool hasNewArchitectureSupport();
-
-/**
- * @brief 获取新架构功能描述
- * @return 功能描述字符串
- */
-FASTEXCEL_API std::string getNewArchitectureFeatures();
-
-/**
- * @brief 迁移指南信息
- */  
-struct FASTEXCEL_API MigrationGuide {
-    static const char* OLD_API_EXAMPLE;
-    static const char* NEW_API_EXAMPLE;
-    static const char* MIGRATION_STEPS;
 };
 
 } // namespace fastexcel

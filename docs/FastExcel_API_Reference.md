@@ -1,385 +1,319 @@
 # FastExcel API 参考文档
 
-本文档提供了 FastExcel 库的完整 API 参考，包括所有类、方法、使用示例和详细的代码处理流程。
+本文档提供了 FastExcel 库的最新 API 参考，基于当前代码实现编写，包括所有类、方法、使用示例和详细说明。
 
 ## 目录
 
-1. [核心类概述](#核心类概述)
-2. [代码处理流程](#代码处理流程)
+1. [核心架构概述](#核心架构概述)
+2. [快速开始](#快速开始)
 3. [Workbook 类](#workbook-类)
 4. [Worksheet 类](#worksheet-类)
-5. [Format 类](#format-类)
+5. [样式系统](#样式系统)
 6. [Cell 类](#cell-类)
-7. [XMLStreamWriter 类](#xmlstreamwriter-类)
-8. [工具函数](#工具函数)
-9. [错误处理](#错误处理)
-10. [性能优化](#性能优化)
+7. [流式处理](#流式处理)
+8. [文档属性管理](#文档属性管理)
+9. [工具类](#工具类)
+10. [最佳实践](#最佳实践)
 
-## 核心类概述
+## 核心架构概述
 
-FastExcel 库采用现代 C++ 设计，提供高性能的 Excel 文件生成功能。核心架构包含以下主要类：
-
-- **Workbook**: 工作簿类，管理整个 Excel 文件和全局设置
-- **Worksheet**: 工作表类，管理单个工作表的数据和格式
-- **Format**: 格式类，定义单元格的视觉样式和数字格式
-- **Cell**: 单元格类，存储单元格数据、格式和超链接
-- **XMLStreamWriter**: 高性能 XML 流写入器，生成 Excel OOXML 格式
-
-### 类关系图
+FastExcel 采用现代 C++17 设计，核心组件包括：
 
 ```
-Workbook (1) -----> (N) Worksheet
-    |                      |
-    |                      v
-    v                   Cell (N)
-Format (N) <------------|
-    |
-    v
-XMLStreamWriter
+┌─────────────────────────────────────────┐
+│            FastExcel 架构                │
+├─────────────────────────────────────────┤
+│  应用层: 用户 API                        │
+│  ├─ Workbook (工作簿管理)                │
+│  ├─ Worksheet (工作表操作)               │
+│  └─ FormatDescriptor & StyleBuilder      │
+├─────────────────────────────────────────┤
+│  核心层: 数据管理                        │
+│  ├─ FormatRepository (格式仓储)          │
+│  ├─ CustomPropertyManager               │
+│  └─ DefinedNameManager                  │
+├─────────────────────────────────────────┤
+│  流式处理层                              │
+│  ├─ XMLStreamWriter/Reader              │
+│  ├─ BatchFileWriter                     │
+│  └─ StreamingFileWriter                 │
+├─────────────────────────────────────────┤
+│  存储层: 文件管理                        │
+│  └─ FileManager & ZipArchive            │
+└─────────────────────────────────────────┘
 ```
 
-### 设计原则
+### 关键设计特性
 
-1. **RAII 资源管理**: 使用智能指针自动管理内存
-2. **类型安全**: 强类型枚举和模板，减少运行时错误
-3. **高性能**: 优化的 XML 生成和内存管理
-4. **现代 C++**: 使用 C++17 特性，提供直观的 API
+- **智能模式选择**: 根据数据量自动选择批量或流式处理
+- **格式仓储去重**: 自动去除重复的格式定义，优化文件大小
+- **回调式XML生成**: 统一的XML生成接口，支持批量和流式两种模式
+- **内存管理优化**: 使用智能指针和RAII模式管理资源
 
-## 代码处理流程
+## 快速开始
 
-### 1. 整体架构流程
-
-```mermaid
-graph TD
-    A[初始化 FastExcel] --> B[创建 Workbook]
-    B --> C[添加 Worksheet]
-    C --> D[创建 Format]
-    D --> E[写入数据到 Cell]
-    E --> F[应用格式和样式]
-    F --> G[设置工作表属性]
-    G --> H[生成 XML]
-    H --> I[创建 ZIP 归档]
-    I --> J[保存 Excel 文件]
-    J --> K[清理资源]
-```
-
-### 2. 数据写入流程
+### 基本使用示例
 
 ```cpp
-// 1. 库初始化
-fastexcel::initialize();
+#include "fastexcel/FastExcel.hpp"
+using namespace fastexcel::core;
 
-// 2. 创建工作簿
-auto workbook = fastexcel::core::Workbook::create("output.xlsx");
-workbook->open();
-
-// 3. 添加工作表
-auto worksheet = workbook->addWorksheet("数据表");
-
-// 4. 创建格式
-auto header_format = workbook->createFormat();
-header_format->setBold(true);
-header_format->setBackgroundColor(fastexcel::core::COLOR_BLUE);
-
-// 5. 写入数据
-worksheet->writeString(0, 0, "标题", header_format);
-worksheet->writeNumber(1, 0, 123.45);
-
-// 6. 保存文件
-workbook->save();
-
-// 7. 清理资源
-fastexcel::cleanup();
-```
-
-### 3. XML 生成流程
-
-```mermaid
-graph LR
-    A[Cell 数据] --> B[Worksheet XML]
-    C[Format 数据] --> D[Styles XML]
-    E[Workbook 属性] --> F[Workbook XML]
-    B --> G[合并 XML]
-    D --> G
-    F --> G
-    G --> H[ZIP 压缩]
-    H --> I[Excel 文件]
-```
-
-### 4. 内存管理流程
-
-```cpp
-// 智能指针自动管理
-std::shared_ptr<Workbook> workbook;  // 自动释放
-std::shared_ptr<Format> format;      // 引用计数管理
-std::unique_ptr<Worksheet> sheet;    // 独占所有权
-
-// RAII 模式
-{
-    auto workbook = Workbook::create("test.xlsx");
-    // ... 使用 workbook
-} // 自动析构，释放资源
-```
-
-### 5. 错误处理流程
-
-```cpp
-try {
-    auto workbook = fastexcel::core::Workbook::create("test.xlsx");
+int main() {
+    // 创建工作簿
+    auto workbook = Workbook::create("example.xlsx");
     workbook->open();
     
-    auto worksheet = workbook->addWorksheet("Sheet1");
-    worksheet->writeString(0, 0, "Hello");
+    // 添加工作表
+    auto worksheet = workbook->addWorksheet("数据表");
     
+    // 创建样式
+    StyleBuilder header_style;
+    header_style.font().bold(true).color(0xFFFFFF);
+    header_style.fill().backgroundColor(0x4472C4);
+    int header_style_id = workbook->addStyle(header_style);
+    
+    // 写入数据
+    worksheet->writeString(0, 0, "姓名", header_style_id);
+    worksheet->writeString(0, 1, "年龄", header_style_id);
+    worksheet->writeString(1, 0, "张三");
+    worksheet->writeNumber(1, 1, 25);
+    
+    // 保存文件
     workbook->save();
-} catch (const fastexcel::FastExcelException& e) {
-    LOG_ERROR("FastExcel 错误: {}", e.what());
-} catch (const std::exception& e) {
-    LOG_ERROR("标准异常: {}", e.what());
+    
+    return 0;
 }
+```
+
+### 高性能模式
+
+```cpp
+// 启用高性能模式
+workbook->setHighPerformanceMode(true);
+
+// 或手动配置优化选项
+auto& options = workbook->getOptions();
+options.mode = WorkbookMode::STREAMING;  // 流式模式
+options.compression_level = 0;           // 无压缩
+options.use_shared_strings = false;      // 禁用共享字符串
 ```
 
 ## Workbook 类
 
-工作簿是 Excel 文件的主容器，管理所有工作表和全局设置。提供智能工作表命名、格式索引管理和完善的异常处理。
+工作簿是 Excel 文件的根容器，管理所有工作表、样式和文档属性。
 
-### 类定义
+### 核心方法
 
 ```cpp
 namespace fastexcel::core {
 class Workbook {
 public:
-    // 创建工作簿
-    static std::shared_ptr<Workbook> create(const std::string& filename);
-    
-    // 生命周期管理
+    // === 生命周期管理 ===
+    static std::unique_ptr<Workbook> create(const Path& path);
     bool open();
     bool save();
+    bool saveAs(const std::string& filename);
     bool close();
     
-    // 工作表管理
+    // === 工作表管理 ===
     std::shared_ptr<Worksheet> addWorksheet(const std::string& name = "");
+    std::shared_ptr<Worksheet> insertWorksheet(size_t index, const std::string& name = "");
+    bool removeWorksheet(const std::string& name);
+    bool removeWorksheet(size_t index);
     std::shared_ptr<Worksheet> getWorksheet(const std::string& name);
     std::shared_ptr<Worksheet> getWorksheet(size_t index);
+    
     size_t getWorksheetCount() const;
+    std::vector<std::string> getWorksheetNames() const;
+    bool renameWorksheet(const std::string& old_name, const std::string& new_name);
+    bool moveWorksheet(size_t from_index, size_t to_index);
+    void setActiveWorksheet(size_t index);
     
-    // 格式管理
-    std::shared_ptr<Format> createFormat();
+    // === 样式管理 ===
+    int addStyle(const FormatDescriptor& style);
+    int addStyle(const StyleBuilder& builder);
+    std::shared_ptr<const FormatDescriptor> getStyle(int style_id) const;
+    int getDefaultStyleId() const;
+    bool isValidStyleId(int style_id) const;
+    const FormatRepository& getStyleRepository() const;
     
-    // 文档属性
-    void setTitle(const std::string& title);
-    void setAuthor(const std::string& author);
-    void setSubject(const std::string& subject);
-    void setKeywords(const std::string& keywords);
-    void setComments(const std::string& comments);
-    void setCompany(const std::string& company);
-    void setManager(const std::string& manager);
-    void setCategory(const std::string& category);
+    // === 文档属性 ===
+    DocumentProperties& getDocumentProperties();
+    const DocumentProperties& getDocumentProperties() const;
     
-    // 自定义属性
+    // === 自定义属性 ===
     void setCustomProperty(const std::string& name, const std::string& value);
     void setCustomProperty(const std::string& name, double value);
-    void setCustomProperty(const std::string& name, int value);
     void setCustomProperty(const std::string& name, bool value);
-    void setCustomProperty(const std::string& name, const std::tm& value);
+    std::string getCustomProperty(const std::string& name) const;
+    bool removeCustomProperty(const std::string& name);
     
-    // 定义名称
-    void defineNamedRange(const std::string& name, const std::string& formula);
+    // === 定义名称 ===
+    void defineName(const std::string& name, const std::string& formula, 
+                   const std::string& scope = "");
+    std::string getDefinedName(const std::string& name, 
+                              const std::string& scope = "") const;
+    bool removeDefinedName(const std::string& name, const std::string& scope = "");
     
-    // VBA 支持
-    void addVBAProject(const std::string& vba_data);
+    // === 工作簿选项 ===
+    WorkbookOptions& getOptions();
+    void setHighPerformanceMode(bool enable);
+    void setCalcOptions(bool calc_on_load, bool full_calc_on_load);
     
-    // 常量内存模式
-    void setConstantMemoryMode(bool enabled);
+    // === 工作簿保护 ===
+    void protect(const std::string& password, bool lock_structure = true, 
+                bool lock_windows = false);
+    void unprotect();
+    bool isProtected() const;
     
-    // XML 生成
-    std::string generateWorkbookXML() const;
-    std::string generateStylesXML() const;
-    std::string generateSharedStringsXML() const;
-    std::string generateContentTypesXML() const;
-    std::string generateRelsXML() const;
+    // === VBA 支持 ===
+    bool addVbaProject(const std::string& vba_project_path);
+    bool hasVba() const;
+    
+    // === 统计信息 ===
+    WorkbookStats getStatistics() const;
+    size_t estimateMemoryUsage() const;
+    size_t getTotalCellCount() const;
+    
+    // === 工作簿编辑功能 ===
+    static std::unique_ptr<Workbook> loadForEdit(const Path& path);
+    bool refresh();
+    bool mergeWorkbook(const std::unique_ptr<Workbook>& other_workbook, 
+                      const MergeOptions& options);
+    bool exportWorksheets(const std::vector<std::string>& worksheet_names, 
+                         const std::string& output_filename);
+    
+    // === 样式复制和传输 ===
+    std::unique_ptr<StyleTransferContext> copyStylesFrom(const Workbook& source_workbook);
+    FormatRepository::DeduplicationStats getStyleStats() const;
 };
 }
 ```
 
-### 新增功能和改进
+### 工作簿选项配置
 
-#### 1. 智能工作表命名
 ```cpp
-// 自动生成唯一工作表名称
-auto sheet1 = workbook->addWorksheet();        // 自动命名为 "Sheet1"
-auto sheet2 = workbook->addWorksheet();        // 自动命名为 "Sheet2"
-auto sheet3 = workbook->addWorksheet("Data");  // 指定名称 "Data"
-auto sheet4 = workbook->addWorksheet("Data");  // 自动处理重复，命名为 "Data1"
-```
-
-#### 2. 格式索引管理
-```cpp
-// 格式索引从0开始，符合Excel标准
-auto format1 = workbook->createFormat();  // 索引 0
-auto format2 = workbook->createFormat();  // 索引 1
-auto format3 = workbook->createFormat();  // 索引 2
-```
-
-#### 3. 完善的异常处理
-```cpp
-try {
-    auto workbook = Workbook::create("test.xlsx");
-    workbook->open();
+struct WorkbookOptions {
+    WorkbookMode mode = WorkbookMode::AUTO;    // 处理模式
+    int compression_level = 6;                 // ZIP压缩级别 (0-9)
+    bool use_shared_strings = true;           // 启用共享字符串
+    bool constant_memory = false;             // 常量内存模式
     
-    // 未打开工作簿时的操作会抛出异常
-    auto sheet = workbook->addWorksheet("Test");  // 如果未open()会抛出异常
+    // 性能调优参数
+    size_t row_buffer_size = 5000;           // 行缓冲区大小
+    size_t xml_buffer_size = 4 * 1024 * 1024; // XML缓冲区大小
     
-    workbook->save();
-} catch (const FastExcelException& e) {
-    std::cout << "错误: " << e.what() << std::endl;
-    std::cout << "错误码: " << static_cast<int>(e.getErrorCode()) << std::endl;
-}
-```
-
-#### 4. 自定义属性类型安全
-```cpp
-// 支持多种数据类型的自定义属性
-workbook->setCustomProperty("部门", "销售部");           // 字符串
-workbook->setCustomProperty("预算", 100000.0);          // 浮点数
-workbook->setCustomProperty("员工数量", 25);            // 整数
-workbook->setCustomProperty("是否激活", true);          // 布尔值
-
-// 获取自定义属性时会保持类型
-std::string dept = workbook->getCustomProperty("部门").asString();
-double budget = workbook->getCustomProperty("预算").asDouble();
+    // 自动模式阈值
+    size_t auto_mode_cell_threshold = 1000000;      // 100万单元格
+    size_t auto_mode_memory_threshold = 100 * 1024 * 1024; // 100MB
+    
+    // 计算选项
+    bool calc_on_load = true;                // 打开时计算
+    bool full_calc_on_load = true;           // 完全重新计算
+};
 ```
 
 ### 使用示例
 
 ```cpp
-#include "fastexcel/FastExcel.hpp"
+// 基本工作簿操作
+auto workbook = Workbook::create("report.xlsx");
+workbook->open();
 
-int main() {
-    // 初始化库
-    fastexcel::initialize();
-    
-    try {
-        // 创建工作簿
-        auto workbook = fastexcel::core::Workbook::create("example.xlsx");
-        workbook->open();
-        
-        // 设置文档属性
-        workbook->setTitle("销售报表");
-        workbook->setAuthor("FastExcel");
-        workbook->setCompany("我的公司");
-        
-        // 设置自定义属性
-        workbook->setCustomProperty("部门", "销售部");
-        workbook->setCustomProperty("版本", 1.0);
-        
-        // 添加工作表
-        auto worksheet = workbook->addWorksheet("销售数据");
-        
-        // 创建格式
-        auto header_format = workbook->createFormat();
-        header_format->setBold(true);
-        header_format->setBackgroundColor(fastexcel::core::COLOR_BLUE);
-        header_format->setFontColor(fastexcel::core::COLOR_WHITE);
-        
-        // 写入数据
-        worksheet->writeString(0, 0, "产品名称", header_format);
-        worksheet->writeString(0, 1, "销售额", header_format);
-        worksheet->writeString(1, 0, "产品A");
-        worksheet->writeNumber(1, 1, 12345.67);
-        
-        // 保存文件
-        workbook->save();
-        
-    } catch (const std::exception& e) {
-        std::cerr << "错误: " << e.what() << std::endl;
-        return -1;
-    }
-    
-    // 清理资源
-    fastexcel::cleanup();
-    return 0;
-}
+// 设置文档属性
+auto& props = workbook->getDocumentProperties();
+props.title = "月度销售报表";
+props.author = "销售部";
+props.company = "我的公司";
+
+// 添加自定义属性
+workbook->setCustomProperty("部门", "销售部");
+workbook->setCustomProperty("预算", 100000.0);
+workbook->setCustomProperty("是否审核", true);
+
+// 创建多个工作表
+auto summary = workbook->addWorksheet("汇总");
+auto detail = workbook->addWorksheet("明细");
+auto chart = workbook->addWorksheet("图表");
+
+// 设置工作表顺序
+workbook->moveWorksheet(2, 1); // 将图表移动到第二位
+
+// 启用高性能模式
+workbook->setHighPerformanceMode(true);
+
+// 保存文件
+workbook->save();
 ```
 
 ## Worksheet 类
 
-工作表包含实际的数据和格式信息，提供丰富的数据操作功能。
+工作表包含单元格数据、格式设置和工作表级别的配置。
 
-### 类定义
+### 核心方法
 
 ```cpp
-namespace fastexcel::core {
 class Worksheet {
 public:
-    // 基本数据写入
-    void writeString(int row, int col, const std::string& value, 
-                    std::shared_ptr<Format> format = nullptr);
-    void writeNumber(int row, int col, double value,
-                    std::shared_ptr<Format> format = nullptr);
-    void writeBoolean(int row, int col, bool value,
-                     std::shared_ptr<Format> format = nullptr);
-    void writeFormula(int row, int col, const std::string& formula,
-                     std::shared_ptr<Format> format = nullptr);
-    void writeDateTime(int row, int col, const std::tm& datetime,
-                      std::shared_ptr<Format> format = nullptr);
+    // === 基本信息 ===
+    const std::string& getName() const;
+    void setName(const std::string& name);
+    int getSheetId() const;
+    
+    // === 数据写入 ===
+    void writeString(int row, int col, const std::string& value, int style_id = 0);
+    void writeNumber(int row, int col, double value, int style_id = 0);
+    void writeBoolean(int row, int col, bool value, int style_id = 0);
+    void writeDateTime(int row, int col, const std::tm& datetime, int style_id = 0);
+    void writeFormula(int row, int col, const std::string& formula, int style_id = 0);
     void writeUrl(int row, int col, const std::string& url, 
-                  const std::string& string = "",
-                  std::shared_ptr<Format> format = nullptr);
+                  const std::string& display_text = "", int style_id = 0);
     
-    // 批量数据写入
-    void writeRange(int start_row, int start_col, 
-                   const std::vector<std::vector<std::string>>& data);
-    void writeRange(int start_row, int start_col,
-                   const std::vector<std::vector<double>>& data);
+    // === 数据读取 ===
+    bool hasCellAt(int row, int col) const;
+    const Cell& getCell(int row, int col) const;
+    Cell& getCell(int row, int col);
     
-    // 行列操作
+    // === 范围操作 ===
+    std::pair<int, int> getUsedRange() const;
+    size_t getCellCount() const;
+    void clear();
+    void clearRange(int first_row, int first_col, int last_row, int last_col);
+    
+    // === 行列操作 ===
     void setColumnWidth(int col, double width);
     void setColumnWidth(int first_col, int last_col, double width);
-    void setColumnFormat(int col, std::shared_ptr<Format> format);
-    void setColumnFormat(int first_col, int last_col, std::shared_ptr<Format> format);
+    void setRowHeight(int row, double height);
+    void setRowHeight(int first_row, int last_row, double height);
+    
     void hideColumn(int col);
     void hideColumn(int first_col, int last_col);
-    
-    void setRowHeight(int row, double height);
-    void setRowFormat(int row, std::shared_ptr<Format> format);
     void hideRow(int row);
     void hideRow(int first_row, int last_row);
     
-    // 合并单元格
-    void mergeCells(int first_row, int first_col, int last_row, int last_col);
-    void mergeRange(int first_row, int first_col, int last_row, int last_col, 
-                   const std::string& value, std::shared_ptr<Format> format = nullptr);
+    void insertRows(int row, int count = 1);
+    void insertColumns(int col, int count = 1);
+    void deleteRows(int row, int count = 1);
+    void deleteColumns(int col, int count = 1);
     
-    // 自动筛选
+    // === 合并单元格 ===
+    void mergeCells(int first_row, int first_col, int last_row, int last_col);
+    void unmergeCells(int first_row, int first_col, int last_row, int last_col);
+    bool isMergedRange(int row, int col) const;
+    
+    // === 自动筛选 ===
     void setAutoFilter(int first_row, int first_col, int last_row, int last_col);
     void removeAutoFilter();
+    bool hasAutoFilter() const;
     
-    // 冻结窗格
+    // === 冻结窗格 ===
     void freezePanes(int row, int col);
     void freezePanes(int row, int col, int top_left_row, int top_left_col);
     void splitPanes(int row, int col);
+    void removePanes();
     
-    // 打印设置
-    void setPrintArea(int first_row, int first_col, int last_row, int last_col);
-    void setRepeatRows(int first_row, int last_row);
-    void setRepeatColumns(int first_col, int last_col);
-    void setLandscape(bool landscape = true);
-    void setPaperSize(int paper_size);
-    void setMargins(double left, double right, double top, double bottom);
-    void setHeaderFooterMargins(double header, double footer);
-    void setPrintScale(int scale);
-    void setFitToPages(int width, int height);
-    void setPrintGridlines(bool print = true);
-    void setPrintHeadings(bool print = true);
-    void setCenterOnPage(bool horizontal, bool vertical);
-    
-    // 工作表保护
-    void protect(const std::string& password = "");
-    void unprotect();
-    
-    // 视图设置
-    void setZoom(int scale);
+    // === 工作表视图 ===
+    void setZoom(int zoom_scale);
     void showGridlines(bool show = true);
     void showRowColHeaders(bool show = true);
     void setRightToLeft(bool rtl = true);
@@ -387,999 +321,784 @@ public:
     void setActiveCell(int row, int col);
     void setSelection(int first_row, int first_col, int last_row, int last_col);
     
-    // 获取信息
-    const std::string& getName() const;
-    std::pair<int, int> getUsedRange() const;
-    bool hasCellAt(int row, int col) const;
-    Cell& getCell(int row, int col);
-    const Cell& getCell(int row, int col) const;
+    // === 打印设置 ===
+    void setPrintArea(int first_row, int first_col, int last_row, int last_col);
+    void setRepeatRows(int first_row, int last_row);
+    void setRepeatColumns(int first_col, int last_col);
+    void setPageSetup(const PageSetup& setup);
     
-    // 工具方法
-    void clear();
-    void clearRange(int first_row, int first_col, int last_row, int last_col);
-    void insertRows(int row, int count = 1);
-    void insertColumns(int col, int count = 1);
-    void deleteRows(int row, int count = 1);
-    void deleteColumns(int col, int count = 1);
+    // === 工作表保护 ===
+    void protect(const std::string& password = "");
+    void unprotect();
+    bool isProtected() const;
     
-    // XML 生成
-    std::string generateXML() const;
-    std::string generateRelsXML() const;
+    // === 数据验证 ===
+    void addDataValidation(int first_row, int first_col, int last_row, int last_col,
+                          const DataValidation& validation);
+    
+    // === 条件格式 ===
+    void addConditionalFormat(int first_row, int first_col, int last_row, int last_col,
+                             const ConditionalFormat& format);
+    
+    // === 批量搜索替换 ===
+    int findAndReplace(const std::string& find_text, const std::string& replace_text,
+                      bool match_case = false, bool match_entire_cell = false);
+    std::vector<std::pair<int, int>> findCells(const std::string& search_text,
+                                              bool match_case = false, 
+                                              bool match_entire_cell = false) const;
+    
+    // === 内存和性能 ===
+    bool isOptimizeMode() const;
+    size_t getMemoryUsage() const;
+    void optimizeMemory();
+    
+    // === XML 生成 ===
+    void generateXML(const std::function<void(const char*, size_t)>& callback) const;
+    void generateRelsXML(const std::function<void(const char*, size_t)>& callback) const;
 };
-}
 ```
 
 ### 使用示例
 
 ```cpp
-// 创建工作表并写入数据
+// 创建工作表
 auto worksheet = workbook->addWorksheet("销售数据");
 
 // 设置列宽
-worksheet->setColumnWidth(0, 15.0);  // A列宽度15
-worksheet->setColumnWidth(1, 3, 12.0);  // B-D列宽度12
+worksheet->setColumnWidth(0, 15.0);  // A列
+worksheet->setColumnWidth(1, 3, 12.0); // B-D列
 
-// 创建标题格式
-auto title_format = workbook->createFormat();
-title_format->setBold(true);
-title_format->setFontSize(16);
-title_format->setHorizontalAlign(fastexcel::core::HorizontalAlign::Center);
-
-// 合并单元格作为标题
-worksheet->mergeRange(0, 0, 0, 3, "2024年销售报表", title_format);
-
-// 创建表头格式
-auto header_format = workbook->createFormat();
-header_format->setBold(true);
-header_format->setBackgroundColor(fastexcel::core::COLOR_BLUE);
-header_format->setFontColor(fastexcel::core::COLOR_WHITE);
-
-// 写入表头
-std::vector<std::string> headers = {"产品名称", "单价", "数量", "总额"};
+// 写入标题行
+std::vector<std::string> headers = {"产品名称", "销售日期", "数量", "金额"};
 for (size_t i = 0; i < headers.size(); ++i) {
-    worksheet->writeString(1, static_cast<int>(i), headers[i], header_format);
+    worksheet->writeString(0, i, headers[i], header_style_id);
 }
 
 // 写入数据
-std::vector<std::vector<std::string>> data = {
-    {"产品A", "100.00", "10", "1000.00"},
-    {"产品B", "200.00", "5", "1000.00"},
-    {"产品C", "150.00", "8", "1200.00"}
-};
-worksheet->writeRange(2, 0, data);
+worksheet->writeString(1, 0, "产品A");
+worksheet->writeDateTime(1, 1, current_date, date_style_id);
+worksheet->writeNumber(1, 2, 100);
+worksheet->writeNumber(1, 3, 12500.0, currency_style_id);
+
+// 合并单元格
+worksheet->mergeCells(0, 0, 0, 3); // 合并标题行
 
 // 设置自动筛选
-worksheet->setAutoFilter(1, 0, 4, 3);
+worksheet->setAutoFilter(0, 0, 10, 3);
 
 // 冻结窗格
-worksheet->freezePanes(2, 0);
+worksheet->freezePanes(1, 0); // 冻结第一行
 
 // 设置打印区域
-worksheet->setPrintArea(0, 0, 4, 3);
+worksheet->setPrintArea(0, 0, 10, 3);
+
+// 查找和替换
+int replaced = worksheet->findAndReplace("产品A", "Product A", false, true);
+
+// 查找单元格
+auto found_cells = worksheet->findCells("Product", false, false);
+for (auto& [row, col] : found_cells) {
+    std::cout << "找到匹配项: " << row << ", " << col << std::endl;
+}
 ```
 
-## Format 类
+## 样式系统
 
-格式类定义单元格的外观和数字格式，支持字体、对齐、边框、填充等所有 Excel 格式选项。
+FastExcel 使用现代的样式系统，包括 FormatDescriptor（样式描述符）和 StyleBuilder（样式构建器）。
 
-### 类定义
+### FormatDescriptor - 样式描述符
 
 ```cpp
-namespace fastexcel::core {
-class Format {
-public:
+struct FormatDescriptor {
     // 字体设置
-    void setFontName(const std::string& name);
-    void setFontSize(double size);
-    void setFontColor(uint32_t color);
-    void setBold(bool bold = true);
-    void setItalic(bool italic = true);
-    void setUnderline(UnderlineType type = UnderlineType::Single);
-    void setStrikeout(bool strikeout = true);
-    void setSuperscript(bool superscript = true);
-    void setSubscript(bool subscript = true);
+    FontDescriptor font;
     
     // 对齐设置
-    void setHorizontalAlign(HorizontalAlign align);
-    void setVerticalAlign(VerticalAlign align);
-    void setTextWrap(bool wrap = true);
-    void setRotation(int angle);
-    void setIndent(int level);
-    void setShrinkToFit(bool shrink = true);
-    void setReadingOrder(ReadingOrder order);
+    AlignmentDescriptor alignment;
     
     // 边框设置
-    void setBorder(BorderStyle style);
-    void setBorderColor(uint32_t color);
-    void setLeftBorder(BorderStyle style);
-    void setRightBorder(BorderStyle style);
-    void setTopBorder(BorderStyle style);
-    void setBottomBorder(BorderStyle style);
-    void setDiagonalBorder(BorderStyle style);
-    void setLeftBorderColor(uint32_t color);
-    void setRightBorderColor(uint32_t color);
-    void setTopBorderColor(uint32_t color);
-    void setBottomBorderColor(uint32_t color);
-    void setDiagonalBorderColor(uint32_t color);
-    void setDiagonalType(DiagonalType type);
+    BorderDescriptor border;
     
     // 填充设置
-    void setBackgroundColor(uint32_t color);
-    void setForegroundColor(uint32_t color);
-    void setPattern(PatternType pattern);
+    FillDescriptor fill;
     
     // 数字格式
-    void setNumberFormat(const std::string& format);
-    void setNumberFormat(NumberFormatType type);
+    std::string number_format;
     
     // 保护设置
-    void setLocked(bool locked = true);
-    void setHidden(bool hidden = true);
+    bool locked = true;
+    bool hidden = false;
     
-    // 获取方法
-    std::string getFontName() const;
-    double getFontSize() const;
-    uint32_t getFontColor() const;
-    bool isBold() const;
-    bool isItalic() const;
-    // ... 其他获取方法
-    
-    // 内部方法
-    int getXfIndex() const;
-    std::string generateXML() const;
+    // 生成唯一哈希值（用于去重）
+    size_t getHash() const;
+    bool operator==(const FormatDescriptor& other) const;
 };
-}
 ```
 
-### 枚举类型
+### StyleBuilder - 样式构建器
 
 ```cpp
-// 水平对齐
-enum class HorizontalAlign {
-    General, Left, Center, Right, Fill, Justify, 
-    CenterAcrossSelection, Distributed
-};
-
-// 垂直对齐
-enum class VerticalAlign {
-    Top, Center, Bottom, Justify, Distributed
-};
-
-// 边框样式
-enum class BorderStyle {
-    None, Thin, Medium, Dashed, Dotted, Thick, Double, Hair,
-    MediumDashed, DashDot, MediumDashDot, DashDotDot, 
-    MediumDashDotDot, SlantDashDot
-};
-
-// 填充模式
-enum class PatternType {
-    None, Solid, MediumGray, DarkGray, LightGray,
-    DarkHorizontal, DarkVertical, DarkDown, DarkUp,
-    DarkGrid, DarkTrellis, LightHorizontal, LightVertical,
-    LightDown, LightUp, LightGrid, LightTrellis, Gray125, Gray0625
-};
-
-// 下划线类型
-enum class UnderlineType {
-    None, Single, Double, SingleAccounting, DoubleAccounting
-};
-
-// 数字格式类型
-enum class NumberFormatType {
-    General, Number, Currency, Accounting, Date, Time, 
-    Percentage, Fraction, Scientific, Text
+class StyleBuilder {
+public:
+    // === 字体链式设置 ===
+    FontBuilder& font();
+    
+    // === 对齐链式设置 ===
+    AlignmentBuilder& alignment();
+    
+    // === 边框链式设置 ===
+    BorderBuilder& border();
+    
+    // === 填充链式设置 ===
+    FillBuilder& fill();
+    
+    // === 数字格式 ===
+    StyleBuilder& numberFormat(const std::string& format);
+    
+    // === 保护设置 ===
+    StyleBuilder& locked(bool is_locked = true);
+    StyleBuilder& hidden(bool is_hidden = true);
+    
+    // === 构建样式 ===
+    std::shared_ptr<FormatDescriptor> build() const;
 };
 ```
 
-### 使用示例
+### 链式构建器详细API
 
 ```cpp
-// 创建标题格式
-auto title_format = workbook->createFormat();
-title_format->setFontName("Arial");
-title_format->setFontSize(16);
-title_format->setBold(true);
-title_format->setFontColor(fastexcel::core::COLOR_BLUE);
-title_format->setHorizontalAlign(fastexcel::core::HorizontalAlign::Center);
-title_format->setVerticalAlign(fastexcel::core::VerticalAlign::Center);
-title_format->setBorder(fastexcel::core::BorderStyle::Thin);
-title_format->setBackgroundColor(0xF0F0F0);
+// 字体构建器
+class FontBuilder {
+public:
+    FontBuilder& name(const std::string& font_name);
+    FontBuilder& size(double font_size);
+    FontBuilder& color(uint32_t color);
+    FontBuilder& bold(bool is_bold = true);
+    FontBuilder& italic(bool is_italic = true);
+    FontBuilder& underline(UnderlineType type = UnderlineType::Single);
+    FontBuilder& strikeout(bool is_strikeout = true);
+};
 
-// 创建货币格式
-auto currency_format = workbook->createFormat();
-currency_format->setNumberFormat("¥#,##0.00");
-currency_format->setHorizontalAlign(fastexcel::core::HorizontalAlign::Right);
+// 对齐构建器  
+class AlignmentBuilder {
+public:
+    AlignmentBuilder& horizontal(HorizontalAlign align);
+    AlignmentBuilder& vertical(VerticalAlign align);
+    AlignmentBuilder& wrap(bool text_wrap = true);
+    AlignmentBuilder& rotation(int angle);
+    AlignmentBuilder& indent(int level);
+    AlignmentBuilder& shrinkToFit(bool shrink = true);
+};
 
-// 创建日期格式
-auto date_format = workbook->createFormat();
-date_format->setNumberFormat("yyyy-mm-dd");
+// 边框构建器
+class BorderBuilder {
+public:
+    BorderBuilder& all(BorderStyle style, uint32_t color = 0x000000);
+    BorderBuilder& left(BorderStyle style, uint32_t color = 0x000000);
+    BorderBuilder& right(BorderStyle style, uint32_t color = 0x000000);
+    BorderBuilder& top(BorderStyle style, uint32_t color = 0x000000);
+    BorderBuilder& bottom(BorderStyle style, uint32_t color = 0x000000);
+    BorderBuilder& diagonal(BorderStyle style, uint32_t color = 0x000000);
+};
 
-// 创建百分比格式
-auto percent_format = workbook->createFormat();
-percent_format->setNumberFormat("0.00%");
-
-// 应用格式
-worksheet->writeString(0, 0, "销售报表", title_format);
-worksheet->writeNumber(1, 0, 12345.67, currency_format);
-worksheet->writeDateTime(2, 0, current_time, date_format);
-worksheet->writeNumber(3, 0, 0.1234, percent_format);
+// 填充构建器
+class FillBuilder {
+public:
+    FillBuilder& backgroundColor(uint32_t color);
+    FillBuilder& foregroundColor(uint32_t color);  
+    FillBuilder& pattern(PatternType pattern);
+};
 ```
 
-## Cell 类
+### 样式使用示例
 
-单元格类存储单元格的数据、格式和超链接信息。支持内联字符串优化，提升短字符串处理性能。
+```cpp
+// 使用 StyleBuilder 创建样式
+StyleBuilder title_builder;
+title_builder.font()
+    .name("Arial")
+    .size(16)
+    .bold(true)
+    .color(0xFFFFFF);
+title_builder.fill()
+    .backgroundColor(0x4472C4);
+title_builder.alignment()
+    .horizontal(HorizontalAlign::Center)
+    .vertical(VerticalAlign::Center);
+title_builder.border()
+    .all(BorderStyle::Thin);
 
-### 类定义
+int title_style_id = workbook->addStyle(title_builder);
+
+// 创建货币样式
+StyleBuilder currency_builder;
+currency_builder.numberFormat("¥#,##0.00");
+currency_builder.alignment().horizontal(HorizontalAlign::Right);
+int currency_style_id = workbook->addStyle(currency_builder);
+
+// 创建日期样式
+StyleBuilder date_builder;
+date_builder.numberFormat("yyyy-mm-dd");
+int date_style_id = workbook->addStyle(date_builder);
+
+// 应用样式
+worksheet->writeString(0, 0, "销售报表", title_style_id);
+worksheet->writeNumber(1, 0, 12345.67, currency_style_id);
+worksheet->writeDateTime(2, 0, current_time, date_style_id);
+
+// 检查样式统计
+auto stats = workbook->getStyleStats();
+std::cout << "创建样式: " << stats.created_count << std::endl;
+std::cout << "去重样式: " << stats.deduplicated_count << std::endl;
+```
+
+### 预定义样式常量
 
 ```cpp
 namespace fastexcel::core {
-enum class CellType {
-    Empty, String, Number, Boolean, Date, Formula, Error, InlineString
-};
-
-class Cell {
-public:
-    // 构造和析构
-    Cell() = default;
-    ~Cell() = default;
-    Cell(const Cell& other);
-    Cell& operator=(const Cell& other);
-    Cell(Cell&& other) noexcept = default;
-    Cell& operator=(Cell&& other) noexcept = default;
-    
-    // 设置值
-    void setValue(const std::string& value);
-    void setValue(double value);
-    void setValue(bool value);
-    void setValue(int value);
-    void setFormula(const std::string& formula);
-    
-    // 获取值
-    CellType getType() const;                    // 外部API统一类型
-    CellType getInternalType() const;            // 内部实际类型（用于测试）
-    std::string getStringValue() const;
-    double getNumberValue() const;
-    bool getBooleanValue() const;
-    std::string getFormula() const;
-    
-    // 格式设置
-    void setFormat(std::shared_ptr<Format> format);
-    std::shared_ptr<Format> getFormat() const;
-    
-    // 超链接操作
-    void setHyperlink(const std::string& url);
-    std::string getHyperlink() const;
-    bool hasHyperlink() const;
-    
-    // 检查状态
-    bool isEmpty() const;
-    bool isString() const;
-    bool isNumber() const;
-    bool isBoolean() const;
-    bool isFormula() const;
-    
-    // 内存使用统计
-    size_t getMemoryUsage() const;
-    
-    // 清空单元格
-    void clear();
-};
-}
-```
-
-### 内联字符串优化
-
-FastExcel 实现了智能的内联字符串优化：
-
-- **短字符串（≤15字符）**: 直接存储在 Cell 对象内部，避免额外内存分配
-- **长字符串（>15字符）**: 使用传统的堆分配存储
-- **自动选择**: 根据字符串长度自动选择最优存储方式
-- **API透明**: 对外API保持一致，内部优化对用户透明
-
-```cpp
-// 示例：内联字符串优化
-Cell cell;
-cell.setValue("短文本");        // 内联存储，高性能
-cell.setValue("这是一个很长的字符串内容，超过15个字符"); // 堆存储
-
-// API使用完全相同
-std::string value = cell.getStringValue();
-CellType type = cell.getType(); // 始终返回 CellType::String
-```
-
-### 使用示例
-
-```cpp
-// 获取单元格并操作
-auto& cell = worksheet->getCell(0, 0);
-cell.setValue("Hello World");
-cell.setFormat(title_format);
-cell.setHyperlink("https://www.example.com");
-
-// 检查单元格状态
-if (cell.isString()) {
-    std::cout << "单元格内容: " << cell.getStringValue() << std::endl;
-}
-
-if (cell.hasHyperlink()) {
-    std::cout << "超链接: " << cell.getHyperlink() << std::endl;
-}
-```
-
-## XMLStreamWriter 类
-
-高性能的 XML 流写入器，用于生成 Excel OOXML 格式。
-
-### 类定义
-
-```cpp
-namespace fastexcel::xml {
-class XMLStreamWriter {
-public:
-    XMLStreamWriter();
-    ~XMLStreamWriter();
-    
-    // 禁用拷贝
-    XMLStreamWriter(const XMLStreamWriter&) = delete;
-    XMLStreamWriter& operator=(const XMLStreamWriter&) = delete;
-    
-    // 模式设置
-    void setDirectFileMode(FILE* file, bool take_ownership = false);
-    void setBufferedMode();
-    
-    // 文档操作
-    void startDocument();
-    void endDocument();
-    
-    // 元素操作
-    void startElement(const char* name);
-    void endElement();
-    void writeEmptyElement(const char* name);
-    
-    // 属性操作
-    void writeAttribute(const char* name, const char* value);
-    void writeAttribute(const char* name, int value);
-    void writeAttribute(const char* name, double value);
-    
-    // 文本操作
-    void writeText(const char* text);
-    void writeRaw(const char* data);
-    void writeRaw(const std::string& data);
-    
-    // 获取结果
-    std::string toString() const;
-    void clear();
-    
-    // 文件操作
-    bool writeToFile(const std::string& filename);
-    bool setOutputFile(FILE* file, bool take_ownership = false);
-    
-    // 批处理属性
-    void startAttributeBatch();
-    void endAttributeBatch();
-};
-}
-```
-
-### 使用示例
-
-```cpp
-// 创建 XML 写入器
-fastexcel::xml::XMLStreamWriter writer;
-writer.startDocument();
-
-// 写入根元素
-writer.startElement("worksheet");
-writer.writeAttribute("xmlns", "http://schemas.openxmlformats.org/spreadsheetml/2006/main");
-
-// 写入数据
-writer.startElement("sheetData");
-writer.startElement("row");
-writer.writeAttribute("r", "1");
-
-writer.startElement("c");
-writer.writeAttribute("r", "A1");
-writer.writeAttribute("t", "inlineStr");
-writer.startElement("is");
-writer.startElement("t");
-writer.writeText("Hello World");
-writer.endElement(); // t
-writer.endElement(); // is
-writer.endElement(); // c
-
-writer.endElement(); // row
-writer.endElement(); // sheetData
-writer.endElement(); // worksheet
-
-writer.endDocument();
-
-// 获取结果
-std::string xml = writer.toString();
-```
-
-## 工具函数
-
-### 库初始化和清理
-
-```cpp
-namespace fastexcel {
-// 初始化库
-void initialize();
-
-// 清理资源
-void cleanup();
-
-// 获取版本信息
-std::string getVersion();
-std::string getBuildInfo();
-}
-```
-
-### 颜色常量
-
-```cpp
-namespace fastexcel::core {
-// 基本颜色
+// 颜色常量
 constexpr uint32_t COLOR_BLACK   = 0x000000;
 constexpr uint32_t COLOR_WHITE   = 0xFFFFFF;
 constexpr uint32_t COLOR_RED     = 0xFF0000;
 constexpr uint32_t COLOR_GREEN   = 0x00FF00;
 constexpr uint32_t COLOR_BLUE    = 0x0000FF;
 constexpr uint32_t COLOR_YELLOW  = 0xFFFF00;
-constexpr uint32_t COLOR_MAGENTA = 0xFF00FF;
-constexpr uint32_t COLOR_CYAN    = 0x00FFFF;
 
-// 扩展颜色
-constexpr uint32_t COLOR_GRAY    = 0x808080;
-constexpr uint32_t COLOR_SILVER  = 0xC0C0C0;
-constexpr uint32_t COLOR_MAROON  = 0x800000;
-constexpr uint32_t COLOR_OLIVE   = 0x808000;
-constexpr uint32_t COLOR_LIME    = 0x00FF00;
-constexpr uint32_t COLOR_AQUA    = 0x00FFFF;
-constexpr uint32_t COLOR_TEAL    = 0x008080;
-constexpr uint32_t COLOR_NAVY    = 0x000080;
-constexpr uint32_t COLOR_FUCHSIA = 0xFF00FF;
-constexpr uint32_t COLOR_PURPLE  = 0x800080;
+// Excel主题色
+constexpr uint32_t THEME_BLUE    = 0x4472C4;
+constexpr uint32_t THEME_RED     = 0xC5504B;
+constexpr uint32_t THEME_GREEN   = 0x70AD47;
+constexpr uint32_t THEME_ORANGE  = 0xE07C24;
+
+// 常用数字格式
+constexpr const char* NUMBER_FORMAT_GENERAL    = "General";
+constexpr const char* NUMBER_FORMAT_INTEGER    = "0";
+constexpr const char* NUMBER_FORMAT_DECIMAL    = "0.00";
+constexpr const char* NUMBER_FORMAT_CURRENCY   = "¥#,##0.00";
+constexpr const char* NUMBER_FORMAT_PERCENTAGE = "0.00%";
+constexpr const char* NUMBER_FORMAT_DATE       = "yyyy-mm-dd";
+constexpr const char* NUMBER_FORMAT_TIME       = "h:mm:ss";
+constexpr const char* NUMBER_FORMAT_DATETIME   = "yyyy-mm-dd h:mm:ss";
 }
 ```
 
-### 工具函数
+## Cell 类
+
+单元格类存储单元格数据和相关信息。
+
+```cpp
+enum class CellType {
+    Empty, String, Number, Boolean, Date, Formula, Error
+};
+
+class Cell {
+public:
+    // === 构造和析构 ===
+    Cell() = default;
+    Cell(const Cell& other);
+    Cell& operator=(const Cell& other);
+    Cell(Cell&& other) noexcept = default;
+    Cell& operator=(Cell&& other) noexcept = default;
+    
+    // === 设置值 ===
+    void setValue(const std::string& value);
+    void setValue(double value);
+    void setValue(bool value);
+    void setValue(int value);
+    void setFormula(const std::string& formula);
+    
+    // === 获取值 ===
+    CellType getType() const;
+    std::string getStringValue() const;
+    double getNumberValue() const;
+    bool getBooleanValue() const;
+    std::string getFormula() const;
+    
+    // === 样式设置 ===
+    void setStyleId(int style_id);
+    int getStyleId() const;
+    
+    // === 超链接 ===
+    void setHyperlink(const std::string& url);
+    std::string getHyperlink() const;
+    bool hasHyperlink() const;
+    
+    // === 检查状态 ===
+    bool isEmpty() const;
+    bool isString() const;
+    bool isNumber() const;
+    bool isBoolean() const;
+    bool isFormula() const;
+    
+    // === 内存管理 ===
+    size_t getMemoryUsage() const;
+    void clear();
+};
+```
+
+### 使用示例
+
+```cpp
+// 获取单元格引用
+auto& cell = worksheet->getCell(0, 0);
+
+// 设置不同类型的值
+cell.setValue("Hello World");
+cell.setValue(123.45);
+cell.setValue(true);
+cell.setFormula("SUM(A1:A10)");
+
+// 应用样式
+cell.setStyleId(header_style_id);
+
+// 添加超链接
+cell.setHyperlink("https://www.example.com");
+
+// 检查单元格类型
+if (cell.isString()) {
+    std::cout << "字符串值: " << cell.getStringValue() << std::endl;
+}
+if (cell.isNumber()) {
+    std::cout << "数值: " << cell.getNumberValue() << std::endl;
+}
+if (cell.hasHyperlink()) {
+    std::cout << "超链接: " << cell.getHyperlink() << std::endl;
+}
+```
+
+## 流式处理
+
+FastExcel 支持三种流式处理模式，可以处理不同规模的数据。
+
+### WorkbookMode 模式选择
+
+```cpp
+enum class WorkbookMode {
+    AUTO,      // 自动选择（推荐）
+    BATCH,     // 批量模式：内存缓存后批量写入
+    STREAMING  // 流式模式：实时写入，恒定内存
+};
+
+// 设置处理模式
+auto& options = workbook->getOptions();
+options.mode = WorkbookMode::STREAMING;
+
+// 或者使用高性能模式（自动优化）
+workbook->setHighPerformanceMode(true);
+```
+
+### 性能模式对比
+
+| 模式 | 内存使用 | 处理速度 | 适用场景 |
+|------|----------|----------|----------|
+| **BATCH** | 高（全量缓存） | 快 | 小到中型文件 (<50MB) |
+| **STREAMING** | 恒定（8KB缓冲） | 中等 | 大文件，内存受限 (>100MB) |
+| **AUTO** | 智能选择 | 最优 | 所有场景（推荐） |
+
+### 高性能配置示例
+
+```cpp
+// 极致性能配置
+workbook->setHighPerformanceMode(true);
+
+// 或者手动配置
+auto& options = workbook->getOptions();
+options.mode = WorkbookMode::AUTO;
+options.compression_level = 0;           // 无压缩
+options.use_shared_strings = false;      // 禁用共享字符串
+options.constant_memory = true;          // 启用恒定内存
+options.row_buffer_size = 10000;         // 大缓冲区
+options.xml_buffer_size = 8 * 1024 * 1024; // 8MB XML缓冲
+
+// 设置自动模式阈值
+options.auto_mode_cell_threshold = 2000000;    // 200万单元格
+options.auto_mode_memory_threshold = 200 * 1024 * 1024; // 200MB
+```
+
+## 文档属性管理
+
+### DocumentProperties 结构
+
+```cpp
+struct DocumentProperties {
+    std::string title;       // 文档标题
+    std::string author;      // 作者
+    std::string manager;     // 管理者
+    std::string company;     // 公司
+    std::string category;    // 类别
+    std::string keywords;    // 关键词
+    std::string comments;    // 备注
+    std::string subject;     // 主题
+    std::string status;      // 状态
+    
+    std::tm created_time;    // 创建时间
+    std::tm modified_time;   // 修改时间
+};
+```
+
+### CustomPropertyManager
+
+```cpp
+class CustomPropertyManager {
+public:
+    // 设置属性
+    void setProperty(const std::string& name, const std::string& value);
+    void setProperty(const std::string& name, double value);
+    void setProperty(const std::string& name, bool value);
+    
+    // 获取属性
+    std::string getProperty(const std::string& name) const;
+    bool hasProperty(const std::string& name) const;
+    bool removeProperty(const std::string& name);
+    
+    // 批量操作
+    std::unordered_map<std::string, std::string> getAllProperties() const;
+    void clear();
+    bool empty() const;
+    size_t size() const;
+};
+```
+
+### 使用示例
+
+```cpp
+// 设置文档属性
+auto& props = workbook->getDocumentProperties();
+props.title = "2024年销售报表";
+props.author = "销售部";
+props.company = "我的公司";
+props.category = "财务报表";
+props.keywords = "销售,报表,2024";
+props.comments = "月度销售数据汇总";
+props.status = "草稿";
+
+// 设置自定义属性
+workbook->setCustomProperty("部门", "销售部");
+workbook->setCustomProperty("版本", 1.2);
+workbook->setCustomProperty("已审核", false);
+workbook->setCustomProperty("截止日期", "2024-12-31");
+
+// 获取自定义属性
+std::string dept = workbook->getCustomProperty("部门");
+bool reviewed = workbook->getCustomProperty("已审核") == "true";
+
+// 移除属性
+workbook->removeCustomProperty("临时属性");
+```
+
+## 工具类
+
+### 单元格引用工具
 
 ```cpp
 namespace fastexcel::utils {
 // 单元格引用转换
-std::string cellReference(int row, int col);
-std::pair<int, int> parseReference(const std::string& ref);
+std::string cellReference(int row, int col);           // (0,0) -> "A1"
+std::pair<int, int> parseReference(const std::string& ref); // "A1" -> (0,0)
 
-// 列号转换
-std::string columnToLetter(int col);
-int letterToColumn(const std::string& letter);
+// 列转换
+std::string columnToLetter(int col);    // 0 -> "A", 25 -> "Z", 26 -> "AA"
+int letterToColumn(const std::string& letter); // "A" -> 0, "AA" -> 26
 
-// 日期时间工具
+// 范围引用
+std::string rangeReference(int first_row, int first_col, 
+                          int last_row, int last_col); // "A1:B2"
+}
+```
+
+### 颜色工具
+
+```cpp
+namespace fastexcel::utils {
+// RGB转换
+uint32_t rgbToColor(int r, int g, int b);
+std::tuple<int, int, int> colorToRgb(uint32_t color);
+
+// 颜色调整
+uint32_t darkenColor(uint32_t color, double factor);  // 变暗
+uint32_t lightenColor(uint32_t color, double factor); // 变亮
+uint32_t blendColors(uint32_t color1, uint32_t color2, double ratio);
+}
+```
+
+### 日期时间工具
+
+```cpp
+namespace fastexcel::utils {
+// Excel日期序列号转换
 double dateTimeToSerial(const std::tm& datetime);
 std::tm serialToDateTime(double serial);
 
-// 颜色工具
-uint32_t rgbToColor(int r, int g, int b);
-std::tuple<int, int, int> colorToRgb(uint32_t color);
+// 当前时间
+std::tm getCurrentTime();
+std::string formatTimeISO8601(const std::tm& time);
 }
 ```
 
-## 错误处理
-
-### 异常类型
+### 使用示例
 
 ```cpp
-namespace fastexcel {
-class FastExcelException : public std::exception {
-public:
-    FastExcelException(const std::string& message, ErrorCode code = ErrorCode::InternalError);
-    const char* what() const noexcept override;
-    ErrorCode getErrorCode() const;
-    
-private:
-    std::string message_;
-    ErrorCode error_code_;
-};
+// 单元格引用
+std::string ref = fastexcel::utils::cellReference(0, 0); // "A1"
+auto [row, col] = fastexcel::utils::parseReference("B2"); // (1, 1)
 
-enum class ErrorCode {
-    Success,
-    FileNotFound,
-    PermissionDenied,
-    InvalidFormat,
-    OutOfMemory,
-    InvalidParameter,
-    InternalError,
-    XMLParseError,
-    CompressionError
-};
-}
+// 范围引用
+std::string range = fastexcel::utils::rangeReference(0, 0, 9, 3); // "A1:D10"
+
+// 颜色操作
+uint32_t red = fastexcel::utils::rgbToColor(255, 0, 0);
+auto [r, g, b] = fastexcel::utils::colorToRgb(0xFF0000);
+uint32_t dark_red = fastexcel::utils::darkenColor(red, 0.8);
+
+// 日期时间
+auto now = fastexcel::utils::getCurrentTime();
+double excel_date = fastexcel::utils::dateTimeToSerial(now);
 ```
 
-### 错误处理示例
+## 最佳实践
+
+### 1. 性能优化指南
 
 ```cpp
-try {
-    auto workbook = fastexcel::core::Workbook::create("test.xlsx");
-    workbook->open();
-    
-    auto worksheet = workbook->addWorksheet("Sheet1");
-    worksheet->writeString(0, 0, "Hello");
-    
-    workbook->save();
-    
-} catch (const fastexcel::FastExcelException& e) {
-    switch (e.getErrorCode()) {
-        case fastexcel::ErrorCode::FileNotFound:
-            std::cerr << "文件未找到: " << e.what() << std::endl;
-            break;
-        case fastexcel::ErrorCode::PermissionDenied:
-            std::cerr << "权限不足: " << e.what
-std::cerr << "权限不足: " << e.what() << std::endl;
-            break;
-        case fastexcel::ErrorCode::InvalidParameter:
-            std::cerr << "参数无效: " << e.what() << std::endl;
-            break;
-        default:
-            std::cerr << "未知错误: " << e.what() << std::endl;
-            break;
-    }
-} catch (const std::exception& e) {
-    std::cerr << "标准异常: " << e.what() << std::endl;
-}
-```
+// ✅ 推荐：使用自动模式
+auto& options = workbook->getOptions();
+options.mode = WorkbookMode::AUTO;
 
-## 性能优化
+// ✅ 推荐：重用样式
+StyleBuilder header_style;
+header_style.font().bold(true).color(0xFFFFFF);
+int header_id = workbook->addStyle(header_style);
 
-### 1. 批量写入优化
-
-```cpp
-// 推荐：使用批量写入
-std::vector<std::vector<std::string>> data = {
-    {"A1", "B1", "C1"},
-    {"A2", "B2", "C2"},
-    {"A3", "B3", "C3"}
-};
-worksheet->writeRange(0, 0, data);
-
-// 避免：逐个单元格写入
-for (int i = 0; i < 3; ++i) {
-    for (int j = 0; j < 3; ++j) {
-        worksheet->writeString(i, j, data[i][j]);
-    }
-}
-```
-
-### 2. 格式重用
-
-```cpp
-// 推荐：重用格式对象
-auto header_format = workbook->createFormat();
-header_format->setBold(true);
-header_format->setBackgroundColor(fastexcel::core::COLOR_BLUE);
-
+// 在循环中重用样式ID
 for (int col = 0; col < 10; ++col) {
-    worksheet->writeString(0, col, headers[col], header_format);
+    worksheet->writeString(0, col, headers[col], header_id);
 }
 
-// 避免：重复创建格式
+// ❌ 避免：在循环中创建样式
 for (int col = 0; col < 10; ++col) {
-    auto format = workbook->createFormat();
-    format->setBold(true);
-    format->setBackgroundColor(fastexcel::core::COLOR_BLUE);
-    worksheet->writeString(0, col, headers[col], format);
+    StyleBuilder style;  // 每次都创建新样式
+    style.font().bold(true);
+    int style_id = workbook->addStyle(style);
+    worksheet->writeString(0, col, headers[col], style_id);
 }
 ```
 
-### 3. 内存管理优化
+### 2. 内存管理
 
 ```cpp
-// 对于大量数据，使用常量内存模式
-workbook->setConstantMemoryMode(true);
+// ✅ 大数据处理：启用流式模式
+workbook->getOptions().mode = WorkbookMode::STREAMING;
 
-// 分批处理大数据集
-const size_t BATCH_SIZE = 1000;
+// ✅ 分批处理
+const size_t BATCH_SIZE = 5000;
 for (size_t i = 0; i < total_rows; i += BATCH_SIZE) {
     size_t end = std::min(i + BATCH_SIZE, total_rows);
     processBatch(worksheet, i, end);
     
-    // 可选：强制垃圾回收
+    // 可选：报告进度
     if (i % (BATCH_SIZE * 10) == 0) {
-        // 清理临时对象
+        std::cout << "已处理: " << i << " / " << total_rows << std::endl;
     }
 }
 ```
 
-### 4. XML 生成优化
+### 3. 错误处理
 
 ```cpp
-// 使用直接文件模式减少内存使用
-FILE* file = fopen("output.xml", "wb");
-if (file) {
-    fastexcel::xml::XMLStreamWriter writer;
-    writer.setDirectFileMode(file, true);
-    
-    // 生成 XML
-    writer.startDocument();
-    // ... XML 内容
-    writer.endDocument();
-}
-```
-
-### 5. 性能测试示例
-
-```cpp
-#include <chrono>
-
-void performanceTest() {
-    auto start = std::chrono::high_resolution_clock::now();
-    
-    auto workbook = fastexcel::core::Workbook::create("performance_test.xlsx");
+try {
+    auto workbook = Workbook::create("report.xlsx");
     workbook->open();
-    workbook->setConstantMemoryMode(true);
     
-    auto worksheet = workbook->addWorksheet("大数据测试");
-    
-    // 写入 100,000 行数据
-    const int ROWS = 100000;
-    const int COLS = 10;
-    
-    for (int row = 0; row < ROWS; ++row) {
-        for (int col = 0; col < COLS; ++col) {
-            worksheet->writeNumber(row, col, row * col + col);
-        }
-        
-        // 每 1000 行报告进度
-        if (row % 1000 == 0) {
-            std::cout << "已处理 " << row << " 行" << std::endl;
-        }
-    }
+    auto worksheet = workbook->addWorksheet("数据");
+    // ... 数据操作
     
     workbook->save();
     
-    auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-    
-    std::cout << "写入 " << ROWS << " 行数据耗时: " << duration.count() << " 毫秒" << std::endl;
-    std::cout << "平均每行耗时: " << static_cast<double>(duration.count()) / ROWS << " 毫秒" << std::endl;
+} catch (const std::exception& e) {
+    LOG_ERROR("创建Excel文件失败: {}", e.what());
+    // 错误恢复逻辑
+    return false;
 }
 ```
 
-## 兼容性说明
+### 4. 资源管理
 
-### 与 libxlsxwriter 的差异
-
-| 特性 | libxlsxwriter | FastExcel |
-|------|---------------|-----------|
-| 内存管理 | 手动管理 | 智能指针自动管理 |
-| 错误处理 | 错误码 | C++ 异常 |
-| 类型安全 | 弱类型 | 强类型枚举 |
-| API 风格 | C 风格 | 现代 C++ 风格 |
-| 性能 | 基准 | 优化提升 20-40% |
-| 功能 | 基础功能 | 扩展功能 + 兼容 |
-
-### 迁移指南
-
-#### 基本迁移步骤
-
-1. **包含头文件**
 ```cpp
-// libxlsxwriter
-#include "xlsxwriter.h"
+// ✅ RAII模式 - 自动管理资源
+{
+    auto workbook = Workbook::create("temp.xlsx");
+    workbook->open();
+    // ... 操作
+    workbook->save();
+} // 自动释放资源
 
-// FastExcel
-#include "fastexcel/FastExcel.hpp"
+// ✅ 智能指针管理
+std::shared_ptr<Worksheet> sheet = workbook->addWorksheet("Sheet1");
+// worksheet会在workbook析构时自动释放
 ```
 
-2. **工作簿创建**
-```cpp
-// libxlsxwriter
-lxw_workbook *workbook = workbook_new("test.xlsx");
+### 5. 样式复制和迁移
 
-// FastExcel
-auto workbook = fastexcel::core::Workbook::create("test.xlsx");
-workbook->open();
+```cpp
+// 从现有工作簿复制样式
+auto source_workbook = Workbook::loadForEdit("template.xlsx");
+auto transfer_context = workbook->copyStylesFrom(*source_workbook);
+
+// 使用ID映射应用样式
+int source_style_id = 5;
+int target_style_id = transfer_context->mapStyleId(source_style_id);
+worksheet->writeString(0, 0, "Hello", target_style_id);
+
+// 查看传输统计
+auto stats = transfer_context->getTransferStats();
+LOG_INFO("传输了{}个样式，去重{}个", stats.transferred_count, stats.deduplicated_count);
 ```
 
-3. **工作表操作**
-```cpp
-// libxlsxwriter
-lxw_worksheet *worksheet = workbook_add_worksheet(workbook, "Sheet1");
+### 6. 多工作表操作
 
-// FastExcel
-auto worksheet = workbook->addWorksheet("Sheet1");
+```cpp
+// 批量重命名工作表
+std::unordered_map<std::string, std::string> rename_map = {
+    {"Sheet1", "汇总"},
+    {"Sheet2", "明细"},
+    {"Sheet3", "图表"}
+};
+int renamed = workbook->batchRenameWorksheets(rename_map);
+
+// 批量删除工作表
+std::vector<std::string> to_remove = {"临时表", "测试表"};
+int removed = workbook->batchRemoveWorksheets(to_remove);
+
+// 重新排列工作表顺序
+std::vector<std::string> new_order = {"汇总", "图表", "明细"};
+workbook->reorderWorksheets(new_order);
 ```
 
-4. **格式创建**
-```cpp
-// libxlsxwriter
-lxw_format *format = workbook_add_format(workbook);
-format_set_bold(format);
-
-// FastExcel
-auto format = workbook->createFormat();
-format->setBold(true);
-```
-
-5. **数据写入**
-```cpp
-// libxlsxwriter
-worksheet_write_string(worksheet, 0, 0, "Hello", format);
-worksheet_write_number(worksheet, 1, 0, 123.45, NULL);
-
-// FastExcel
-worksheet->writeString(0, 0, "Hello", format);
-worksheet->writeNumber(1, 0, 123.45);
-```
-
-6. **文件保存**
-```cpp
-// libxlsxwriter
-workbook_close(workbook);
-
-// FastExcel
-workbook->save();
-```
-
-#### 完整迁移示例
+### 7. 查找和替换
 
 ```cpp
-// === libxlsxwriter 版本 ===
-#include "xlsxwriter.h"
+// 全局查找替换
+FindReplaceOptions options;
+options.match_case = false;
+options.match_entire_cell = false;
+options.worksheet_filter = {"Sheet1", "Sheet2"}; // 仅在指定工作表中查找
 
-int main() {
-    lxw_workbook *workbook = workbook_new("libxlsxwriter_example.xlsx");
-    lxw_worksheet *worksheet = workbook_add_worksheet(workbook, NULL);
-    lxw_format *format = workbook_add_format(workbook);
-    
-    format_set_bold(format);
-    format_set_font_color(format, LXW_COLOR_RED);
-    
-    worksheet_write_string(worksheet, 0, 0, "Hello", format);
-    worksheet_write_number(worksheet, 1, 0, 123.45, NULL);
-    
-    workbook_close(workbook);
-    return 0;
+int replaced = workbook->findAndReplaceAll("旧文本", "新文本", options);
+
+// 查找所有匹配项
+auto results = workbook->findAll("搜索文本", options);
+for (auto& [sheet_name, row, col] : results) {
+    std::cout << "找到: " << sheet_name << " " << row << ":" << col << std::endl;
 }
+```
 
-// === FastExcel 版本 ===
+### 8. 完整的应用示例
+
+```cpp
 #include "fastexcel/FastExcel.hpp"
+using namespace fastexcel::core;
 
-int main() {
-    fastexcel::initialize();
-    
+void createSalesReport() {
     try {
-        auto workbook = fastexcel::core::Workbook::create("fastexcel_example.xlsx");
+        // 创建工作簿
+        auto workbook = Workbook::create("销售报表2024.xlsx");
         workbook->open();
         
-        auto worksheet = workbook->addWorksheet();
-        auto format = workbook->createFormat();
+        // 启用高性能模式
+        workbook->setHighPerformanceMode(true);
         
-        format->setBold(true);
-        format->setFontColor(fastexcel::core::COLOR_RED);
+        // 设置文档属性
+        auto& props = workbook->getDocumentProperties();
+        props.title = "2024年销售报表";
+        props.author = "销售部";
+        props.company = "我的公司";
         
-        worksheet->writeString(0, 0, "Hello", format);
-        worksheet->writeNumber(1, 0, 123.45);
+        // 创建样式
+        StyleBuilder title_style;
+        title_style.font().size(18).bold(true).color(0xFFFFFF);
+        title_style.fill().backgroundColor(0x4472C4);
+        title_style.alignment().horizontal(HorizontalAlign::Center);
+        int title_id = workbook->addStyle(title_style);
         
-        workbook->save();
+        StyleBuilder header_style;
+        header_style.font().bold(true);
+        header_style.fill().backgroundColor(0xD9E1F2);
+        header_style.border().all(BorderStyle::Thin);
+        int header_id = workbook->addStyle(header_style);
         
-    } catch (const std::exception& e) {
-        std::cerr << "错误: " << e.what() << std::endl;
-        fastexcel::cleanup();
-        return -1;
-    }
-    
-    fastexcel::cleanup();
-    return 0;
-}
-```
-
-## 高级用法示例
-
-### 1. 复杂报表生成
-
-```cpp
-void generateSalesReport() {
-    fastexcel::initialize();
-    
-    auto workbook = fastexcel::core::Workbook::create("销售报表.xlsx");
-    workbook->open();
-    
-    // 设置文档属性
-    workbook->setTitle("2024年销售报表");
-    workbook->setAuthor("销售部");
-    workbook->setCompany("我的公司");
-    
-    auto worksheet = workbook->addWorksheet("销售数据");
-    
-    // 创建各种格式
-    auto title_format = workbook->createFormat();
-    title_format->setFontSize(18);
-    title_format->setBold(true);
-    title_format->setHorizontalAlign(fastexcel::core::HorizontalAlign::Center);
-    title_format->setBackgroundColor(0x4472C4);
-    title_format->setFontColor(fastexcel::core::COLOR_WHITE);
-    
-    auto header_format = workbook->createFormat();
-    header_format->setBold(true);
-    header_format->setBackgroundColor(0xD9E1F2);
-    header_format->setBorder(fastexcel::core::BorderStyle::Thin);
-    
-    auto currency_format = workbook->createFormat();
-    currency_format->setNumberFormat("¥#,##0.00");
-    currency_format->setBorder(fastexcel::core::BorderStyle::Thin);
-    
-    auto date_format = workbook->createFormat();
-    date_format->setNumberFormat("yyyy-mm-dd");
-    date_format->setBorder(fastexcel::core::BorderStyle::Thin);
-    
-    // 设置列宽
-    worksheet->setColumnWidth(0, 15);  // 产品名称
-    worksheet->setColumnWidth(1, 12);  // 销售日期
-    worksheet->setColumnWidth(2, 10);  // 数量
-    worksheet->setColumnWidth(3, 12);  // 单价
-    worksheet->setColumnWidth(4, 12);  // 总额
-    
-    // 写入标题
-    worksheet->mergeRange(0, 0, 0, 4, "2024年销售报表", title_format);
-    
-    // 写入表头
-    std::vector<std::string> headers = {"产品名称", "销售日期", "数量", "单价", "总额"};
-    for (size_t i = 0; i < headers.size(); ++i) {
-        worksheet->writeString(2, static_cast<int>(i), headers[i], header_format);
-    }
-    
-    // 写入数据
-    struct SalesRecord {
-        std::string product;
-        std::tm date;
-        int quantity;
-        double price;
-        double total;
-    };
-    
-    std::vector<SalesRecord> sales_data = {
-        {"产品A", {0, 0, 124, 1, 0, 0}, 100, 50.0, 5000.0},
-        {"产品B", {0, 0, 124, 2, 0, 0}, 80, 75.0, 6000.0},
-        {"产品C", {0, 0, 124, 3, 0, 0}, 120, 60.0, 7200.0}
-    };
-    
-    int row = 3;
-    for (const auto& record : sales_data) {
-        worksheet->writeString(row, 0, record.product);
-        worksheet->writeDateTime(row, 1, record.date, date_format);
-        worksheet->writeNumber(row, 2, record.quantity);
-        worksheet->writeNumber(row, 3, record.price, currency_format);
-        worksheet->writeNumber(row, 4, record.total, currency_format);
-        row++;
-    }
-    
-    // 添加总计行
-    auto total_format = workbook->createFormat();
-    total_format->setBold(true);
-    total_format->setBackgroundColor(0xF2F2F2);
-    total_format->setBorder(fastexcel::core::BorderStyle::Thin);
-    
-    worksheet->writeString(row, 0, "总计", total_format);
-    worksheet->writeFormula(row, 4, "SUM(E4:E6)", total_format);
-    
-    // 设置自动筛选
-    worksheet->setAutoFilter(2, 0, row - 1, 4);
-    
-    // 冻结窗格
-    worksheet->freezePanes(3, 0);
-    
-    // 设置打印选项
-    worksheet->setPrintArea(0, 0, row, 4);
-    worksheet->setLandscape(true);
-    worksheet->setPrintGridlines(true);
-    
-    workbook->save();
-    fastexcel::cleanup();
-}
-```
-
-### 2. 数据透视表样式报表
-
-```cpp
-void generatePivotStyleReport() {
-    auto workbook = fastexcel::core::Workbook::create("数据透视表样式.xlsx");
-    workbook->open();
-    
-    auto worksheet = workbook->addWorksheet("透视表");
-    
-    // 创建透视表样式格式
-    auto pivot_header = workbook->createFormat();
-    pivot_header->setBold(true);
-    pivot_header->setBackgroundColor(0x5B9BD5);
-    pivot_header->setFontColor(fastexcel::core::COLOR_WHITE);
-    pivot_header->setBorder(fastexcel::core::BorderStyle::Thin);
-    
-    auto pivot_subtotal = workbook->createFormat();
-    pivot_subtotal->setBold(true);
-    pivot_subtotal->setBackgroundColor(0xDDEBF7);
-    pivot_subtotal->setBorder(fastexcel::core::BorderStyle::Thin);
-    
-    auto pivot_data = workbook->createFormat();
-    pivot_data->setBorder(fastexcel::core::BorderStyle::Thin);
-    pivot_data->setNumberFormat("#,##0");
-    
-    // 模拟透视表数据结构
-    worksheet->writeString(0, 0, "地区", pivot_header);
-    worksheet->writeString(0, 1, "产品", pivot_header);
-    worksheet->writeString(0, 2, "销售额", pivot_header);
-    
-    // 数据行
-    std::vector<std::tuple<std::string, std::string, double>> data = {
-        {"北京", "产品A", 10000},
-        {"北京", "产品B", 15000},
-        {"北京", "小计", 25000},
-        {"上海", "产品A", 12000},
-        {"上海", "产品B", 18000},
-        {"上海", "小计", 30000},
-        {"总计", "", 55000}
-    };
-    
-    int row = 1;
-    for (const auto& [region, product, amount] : data) {
-        auto format = pivot_data;
-        if (region == "总计" || product == "小计") {
-            format = pivot_subtotal;
+        StyleBuilder currency_style;
+        currency_style.numberFormat("¥#,##0.00");
+        currency_style.border().all(BorderStyle::Thin);
+        int currency_id = workbook->addStyle(currency_style);
+        
+        // 创建工作表
+        auto worksheet = workbook->addWorksheet("销售数据");
+        
+        // 设置列宽
+        worksheet->setColumnWidth(0, 15);
+        worksheet->setColumnWidth(1, 12);
+        worksheet->setColumnWidth(2, 10);
+        worksheet->setColumnWidth(3, 12);
+        
+        // 写入标题
+        worksheet->mergeCells(0, 0, 0, 3);
+        worksheet->writeString(0, 0, "2024年销售报表", title_id);
+        
+        // 写入表头
+        std::vector<std::string> headers = {"产品名称", "销售日期", "数量", "金额"};
+        for (size_t i = 0; i < headers.size(); ++i) {
+            worksheet->writeString(1, i, headers[i], header_id);
         }
         
-        worksheet->writeString(row, 0, region, format);
-        worksheet->writeString(row, 1, product, format);
-        worksheet->writeNumber(row, 2, amount, format);
-        row++;
+        // 写入数据（模拟大量数据）
+        for (int row = 2; row < 10002; ++row) {
+            worksheet->writeString(row, 0, "产品" + std::to_string(row - 1));
+            worksheet->writeString(row, 1, "2024-01-01");
+            worksheet->writeNumber(row, 2, row * 10);
+            worksheet->writeNumber(row, 3, row * 123.45, currency_id);
+            
+            // 进度报告
+            if (row % 1000 == 0) {
+                std::cout << "已写入: " << row << " 行\n";
+            }
+        }
+        
+        // 设置自动筛选
+        worksheet->setAutoFilter(1, 0, 10001, 3);
+        
+        // 冻结窗格
+        worksheet->freezePanes(2, 0);
+        
+        // 保存文件
+        auto start_time = std::chrono::high_resolution_clock::now();
+        workbook->save();
+        auto end_time = std::chrono::high_resolution_clock::now();
+        
+        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
+        std::cout << "保存耗时: " << duration.count() << " 毫秒\n";
+        
+        // 查看统计信息
+        auto stats = workbook->getStatistics();
+        std::cout << "总工作表: " << stats.total_worksheets << "\n";
+        std::cout << "总单元格: " << stats.total_cells << "\n";
+        std::cout << "总样式: " << stats.total_formats << "\n";
+        std::cout << "内存使用: " << stats.memory_usage / 1024 / 1024 << " MB\n";
+        
+        auto style_stats = workbook->getStyleStats();
+        std::cout << "样式去重: " << style_stats.deduplicated_count << "\n";
+        
+    } catch (const std::exception& e) {
+        std::cerr << "创建报表失败: " << e.what() << std::endl;
     }
-    
-    workbook->save();
 }
-```
-
-## 示例代码
-
-更多完整示例请参考项目中的 `examples/` 目录：
-
-- [`basic_usage.cpp`](../examples/basic_usage.cpp) - 基本用法示例
-- [`formatting_example.cpp`](../examples/formatting_example.cpp) - 格式化示例  
-- [`large_data_example.cpp`](../examples/large_data_example.cpp) - 大数据处理示例
-
-## 常见问题
-
-### Q: 如何处理中文字符？
-A: FastExcel 完全支持 UTF-8 编码，可以直接写入中文字符：
-```cpp
-worksheet->writeString(0, 0, "中文测试");
-```
-
-### Q: 如何优化大文件生成性能？
-A: 使用以下优化策略：
-1. 启用常量内存模式：`workbook->setConstantMemoryMode(true)`
-2. 使用批量写入：`worksheet->writeRange()`
-3. 重用格式对象
-4. 分批处理数据
-
-### Q: 如何处理公式？
-A: 直接写入 Excel 公式字符串：
-```cpp
-worksheet->writeFormula(0, 0, "SUM(A1:A10)");
-worksheet->writeFormula(1, 0, "AVERAGE(B1:B10)");
-```
-
-### Q: 如何设置单元格保护？
-A: 使用工作表保护功能：
-```cpp
-worksheet->protect("password");
-// 或者设置格式的锁定属性
-format->setLocked(false);  // 解锁特定单元格
 ```
 
 ---
 
-**FastExcel** - 让 Excel 文件生成更快、更简单、更现代！
+**FastExcel** - 现代化、高性能的 C++ Excel 库
 
-*本文档版本: 1.0.0*  
-*最后更新: 2024-01-01*  
-*如有问题请提交 [Issue](https://github.com/fastexcel/FastExcel/issues)*
+*本文档版本: 2.0.0*  
+*基于代码版本: 当前最新*  
+*最后更新: 2025-01-06*
+
+如有问题或建议，请提交 [Issue](https://github.com/your-repo/FastExcel/issues)

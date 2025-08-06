@@ -1,5 +1,8 @@
 #include "fastexcel/core/Workbook.hpp"
 #include "fastexcel/core/Path.hpp"
+#include "fastexcel/core/CustomPropertyManager.hpp"
+#include "fastexcel/core/DefinedNameManager.hpp"
+#include "fastexcel/core/StyleTransferContext.hpp"
 #include "fastexcel/reader/XLSXReader.hpp"
 #include "fastexcel/utils/LogConfig.hpp"
 #include "fastexcel/utils/Logger.hpp"
@@ -7,6 +10,7 @@
 #include "fastexcel/xml/Relationships.hpp"
 #include "fastexcel/xml/SharedStrings.hpp"
 #include "fastexcel/xml/XMLStreamWriter.hpp"
+#include "fastexcel/xml/StyleSerializer.hpp"
 #include "fastexcel/core/Exception.hpp"
 #include <algorithm>
 #include <ctime>
@@ -43,7 +47,13 @@ Workbook::Workbook(const Path& path) : filename_(path.string()) {
         file_manager_ = std::make_unique<archive::FileManager>(path);
     }
     
-    format_pool_ = std::make_unique<FormatPool>();
+    format_repo_ = std::make_unique<FormatRepository>();
+    
+    // 初始化管理器
+    custom_property_manager_ = std::make_unique<CustomPropertyManager>();
+    defined_name_manager_ = std::make_unique<DefinedNameManager>();
+    custom_property_manager_ = std::make_unique<CustomPropertyManager>();
+    defined_name_manager_ = std::make_unique<DefinedNameManager>();
     
     // 设置默认文档属性
     doc_properties_.author = "FastExcel";
@@ -362,163 +372,76 @@ void Workbook::setActiveWorksheet(size_t index) {
     }
 }
 
-// ========== 格式管理 ==========
+// ========== 样式管理 ==========
 
-std::shared_ptr<Format> Workbook::createFormat() {
-    if (!is_open_) {
-        FASTEXCEL_THROW_OP("Workbook is not open");
-    }
-    
-    // 直接创建一个独立的格式对象，不添加到格式池
-    // 格式池的添加将在格式真正被使用时进行
-    auto format = std::make_unique<Format>();
-    
-    // 设置一个临时的XF索引
-    static int temp_index = 1000;
-    format->setXfIndex(temp_index++);
-    
-    // 返回独立的Format对象，使用正常的删除器
-    return std::shared_ptr<Format>(format.release());
+int Workbook::addStyle(const FormatDescriptor& style) {
+    return format_repo_->addFormat(style);
 }
 
-std::shared_ptr<Format> Workbook::getFormat(size_t format_id) const {
+int Workbook::addStyle(const StyleBuilder& builder) {
+    auto format = builder.build();
+    return format_repo_->addFormat(format);
+}
+
+std::shared_ptr<const FormatDescriptor> Workbook::getStyle(int style_id) const {
     if (!is_open_) {
         return nullptr;
     }
     
-    // 从格式池中根据索引获取格式
-    Format* format = format_pool_->getFormatByIndex(format_id);
-    if (!format) {
-        return nullptr;
-    }
-    
-    // 返回共享指针，使用空删除器
-    return std::shared_ptr<Format>(format, [](Format*){
-        // 空删除器，FormatPool负责管理生命周期
-    });
+    // 从格式仓储中根据ID获取格式描述符
+    return format_repo_->getFormat(style_id);
+}
+
+int Workbook::getDefaultStyleId() const {
+    return format_repo_->getDefaultFormatId();
+}
+
+bool Workbook::isValidStyleId(int style_id) const {
+    return format_repo_->isValidFormatId(style_id);
+}
+
+const FormatRepository& Workbook::getStyleRepository() const {
+    return *format_repo_;
 }
 
 // ========== 自定义属性 ==========
 
 void Workbook::setCustomProperty(const std::string& name, const std::string& value) {
-    // 查找是否已存在
-    auto it = std::find_if(custom_properties_.begin(), custom_properties_.end(),
-                          [&name](const CustomProperty& prop) {
-                              return prop.name == name;
-                          });
-    
-    if (it != custom_properties_.end()) {
-        it->value = value;
-        it->type = CustomProperty::String;
-    } else {
-        custom_properties_.emplace_back(name, value);
-    }
+    custom_property_manager_->setProperty(name, value);
 }
 
 void Workbook::setCustomProperty(const std::string& name, double value) {
-    auto it = std::find_if(custom_properties_.begin(), custom_properties_.end(),
-                          [&name](const CustomProperty& prop) {
-                              return prop.name == name;
-                          });
-    
-    if (it != custom_properties_.end()) {
-        it->value = std::to_string(value);
-        it->type = CustomProperty::Number;
-    } else {
-        custom_properties_.emplace_back(name, value);
-    }
+    custom_property_manager_->setProperty(name, value);
 }
 
 void Workbook::setCustomProperty(const std::string& name, bool value) {
-    auto it = std::find_if(custom_properties_.begin(), custom_properties_.end(),
-                          [&name](const CustomProperty& prop) {
-                              return prop.name == name;
-                          });
-    
-    if (it != custom_properties_.end()) {
-        it->value = value ? "true" : "false";
-        it->type = CustomProperty::Boolean;
-    } else {
-        custom_properties_.emplace_back(name, value);
-    }
+    custom_property_manager_->setProperty(name, value);
 }
 
 std::string Workbook::getCustomProperty(const std::string& name) const {
-    auto it = std::find_if(custom_properties_.begin(), custom_properties_.end(),
-                          [&name](const CustomProperty& prop) {
-                              return prop.name == name;
-                          });
-    
-    if (it != custom_properties_.end()) {
-        return it->value;
-    }
-    
-    return "";
+    return custom_property_manager_->getProperty(name);
 }
 
 bool Workbook::removeCustomProperty(const std::string& name) {
-    auto it = std::find_if(custom_properties_.begin(), custom_properties_.end(),
-                          [&name](const CustomProperty& prop) {
-                              return prop.name == name;
-                          });
-    
-    if (it != custom_properties_.end()) {
-        custom_properties_.erase(it);
-        return true;
-    }
-    
-    return false;
+    return custom_property_manager_->removeProperty(name);
 }
 
 std::unordered_map<std::string, std::string> Workbook::getCustomProperties() const {
-    std::unordered_map<std::string, std::string> properties;
-    for (const auto& prop : custom_properties_) {
-        properties[prop.name] = prop.value;
-    }
-    return properties;
+    return custom_property_manager_->getAllProperties();
 }
 
 // ========== 定义名称 ==========
 
 void Workbook::defineName(const std::string& name, const std::string& formula, const std::string& scope) {
-    // 查找是否已存在
-    auto it = std::find_if(defined_names_.begin(), defined_names_.end(),
-                          [&name, &scope](const DefinedName& dn) {
-                              return dn.name == name && dn.scope == scope;
-                          });
-    
-    if (it != defined_names_.end()) {
-        it->formula = formula;
-    } else {
-        defined_names_.emplace_back(name, formula, scope);
-    }
+    defined_name_manager_->define(name, formula, scope);
 }
 
 std::string Workbook::getDefinedName(const std::string& name, const std::string& scope) const {
-    auto it = std::find_if(defined_names_.begin(), defined_names_.end(),
-                          [&name, &scope](const DefinedName& dn) {
-                              return dn.name == name && dn.scope == scope;
-                          });
-    
-    if (it != defined_names_.end()) {
-        return it->formula;
-    }
-    
-    return "";
+    return defined_name_manager_->get(name, scope);
 }
 
 bool Workbook::removeDefinedName(const std::string& name, const std::string& scope) {
-    auto it = std::find_if(defined_names_.begin(), defined_names_.end(),
-                          [&name, &scope](const DefinedName& dn) {
-                              return dn.name == name && dn.scope == scope;
-                          });
-    
-    if (it != defined_names_.end()) {
-        defined_names_.erase(it);
-        return true;
-    }
-    
-    return false;
+    return defined_name_manager_->remove(name, scope);
 }
 
 // ========== VBA项目 ==========
@@ -645,7 +568,7 @@ bool Workbook::generateExcelStructureBatch() {
     
     // 预估文件数量：基础文件8个 + 工作表文件 + 工作表关系文件 + 自定义属性
     size_t estimated_files = 8 + worksheets_.size() * 2;
-    if (!custom_properties_.empty()) {
+    if (!custom_property_manager_->empty()) {
         estimated_files++;
     }
     
@@ -682,7 +605,7 @@ bool Workbook::generateExcelStructureBatch() {
     files.emplace_back("docProps/core.xml", std::move(core_xml));
     
     // 自定义属性（如果有）
-    if (!custom_properties_.empty()) {
+    if (!custom_property_manager_->empty()) {
         std::string custom_xml;
         generateDocPropsCustomXML([&custom_xml](const char* data, size_t size) {
             custom_xml.append(data, size);
@@ -819,7 +742,7 @@ bool Workbook::generateExcelStructureStreaming() {
         }
         
         // 自定义属性（如果有）- 流式写入
-        if (!custom_properties_.empty()) {
+        if (!custom_property_manager_->empty()) {
             if (!file_manager_->openStreamingFile("docProps/custom.xml")) {
                 LOG_ERROR("Failed to open streaming file: docProps/custom.xml");
                 return false;
@@ -998,8 +921,8 @@ void Workbook::generateWorkbookXML(const std::function<void(const char*, size_t)
 }
 
 void Workbook::generateStylesXML(const std::function<void(const char*, size_t)>& callback) const {
-    // 委托给FormatPool生成样式XML
-    format_pool_->generateStylesXML(callback);
+    // 使用StyleSerializer生成样式XML
+    xml::StyleSerializer::serialize(*format_repo_, callback);
 }
 
 void Workbook::generateSharedStringsXML(const std::function<void(const char*, size_t)>& callback) const {
@@ -1181,7 +1104,7 @@ void Workbook::generateDocPropsCoreXML(const std::function<void(const char*, siz
 }
 
 void Workbook::generateDocPropsCustomXML(const std::function<void(const char*, size_t)>& callback) const {
-    if (custom_properties_.empty()) {
+    if (custom_property_manager_->empty()) {
         return;
     }
     
@@ -1192,7 +1115,7 @@ void Workbook::generateDocPropsCustomXML(const std::function<void(const char*, s
     writer.writeAttribute("xmlns:vt", "http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes");
     
     int pid = 2;
-    for (const auto& prop : custom_properties_) {
+    for (const auto& prop : custom_property_manager_->getAllDetailedProperties()) {
         writer.startElement("property");
         writer.writeAttribute("fmtid", "{D5CDD505-2E9C-101B-9397-08002B2CF9AE}");
         writer.writeAttribute("pid", std::to_string(pid++).c_str());
@@ -1270,7 +1193,7 @@ void Workbook::generateContentTypesXML(const std::function<void(const char*, siz
     }
     
     // 自定义属性（如果有）
-    if (!custom_properties_.empty()) {
+    if (!custom_property_manager_->empty()) {
         writer.startElement("Override");
         writer.writeAttribute("PartName", "/docProps/custom.xml");
         writer.writeAttribute("ContentType", "application/vnd.openxmlformats-officedocument.custom-properties+xml");
@@ -1306,7 +1229,7 @@ void Workbook::generateRelsXML(const std::function<void(const char*, size_t)>& c
     writer.writeAttribute("Target", "docProps/app.xml");
     writer.endElement(); // Relationship
     
-    if (!custom_properties_.empty()) {
+    if (!custom_property_manager_->empty()) {
         writer.startElement("Relationship");
         writer.writeAttribute("Id", "rId4");
         writer.writeAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/custom-properties");
@@ -1642,10 +1565,10 @@ bool Workbook::refresh() {
         
         // 替换当前内容
         worksheets_ = std::move(refreshed_workbook->worksheets_);
-        format_pool_ = std::move(refreshed_workbook->format_pool_);
+        format_repo_ = std::move(refreshed_workbook->format_repo_);
         doc_properties_ = refreshed_workbook->doc_properties_;
-        custom_properties_ = std::move(refreshed_workbook->custom_properties_);
-        defined_names_ = std::move(refreshed_workbook->defined_names_);
+        custom_property_manager_ = std::move(refreshed_workbook->custom_property_manager_);
+        defined_name_manager_ = std::move(refreshed_workbook->defined_name_manager_);
         
         // 恢复打开状态
         if (was_open) {
@@ -1704,10 +1627,10 @@ bool Workbook::mergeWorkbook(const std::unique_ptr<Workbook>& other_workbook, co
         
         // 合并格式
         if (options.merge_formats) {
-            // 将其他工作簿的格式池合并到当前格式池
-            // 这里简化处理，实际可以实现更复杂的合并逻辑
-            for (const auto& format : *other_workbook->format_pool_) {
-                format_pool_->getOrCreateFormat(*format);
+            // 将其他工作簿的格式仓储合并到当前格式仓储
+            // 遍历其他工作簿的所有格式并添加到当前仓储中（自动去重）
+            for (const auto& format_item : *other_workbook->format_repo_) {
+                format_repo_->addFormat(*format_item.format);
             }
             LOG_DEBUG("Merged formats from other workbook");
         }
@@ -1728,7 +1651,7 @@ bool Workbook::mergeWorkbook(const std::unique_ptr<Workbook>& other_workbook, co
             }
             
             // 合并自定义属性
-            for (const auto& prop : other_workbook->custom_properties_) {
+            for (const auto& prop : other_workbook->custom_property_manager_->getAllDetailedProperties()) {
                 setCustomProperty(prop.name, prop.value);
             }
             
@@ -1736,7 +1659,7 @@ bool Workbook::mergeWorkbook(const std::unique_ptr<Workbook>& other_workbook, co
         }
         
         LOG_INFO("Successfully merged workbook: {} worksheets, {} formats",
-                merged_count, other_workbook->format_pool_->getFormatCount());
+                merged_count, other_workbook->format_repo_->getFormatCount());
         return true;
         
     } catch (const std::exception& e) {
@@ -1779,7 +1702,10 @@ bool Workbook::exportWorksheets(const std::vector<std::string>& worksheet_names,
         
         // 复制文档属性
         export_workbook->doc_properties_ = doc_properties_;
-        export_workbook->custom_properties_ = custom_properties_;
+        // 复制自定义属性
+        for (const auto& prop : custom_property_manager_->getAllDetailedProperties()) {
+            export_workbook->setCustomProperty(prop.name, prop.value);
+        }
         
         // 保存导出的工作簿
         bool success = export_workbook->save();
@@ -1926,7 +1852,7 @@ Workbook::WorkbookStats Workbook::getStatistics() const {
     WorkbookStats stats;
     
     stats.total_worksheets = worksheets_.size();
-    stats.total_formats = format_pool_->getFormatCount();
+    stats.total_formats = format_repo_->getFormatCount();
     
     // 计算总单元格数和内存使用
     for (const auto& worksheet : worksheets_) {
@@ -1942,9 +1868,9 @@ Workbook::WorkbookStats Workbook::getStatistics() const {
     // 估算工作簿本身的内存使用
     stats.memory_usage += sizeof(Workbook);
     stats.memory_usage += worksheets_.capacity() * sizeof(std::shared_ptr<Worksheet>);
-    stats.memory_usage += format_pool_->getMemoryUsage();
-    stats.memory_usage += custom_properties_.capacity() * sizeof(CustomProperty);
-    stats.memory_usage += defined_names_.capacity() * sizeof(DefinedName);
+    stats.memory_usage += format_repo_->getMemoryUsage();
+    stats.memory_usage += custom_property_manager_->size() * sizeof(CustomProperty);
+    stats.memory_usage += defined_name_manager_->size() * sizeof(DefinedName);
     
     return stats;
 }
@@ -1969,7 +1895,7 @@ size_t Workbook::estimateMemoryUsage() const {
     }
     
     // 估算格式池内存
-    total_memory += format_pool_->getMemoryUsage();
+    total_memory += format_repo_->getMemoryUsage();
     
     // 估算共享字符串内存
     for (const auto& str : shared_strings_list_) {
@@ -2008,26 +1934,31 @@ size_t Workbook::getTotalCellCount() const {
     return total_cells;
 }
 
-void Workbook::copyStylesFrom(const Workbook* source_workbook) {
-    if (!source_workbook || !source_workbook->format_pool_) {
-        LOG_WARN("copyStylesFrom: source workbook or format pool is null");
-        return;
-    }
-
+std::unique_ptr<StyleTransferContext> Workbook::copyStylesFrom(const Workbook& source_workbook) {
     LOG_DEBUG("开始从源工作簿复制样式数据");
     
-    // 检查源工作簿是否有原始样式数据用于复制
-    if (source_workbook->format_pool_->hasRawStylesForCopy()) {
-        const auto& source_raw_styles = source_workbook->format_pool_->getRawStylesForCopy();
-        LOG_DEBUG("源工作簿包含{}个原始样式，复制到目标工作簿", source_raw_styles.size());
-        
-        // 将源工作簿的原始样式数据复制到目标工作簿的FormatPool
-        format_pool_->setRawStylesForCopy(source_raw_styles);
-        
-        LOG_INFO("样式数据复制完成：{}个原始样式已传递到目标工作簿", source_raw_styles.size());
-    } else {
-        LOG_DEBUG("源工作簿没有原始样式数据，跳过复制");
-    }
+    // 创建样式传输上下文
+    auto transfer_context = std::make_unique<StyleTransferContext>(*source_workbook.format_repo_, *format_repo_);
+    
+    // 预加载所有映射以触发批量复制
+    transfer_context->preloadAllMappings();
+    
+    auto stats = transfer_context->getTransferStats();
+    LOG_DEBUG("完成样式复制，传输了{}个格式，去重了{}个", 
+             stats.transferred_count, stats.deduplicated_count);
+    
+    return transfer_context;
+}
+
+FormatRepository::DeduplicationStats Workbook::getStyleStats() const {
+    return format_repo_->getDeduplicationStats();
+}
+
+size_t Workbook::importStyles(const std::vector<std::string>& styles) {
+    // 这是一个简化实现，实际需要解析XML格式的样式数据
+    // 由于新架构中样式解析应该是独立的，这里返回0表示不支持这种旧的导入方式
+    LOG_WARN("importStyles: 旧的样式导入方式不再支持，请使用新的样式架构");
+    return 0;
 }
 
 }} // namespace fastexcel::core

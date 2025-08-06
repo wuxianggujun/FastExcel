@@ -2,139 +2,150 @@
 
 ## 概述
 
-FastExcel 是一个专为高性能设计的 C++ Excel 库，提供了多层次的性能优化策略。本文档详细介绍了各种优化特性和最佳实践。
+FastExcel 是一个专为高性能设计的 C++ Excel 库，提供了多层次的性能优化策略。本文档详细介绍了各种优化特性和最佳实践，基于当前最新的代码架构实现。
 
 ## 核心优化特性
 
-### 1. 双通道错误处理系统
+### 1. 智能模式选择系统
 
 #### 设计理念
-- **底层零成本**：使用 `Expected<T, Error>` 类型，无异常开销
-- **高层易用性**：可选择抛出异常，保持传统 C++ 异常语义
-- **编译时开关**：通过 `FASTEXCEL_USE_EXCEPTIONS` 控制
+- **自动模式判断**：根据数据量和内存使用情况自动选择最优处理模式
+- **批量与流式切换**：小数据使用批量模式，大数据使用流式模式
+- **用户可控**：支持强制指定处理模式
 
-#### 性能对比
+#### 模式选择算法
 ```cpp
-// 零成本模式（推荐用于热路径）
-auto result = worksheet->readCell(row, col);
-if (result.hasValue()) {
-    auto& cell = result.value();
-    // 处理成功情况
-} else {
-    // 处理错误，无异常开销
-    logError(result.error());
-}
+enum class WorkbookMode {
+    AUTO,      // 自动选择（推荐）
+    BATCH,     // 强制批量模式
+    STREAMING  // 强制流式模式
+};
 
-// 异常模式（易用性优先）
-try {
-    auto& cell = worksheet->readCell(row, col).valueOrThrow();
-    // 处理成功情况
-} catch (const FastExcelException& e) {
-    // 处理异常
+// 智能选择逻辑
+switch (options_.mode) {
+    case WorkbookMode::AUTO:
+        if (total_cells > options_.auto_mode_cell_threshold ||
+            estimated_memory > options_.auto_mode_memory_threshold) {
+            use_streaming = true;  // 使用流式模式
+        }
+        break;
 }
 ```
 
-#### 编译配置
-```bash
-# 启用异常（默认）
-cmake -DFASTEXCEL_USE_EXCEPTIONS=ON ..
+#### 性能配置示例
+```cpp
+// 启用高性能模式
+workbook->setHighPerformanceMode(true);
 
-# 禁用异常（最大性能）
-cmake -DFASTEXCEL_USE_EXCEPTIONS=OFF ..
+// 或手动配置
+auto& options = workbook->getOptions();
+options.mode = WorkbookMode::AUTO;
+options.compression_level = 0;           // 无压缩
+options.use_shared_strings = false;      // 禁用共享字符串
+options.constant_memory = true;          // 启用恒定内存模式
 ```
 
 ### 2. 内存管理优化
 
-#### 内存池系统
+#### 智能指针管理
 ```cpp
-// 自动内存池管理
-class MemoryPool {
-    static constexpr size_t DEFAULT_BLOCK_SIZE = 64 * 1024;  // 64KB
-    static constexpr size_t DEFAULT_ALIGNMENT = 8;
-    
-public:
-    void* allocate(size_t size, size_t alignment = DEFAULT_ALIGNMENT);
-    void deallocate(void* ptr, size_t size);
-    
-    // 批量分配优化
-    template<typename T>
-    T* allocateArray(size_t count);
+class Workbook {
+private:
+    std::vector<std::shared_ptr<Worksheet>> worksheets_;
+    std::unique_ptr<FormatRepository> format_repo_;
+    std::unique_ptr<CustomPropertyManager> custom_property_manager_;
+    std::unique_ptr<archive::FileManager> file_manager_;
 };
 ```
 
-#### Cell 类优化
+#### Cell 类优化设计
 ```cpp
 class Cell {
-    // 位域优化，减少内存占用
-    CellType type_ : 3;          // 3位存储类型
-    bool has_format_ : 1;        // 1位存储格式标志
-    bool is_formula_ : 1;        // 1位存储公式标志
-    uint32_t format_index_ : 27; // 27位存储格式索引
+    // 优化的单元格存储，支持不同数据类型
+    CellType type_;
+    std::variant<std::string, double, bool, std::tm> value_;
+    int style_id_ = 0;
+    std::string hyperlink_;
     
-    // 联合体优化，共享内存
-    union {
-        double number_value_;
-        int32_t string_index_;
-        bool boolean_value_;
-    };
+public:
+    // 类型安全的值访问
+    bool isString() const { return type_ == CellType::String; }
+    std::string getStringValue() const;
+    double getNumberValue() const;
 };
 ```
 
-#### LRU 缓存系统
+#### FormatRepository去重系统
 ```cpp
-template<typename Key, typename Value>
-class LRUCache {
-    size_t capacity_;
-    std::unordered_map<Key, typename std::list<std::pair<Key, Value>>::iterator> cache_;
-    std::list<std::pair<Key, Value>> items_;
+class FormatRepository {
+    std::vector<FormatItem> formats_;
+    std::unordered_map<size_t, int> hash_to_id_;  // 哈希去重
     
 public:
-    bool get(const Key& key, Value& value);
-    void put(const Key& key, const Value& value);
-    void clear();
-    size_t size() const { return cache_.size(); }
+    // 自动去重的格式添加
+    int addFormat(const FormatDescriptor& format) {
+        size_t hash = format.getHash();
+        auto it = hash_to_id_.find(hash);
+        if (it != hash_to_id_.end()) {
+            return it->second;  // 返回已存在的ID
+        }
+        // 创建新格式
+    }
 };
 ```
 
 ### 3. 流式处理优化
 
-#### XML 流式写入
+#### XMLStreamWriter高性能设计
 ```cpp
 class XMLStreamWriter {
-    std::function<void(const char*, size_t)> callback_;
-    std::string buffer_;
-    size_t buffer_size_;
-    bool auto_flush_;
+    static constexpr size_t BUFFER_SIZE = 8192;  // 固定8KB缓冲区
+    
+    char buffer_[BUFFER_SIZE];
+    size_t buffer_pos_ = 0;
+    WriteCallback write_callback_;
+    
+    // 预定义转义序列，编译时优化
+    static constexpr char AMP_REPLACEMENT[] = "&amp;";
+    static constexpr size_t AMP_REPLACEMENT_LEN = sizeof(AMP_REPLACEMENT) - 1;
     
 public:
-    // 设置回调模式，直接写入目标
-    void setCallbackMode(std::function<void(const std::string&)> callback, bool auto_flush = false);
+    // 回调模式构造，零拷贝传输
+    XMLStreamWriter(const WriteCallback& callback);
     
-    // 流式写入，避免大内存占用
-    void writeElement(const std::string& name, const std::string& content);
-    void flushBuffer();
+    // 高效的XML元素写入
+    void startElement(const char* name);
+    void writeAttribute(const char* name, const char* value);
+    void writeText(const char* text);
+    void endElement();
 };
 ```
 
-#### 大文件处理策略
+#### 智能流式处理策略
 ```cpp
-// 工作簿配置
+// WorkbookOptions 配置
 struct WorkbookOptions {
-    bool streaming_xml = true;           // 启用流式XML
-    bool use_shared_strings = false;     // 禁用共享字符串（性能优先）
-    size_t row_buffer_size = 5000;       // 行缓冲区大小
-    size_t xml_buffer_size = 4 * 1024 * 1024; // XML缓冲区大小（4MB）
-    int compression_level = 1;           // 快速压缩
+    WorkbookMode mode = WorkbookMode::AUTO;       // 智能模式选择
+    int compression_level = 6;                    // ZIP压缩级别
+    bool use_shared_strings = true;               // 共享字符串优化
+    bool constant_memory = false;                 // 恒定内存模式
+    
+    // 性能调优参数
+    size_t row_buffer_size = 5000;
+    size_t xml_buffer_size = 4 * 1024 * 1024;    // 4MB XML缓冲区
+    
+    // 自动模式阈值
+    size_t auto_mode_cell_threshold = 1000000;      // 100万单元格
+    size_t auto_mode_memory_threshold = 100 * 1024 * 1024; // 100MB
 };
 
-// 超高性能模式
+// 高性能模式设置
 workbook->setHighPerformanceMode(true);
-// 等价于：
+// 自动配置：
 // - compression_level = 0 (无压缩)
 // - row_buffer_size = 10000
 // - xml_buffer_size = 8MB
-// - streaming_xml = true
-// - use_shared_strings = false
+// - mode = AUTO (智能选择)
 ```
 
 ### 4. 压缩优化

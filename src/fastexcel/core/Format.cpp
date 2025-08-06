@@ -224,7 +224,7 @@ void Format::setDiagonalBorderColor(Color color) {
     setDiagColor(color);
 }
 
-void Format::setDiagonalType(DiagonalType type) {
+void Format::setDiagonalType(DiagonalBorderType type) {
     setDiagType(type);
 }
 

@@ -3,6 +3,8 @@
 #include "fastexcel/core/Worksheet.hpp"
 #include "fastexcel/core/WorkbookModeSelector.hpp"
 #include "fastexcel/core/Path.hpp"
+#include "fastexcel/core/CustomPropertyManager.hpp"
+#include "fastexcel/core/DefinedNameManager.hpp"
 #include "fastexcel/archive/FileManager.hpp"
 #include "fastexcel/utils/CommonUtils.hpp"
 #include "FormatDescriptor.hpp"
@@ -42,20 +44,6 @@ struct DocumentProperties {
     DocumentProperties();
 };
 
-// 自定义属性
-struct CustomProperty {
-    std::string name;
-    std::string value;
-    enum Type { String, Number, Date, Boolean } type;
-    
-    CustomProperty(const std::string& n, const std::string& v) 
-        : name(n), value(v), type(String) {}
-    CustomProperty(const std::string& n, double v) 
-        : name(n), value(std::to_string(v)), type(Number) {}
-    CustomProperty(const std::string& n, bool v) 
-        : name(n), value(v ? "true" : "false"), type(Boolean) {}
-};
-
 // 工作簿选项
 struct WorkbookOptions {
     bool constant_memory = false;      // 常量内存模式
@@ -83,17 +71,6 @@ struct WorkbookOptions {
     // 自动模式阈值
     size_t auto_mode_cell_threshold = 1000000;     // 100万单元格
     size_t auto_mode_memory_threshold = 100 * 1024 * 1024; // 100MB
-};
-
-// 定义名称
-struct DefinedName {
-    std::string name;
-    std::string formula;
-    std::string scope;  // 作用域（工作表名或空表示全局）
-    bool hidden = false;
-    
-    DefinedName(const std::string& n, const std::string& f, const std::string& s = "")
-        : name(n), formula(f), scope(s) {}
 };
 
 /**
@@ -129,10 +106,10 @@ private:
     
     // 文档属性
     DocumentProperties doc_properties_;
-    std::vector<CustomProperty> custom_properties_;
+    std::unique_ptr<CustomPropertyManager> custom_property_manager_;
     
-    // 定义名称
-    std::vector<DefinedName> defined_names_;
+    // 定义名称管理
+    std::unique_ptr<DefinedNameManager> defined_name_manager_;
     
     // 工作簿选项
     WorkbookOptions options_;
@@ -405,16 +382,11 @@ public:
     FormatRepository::DeduplicationStats getStyleStats() const;
     
     /**
-     * @brief 获取样式内存使用估算
-     * @return 内存使用字节数
+     * @brief 导入样式数据（用于从文件读取）
+     * @param styles 样式数据列表
+     * @return 导入的样式数量
      */
-    size_t getStyleMemoryUsage() const;
-    
-    /**
-     * @brief 优化样式（压缩样式、清理未使用资源）
-     * @return 优化的项目数
-     */
-    size_t optimizeStyles();
+    size_t importStyles(const std::vector<std::string>& styles);
     
     // ========== 文档属性 ==========
     
@@ -527,12 +499,6 @@ public:
      * @param application 应用程序名称
      */
     void setApplication(const std::string& application);
-    
-    /**
-     * @brief 设置默认日期格式（新API）
-     * @param format 日期格式字符串
-     */
-    void setDefaultDateFormat(const std::string& format);
     
     // ========== 自定义属性 ==========
     

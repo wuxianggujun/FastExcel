@@ -2,6 +2,7 @@
 #include "fastexcel/core/Workbook.hpp"
 #include "fastexcel/core/SharedStringTable.hpp"
 #include "fastexcel/core/FormatPool.hpp"
+#include "fastexcel/core/CellRangeManager.hpp"
 #include "fastexcel/xml/XMLStreamWriter.hpp"
 #include "fastexcel/xml/SharedStrings.hpp"
 #include "fastexcel/utils/Logger.hpp"
@@ -363,18 +364,9 @@ void Worksheet::setSelection(int first_row, int first_col, int last_row, int las
 // ========== 获取信息 ==========
 
 std::pair<int, int> Worksheet::getUsedRange() const {
-    int max_row = -1;
-    int max_col = -1;
-    
-    for (const auto& [pos, cell] : cells_) {
-        // 关键修复：包含有格式但为空的单元格
-        if (!cell.isEmpty() || cell.hasFormat()) {
-            max_row = std::max(max_row, pos.first);
-            max_col = std::max(max_col, pos.second);
-        }
-    }
-    
-    return {max_row, max_col};
+    return range_manager_.getUsedRowRange().first != -1 ? 
+           std::make_pair(range_manager_.getUsedRowRange().second, range_manager_.getUsedColRange().second) :
+           std::make_pair(-1, -1);
 }
 
 bool Worksheet::hasCellAt(int row, int col) const {
@@ -499,7 +491,7 @@ void Worksheet::generateXMLBatch(const std::function<void(const char*, size_t)>&
     
     // 尺寸信息
     writer.startElement("dimension");
-    writer.writeAttribute("ref", "A1");
+    writer.writeAttribute("ref", range_manager_.getRangeReference().c_str());
     writer.endElement(); // dimension
     
     // 关键修复：只有被选中的工作表才设置tabSelected属性
@@ -647,8 +639,8 @@ void Worksheet::generateXMLStreaming(const std::function<void(const char*, size_
     callback(worksheet_start, strlen(worksheet_start));
     
     // 尺寸信息
-    const char* dimension = "<dimension ref=\"A1\"/>";
-    callback(dimension, strlen(dimension));
+    std::string dimension_str = "<dimension ref=\"" + range_manager_.getRangeReference() + "\"/>";
+    callback(dimension_str.c_str(), dimension_str.length());
     
     // 关键修复：流式模式也要正确处理tabSelected属性
     std::string sheet_views_start = "<sheetViews><sheetView";
@@ -1203,10 +1195,7 @@ void Worksheet::generateSheetProtectionXML(const std::function<void(const char*,
 // ========== 内部状态管理 ==========
 
 void Worksheet::updateUsedRange(int row, int col) {
-    // 这个方法在写入数据时被调用，用于跟踪使用范围
-    // 实际实现中可以优化性能
-    (void)row; // 避免未使用参数警告
-    (void)col; // 避免未使用参数警告
+    range_manager_.updateRange(row, col);
 }
 
 void Worksheet::shiftCellsForRowInsertion(int row, int count) {
@@ -1465,10 +1454,7 @@ void Worksheet::writeOptimizedCell(int row, int col, Cell&& cell, std::shared_pt
 }
 
 void Worksheet::updateUsedRangeOptimized(int row, int col) {
-    min_row_ = std::min(min_row_, row);
-    max_row_ = std::max(max_row_, row);
-    min_col_ = std::min(min_col_, col);
-    max_col_ = std::max(max_col_, col);
+    range_manager_.updateRange(row, col);
 }
 
 // ========== 单元格编辑功能实现 ==========

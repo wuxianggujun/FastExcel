@@ -174,10 +174,10 @@ core::ErrorCode XLSXReader::loadWorkbook(std::unique_ptr<core::Workbook>& workbo
             }
         }
         
-        // 🔧 关键修复：导入解析的样式到工作簿的FormatPool
+        // 🔧 关键修复：导入解析的样式到工作簿
         if (!styles_.empty()) {
             LOG_DEBUG("导入解析的样式到工作簿: {} 个样式", styles_.size());
-            workbook->getFormatPool()->importStyles(styles_);
+            workbook->importStyles(styles_);
         }
         
         LOG_INFO("成功加载工作簿，包含 {} 个工作表", worksheet_names_.size());

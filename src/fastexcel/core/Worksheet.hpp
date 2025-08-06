@@ -4,6 +4,7 @@
 #include "fastexcel/core/Format.hpp"
 #include "fastexcel/core/SharedStringTable.hpp"
 #include "fastexcel/core/FormatPool.hpp"
+#include "fastexcel/core/CellRangeManager.hpp"
 #include "fastexcel/utils/CommonUtils.hpp"
 #include <string>
 #include <vector>
@@ -165,10 +166,7 @@ private:
     std::vector<Cell> row_buffer_;
     
     // 使用范围跟踪
-    int min_row_ = INT32_MAX;
-    int max_row_ = -1;
-    int min_col_ = INT32_MAX;
-    int max_col_ = -1;
+    CellRangeManager range_manager_;
     
     // 行列信息
     std::unordered_map<int, ColumnInfo> column_info_;
