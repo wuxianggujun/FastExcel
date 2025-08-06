@@ -1,12 +1,14 @@
 #pragma once
 
 #include "fastexcel/core/Worksheet.hpp"
-#include "fastexcel/core/Format.hpp"
-#include "fastexcel/core/FormatPool.hpp"
 #include "fastexcel/core/WorkbookModeSelector.hpp"
 #include "fastexcel/core/Path.hpp"
 #include "fastexcel/archive/FileManager.hpp"
 #include "fastexcel/utils/CommonUtils.hpp"
+#include "FormatDescriptor.hpp"
+#include "FormatRepository.hpp"
+#include "StyleTransferContext.hpp"
+#include "StyleBuilder.hpp"
 #include <string>
 #include <vector>
 #include <map>
@@ -18,6 +20,9 @@
 
 namespace fastexcel {
 namespace core {
+
+// 前向声明
+class NamedStyle;
 
 // 文档属性结构
 struct DocumentProperties {
@@ -92,17 +97,19 @@ struct DefinedName {
 };
 
 /**
- * @brief Workbook类 - Excel工作簿
+ * @brief Workbook类 - Excel工作簿（新架构）
  * 
- * 提供完整的Excel工作簿功能，包括：
- * - 工作表管理
- * - 格式管理
- * - 文档属性设置
- * - 自定义属性
- * - 定义名称
- * - VBA项目支持
- * - 工作簿保护
- * - 多种保存选项
+ * 采用全新的样式管理系统，提供线程安全、高性能的Excel操作接口。
+ * 
+ * 核心特性：
+ * - 不可变样式系统：使用FormatDescriptor值对象，线程安全
+ * - 样式去重优化：FormatRepository自动去重，节省内存
+ * - 流式样式构建：StyleBuilder提供链式调用API
+ * - 跨工作簿操作：支持样式和工作表的复制传输
+ * - 性能监控：内存使用统计、样式优化工具
+ * - 工作表管理：完整的工作表生命周期管理
+ * - 文档属性：丰富的元数据管理
+ * - 多种保存选项：支持不同的性能优化模式
  */
 class Workbook {
 private:
@@ -110,8 +117,8 @@ private:
     std::vector<std::shared_ptr<Worksheet>> worksheets_;
     std::unique_ptr<archive::FileManager> file_manager_;
     
-    // 格式管理 - 使用FormatPool
-    std::unique_ptr<FormatPool> format_pool_;
+    // 格式管理 - 新样式架构
+    std::unique_ptr<FormatRepository> format_repo_;
     
     // ID管理
     int next_sheet_id_ = 1;
@@ -151,6 +158,20 @@ public:
      * @return 工作簿智能指针
      */
     static std::unique_ptr<Workbook> create(const Path& path);
+    
+    /**
+     * @brief 创建新的工作簿（新API，静态工厂方法）
+     * @param filename 文件名
+     * @return 工作簿智能指针
+     */
+    static std::unique_ptr<Workbook> createNew(const std::string& filename);
+    
+    /**
+     * @brief 打开现有工作簿（新API，静态工厂方法）
+     * @param filename 文件名
+     * @return 工作簿智能指针
+     */
+    static std::unique_ptr<Workbook> openExisting(const std::string& filename);
     
     /**
      * @brief 构造函数
@@ -294,43 +315,106 @@ public:
     std::shared_ptr<Worksheet> copyWorksheet(const std::string& source_name, const std::string& new_name);
     
     /**
+     * @brief 复制工作表从另一个工作簿
+     * @param source_worksheet 源工作表
+     * @param new_name 新工作表名称（空则使用源名称）
+     * @return 新创建的工作表指针
+     */
+    std::shared_ptr<Worksheet> copyWorksheetFrom(const std::shared_ptr<const Worksheet>& source_worksheet, 
+                                const std::string& new_name = "");
+    
+    /**
      * @brief 设置活动工作表
      * @param index 工作表索引
      */
     void setActiveWorksheet(size_t index);
     
-    // ========== 格式管理 ==========
+    // ========== 样式管理 ==========
     
     /**
-     * @brief 创建格式
-     * @return 格式指针
+     * @brief 添加样式到工作簿
+     * @param style 样式描述符
+     * @return 样式ID
      */
-    std::shared_ptr<Format> createFormat();
+    int addStyle(const FormatDescriptor& style);
     
     /**
-     * @brief 根据ID获取格式
-     * @param format_id 格式ID
-     * @return 格式指针，如果不存在返回nullptr
+     * @brief 添加样式到工作簿（使用Builder）
+     * @param builder 样式构建器
+     * @return 样式ID
      */
-    std::shared_ptr<Format> getFormat(size_t format_id) const;
+    int addStyle(const StyleBuilder& builder);
     
     /**
-     * @brief 获取格式池
-     * @return 格式池指针
+     * @brief 添加命名样式
+     * @param named_style 命名样式
+     * @return 样式ID
      */
-    FormatPool* getFormatPool() const { return format_pool_.get(); }
+    int addNamedStyle(const NamedStyle& named_style);
     
     /**
-     * @brief 从另一个工作簿复制样式数据（用于格式复制）
+     * @brief 创建样式构建器
+     * @return 样式构建器
+     */
+    StyleBuilder createStyleBuilder() const;
+    
+    /**
+     * @brief 根据ID获取样式
+     * @param style_id 样式ID
+     * @return 样式描述符，如果ID无效则返回默认样式
+     */
+    std::shared_ptr<const FormatDescriptor> getStyle(int style_id) const;
+    
+    /**
+     * @brief 获取默认样式ID
+     * @return 默认样式ID
+     */
+    int getDefaultStyleId() const;
+    
+    /**
+     * @brief 检查样式ID是否有效
+     * @param style_id 样式ID
+     * @return 是否有效
+     */
+    bool isValidStyleId(int style_id) const;
+    
+    /**
+     * @brief 获取样式数量
+     * @return 样式数量
+     */
+    size_t getStyleCount() const;
+    
+    /**
+     * @brief 获取样式仓储（只读访问）
+     * @return 样式仓储的常量引用
+     */
+    const FormatRepository& getStyleRepository() const;
+    
+    /**
+     * @brief 从另一个工作簿复制样式
      * @param source_workbook 源工作簿
+     * @return 样式传输上下文（用于ID映射）
      */
-    void copyStylesFrom(const Workbook* source_workbook);
+    std::unique_ptr<StyleTransferContext> copyStylesFrom(
+        const Workbook& source_workbook);
     
     /**
-     * @brief 获取格式数量
-     * @return 格式数量
+     * @brief 获取样式去重统计
+     * @return 去重统计信息
      */
-    size_t getFormatCount() const { return format_pool_->getFormatCount(); }
+    FormatRepository::DeduplicationStats getStyleStats() const;
+    
+    /**
+     * @brief 获取样式内存使用估算
+     * @return 内存使用字节数
+     */
+    size_t getStyleMemoryUsage() const;
+    
+    /**
+     * @brief 优化样式（压缩样式、清理未使用资源）
+     * @return 优化的项目数
+     */
+    size_t optimizeStyles();
     
     // ========== 文档属性 ==========
     
@@ -423,6 +507,32 @@ public:
      * @param modified_time 修改时间
      */
     void setModifiedTime(const std::tm& modified_time) { doc_properties_.modified_time = modified_time; }
+    
+    /**
+     * @brief 批量设置文档属性（新API）
+     * @param title 标题
+     * @param subject 主题
+     * @param author 作者
+     * @param company 公司
+     * @param comments 注释
+     */
+    void setDocumentProperties(const std::string& title = "",
+                              const std::string& subject = "",
+                              const std::string& author = "",
+                              const std::string& company = "",
+                              const std::string& comments = "");
+    
+    /**
+     * @brief 设置应用程序名称（新API）
+     * @param application 应用程序名称
+     */
+    void setApplication(const std::string& application);
+    
+    /**
+     * @brief 设置默认日期格式（新API）
+     * @param format 日期格式字符串
+     */
+    void setDefaultDateFormat(const std::string& format);
     
     // ========== 自定义属性 ==========
     
@@ -775,6 +885,24 @@ public:
         std::unordered_map<std::string, size_t> worksheet_cell_counts;
     };
     WorkbookStats getStatistics() const;
+    
+    /**
+     * @brief 检查工作簿是否已修改（新API）
+     * @return 是否已修改
+     */
+    bool isModified() const;
+    
+    /**
+     * @brief 获取内存使用总量（新API）
+     * @return 内存使用字节数
+     */
+    size_t getTotalMemoryUsage() const;
+    
+    /**
+     * @brief 优化工作簿（压缩样式、清理未使用资源，新API）
+     * @return 优化的项目数
+     */
+    size_t optimize();
 
 private:
     // ========== 内部方法 ==========

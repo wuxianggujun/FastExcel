@@ -1,0 +1,14 @@
+@PACKAGE_INIT@
+
+include(CMakeFindDependencyMacro)
+
+# 查找依赖项
+find_dependency(spdlog)
+find_dependency(expat)
+find_dependency(ZLIB)
+
+# 包含目标文件
+include("${CMAKE_CURRENT_LIST_DIR}/FastExcelTargets.cmake")
+
+# 检查所有组件是否可用
+check_required_components(FastExcel)
