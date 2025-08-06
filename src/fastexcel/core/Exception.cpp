@@ -24,21 +24,38 @@ FastExcelException::FastExcelException(const std::string& message,
 
 std::string FastExcelException::getErrorCodeString() const {
     switch (error_code_) {
-        case ErrorCode::Unknown: return "Unknown";
+        case ErrorCode::Ok: return "Ok";
+        case ErrorCode::InvalidArgument: return "InvalidArgument";
+        case ErrorCode::OutOfMemory: return "OutOfMemory";
+        case ErrorCode::NotImplemented: return "NotImplemented";
+        case ErrorCode::InternalError: return "InternalError";
+        case ErrorCode::Timeout: return "Timeout";
         case ErrorCode::FileNotFound: return "FileNotFound";
         case ErrorCode::FileAccessDenied: return "FileAccessDenied";
-        case ErrorCode::InvalidFileFormat: return "InvalidFileFormat";
-        case ErrorCode::CorruptedFile: return "CorruptedFile";
-        case ErrorCode::OutOfMemory: return "OutOfMemory";
-        case ErrorCode::InvalidParameter: return "InvalidParameter";
-        case ErrorCode::InvalidOperation: return "InvalidOperation";
-        case ErrorCode::WorksheetNotFound: return "WorksheetNotFound";
-        case ErrorCode::CellOutOfRange: return "CellOutOfRange";
-        case ErrorCode::FormatError: return "FormatError";
-        case ErrorCode::CompressionError: return "CompressionError";
-        case ErrorCode::XMLParseError: return "XMLParseError";
-        case ErrorCode::NetworkError: return "NetworkError";
-        case ErrorCode::TimeoutError: return "TimeoutError";
+        case ErrorCode::FileCorrupted: return "FileCorrupted";
+        case ErrorCode::FileAlreadyExists: return "FileAlreadyExists";
+        case ErrorCode::FileWriteError: return "FileWriteError";
+        case ErrorCode::FileReadError: return "FileReadError";
+        case ErrorCode::FileTooLarge: return "FileTooLarge";
+        case ErrorCode::ZipCreateError: return "ZipCreateError";
+        case ErrorCode::ZipWriteError: return "ZipWriteError";
+        case ErrorCode::ZipReadError: return "ZipReadError";
+        case ErrorCode::ZipCorrupted: return "ZipCorrupted";
+        case ErrorCode::ZipCompressionError: return "ZipCompressionError";
+        case ErrorCode::ZipExtractionError: return "ZipExtractionError";
+        case ErrorCode::XmlParseError: return "XmlParseError";
+        case ErrorCode::XmlInvalidFormat: return "XmlInvalidFormat";
+        case ErrorCode::XmlMissingElement: return "XmlMissingElement";
+        case ErrorCode::XmlInvalidAttribute: return "XmlInvalidAttribute";
+        case ErrorCode::XmlEncodingError: return "XmlEncodingError";
+        case ErrorCode::InvalidWorkbook: return "InvalidWorkbook";
+        case ErrorCode::InvalidWorksheet: return "InvalidWorksheet";
+        case ErrorCode::InvalidCellReference: return "InvalidCellReference";
+        case ErrorCode::InvalidFormat: return "InvalidFormat";
+        case ErrorCode::InvalidFormula: return "InvalidFormula";
+        case ErrorCode::UnsupportedFeature: return "UnsupportedFeature";
+        case ErrorCode::CorruptedStyles: return "CorruptedStyles";
+        case ErrorCode::CorruptedSharedStrings: return "CorruptedSharedStrings";
         default: return "Unknown";
     }
 }
@@ -90,7 +107,7 @@ ParameterException::ParameterException(const std::string& message,
                                      const std::string& parameter_name,
                                      const char* file, int line)
     : FastExcelException(message + " (parameter: " + parameter_name + ")", 
-                        ErrorCode::InvalidParameter, file, line)
+                        ErrorCode::InvalidArgument, file, line)
     , parameter_name_(parameter_name) {
 }
 
@@ -138,7 +155,7 @@ std::string CellException::getCellReference() const {
 XMLException::XMLException(const std::string& message,
                          const std::string& xml_path,
                          int xml_line, const char* file, int line)
-    : FastExcelException(message, ErrorCode::XMLParseError, file, line)
+    : FastExcelException(message, ErrorCode::XmlParseError, file, line)
     , xml_path_(xml_path)
     , xml_line_(xml_line) {
 }

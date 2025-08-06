@@ -134,47 +134,4 @@ inline Error success() {
     return Error(ErrorCode::Ok);
 }
 
-#include <stdexcept>
-
-/**
- * @brief FastExcel异常类
- */
-class FastExcelException : public std::runtime_error {
-private:
-    ErrorCode code_;
-    std::string context_;
-
-public:
-    explicit FastExcelException(const Error& error)
-        : std::runtime_error(error.fullMessage())
-        , code_(error.code)
-        , context_(error.context) {}
-    
-    explicit FastExcelException(ErrorCode code)
-        : std::runtime_error(toString(code))
-        , code_(code) {}
-    
-    FastExcelException(ErrorCode code, const std::string& message)
-        : std::runtime_error(message)
-        , code_(code) {}
-    
-    ErrorCode code() const noexcept { return code_; }
-    const std::string& context() const noexcept { return context_; }
-};
-
-/**
- * @brief 抛出异常的便利函数
- */
-[[noreturn]] inline void throwError(const Error& error) {
-    throw FastExcelException(error);
-}
-
-[[noreturn]] inline void throwError(ErrorCode code) {
-    throw FastExcelException(code);
-}
-
-[[noreturn]] inline void throwError(ErrorCode code, const std::string& message) {
-    throw FastExcelException(code, message);
-}
-
 }} // namespace fastexcel::core

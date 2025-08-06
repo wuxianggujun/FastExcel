@@ -4,14 +4,16 @@
 
 #include "XLSXReader.hpp"
 #include "SharedStringsParser.hpp"
-#include "WorksheetParser.hpp"
 #include "StylesParser.hpp"
-#include "fastexcel/core/Workbook.hpp"
+#include "WorksheetParser.hpp"
 #include "fastexcel/archive/ZipArchive.hpp"
+#include "fastexcel/core/ErrorCode.hpp"
+#include "fastexcel/core/Exception.hpp"
 #include "fastexcel/core/Path.hpp"
+#include "fastexcel/core/Workbook.hpp"
+#include "fastexcel/utils/Logger.hpp"
 #include <iostream>
 #include <sstream>
-#include <stdexcept>
 
 namespace fastexcel {
 namespace reader {
@@ -39,39 +41,40 @@ XLSXReader::~XLSXReader() {
     }
 }
 
-// 打开XLSX文件
-bool XLSXReader::open() {
+// 打开XLSX文件 - 系统层高性能API
+core::ErrorCode XLSXReader::open() {
     if (is_open_) {
-        return true;
+        return core::ErrorCode::Ok;
     }
     
     try {
         // 打开ZIP文件进行读取
         if (!zip_archive_->open(false)) {  // false表示不创建新文件，只读取
-            std::cerr << "无法打开XLSX文件: " << filename_ << std::endl;
-            return false;
+            LOG_ERROR("无法打开XLSX文件: {}", filename_);
+            return core::ErrorCode::FileAccessDenied;
         }
         
         // 验证XLSX文件结构
         if (!validateXLSXStructure()) {
-            std::cerr << "无效的XLSX文件格式: " << filename_ << std::endl;
+            LOG_ERROR("无效的XLSX文件格式: {}", filename_);
             zip_archive_->close();
-            return false;
+            return core::ErrorCode::XmlInvalidFormat;
         }
         
         is_open_ = true;
-        return true;
+        LOG_INFO("成功打开XLSX文件: {}", filename_);
+        return core::ErrorCode::Ok;
         
     } catch (const std::exception& e) {
-        std::cerr << "打开XLSX文件时发生错误: " << e.what() << std::endl;
-        return false;
+        LOG_ERROR("打开XLSX文件时发生异常: {}", e.what());
+        return core::ErrorCode::InternalError;
     }
 }
 
-// 关闭文件
-bool XLSXReader::close() {
+// 关闭文件 - 系统层高性能API
+core::ErrorCode XLSXReader::close() {
     if (!is_open_) {
-        return true;
+        return core::ErrorCode::Ok;
     }
     
     try {
@@ -85,109 +88,146 @@ bool XLSXReader::close() {
         shared_strings_.clear();
         styles_.clear();
         
-        return true;
+        LOG_INFO("成功关闭XLSX文件: {}", filename_);
+        return core::ErrorCode::Ok;
         
     } catch (const std::exception& e) {
-        std::cerr << "关闭XLSX文件时发生错误: " << e.what() << std::endl;
-        return false;
+        LOG_ERROR("关闭XLSX文件时发生异常: {}", e.what());
+        return core::ErrorCode::InternalError;
     }
 }
 
-// 加载整个工作簿
-std::unique_ptr<core::Workbook> XLSXReader::loadWorkbook() {
+// 加载整个工作簿 - 系统层高性能API
+core::ErrorCode XLSXReader::loadWorkbook(std::unique_ptr<core::Workbook>& workbook) {
     if (!is_open_) {
-        std::cerr << "文件未打开，无法加载工作簿" << std::endl;
-        return nullptr;
+        LOG_ERROR("文件未打开，无法加载工作簿");
+        return core::ErrorCode::InvalidArgument;
     }
     
     try {
-        // 利用现有的XMLStreamReader进行流式解析，无需临时文件
-        // 直接在内存中构建Workbook对象，避免磁盘I/O
-        
         // 创建内存工作簿容器（绝不创建文件）
         core::Path memory_path("::memory::reader_" + std::to_string(reinterpret_cast<uintptr_t>(this)));
-        auto workbook = std::make_unique<core::Workbook>(memory_path);
+        workbook = std::make_unique<core::Workbook>(memory_path);
         
         // 确保内存工作簿正确初始化
         if (!workbook->open()) {
-            std::cerr << "无法初始化内存工作簿" << std::endl;
-            return nullptr;
+            LOG_ERROR("无法初始化内存工作簿");
+            return core::ErrorCode::InternalError;
         }
         
-        // 解析各种XML文件
-        if (!parseSharedStringsXML()) {
-            std::cerr << "解析共享字符串失败" << std::endl;
+        LOG_INFO("开始解析XLSX文件结构: {}", filename_);
+        
+        // 解析各种XML文件，使用错误码检查
+        auto result = parseSharedStringsXML();
+        if (result != core::ErrorCode::Ok && result != core::ErrorCode::FileNotFound) {
+            LOG_WARN("解析共享字符串失败，错误码: {}", static_cast<int>(result));
             // 共享字符串不是必需的，继续执行
         }
         
-        if (!parseStylesXML()) {
+        result = parseStylesXML();
+        if (result != core::ErrorCode::Ok && result != core::ErrorCode::FileNotFound) {
+            LOG_WARN("解析样式失败，错误码: {}", static_cast<int>(result));
             // 样式解析失败不影响主要功能，继续执行
         }
         
-        if (!parseWorkbookXML()) {
-            std::cerr << "解析工作簿失败" << std::endl;
-            return nullptr;
+        result = parseWorkbookXML();
+        if (result != core::ErrorCode::Ok) {
+            LOG_ERROR("解析工作簿结构失败，错误码: {}", static_cast<int>(result));
+            return result;
         }
         
-        if (!parseDocPropsXML()) {
+        result = parseDocPropsXML();
+        if (result != core::ErrorCode::Ok && result != core::ErrorCode::FileNotFound) {
+            LOG_WARN("解析文档属性失败，错误码: {}", static_cast<int>(result));
             // 文档属性解析失败不影响主要功能，继续执行
         }
         
         // 利用现有的XMLStreamReader解析工作表
         // 直接在内存中构建数据结构，无需临时文件
         for (const auto& sheet_name : worksheet_names_) {
-            auto worksheet = workbook->addWorksheet(sheet_name);
-            if (worksheet) {
-                auto it = worksheet_paths_.find(sheet_name);
-                if (it != worksheet_paths_.end()) {
-                    // 使用流式XML解析器处理工作表数据
-                    if (!parseWorksheetXML(it->second, worksheet.get())) {
-                        std::cerr << "解析工作表 " << sheet_name << " 失败" << std::endl;
-                        // 继续处理其他工作表
+            try {
+                auto worksheet = workbook->addWorksheet(sheet_name);
+                if (worksheet) {
+                    auto it = worksheet_paths_.find(sheet_name);
+                    if (it != worksheet_paths_.end()) {
+                        // 使用流式XML解析器处理工作表数据
+                        auto parse_result = parseWorksheetXML(it->second, worksheet.get());
+                        if (parse_result != core::ErrorCode::Ok) {
+                            FASTEXCEL_HANDLE_WARNING(
+                                "解析工作表失败: " + sheet_name, "loadWorkbook");
+                            // 继续处理其他工作表
+                        } else {
+                            LOG_DEBUG("成功解析工作表: {}", sheet_name);
+                        }
+                    } else {
+                        FASTEXCEL_HANDLE_WARNING(
+                            "工作表路径未找到: " + sheet_name, "loadWorkbook");
                     }
+                } else {
+                    FASTEXCEL_HANDLE_WARNING(
+                        "无法创建工作表: " + sheet_name, "loadWorkbook");
                 }
+            } catch (const core::FastExcelException& e) {
+                FASTEXCEL_HANDLE_WARNING(
+                    "处理工作表时发生异常: " + sheet_name + " - " + e.what(), 
+                    "loadWorkbook");
             }
         }
         
-        return workbook;
+        LOG_INFO("成功加载工作簿，包含 {} 个工作表", worksheet_names_.size());
+        return core::ErrorCode::Ok;
         
+    } catch (const core::FastExcelException& e) {
+        LOG_ERROR("加载工作簿时发生FastExcel异常: {}", e.getDetailedMessage());
+        FASTEXCEL_HANDLE_ERROR(e);
+        return core::ErrorCode::InternalError;
     } catch (const std::exception& e) {
-        std::cerr << "加载工作簿时发生错误: " << e.what() << std::endl;
-        return nullptr;
+        core::OperationException oe("加载工作簿时发生未知错误: " + std::string(e.what()), 
+                                   "loadWorkbook");
+        LOG_ERROR("加载工作簿时发生标准异常: {}", e.what());
+        FASTEXCEL_HANDLE_ERROR(oe);
+        return core::ErrorCode::InternalError;
     }
 }
 
-// 加载单个工作表
-std::shared_ptr<core::Worksheet> XLSXReader::loadWorksheet(const std::string& name) {
+// 加载单个工作表 - 系统层高性能API
+core::ErrorCode XLSXReader::loadWorksheet(const std::string& name, std::shared_ptr<core::Worksheet>& worksheet) {
     if (!is_open_) {
-        std::cerr << "文件未打开，无法加载工作表" << std::endl;
-        return nullptr;
+        LOG_ERROR("文件未打开，无法加载工作表");
+        return core::ErrorCode::InvalidArgument;
     }
     
     try {
         // 如果还没有解析工作簿结构，先解析
         if (worksheet_names_.empty()) {
-            if (!parseWorkbookXML()) {
-                std::cerr << "解析工作簿结构失败" << std::endl;
-                return nullptr;
+            auto result = parseWorkbookXML();
+            if (result != core::ErrorCode::Ok) {
+                LOG_ERROR("解析工作簿结构失败，错误码: {}", static_cast<int>(result));
+                return result;
             }
         }
         
         // 检查工作表是否存在
         auto it = worksheet_paths_.find(name);
         if (it == worksheet_paths_.end()) {
-            std::cerr << "工作表 " << name << " 不存在" << std::endl;
-            return nullptr;
+            LOG_ERROR("工作表不存在: {}", name);
+            return core::ErrorCode::InvalidWorksheet;
         }
         
         // 解析共享字符串（如果还没有解析）
         if (shared_strings_.empty()) {
-            parseSharedStringsXML();  // 忽略错误，某些文件可能没有共享字符串
+            auto result = parseSharedStringsXML();
+            if (result != core::ErrorCode::Ok && result != core::ErrorCode::FileNotFound) {
+                FASTEXCEL_HANDLE_WARNING("解析共享字符串失败", "loadWorksheet");
+            }
         }
         
         // 解析样式（如果还没有解析）
         if (styles_.empty()) {
-            parseStylesXML();  // 忽略错误，某些文件可能没有自定义样式
+            auto result = parseStylesXML();
+            if (result != core::ErrorCode::Ok && result != core::ErrorCode::FileNotFound) {
+                FASTEXCEL_HANDLE_WARNING("解析样式失败", "loadWorksheet");
+            }
         }
         
         // 创建轻量级内存工作簿来容纳单个工作表
@@ -196,75 +236,92 @@ std::shared_ptr<core::Worksheet> XLSXReader::loadWorksheet(const std::string& na
         
         // 确保内存工作簿处于打开状态
         if (!temp_workbook->open()) {
-            std::cerr << "无法打开内存工作簿用于工作表: " << name << std::endl;
-            return nullptr;
+            LOG_ERROR("无法打开内存工作簿用于工作表: {}", name);
+            return core::ErrorCode::InternalError;
         }
         
-        auto worksheet = std::make_shared<core::Worksheet>(name, temp_workbook);
+        worksheet = std::make_shared<core::Worksheet>(name, temp_workbook);
         
         // 解析工作表数据
-        if (!parseWorksheetXML(it->second, worksheet.get())) {
-            std::cerr << "解析工作表 " << name << " 失败" << std::endl;
-            return nullptr;
+        auto result = parseWorksheetXML(it->second, worksheet.get());
+        if (result != core::ErrorCode::Ok) {
+            LOG_ERROR("解析工作表失败: {}，错误码: {}", name, static_cast<int>(result));
+            return result;
         }
         
-        return worksheet;
+        LOG_INFO("成功加载工作表: {}", name);
+        return core::ErrorCode::Ok;
         
+    } catch (const core::FastExcelException& e) {
+        LOG_ERROR("加载工作表时发生FastExcel异常: {}", e.getDetailedMessage());
+        FASTEXCEL_HANDLE_ERROR(e);
+        return core::ErrorCode::InternalError;
     } catch (const std::exception& e) {
-        std::cerr << "加载工作表时发生错误: " << e.what() << std::endl;
-        return nullptr;
+        core::WorksheetException we("加载工作表时发生未知错误: " + std::string(e.what()), name);
+        LOG_ERROR("加载工作表时发生标准异常: {}", e.what());
+        FASTEXCEL_HANDLE_ERROR(we);
+        return core::ErrorCode::InternalError;
     }
 }
 
-// 获取工作表名称列表
-std::vector<std::string> XLSXReader::getWorksheetNames() {
+// 获取工作表名称列表 - 系统层高性能API
+core::ErrorCode XLSXReader::getWorksheetNames(std::vector<std::string>& names) {
     if (!is_open_) {
-        std::cerr << "文件未打开，无法获取工作表名称" << std::endl;
-        return {};
+        FASTEXCEL_HANDLE_WARNING("文件未打开，无法获取工作表名称", "getWorksheetNames");
+        return core::ErrorCode::InvalidArgument;
     }
     
     // 如果还没有解析工作簿结构，先解析
     if (worksheet_names_.empty()) {
-        if (!parseWorkbookXML()) {
-            std::cerr << "解析工作簿结构失败" << std::endl;
-            return {};
+        auto result = parseWorkbookXML();
+        if (result != core::ErrorCode::Ok) {
+            FASTEXCEL_HANDLE_WARNING("解析工作簿结构失败", "getWorksheetNames");
+            return result;
         }
     }
     
-    return worksheet_names_;
+    names = worksheet_names_;
+    return core::ErrorCode::Ok;
 }
 
-// 获取元数据
-WorkbookMetadata XLSXReader::getMetadata() {
+// 获取元数据 - 系统层高性能API
+core::ErrorCode XLSXReader::getMetadata(WorkbookMetadata& metadata) {
     if (!is_open_) {
-        std::cerr << "文件未打开，无法获取元数据" << std::endl;
-        return WorkbookMetadata{};
+        FASTEXCEL_HANDLE_WARNING("文件未打开，无法获取元数据", "getMetadata");
+        return core::ErrorCode::InvalidArgument;
     }
     
     // 如果还没有解析文档属性，先解析
     if (metadata_.title.empty() && metadata_.author.empty()) {
-        parseDocPropsXML();  // 忽略错误
+        auto result = parseDocPropsXML();
+        if (result != core::ErrorCode::Ok && result != core::ErrorCode::FileNotFound) {
+            FASTEXCEL_HANDLE_WARNING("解析文档属性失败", "getMetadata");
+            return result;
+        }
     }
     
-    return metadata_;
+    metadata = metadata_;
+    return core::ErrorCode::Ok;
 }
 
-// 获取定义名称列表
-std::vector<std::string> XLSXReader::getDefinedNames() {
+// 获取定义名称列表 - 系统层高性能API
+core::ErrorCode XLSXReader::getDefinedNames(std::vector<std::string>& names) {
     if (!is_open_) {
-        std::cerr << "文件未打开，无法获取定义名称" << std::endl;
-        return {};
+        FASTEXCEL_HANDLE_WARNING("文件未打开，无法获取定义名称", "getDefinedNames");
+        return core::ErrorCode::InvalidArgument;
     }
     
     // 如果还没有解析工作簿结构，先解析
     if (defined_names_.empty()) {
-        if (!parseWorkbookXML()) {
-            std::cerr << "解析工作簿结构失败" << std::endl;
-            return {};
+        auto result = parseWorkbookXML();
+        if (result != core::ErrorCode::Ok) {
+            FASTEXCEL_HANDLE_WARNING("解析工作簿结构失败", "getDefinedNames");
+            return result;
         }
     }
     
-    return defined_names_;
+    names = defined_names_;
+    return core::ErrorCode::Ok;
 }
 
 // 从ZIP中提取XML文件内容
@@ -273,10 +330,11 @@ std::string XLSXReader::extractXMLFromZip(const std::string& path) {
     auto error = zip_archive_->extractFile(path, content);
     
     if (archive::isError(error)) {
-        std::cerr << "提取文件 " << path << " 失败" << std::endl;
+        LOG_ERROR("提取文件失败: {}", path);
         return "";
     }
     
+    LOG_DEBUG("成功提取XML文件: {} ({} bytes)", path, content.size());
     return content;
 }
 
@@ -292,7 +350,7 @@ bool XLSXReader::validateXLSXStructure() {
     for (const auto& file : required_files) {
         auto error = zip_archive_->fileExists(file);
         if (archive::isError(error)) {
-            std::cerr << "缺少必需文件: " << file << std::endl;
+            LOG_ERROR("缺少必需文件: {}", file);
             return false;
         }
     }
@@ -300,11 +358,11 @@ bool XLSXReader::validateXLSXStructure() {
     return true;
 }
 
-// 解析工作簿XML - 完整实现
-bool XLSXReader::parseWorkbookXML() {
+// 解析工作簿XML - 系统层ErrorCode版本
+core::ErrorCode XLSXReader::parseWorkbookXML() {
     std::string xml_content = extractXMLFromZip("xl/workbook.xml");
     if (xml_content.empty()) {
-        return false;
+        return core::ErrorCode::FileNotFound;
     }
     
     try {
@@ -316,20 +374,20 @@ bool XLSXReader::parseWorkbookXML() {
         // 首先解析关系文件来获取工作表的实际路径
         std::unordered_map<std::string, std::string> relationships;
         if (!parseWorkbookRelationships(relationships)) {
-            std::cerr << "警告: 无法解析工作簿关系文件，使用默认路径" << std::endl;
+            LOG_WARN("无法解析工作簿关系文件，使用默认路径");
         }
         
         // 解析工作表信息
         size_t sheets_start = xml_content.find("<sheets");
         if (sheets_start == std::string::npos) {
-            std::cerr << "未找到工作表定义" << std::endl;
-            return false;
+            LOG_ERROR("未找到工作表定义");
+            return core::ErrorCode::XmlMissingElement;
         }
         
         size_t sheets_end = xml_content.find("</sheets>", sheets_start);
         if (sheets_end == std::string::npos) {
-            std::cerr << "工作表定义格式错误" << std::endl;
-            return false;
+            LOG_ERROR("工作表定义格式错误");
+            return core::ErrorCode::XmlInvalidFormat;
         }
         
         std::string sheets_content = xml_content.substr(sheets_start, sheets_end - sheets_start);
@@ -366,7 +424,7 @@ bool XLSXReader::parseWorkbookXML() {
                     // 回退到默认路径
                     sheet_path = "xl/worksheets/sheet" + sheet_id + ".xml";
                 } else {
-                    std::cerr << "无法确定工作表 " << sheet_name << " 的路径" << std::endl;
+                    LOG_ERROR("无法确定工作表 {} 的路径", sheet_name);
                     continue;
                 }
                 
@@ -379,61 +437,61 @@ bool XLSXReader::parseWorkbookXML() {
         // 解析定义名称
         parseDefinedNames(xml_content);
         
-        return !worksheet_names_.empty();
+        return worksheet_names_.empty() ? core::ErrorCode::XmlMissingElement : core::ErrorCode::Ok;
         
     } catch (const std::exception& e) {
-        std::cerr << "解析工作簿XML时发生异常: " << e.what() << std::endl;
-        return false;
+        LOG_ERROR("解析工作簿XML时发生异常: {}", e.what());
+        return core::ErrorCode::XmlParseError;
     }
 }
 
-// 解析工作表XML
-bool XLSXReader::parseWorksheetXML(const std::string& path, core::Worksheet* worksheet) {
+// 解析工作表XML - 系统层ErrorCode版本
+core::ErrorCode XLSXReader::parseWorksheetXML(const std::string& path, core::Worksheet* worksheet) {
     if (!worksheet) {
-        std::cerr << "工作表对象为空" << std::endl;
-        return false;
+        LOG_ERROR("工作表对象为空");
+        return core::ErrorCode::InvalidArgument;
     }
     
     std::string xml_content = extractXMLFromZip(path);
     if (xml_content.empty()) {
-        std::cerr << "无法提取工作表XML: " << path << std::endl;
-        return false;
+        LOG_ERROR("无法提取工作表XML: {}", path);
+        return core::ErrorCode::FileNotFound;
     }
     
     try {
         WorksheetParser parser;
         if (!parser.parse(xml_content, worksheet, shared_strings_, styles_)) {
-            std::cerr << "解析工作表XML失败: " << path << std::endl;
-            return false;
+            LOG_ERROR("解析工作表XML失败: {}", path);
+            return core::ErrorCode::XmlParseError;
         }
         
-        std::cout << "成功解析工作表: " << worksheet->getName() << std::endl;
-        return true;
+        LOG_DEBUG("成功解析工作表: {}", worksheet->getName());
+        return core::ErrorCode::Ok;
         
     } catch (const std::exception& e) {
-        std::cerr << "解析工作表时发生异常: " << e.what() << std::endl;
-        return false;
+        LOG_ERROR("解析工作表时发生异常: {}", e.what());
+        return core::ErrorCode::XmlParseError;
     }
 }
 
-bool XLSXReader::parseStylesXML() {
+core::ErrorCode XLSXReader::parseStylesXML() {
     // 检查样式文件是否存在
     auto error = zip_archive_->fileExists("xl/styles.xml");
     if (archive::isError(error)) {
         // 样式文件不存在，这是正常的（某些Excel文件可能没有自定义样式）
-        return true;
+        return core::ErrorCode::FileNotFound;
     }
     
     std::string xml_content = extractXMLFromZip("xl/styles.xml");
     if (xml_content.empty()) {
-        return true; // 文件为空也是正常的
+        return core::ErrorCode::Ok; // 文件为空也是正常的
     }
     
     try {
         StylesParser parser;
         if (!parser.parse(xml_content)) {
-            std::cerr << "解析样式XML失败" << std::endl;
-            return false;
+            LOG_ERROR("解析样式XML失败");
+            return core::ErrorCode::XmlParseError;
         }
         
         // 将解析结果转换为styles_映射
@@ -445,60 +503,60 @@ bool XLSXReader::parseStylesXML() {
             }
         }
         
-        std::cout << "成功解析 " << styles_.size() << " 个样式" << std::endl;
-        return true;
+        LOG_DEBUG("成功解析 {} 个样式", styles_.size());
+        return core::ErrorCode::Ok;
         
     } catch (const std::exception& e) {
-        std::cerr << "解析样式时发生异常: " << e.what() << std::endl;
-        return false;
+        LOG_ERROR("解析样式时发生异常: {}", e.what());
+        return core::ErrorCode::XmlParseError;
     }
 }
 
-bool XLSXReader::parseSharedStringsXML() {
+core::ErrorCode XLSXReader::parseSharedStringsXML() {
     // 检查共享字符串文件是否存在
     auto error = zip_archive_->fileExists("xl/sharedStrings.xml");
     if (archive::isError(error)) {
         // 共享字符串文件不存在，这是正常的（某些Excel文件可能没有共享字符串）
-        return true;
+        return core::ErrorCode::FileNotFound;
     }
     
     std::string xml_content = extractXMLFromZip("xl/sharedStrings.xml");
     if (xml_content.empty()) {
-        return true; // 文件为空也是正常的
+        return core::ErrorCode::Ok; // 文件为空也是正常的
     }
     
     try {
         SharedStringsParser parser;
         if (!parser.parse(xml_content)) {
-            std::cerr << "解析共享字符串XML失败" << std::endl;
-            return false;
+            LOG_ERROR("解析共享字符串XML失败");
+            return core::ErrorCode::XmlParseError;
         }
         
         // 将解析结果复制到成员变量
         shared_strings_ = parser.getStrings();
         
-        std::cout << "成功解析 " << shared_strings_.size() << " 个共享字符串" << std::endl;
-        return true;
+        LOG_DEBUG("成功解析 {} 个共享字符串", shared_strings_.size());
+        return core::ErrorCode::Ok;
         
     } catch (const std::exception& e) {
-        std::cerr << "解析共享字符串时发生异常: " << e.what() << std::endl;
-        return false;
+        LOG_ERROR("解析共享字符串时发生异常: {}", e.what());
+        return core::ErrorCode::XmlParseError;
     }
 }
 
-bool XLSXReader::parseContentTypesXML() {
+core::ErrorCode XLSXReader::parseContentTypesXML() {
     // TODO: 实现内容类型XML解析
-    std::cerr << "parseContentTypesXML 尚未实现" << std::endl;
-    return true;
+    LOG_WARN("parseContentTypesXML 尚未实现");
+    return core::ErrorCode::NotImplemented;
 }
 
-bool XLSXReader::parseRelationshipsXML() {
+core::ErrorCode XLSXReader::parseRelationshipsXML() {
     // TODO: 实现关系XML解析
-    std::cerr << "parseRelationshipsXML 尚未实现" << std::endl;
-    return true;
+    LOG_WARN("parseRelationshipsXML 尚未实现");
+    return core::ErrorCode::NotImplemented;
 }
 
-bool XLSXReader::parseDocPropsXML() {
+core::ErrorCode XLSXReader::parseDocPropsXML() {
     // 尝试解析核心文档属性
     auto error = zip_archive_->fileExists("docProps/core.xml");
     if (archive::isSuccess(error)) {
@@ -559,7 +617,7 @@ bool XLSXReader::parseDocPropsXML() {
         }
     }
     
-    return true;
+    return core::ErrorCode::Ok;
 }
 
 std::string XLSXReader::getCellValue(const std::string& cell_xml, core::CellType& type) {
@@ -678,7 +736,7 @@ bool XLSXReader::parseWorkbookRelationships(std::unordered_map<std::string, std:
         return !relationships.empty();
         
     } catch (const std::exception& e) {
-        std::cerr << "解析关系文件时发生异常: " << e.what() << std::endl;
+        LOG_ERROR("解析关系文件时发生异常: {}", e.what());
         return false;
     }
 }

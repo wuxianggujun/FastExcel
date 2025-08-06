@@ -10,6 +10,8 @@
 #include <string>
 #include <memory>
 #include <vector>
+#include <mutex>
+#include "ErrorCode.hpp"
 
 namespace fastexcel {
 namespace core {
@@ -20,27 +22,6 @@ namespace core {
 class FastExcelException : public std::runtime_error {
 public:
     /**
-     * @brief 错误代码枚举
-     */
-    enum class ErrorCode {
-        Unknown = 0,
-        FileNotFound,
-        FileAccessDenied,
-        InvalidFileFormat,
-        CorruptedFile,
-        OutOfMemory,
-        InvalidParameter,
-        InvalidOperation,
-        WorksheetNotFound,
-        CellOutOfRange,
-        FormatError,
-        CompressionError,
-        XMLParseError,
-        NetworkError,
-        TimeoutError
-    };
-    
-    /**
      * @brief 构造函数
      * @param message 错误消息
      * @param code 错误代码
@@ -48,7 +29,7 @@ public:
      * @param line 发生错误的行号
      */
     FastExcelException(const std::string& message, 
-                      ErrorCode code = ErrorCode::Unknown,
+                      ErrorCode code = ErrorCode::InternalError,
                       const char* file = nullptr,
                       int line = 0);
     
@@ -115,7 +96,7 @@ private:
 class FormatException : public FastExcelException {
 public:
     FormatException(const std::string& message,
-                   ErrorCode code = ErrorCode::InvalidFileFormat,
+                   ErrorCode code = ErrorCode::InvalidFormat,
                    const char* file = nullptr, int line = 0);
 };
 
@@ -156,7 +137,7 @@ class OperationException : public FastExcelException {
 public:
     OperationException(const std::string& message,
                       const std::string& operation = "",
-                      ErrorCode code = ErrorCode::InvalidOperation,
+                      ErrorCode code = ErrorCode::InvalidArgument,
                       const char* file = nullptr, int line = 0);
     
     const std::string& getOperation() const { return operation_; }
@@ -172,7 +153,7 @@ class WorksheetException : public FastExcelException {
 public:
     WorksheetException(const std::string& message,
                       const std::string& worksheet_name = "",
-                      ErrorCode code = ErrorCode::WorksheetNotFound,
+                      ErrorCode code = ErrorCode::InvalidWorksheet,
                       const char* file = nullptr, int line = 0);
     
     const std::string& getWorksheetName() const { return worksheet_name_; }
@@ -188,7 +169,7 @@ class CellException : public FastExcelException {
 public:
     CellException(const std::string& message,
                  int row = -1, int col = -1,
-                 ErrorCode code = ErrorCode::CellOutOfRange,
+                 ErrorCode code = ErrorCode::InvalidCellReference,
                  const char* file = nullptr, int line = 0);
     
     int getRow() const { return row_; }

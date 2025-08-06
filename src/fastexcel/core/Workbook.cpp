@@ -1581,17 +1581,19 @@ std::unique_ptr<Workbook> Workbook::loadForEdit(const Path& path) {
         
         // 使用XLSXReader读取现有文件
         reader::XLSXReader reader(path);
-        if (!reader.open()) {
-            LOG_ERROR("Failed to open XLSX file for reading: {}", path.string());
+        auto result = reader.open();
+        if (result != core::ErrorCode::Ok) {
+            LOG_ERROR("Failed to open XLSX file for reading: {}, error code: {}", path.string(), static_cast<int>(result));
             return nullptr;
         }
         
         // 加载工作簿
-        auto loaded_workbook = reader.loadWorkbook();
+        std::unique_ptr<core::Workbook> loaded_workbook;
+        result = reader.loadWorkbook(loaded_workbook);
         reader.close();
         
-        if (!loaded_workbook) {
-            LOG_ERROR("Failed to load workbook from file: {}", path.string());
+        if (result != core::ErrorCode::Ok) {
+            LOG_ERROR("Failed to load workbook from file: {}, error code: {}", path.string(), static_cast<int>(result));
             return nullptr;
         }
         

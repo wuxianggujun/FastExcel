@@ -6,6 +6,7 @@
 #include "fastexcel/core/Format.hpp"
 #include "fastexcel/core/Worksheet.hpp"
 #include "fastexcel/core/Path.hpp"
+#include "fastexcel/core/ErrorCode.hpp"
 #include "fastexcel/archive/ZipArchive.hpp"
 #include <memory>
 #include <unordered_map>
@@ -39,15 +40,20 @@ public:
   explicit XLSXReader(const core::Path& path);
   ~XLSXReader();
 
-  bool open();
-  std::unique_ptr<core::Workbook> loadWorkbook();
-  bool close();
+  // 系统层API：高性能，使用错误码
+  core::ErrorCode open();
+  core::ErrorCode loadWorkbook(std::unique_ptr<core::Workbook>& workbook);
+  core::ErrorCode close();
 
-  std::shared_ptr<core::Worksheet> loadWorksheet(const std::string& name);
-  std::vector<std::string> getWorksheetNames();
+  core::ErrorCode loadWorksheet(const std::string& name, std::shared_ptr<core::Worksheet>& worksheet);
+  core::ErrorCode getWorksheetNames(std::vector<std::string>& names);
+  
+  core::ErrorCode getMetadata(WorkbookMetadata& metadata);
+  core::ErrorCode getDefinedNames(std::vector<std::string>& names);
 
-  WorkbookMetadata getMetadata();
-  std::vector<std::string> getDefinedNames();
+  // 状态查询
+  bool isOpen() const { return is_open_; }
+  const std::string& getFilename() const { return filename_; }
 
 private:
     // 成员变量
@@ -64,14 +70,14 @@ private:
     std::unordered_map<int, std::string> shared_strings_;           // index -> string
     std::unordered_map<int, std::shared_ptr<core::Format>> styles_; // index -> format
     
-    // 解析方法
-    bool parseWorkbookXML();
-    bool parseWorksheetXML(const std::string& path, core::Worksheet* worksheet);
-    bool parseStylesXML();
-    bool parseSharedStringsXML();
-    bool parseContentTypesXML();
-    bool parseRelationshipsXML();
-    bool parseDocPropsXML();
+    // 内部解析方法 - 系统层，使用ErrorCode
+    core::ErrorCode parseWorkbookXML();
+    core::ErrorCode parseWorksheetXML(const std::string& path, core::Worksheet* worksheet);
+    core::ErrorCode parseStylesXML();
+    core::ErrorCode parseSharedStringsXML();
+    core::ErrorCode parseContentTypesXML();
+    core::ErrorCode parseRelationshipsXML();
+    core::ErrorCode parseDocPropsXML();
     
     // 辅助方法
     std::string extractXMLFromZip(const std::string& path);
