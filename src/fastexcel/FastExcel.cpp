@@ -46,14 +46,12 @@ void cleanup() {
 
 // ========== 新架构 2.0 工厂函数实现 ==========
 
-std::unique_ptr<core::Workbook> createWorkbook(const std::string& filename) {
-    return std::make_unique<core::Workbook>(filename);
+std::unique_ptr<core::NewWorkbook> createWorkbook(const std::string& filename) {
+    return std::make_unique<core::NewWorkbook>(filename);
 }
 
-std::unique_ptr<core::Workbook> openWorkbook(const std::string& filename) {
-    auto workbook = std::make_unique<core::Workbook>();
-    workbook->open(filename);
-    return workbook;
+std::unique_ptr<core::NewWorkbook> openWorkbook(const std::string& filename) {
+    return core::NewWorkbook::open(filename);
 }
 
 core::StyleBuilder createStyle() {
@@ -78,7 +76,7 @@ core::StyleBuilder title() {
 core::StyleBuilder header() {
     return core::StyleBuilder()
         .font("Arial", 12.0, true)
-        .fill(core::Color(0xD9EDF7))  // 浅蓝色背景
+        .fill(core::Color(0xD9EDF7U))  // 浅蓝色背景
         .border(core::BorderStyle::Thin)
         .horizontalAlign(core::HorizontalAlign::Center);
 }
@@ -103,7 +101,7 @@ core::StyleBuilder date() {
 
 core::StyleBuilder border(core::BorderStyle style, core::Color color) {
     return core::StyleBuilder()
-        .allBorders(style, color);
+        .border(style, color);
 }
 
 core::StyleBuilder fill(core::Color color) {

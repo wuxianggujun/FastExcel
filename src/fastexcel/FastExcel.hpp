@@ -171,8 +171,8 @@ namespace core {
     class FormatRepository;  
     class StyleBuilder;
     class StyleTransferContext;
-    class Workbook;
-    class Worksheet;
+    class NewWorkbook;
+    class NewWorksheet;
 }
 
 /**
@@ -193,14 +193,14 @@ struct NewArchitectureVersion {
  * @param filename 文件名
  * @return 工作簿智能指针
  */
-FASTEXCEL_API std::unique_ptr<core::Workbook> createWorkbook(const std::string& filename);
+FASTEXCEL_API std::unique_ptr<core::NewWorkbook> createWorkbook(const std::string& filename);
 
 /**
  * @brief 打开现有Excel文件(新架构)
  * @param filename 文件名  
  * @return 工作簿智能指针
  */
-FASTEXCEL_API std::unique_ptr<core::Workbook> openWorkbook(const std::string& filename);
+FASTEXCEL_API std::unique_ptr<core::NewWorkbook> openWorkbook(const std::string& filename);
 
 /**
  * @brief 创建样式构建器
@@ -242,8 +242,8 @@ using NamedStyle = core::NamedStyle;
 using FormatDescriptor = core::FormatDescriptor;
 using FormatRepository = core::FormatRepository;
 using StyleTransferContext = core::StyleTransferContext;
-using NewWorkbook = core::Workbook;      // 新工作簿类型
-using NewWorksheet = core::Worksheet;    // 新工作表类型
+using NewWorkbook = core::NewWorkbook;      // 新工作簿类型
+using NewWorksheet = core::NewWorksheet;    // 新工作表类型
 
 // 保持旧架构别名(向后兼容)
 using LegacyWorkbook = fastexcel::core::Workbook;   // 旧工作簿类型

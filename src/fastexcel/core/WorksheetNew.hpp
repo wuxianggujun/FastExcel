@@ -2,50 +2,40 @@
 
 #include "FormatDescriptor.hpp"
 #include "StyleBuilder.hpp"
+#include "Cell.hpp"
 #include <string>
 #include <memory>
 #include <vector>
-#include <variant>
 
 namespace fastexcel {
 namespace core {
 
 // 前向声明
-class Workbook;
+class NewWorkbook;
+class WorksheetImpl;
 
 /**
- * @brief 单元格值类型
- */
-using CellValue = std::variant<
-    std::monostate,    // 空值
-    std::string,       // 字符串
-    double,            // 数字
-    bool,              // 布尔值
-    int64_t           // 整数（日期时间的内部表示）
->;
-
-/**
- * @brief Excel工作表 - 重构后的高级API
+ * @brief Excel工作表 - 新架构API
  * 
  * 提供类型安全、高性能的单元格操作接口。
  * 所有样式操作使用样式ID，避免指针管理的复杂性。
  */
-class Worksheet {
+class NewWorksheet {
 private:
     std::unique_ptr<WorksheetImpl> pImpl_;
-    friend class Workbook;
+    friend class NewWorkbook;
     
     // 私有构造函数，只能通过Workbook创建
-    Worksheet(const std::string& name, Workbook* parent_workbook);
+    NewWorksheet(const std::string& name, NewWorkbook* parent_workbook);
 
 public:
-    ~Worksheet();
+    ~NewWorksheet();
     
     // 禁用拷贝，允许移动
-    Worksheet(const Worksheet&) = delete;
-    Worksheet& operator=(const Worksheet&) = delete;
-    Worksheet(Worksheet&&) = default;
-    Worksheet& operator=(Worksheet&&) = default;
+    NewWorksheet(const NewWorksheet&) = delete;
+    NewWorksheet& operator=(const NewWorksheet&) = delete;
+    NewWorksheet(NewWorksheet&&) = default;
+    NewWorksheet& operator=(NewWorksheet&&) = default;
     
     // ========== 基本属性 ==========
     
@@ -66,7 +56,7 @@ public:
      * @brief 获取父工作簿
      * @return 工作簿指针
      */
-    Workbook* getWorkbook() const;
+    NewWorkbook* getWorkbook() const;
     
     /**
      * @brief 获取工作表索引
@@ -149,11 +139,21 @@ public:
      * @brief 写入任意值（自动推断类型）
      * @param row 行号
      * @param col 列号
+     * @param cell 单元格对象
+     * @param style_id 样式ID（可选）
+     * @return 是否成功
+     */
+    bool writeCell(size_t row, size_t col, const Cell& cell, int style_id = 0);
+    
+    /**
+     * @brief 写入任意值（自动推断类型）
+     * @param row 行号
+     * @param col 列号
      * @param value 单元格值
      * @param style_id 样式ID（可选）
      * @return 是否成功
      */
-    bool writeValue(size_t row, size_t col, const CellValue& value, int style_id = 0);
+    bool writeValue(size_t row, size_t col, const Cell& value, int style_id = 0);
     
     // ========== 批量写入操作 ==========
     
@@ -165,7 +165,7 @@ public:
      * @param style_id 样式ID（应用于所有单元格）
      * @return 写入的单元格数量
      */
-    size_t writeRow(size_t row, size_t start_col, const std::vector<CellValue>& values, int style_id = 0);
+    size_t writeRow(size_t row, size_t start_col, const std::vector<Cell>& values, int style_id = 0);
     
     /**
      * @brief 写入行数据（不同样式）
@@ -175,7 +175,7 @@ public:
      * @param style_ids 样式ID列表
      * @return 写入的单元格数量
      */
-    size_t writeRow(size_t row, size_t start_col, const std::vector<CellValue>& values, 
+    size_t writeRow(size_t row, size_t start_col, const std::vector<Cell>& values, 
                    const std::vector<int>& style_ids);
     
     /**
@@ -186,7 +186,7 @@ public:
      * @param style_id 样式ID（应用于所有单元格）
      * @return 写入的单元格数量
      */
-    size_t writeColumn(size_t col, size_t start_row, const std::vector<CellValue>& values, int style_id = 0);
+    size_t writeColumn(size_t col, size_t start_row, const std::vector<Cell>& values, int style_id = 0);
     
     /**
      * @brief 写入二维数据
@@ -197,9 +197,17 @@ public:
      * @return 写入的单元格数量
      */
     size_t writeRange(size_t start_row, size_t start_col, 
-                     const std::vector<std::vector<CellValue>>& data, int style_id = 0);
+                     const std::vector<std::vector<Cell>>& data, int style_id = 0);
     
     // ========== 单元格读取操作 ==========
+    
+    /**
+     * @brief 读取单元格
+     * @param row 行号
+     * @param col 列号
+     * @return 单元格对象引用
+     */
+    const Cell& readCell(size_t row, size_t col) const;
     
     /**
      * @brief 读取单元格值
@@ -207,7 +215,7 @@ public:
      * @param col 列号
      * @return 单元格值
      */
-    CellValue readValue(size_t row, size_t col) const;
+    Cell readValue(size_t row, size_t col) const;
     
     /**
      * @brief 读取单元格样式ID
@@ -478,14 +486,14 @@ public:
      * @param style_id 样式ID（可选）
      * @return 是否成功
      */
-    bool write(const std::string& cell_ref, const CellValue& value, int style_id = 0);
+    bool write(const std::string& cell_ref, const Cell& value, int style_id = 0);
     
     /**
      * @brief 使用A1格式读取值
      * @param cell_ref A1格式的单元格引用
      * @return 单元格值
      */
-    CellValue read(const std::string& cell_ref) const;
+    Cell read(const std::string& cell_ref) const;
     
     /**
      * @brief A1引用转换为行列坐标

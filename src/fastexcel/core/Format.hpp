@@ -373,10 +373,10 @@ public:
     void setDiagonalBorderColor(Color color);
     
     /**
-     * @brief 设置对角线类型（别名）
+     * @brief 设置对角线类型
      * @param type 对角线类型
      */
-    void setDiagonalType(DiagonalType type);
+    void setDiagonalType(DiagonalBorderType type);
     
     // ========== 填充设置 ==========
     
@@ -492,7 +492,7 @@ public:
     BorderStyle getDiagBorder() const { return diag_border_; }
     DiagonalBorderType getDiagType() const { return diag_type_; }
     BorderStyle getDiagonalBorder() const { return diag_border_; }
-    DiagonalType getDiagonalType() const { return diag_type_; }
+    DiagonalBorderType getDiagonalType() const { return diag_type_; }
     
     Color getLeftBorderColor() const { return left_border_color_; }
     Color getRightBorderColor() const { return right_border_color_; }

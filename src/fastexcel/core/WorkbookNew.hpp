@@ -12,15 +12,15 @@ namespace fastexcel {
 namespace core {
 
 // 前向声明
-class Worksheet;
+class NewWorksheet;
 
 /**
- * @brief Excel工作簿 - 重构后的高级API
+ * @brief Excel工作簿 - 新架构API
  * 
  * 使用新的样式管理系统，提供线程安全、高性能的Excel操作接口。
  * 采用PIMPL模式隐藏实现细节，确保API稳定性。
  */
-class Workbook {
+class NewWorkbook {
 private:
     class WorkbookImpl;
     std::unique_ptr<WorkbookImpl> pImpl_;
@@ -31,28 +31,28 @@ public:
      * @param filename 文件名
      * @return 工作簿智能指针
      */
-    static std::unique_ptr<Workbook> create(const std::string& filename);
+    static std::unique_ptr<NewWorkbook> create(const std::string& filename);
     
     /**
      * @brief 打开现有工作簿
      * @param filename 文件名
      * @return 工作簿智能指针
      */
-    static std::unique_ptr<Workbook> open(const std::string& filename);
+    static std::unique_ptr<NewWorkbook> open(const std::string& filename);
     
     /**
      * @brief 构造函数
      * @param filename 文件名
      */
-    explicit Workbook(const std::string& filename);
+    explicit NewWorkbook(const std::string& filename);
     
-    ~Workbook();
+    ~NewWorkbook();
     
     // 禁用拷贝，允许移动
-    Workbook(const Workbook&) = delete;
-    Workbook& operator=(const Workbook&) = delete;
-    Workbook(Workbook&&) = default;
-    Workbook& operator=(Workbook&&) = default;
+    NewWorkbook(const NewWorkbook&) = delete;
+    NewWorkbook& operator=(const NewWorkbook&) = delete;
+    NewWorkbook(NewWorkbook&&) = default;
+    NewWorkbook& operator=(NewWorkbook&&) = default;
     
     // ========== 样式管理 ==========
     
@@ -122,21 +122,21 @@ public:
      * @param name 工作表名称
      * @return 工作表指针
      */
-    Worksheet* addWorksheet(const std::string& name = "");
+    NewWorksheet* addWorksheet(const std::string& name = "");
     
     /**
      * @brief 根据索引获取工作表
      * @param index 工作表索引（从0开始）
      * @return 工作表指针，如果索引无效则返回nullptr
      */
-    Worksheet* getWorksheet(size_t index) const;
+    NewWorksheet* getWorksheet(size_t index) const;
     
     /**
      * @brief 根据名称获取工作表
      * @param name 工作表名称
      * @return 工作表指针，如果不存在则返回nullptr
      */
-    Worksheet* getWorksheet(const std::string& name) const;
+    NewWorksheet* getWorksheet(const std::string& name) const;
     
     /**
      * @brief 获取工作表数量
@@ -175,7 +175,7 @@ public:
      * @return 样式传输上下文（用于ID映射）
      */
     std::unique_ptr<StyleTransferContext> copyStylesFrom(
-        const Workbook& source_workbook);
+        const NewWorkbook& source_workbook);
     
     /**
      * @brief 复制工作表到另一个工作簿
@@ -183,7 +183,7 @@ public:
      * @param new_name 新工作表名称（空则使用源名称）
      * @return 新创建的工作表指针
      */
-    Worksheet* copyWorksheetFrom(const Worksheet& source_worksheet, 
+    NewWorksheet* copyWorksheetFrom(const NewWorksheet& source_worksheet, 
                                 const std::string& new_name = "");
     
     // ========== 文件操作 ==========

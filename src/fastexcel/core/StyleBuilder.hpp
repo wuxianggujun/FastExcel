@@ -344,7 +344,7 @@ public:
      * @return Builder引用
      */
     StyleBuilder& diagonalBorder(BorderStyle style, 
-                               DiagonalBorderType type = DiagonalBorderType::UpDown,
+                               DiagonalBorderType type = DiagonalBorderType::Both,
                                core::Color color = core::Color::BLACK) {
         diag_border_ = style;
         diag_type_ = type;
