@@ -164,19 +164,45 @@ void FormatPool::importStyles(const std::unordered_map<int, std::shared_ptr<core
     size_t estimated_new_formats = styles.size();
     formats_.reserve(formats_.size() + estimated_new_formats);
     
+    size_t formats_before = formats_.size();
+    size_t actually_added = 0;
+    size_t duplicates_found = 0;
+    
     // 按索引顺序导入（保持原有的索引关系）
     for (const auto& [index, format] : styles) {
         if (format) {
             // 创建格式的副本以避免shared_ptr相关问题
             auto format_copy = std::make_unique<Format>(*format);
             
-            // 添加到格式池，使用去重机制
-            addFormat(std::move(format_copy));
+            // 检查是否是重复格式（但仍要添加到formats_中用于XML生成）
+            FormatKey key(*format_copy);
+            auto cache_it = format_cache_.find(key);
             
-            // 注意：由于去重机制，实际索引可能与原索引不同
-            // 这是正常的，因为我们主要关心格式内容而不是索引
+            if (cache_it != format_cache_.end()) {
+                // 格式重复，但仍然需要为XML生成添加一个副本
+                duplicates_found++;
+                LOG_DEBUG("发现重复格式，但仍添加用于XML生成");
+            }
+            
+            // 无论是否重复，都添加到formats_向量中用于XML生成
+            Format* format_ptr = format_copy.get();
+            size_t format_index = next_index_++;
+            formats_.push_back(std::move(format_copy));
+            
+            // 如果是新的格式键，添加到缓存
+            if (cache_it == format_cache_.end()) {
+                format_cache_[key] = format_ptr;
+                actually_added++;
+            }
+            
+            // 添加到索引映射
+            format_to_index_[format_ptr] = format_index;
         }
     }
+    
+    // 添加调试日志
+    LOG_DEBUG("ImportStyles统计: 输入{}个样式, 导入前{}个格式, 导入后{}个格式, 实际新增{}个格式, 重复{}个格式", 
+              styles.size(), formats_before, formats_.size(), actually_added, duplicates_found);
 }
 
 size_t FormatPool::getFormatIndex(Format* format) const {
@@ -232,8 +258,12 @@ void FormatPool::generateStylesXMLInternal(xml::XMLStreamWriter& writer) const {
     writer.startElement("styleSheet");
     writer.writeAttribute("xmlns", "http://schemas.openxmlformats.org/spreadsheetml/2006/main");
     
+    // 添加调试日志来检查格式数量
+    LOG_DEBUG("GenerateStylesXML: formats_.size()={}, getFormatCount()={}", formats_.size(), getFormatCount());
+    
     // 如果没有导入的样式，使用简化的默认样式
-    if (formats_.empty()) {
+    if (formats_.size() <= 1) {  // 只有默认格式或完全没有格式
+        LOG_DEBUG("使用简化的默认样式生成");
         // 默认字体
         writer.startElement("fonts");
         writer.writeAttribute("count", "1");
@@ -329,89 +359,216 @@ void FormatPool::generateStylesXMLInternal(xml::XMLStreamWriter& writer) const {
         writer.writeAttribute("defaultPivotStyle", "PivotStyleLight16");
         writer.endElement(); // tableStyles
     } else {
-        // 有导入的样式，但暂时使用默认样式（样式复制功能的完整实现需要更多工作）
-        // 这至少能确保Excel文件不会报错
+        // 有导入的样式，使用完整的XML生成
+        LOG_DEBUG("使用完整的样式生成，包含{}个格式", formats_.size());
         
-        // 临时使用默认样式防止Excel报错
+        // 数字格式部分
+        std::vector<std::string> custom_formats;
+        for (const auto& format : formats_) {
+            std::string numFmt = format->generateNumberFormatXML();
+            if (!numFmt.empty()) {
+                custom_formats.push_back(numFmt);
+            }
+        }
+        
+        if (!custom_formats.empty()) {
+            writer.startElement("numFmts");
+            writer.writeAttribute("count", std::to_string(custom_formats.size()).c_str());
+            for (const auto& fmt : custom_formats) {
+                writer.writeRaw(fmt);
+            }
+            writer.endElement(); // numFmts
+        }
+        
+        // 字体部分
         writer.startElement("fonts");
-        writer.writeAttribute("count", "1");
+        writer.writeAttribute("count", std::to_string(getFormatCount() + 1).c_str());
+        
+        // 默认字体 - 完整的Calibri 11定义
         writer.startElement("font");
         writer.startElement("sz");
         writer.writeAttribute("val", "11");
-        writer.endElement();
+        writer.endElement(); // sz
         writer.startElement("name");
         writer.writeAttribute("val", "Calibri");
-        writer.endElement();
-        writer.endElement();
-        writer.endElement();
+        writer.endElement(); // name
+        writer.startElement("family");
+        writer.writeAttribute("val", "2");
+        writer.endElement(); // family
+        writer.startElement("scheme");
+        writer.writeAttribute("val", "minor");
+        writer.endElement(); // scheme
+        writer.endElement(); // font
         
+        // 其他字体
+        for (const auto& format : formats_) {
+            // 强制认为每个导入的格式都有字体（用于调试）
+            std::string fontXML = format->generateFontXML();
+            if (!fontXML.empty()) {
+                writer.writeRaw(fontXML);
+            } else {
+                // 如果生成失败，使用默认字体
+                writer.startElement("font");
+                writer.startElement("sz");
+                writer.writeAttribute("val", "11");
+                writer.endElement(); // sz
+                writer.startElement("name");
+                writer.writeAttribute("val", "Calibri");
+                writer.endElement(); // name
+                writer.startElement("family");
+                writer.writeAttribute("val", "2");
+                writer.endElement(); // family
+                writer.startElement("scheme");
+                writer.writeAttribute("val", "minor");
+                writer.endElement(); // scheme
+                writer.endElement(); // font
+            }
+        }
+        
+        writer.endElement(); // fonts
+        
+        // 填充部分
         writer.startElement("fills");
-        writer.writeAttribute("count", "2");
+        writer.writeAttribute("count", std::to_string(getFormatCount() + 2).c_str());
+        
+        // 默认填充
         writer.startElement("fill");
         writer.startElement("patternFill");
         writer.writeAttribute("patternType", "none");
-        writer.endElement();
-        writer.endElement();
+        writer.endElement(); // patternFill
+        writer.endElement(); // fill
+        
         writer.startElement("fill");
         writer.startElement("patternFill");
         writer.writeAttribute("patternType", "gray125");
-        writer.endElement();
-        writer.endElement();
-        writer.endElement();
+        writer.endElement(); // patternFill
+        writer.endElement(); // fill
         
+        // 其他填充
+        for (const auto& format : formats_) {
+            // 强制认为每个导入的格式都有填充（用于调试）
+            std::string fillXML = format->generateFillXML();
+            if (!fillXML.empty()) {
+                writer.writeRaw(fillXML);
+            } else {
+                writer.startElement("fill");
+                writer.startElement("patternFill");
+                writer.writeAttribute("patternType", "none");
+                writer.endElement(); // patternFill
+                writer.endElement(); // fill
+            }
+        }
+        
+        writer.endElement(); // fills
+        
+        // 边框部分
         writer.startElement("borders");
-        writer.writeAttribute("count", "1");
+        writer.writeAttribute("count", std::to_string(getFormatCount() + 1).c_str());
+        
+        // 默认边框
         writer.startElement("border");
         writer.startElement("left");
-        writer.endElement();
+        writer.endElement(); // left
         writer.startElement("right");
-        writer.endElement();
+        writer.endElement(); // right
         writer.startElement("top");
-        writer.endElement();
+        writer.endElement(); // top
         writer.startElement("bottom");
-        writer.endElement();
-        writer.endElement();
-        writer.endElement();
+        writer.endElement(); // bottom
+        writer.startElement("diagonal");
+        writer.endElement(); // diagonal
+        writer.endElement(); // border
         
+        // 其他边框
+        for (const auto& format : formats_) {
+            // 强制认为每个导入的格式都有边框（用于调试）
+            std::string borderXML = format->generateBorderXML();
+            if (!borderXML.empty()) {
+                writer.writeRaw(borderXML);
+            } else {
+                writer.startElement("border");
+                writer.startElement("left");
+                writer.endElement(); // left
+                writer.startElement("right");
+                writer.endElement(); // right
+                writer.startElement("top");
+                writer.endElement(); // top
+                writer.startElement("bottom");
+                writer.endElement(); // bottom
+                writer.startElement("diagonal");
+                writer.endElement(); // diagonal
+                writer.endElement(); // border
+            }
+        }
+        
+        writer.endElement(); // borders
+        
+        // 单元格样式格式
         writer.startElement("cellStyleXfs");
         writer.writeAttribute("count", "1");
+        
         writer.startElement("xf");
         writer.writeAttribute("numFmtId", "0");
         writer.writeAttribute("fontId", "0");
         writer.writeAttribute("fillId", "0");
         writer.writeAttribute("borderId", "0");
-        writer.endElement();
-        writer.endElement();
+        writer.endElement(); // xf
         
+        writer.endElement(); // cellStyleXfs
+        
+        // 单元格格式
         writer.startElement("cellXfs");
-        writer.writeAttribute("count", "1");
+        writer.writeAttribute("count", std::to_string(getFormatCount() + 1).c_str());
+        
+        // 默认格式
         writer.startElement("xf");
         writer.writeAttribute("numFmtId", "0");
         writer.writeAttribute("fontId", "0");
         writer.writeAttribute("fillId", "0");
         writer.writeAttribute("borderId", "0");
         writer.writeAttribute("xfId", "0");
-        writer.endElement();
-        writer.endElement();
+        writer.endElement(); // xf
         
+        // 其他格式
+        for (size_t i = 0; i < formats_.size(); ++i) {
+            const auto& format = formats_[i];
+            // 关键修复：正确设置格式索引
+            // 字体索引：默认字体(0) + 当前格式索引，强制设置为导入格式都有字体
+            format->setFontIndex(i + 1);  // 强制为每个导入格式分配字体索引
+            // 填充索引：默认填充(0,1) + 当前格式索引，强制设置为导入格式都有填充
+            format->setFillIndex(i + 2);  // 强制为每个导入格式分配填充索引
+            // 边框索引：默认边框(0) + 当前格式索引，强制设置为导入格式都有边框
+            format->setBorderIndex(i + 1);  // 强制为每个导入格式分配边框索引
+            
+            std::string xfXML = format->generateXML();
+            writer.writeRaw(xfXML);
+        }
+        
+        writer.endElement(); // cellXfs
+        
+        // 单元格样式
         writer.startElement("cellStyles");
         writer.writeAttribute("count", "1");
+        
         writer.startElement("cellStyle");
         writer.writeAttribute("name", "Normal");
         writer.writeAttribute("xfId", "0");
         writer.writeAttribute("builtinId", "0");
-        writer.endElement();
-        writer.endElement();
+        writer.endElement(); // cellStyle
         
+        writer.endElement(); // cellStyles
+        
+        // 添加dxfs元素（差异格式，即使为空也需要）
         writer.startElement("dxfs");
         writer.writeAttribute("count", "0");
-        writer.endElement();
+        writer.endElement(); // dxfs
         
+        // 添加tableStyles元素
         writer.startElement("tableStyles");
         writer.writeAttribute("count", "0");
         writer.writeAttribute("defaultTableStyle", "TableStyleMedium2");
         writer.writeAttribute("defaultPivotStyle", "PivotStyleLight16");
-        writer.endElement();
+        writer.endElement(); // tableStyles
     }
     
     writer.endElement(); // styleSheet
