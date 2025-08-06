@@ -336,21 +336,16 @@ std::shared_ptr<Format> Workbook::createFormat() {
         throw std::runtime_error("Workbook is not open");
     }
     
-    // 创建一个新的格式对象
+    // 直接创建一个独立的格式对象，不添加到格式池
+    // 格式池的添加将在格式真正被使用时进行
     auto format = std::make_unique<Format>();
     
-    // 将格式添加到格式池中，FormatPool会管理去重和索引
-    Format* pool_format = format_pool_->addFormat(std::move(format));
+    // 设置一个临时的XF索引
+    static int temp_index = 1000;
+    format->setXfIndex(temp_index++);
     
-    // 关键修复：设置Format对象的XF索引
-    size_t format_index = format_pool_->getFormatIndex(pool_format);
-    pool_format->setXfIndex(static_cast<int32_t>(format_index));
-    
-    // 返回一个共享指针，指向池中的格式
-    // 使用空删除器，因为FormatPool管理Format的生命周期
-    return std::shared_ptr<Format>(pool_format, [](Format*){
-        // 空删除器，FormatPool负责管理生命周期
-    });
+    // 返回独立的Format对象，使用正常的删除器
+    return std::shared_ptr<Format>(format.release());
 }
 
 std::shared_ptr<Format> Workbook::getFormat(size_t format_id) const {

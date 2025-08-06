@@ -104,7 +104,16 @@ FormatPool::FormatPool() : next_index_(0), total_requests_(0), cache_hits_(0) {
     
     // 添加默认格式到池中
     Format* default_ptr = default_format_.get();
+    
+    // 创建默认格式的副本添加到formats_向量中
+    auto default_copy = std::make_unique<Format>(*default_format_);
+    formats_.push_back(std::move(default_copy));
+    
+    // 添加到映射中
     format_to_index_[default_ptr] = 0;
+    FormatKey default_key(*default_format_);
+    format_cache_[default_key] = default_ptr;
+    
     next_index_ = 1;
 }
 
