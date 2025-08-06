@@ -961,6 +961,10 @@ void Workbook::generateWorkbookXML(const std::function<void(const char*, size_t)
     writer.writeAttribute("yWindow", "15");
     writer.writeAttribute("windowWidth", "16095");
     writer.writeAttribute("windowHeight", "9660");
+    // 🔧 修复Sheet激活状态问题：设置activeTab为0，只激活第一个工作表
+    if (!worksheets_.empty()) {
+        writer.writeAttribute("activeTab", "0");
+    }
     writer.endElement(); // workbookView
     writer.endElement(); // bookViews
     

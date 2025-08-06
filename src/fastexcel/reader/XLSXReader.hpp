@@ -54,6 +54,9 @@ public:
   // 状态查询
   bool isOpen() const { return is_open_; }
   const std::string& getFilename() const { return filename_; }
+  
+  // 样式访问
+  const std::unordered_map<int, std::shared_ptr<core::Format>>& getStyles() const { return styles_; }
 
 private:
     // 成员变量
