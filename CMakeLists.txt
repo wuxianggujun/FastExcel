@@ -54,11 +54,13 @@ set(FASTEXCEL_SOURCES
         src/fastexcel/core/Cell.cpp
         src/fastexcel/core/Exception.cpp
         src/fastexcel/core/Format.cpp
+        src/fastexcel/core/FormatDescriptor.cpp
         src/fastexcel/core/Path.cpp
         src/fastexcel/core/Workbook.cpp
         src/fastexcel/core/Worksheet.cpp
         src/fastexcel/core/SharedStringTable.cpp
         src/fastexcel/core/FormatPool.cpp
+        src/fastexcel/core/FormatRepository.cpp
         src/fastexcel/core/MemoryPool.cpp
         src/fastexcel/core/ErrorCode.cpp
         src/fastexcel/core/ThreadPool.cpp

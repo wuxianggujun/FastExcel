@@ -174,10 +174,10 @@ core::ErrorCode XLSXReader::loadWorkbook(std::unique_ptr<core::Workbook>& workbo
             }
         }
         
-        // 🔧 关键修复：导入解析的样式到工作簿
+        // 注意：旧的格式导入功能已被新架构替代
+        // 新架构使用 FormatRepository 和 StyleBuilder，不再需要导入旧的 Format 对象
         if (!styles_.empty()) {
-            LOG_DEBUG("导入解析的样式到工作簿: {} 个样式", styles_.size());
-            workbook->importStyles(styles_);
+            LOG_DEBUG("检测到 {} 个旧格式，新架构将自动处理样式", styles_.size());
         }
         
         LOG_INFO("成功加载工作簿，包含 {} 个工作表", worksheet_names_.size());

@@ -152,61 +152,88 @@ workbook->setHighPerformanceMode(true);
 
 #### 多级压缩策略
 ```cpp
-enum class CompressionLevel {
-    None = 0,        // 无压缩，最快速度
-    Fast = 1,        // 快速压缩，平衡性能
-    Default = 6,     // 默认压缩
-    Best = 9         // 最佳压缩，最小文件
+// 压缩级别选择
+enum CompressionLevel {
+    NO_COMPRESSION = 0,     // 无压缩，最快速度
+    FAST_COMPRESSION = 1,   // 快速压缩，平衡性能
+    DEFAULT_COMPRESSION = 6, // 默认压缩
+    BEST_COMPRESSION = 9    // 最佳压缩，最小文件
 };
 
-// 根据场景选择压缩级别
-if (file_size > 100 * 1024 * 1024) {  // 大于100MB
-    workbook->setCompressionLevel(CompressionLevel::None);
-} else if (network_transfer) {
-    workbook->setCompressionLevel(CompressionLevel::Best);
+// 根据场景智能选择压缩级别
+auto& options = workbook->getOptions();
+if (file_size_estimate > 100 * 1024 * 1024) {  // 大于100MB
+    options.compression_level = NO_COMPRESSION;
+} else if (network_transfer_needed) {
+    options.compression_level = BEST_COMPRESSION;
 } else {
-    workbook->setCompressionLevel(CompressionLevel::Fast);
+    options.compression_level = FAST_COMPRESSION;
 }
 ```
 
-#### 并行压缩（可选）
+#### FileManager压缩设置
 ```cpp
-// 启用 libdeflate 获得更好的压缩性能
-cmake -DFASTEXCEL_USE_LIBDEFLATE=ON ..
+class FileManager {
+    int compression_level_ = 6;  // 默认压缩级别
+    
+public:
+    bool setCompressionLevel(int level) {
+        if (level >= 0 && level <= 9) {
+            compression_level_ = level;
+            return true;
+        }
+        return false;
+    }
+};
 ```
 
 ### 5. 批量操作优化
 
 #### 批量单元格操作
 ```cpp
-// 批量写入数据
-std::vector<std::vector<Cell>> batch_data;
-// ... 填充数据
-worksheet->setBatchData(start_row, start_col, batch_data);
-
-// 批量格式设置
-auto format = workbook->createFormat();
-format->setBold(true);
-worksheet->setBatchFormat(start_row, start_col, end_row, end_col, format);
-
-// 批量公式设置
-worksheet->setBatchFormula(start_row, start_col, end_row, end_col, "=A1*B1");
+// 批量写入数据示例
+void writeBatchData(std::shared_ptr<Worksheet> worksheet) {
+    const size_t BATCH_SIZE = 1000;
+    
+    for (size_t batch = 0; batch < total_rows; batch += BATCH_SIZE) {
+        // 分批处理数据，减少内存压力
+        size_t batch_end = std::min(batch + BATCH_SIZE, total_rows);
+        
+        for (size_t row = batch; row < batch_end; ++row) {
+            for (size_t col = 0; col < num_cols; ++col) {
+                worksheet->writeString(row, col, data[row][col]);
+            }
+        }
+        
+        // 定期报告进度
+        if (batch % (BATCH_SIZE * 10) == 0) {
+            std::cout << "已处理: " << batch << " / " << total_rows << std::endl;
+        }
+    }
+}
 ```
 
-#### 全局操作优化
+#### 样式批量管理
 ```cpp
-// 全局查找替换
-FindReplaceOptions options;
-options.match_case = false;
-options.worksheet_filter = {"Sheet1", "Sheet2"}; // 只处理指定工作表
-int replacements = workbook->findAndReplaceAll("old", "new", options);
+// 样式重用优化
+StyleBuilder header_style;
+header_style.font().bold(true).color(0xFFFFFF);
+header_style.fill().backgroundColor(0x4472C4);
+int header_style_id = workbook->addStyle(header_style);
 
-// 批量工作表操作
-std::unordered_map<std::string, std::string> rename_map = {
-    {"Sheet1", "数据表1"},
-    {"Sheet2", "数据表2"}
-};
-int renamed = workbook->batchRenameWorksheets(rename_map);
+// 在循环中重用样式ID
+for (int col = 0; col < num_cols; ++col) {
+    worksheet->writeString(0, col, headers[col], header_style_id);
+}
+
+// 避免在循环中创建样式（性能杀手）
+// ❌ 错误做法
+for (int col = 0; col < num_cols; ++col) {
+    StyleBuilder style;  // 每次都创建新样式
+    style.font().bold(true);
+    int style_id = workbook->addStyle(style);
+    worksheet->writeString(0, col, headers[col], style_id);
+}
 ```
 
 ## 性能基准测试
@@ -340,71 +367,122 @@ void userInterface() {
 }
 ```
 
-### 4. 编译优化
+### 5. 编译优化建议
 
+#### Release构建配置
 ```bash
-# Release 构建
+# CMake配置
 cmake -DCMAKE_BUILD_TYPE=Release \
-      -DFASTEXCEL_USE_EXCEPTIONS=OFF \
-      -DFASTEXCEL_USE_LIBDEFLATE=ON \
+      -DCMAKE_CXX_FLAGS_RELEASE="-O3 -DNDEBUG" \
       ..
 
-# 启用编译器优化
-# GCC/Clang
-export CXXFLAGS="-O3 -march=native -flto"
+# GCC/Clang额外优化
+export CXXFLAGS="-O3 -march=native -flto -ffast-math"
 
-# MSVC
-export CXXFLAGS="/O2 /GL /arch:AVX2"
+# MSVC额外优化  
+export CXXFLAGS="/O2 /GL /arch:AVX2 /fp:fast"
 ```
 
-## 性能监控
+#### 链接时优化
+```cmake
+# CMakeLists.txt中启用LTO
+if(CMAKE_BUILD_TYPE STREQUAL "Release")
+    set_target_properties(fastexcel PROPERTIES INTERPROCEDURAL_OPTIMIZATION TRUE)
+endif()
+```
 
-### 内置性能统计
+### 6. 监控和调试
+
+#### 内置性能统计
 ```cpp
 // 获取工作簿统计信息
 auto stats = workbook->getStatistics();
-std::cout << "内存使用: " << stats.memory_usage / 1024 << " KB" << std::endl;
-std::cout << "单元格数: " << stats.total_cells << std::endl;
-std::cout << "格式数: " << stats.total_formats << std::endl;
+std::cout << "工作表数量: " << stats.total_worksheets << std::endl;
+std::cout << "总单元格数: " << stats.total_cells << std::endl;
+std::cout << "格式数量: " << stats.total_formats << std::endl;
+std::cout << "内存使用: " << stats.memory_usage / 1024 / 1024 << " MB" << std::endl;
 
-// 获取详细的工作表统计
+// 查看各工作表的单元格分布
 for (const auto& [name, count] : stats.worksheet_cell_counts) {
-    std::cout << "工作表 " << name << ": " << count << " 个单元格" << std::endl;
+    std::cout << "工作表 '" << name << "': " << count << " 个单元格" << std::endl;
 }
+
+// 样式去重统计
+auto style_stats = workbook->getStyleStats();
+std::cout << "样式去重率: " << style_stats.deduplication_ratio * 100 << "%" << std::endl;
+std::cout << "节省格式数: " << style_stats.deduplicated_count << std::endl;
 ```
 
-### 性能分析工具
+#### 简单性能计时
 ```cpp
-// 内置计时器
-class Timer {
+#include <chrono>
+
+class SimpleTimer {
     std::chrono::high_resolution_clock::time_point start_;
-    std::string name_;
+    std::string operation_name_;
+    
 public:
-    Timer(const std::string& name) : name_(name) {
+    SimpleTimer(const std::string& name) : operation_name_(name) {
         start_ = std::chrono::high_resolution_clock::now();
     }
-    ~Timer() {
-        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
-            std::chrono::high_resolution_clock::now() - start_);
-        std::cout << "[" << name_ << "] " << duration.count() << "ms" << std::endl;
+    
+    ~SimpleTimer() {
+        auto end = std::chrono::high_resolution_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start_);
+        std::cout << "[" << operation_name_ << "] 耗时: " << duration.count() << "ms" << std::endl;
     }
 };
 
 // 使用示例
 {
-    Timer timer("大文件保存");
-    workbook->save();
-} // 自动输出耗时
+    SimpleTimer timer("Excel文件生成");
+    workbook->save();  // 自动计时
+}
 ```
 
 ## 总结
 
-FastExcel 通过多层次的性能优化，在保持易用性的同时实现了卓越的性能：
+FastExcel 通过精心设计的架构实现了卓越的性能：
 
-1. **零成本抽象**：双通道错误处理，热路径无异常开销
-2. **内存优化**：内存池、位域优化、LRU缓存
-3. **流式处理**：大文件流式读写，避免内存爆炸
-4. **智能压缩**：多级压缩策略，平衡速度和大小
-5. **批量操作**：减少函数调用开销，提高吞吐量
+### 核心优势
 
-通过合理配置和使用这些特性，FastExcel 可以在各种场景下提供最佳性能。
+1. **智能模式选择**：AUTO模式根据数据量自动选择最优处理策略
+   - 小数据：批量模式，最快速度
+   - 大数据：流式模式，恒定内存
+
+2. **现代C++设计**：充分利用C++17特性
+   - 智能指针自动内存管理
+   - 移动语义减少拷贝开销
+   - RAII模式确保资源安全
+
+3. **XML生成优化**：XMLStreamWriter高性能设计
+   - 固定8KB缓冲区，零动态分配
+   - 预定义转义序列，编译时优化
+   - 回调函数实现零拷贝传输
+
+4. **格式去重系统**：FormatRepository智能管理
+   - 哈希算法自动去重
+   - 显著减少文件大小
+   - 提高格式复用效率
+
+5. **灵活压缩策略**：根据场景智能选择
+   - 性能优先：无压缩模式
+   - 平衡模式：快速压缩
+   - 传输优化：最佳压缩
+
+### 最佳使用建议
+
+- **大数据处理**：启用`setHighPerformanceMode(true)`
+- **平衡场景**：使用默认AUTO模式配置
+- **小文件/兼容性**：使用标准配置
+- **样式管理**：预创建并重用样式对象
+- **内存控制**：采用分批处理策略
+- **错误处理**：使用RAII和异常安全代码
+
+通过合理配置和使用这些特性，FastExcel 在各种场景下都能提供最佳的性能表现，同时保持代码的简洁性和可维护性。
+
+---
+
+*性能优化指南版本: 2.0*  
+*基于FastExcel当前架构编写*  
+*最后更新: 2025-01-06*

@@ -10,14 +10,14 @@ FormatRepository::FormatRepository() {
     hash_to_id_.reserve(128);
     
     // 添加默认格式作为ID 0
-    auto default_format = std::make_shared<const domain::FormatDescriptor>(
-        domain::FormatDescriptor::getDefault()
+    auto default_format = std::make_shared<const FormatDescriptor>(
+        FormatDescriptor::getDefault()
     );
     formats_.push_back(default_format);
     hash_to_id_[default_format->hash()] = DEFAULT_FORMAT_ID;
 }
 
-int FormatRepository::addFormat(const domain::FormatDescriptor& format) {
+int FormatRepository::addFormat(const FormatDescriptor& format) {
     total_requests_.fetch_add(1, std::memory_order_relaxed);
     
     size_t format_hash = format.hash();
@@ -59,14 +59,14 @@ int FormatRepository::addFormat(const domain::FormatDescriptor& format) {
     
     // 真正的新格式，添加到仓储
     int new_id = static_cast<int>(formats_.size());
-    auto format_ptr = std::make_shared<const domain::FormatDescriptor>(format);
+    auto format_ptr = std::make_shared<const FormatDescriptor>(format);
     formats_.push_back(format_ptr);
     hash_to_id_[format_hash] = new_id;
     
     return new_id;
 }
 
-std::shared_ptr<const domain::FormatDescriptor> FormatRepository::getFormat(int id) const {
+std::shared_ptr<const FormatDescriptor> FormatRepository::getFormat(int id) const {
     std::shared_lock lock(mutex_);
     
     if (id < 0 || static_cast<size_t>(id) >= formats_.size()) {
@@ -77,7 +77,7 @@ std::shared_ptr<const domain::FormatDescriptor> FormatRepository::getFormat(int 
     return formats_[id];
 }
 
-std::shared_ptr<const domain::FormatDescriptor> FormatRepository::getDefaultFormat() const {
+std::shared_ptr<const FormatDescriptor> FormatRepository::getDefaultFormat() const {
     std::shared_lock lock(mutex_);
     return formats_[DEFAULT_FORMAT_ID];
 }
@@ -126,13 +126,13 @@ size_t FormatRepository::getMemoryUsage() const {
     size_t total_size = 0;
     
     // 估算formats_向量的内存使用
-    total_size += formats_.capacity() * sizeof(std::shared_ptr<const domain::FormatDescriptor>);
+    total_size += formats_.capacity() * sizeof(std::shared_ptr<const FormatDescriptor>);
     
     // 估算hash_to_id_映射的内存使用
     total_size += hash_to_id_.size() * (sizeof(size_t) + sizeof(int));
     
     // 估算FormatDescriptor对象的内存使用
-    total_size += formats_.size() * sizeof(domain::FormatDescriptor);
+    total_size += formats_.size() * sizeof(FormatDescriptor);
     
     // 估算字符串的内存使用（粗略估算）
     for (const auto& format : formats_) {

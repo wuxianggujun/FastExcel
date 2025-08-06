@@ -2,6 +2,7 @@
 
 #include <string>
 #include <cstdint>
+#include <functional>
 
 namespace fastexcel {
 namespace core {
@@ -182,6 +183,15 @@ public:
     
     bool operator!=(const Color& other) const {
         return !(*this == other);
+    }
+    
+    /**
+     * @brief 计算哈希值
+     * @return 哈希值
+     */
+    size_t hash() const {
+        return std::hash<uint32_t>{}(static_cast<uint32_t>(type_) | (value_ << 8)) ^ 
+               std::hash<double>{}(tint_);
     }
     
     // ========== 类型转换 ==========

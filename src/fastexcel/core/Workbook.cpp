@@ -1954,11 +1954,4 @@ FormatRepository::DeduplicationStats Workbook::getStyleStats() const {
     return format_repo_->getDeduplicationStats();
 }
 
-size_t Workbook::importStyles(const std::vector<std::string>& styles) {
-    // 这是一个简化实现，实际需要解析XML格式的样式数据
-    // 由于新架构中样式解析应该是独立的，这里返回0表示不支持这种旧的导入方式
-    LOG_WARN("importStyles: 旧的样式导入方式不再支持，请使用新的样式架构");
-    return 0;
-}
-
 }} // namespace fastexcel::core

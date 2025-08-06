@@ -381,13 +381,6 @@ public:
      */
     FormatRepository::DeduplicationStats getStyleStats() const;
     
-    /**
-     * @brief 导入样式数据（用于从文件读取）
-     * @param styles 样式数据列表
-     * @return 导入的样式数量
-     */
-    size_t importStyles(const std::vector<std::string>& styles);
-    
     // ========== 文档属性 ==========
     
     /**
