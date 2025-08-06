@@ -2,8 +2,8 @@
 // Created by wuxianggujun on 25-8-4.
 //
 
-#ifndef SHAREDSTRINGSPARSER_HPP
-#define SHAREDSTRINGSPARSER_HPP
+#pragma once
+
 
 #include <string>
 #include <vector>
@@ -64,5 +64,3 @@ private:
 
 } // namespace reader
 } // namespace fastexcel
-
-#endif //SHAREDSTRINGSPARSER_HPP

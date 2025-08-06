@@ -3,8 +3,8 @@
  * @brief 内存池实现，用于优化内存分配性能
  */
 
-#ifndef FASTEXCEL_MEMORY_POOL_HPP
-#define FASTEXCEL_MEMORY_POOL_HPP
+#pragma once
+
 
 #include <memory>
 #include <vector>
@@ -249,4 +249,3 @@ private:
 } // namespace core
 } // namespace fastexcel
 
-#endif // FASTEXCEL_MEMORY_POOL_HPP

@@ -2,8 +2,8 @@
 // Created by wuxianggujun on 25-8-4.
 //
 
-#ifndef STYLESPARSER_HPP
-#define STYLESPARSER_HPP
+#pragma once
+
 
 #include "fastexcel/core/Format.hpp"
 #include "fastexcel/core/Color.hpp"
@@ -128,4 +128,3 @@ private:
 } // namespace reader
 } // namespace fastexcel
 
-#endif //STYLESPARSER_HPP

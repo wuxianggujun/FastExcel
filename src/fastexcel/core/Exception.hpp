@@ -3,8 +3,7 @@
  * @brief FastExcel异常类定义
  */
 
-#ifndef FASTEXCEL_EXCEPTION_HPP
-#define FASTEXCEL_EXCEPTION_HPP
+#pragma once
 
 #include <stdexcept>
 #include <string>
@@ -331,4 +330,3 @@ private:
 #define FASTEXCEL_HANDLE_WARNING(message, context) \
     fastexcel::core::ErrorManager::getInstance().handleWarning(message, context)
 
-#endif // FASTEXCEL_EXCEPTION_HPP

@@ -2,8 +2,8 @@
 // Created by wuxianggujun on 25-8-4.
 //
 
-#ifndef WORKSHEETPARSER_HPP
-#define WORKSHEETPARSER_HPP
+#pragma once
+
 
 #include "fastexcel/core/Worksheet.hpp"
 #include "fastexcel/core/Cell.hpp"
@@ -72,4 +72,3 @@ private:
 } // namespace reader
 } // namespace fastexcel
 
-#endif //WORKSHEETPARSER_HPP

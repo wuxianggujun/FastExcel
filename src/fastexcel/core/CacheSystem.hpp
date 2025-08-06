@@ -3,8 +3,7 @@
  * @brief 缓存系统实现，用于提高数据访问性能
  */
 
-#ifndef FASTEXCEL_CACHE_SYSTEM_HPP
-#define FASTEXCEL_CACHE_SYSTEM_HPP
+#pragma once
 
 #include <unordered_map>
 #include <list>
@@ -347,4 +346,3 @@ private:
 } // namespace core
 } // namespace fastexcel
 
-#endif // FASTEXCEL_CACHE_SYSTEM_HPP

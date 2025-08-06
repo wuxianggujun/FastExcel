@@ -3,8 +3,7 @@
  * @brief 异常转换层：连接底层Result/Expected和用户层Exception
  */
 
-#ifndef FASTEXCEL_EXCEPTION_BRIDGE_HPP
-#define FASTEXCEL_EXCEPTION_BRIDGE_HPP
+#pragma once
 
 #include "Expected.hpp"
 #include "ErrorCode.hpp"
@@ -272,5 +271,3 @@ inline VoidUserAPIWrapper wrapForUser(VoidResult&& result) {
 
 } // namespace core
 } // namespace fastexcel
-
-#endif // FASTEXCEL_EXCEPTION_BRIDGE_HPP
