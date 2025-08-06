@@ -114,6 +114,7 @@ public:
                 
                 // 复制所有单元格数据
                 int copied_cells = 0;
+                int copied_formats = 0;
                 for (int row = 0; row <= max_row; ++row) {
                     for (int col = 0; col <= max_col; ++col) {
                         if (source_worksheet->hasCellAt(row, col)) {
@@ -148,12 +149,25 @@ public:
                                     }
                                     break;
                             }
+                            
+                            // 复制单元格格式
+                            auto source_format = source_cell.getFormat();
+                            if (source_format) {
+                                // 获取目标单元格并设置格式
+                                auto& target_cell = target_worksheet->getCell(row, col);
+                                target_cell.setFormat(source_format);
+                                copied_formats++;
+                            }
                             copied_cells++;
                         }
                     }
                 }
                 
-                std::cout << "    OK: Copied " << copied_cells << " cells" << std::endl;
+                std::cout << "    OK: Copied " << copied_cells << " cells";
+                if (copied_formats > 0) {
+                    std::cout << " (with " << copied_formats << " formatted cells)";
+                }
+                std::cout << std::endl;
             }
             
             // Step 5: 保存目标工作簿
@@ -207,10 +221,15 @@ public:
         try {
             std::cout << "\n=== Verifying Copy Result ===" << std::endl;
             
+            // 设置日志级别为 CRITICAL，减少验证阶段的日志输出
+            fastexcel::Logger::getInstance().setLevel(fastexcel::Logger::Level::CRITICAL);
+            
             // 验证目标文件是否存在
             auto target_workbook = core::Workbook::loadForEdit(target_file_);
             if (!target_workbook) {
                 std::cerr << "Verification failed: Cannot load target file" << std::endl;
+                // 恢复日志级别
+                fastexcel::Logger::getInstance().setLevel(fastexcel::Logger::Level::INFO);
                 return false;
             }
             
@@ -218,8 +237,13 @@ public:
             auto source_workbook = core::Workbook::loadForEdit(source_file_);
             if (!source_workbook) {
                 std::cerr << "Verification failed: Cannot load source file" << std::endl;
+                // 恢复日志级别
+                fastexcel::Logger::getInstance().setLevel(fastexcel::Logger::Level::INFO);
                 return false;
             }
+            
+            // 恢复日志级别
+            fastexcel::Logger::getInstance().setLevel(fastexcel::Logger::Level::INFO);
             
             // 比较工作表数量
             if (source_workbook->getWorksheetCount() != target_workbook->getWorksheetCount()) {
@@ -264,6 +288,8 @@ public:
             return true;
             
         } catch (const std::exception& e) {
+            // 确保日志级别恢复
+            fastexcel::Logger::getInstance().setLevel(fastexcel::Logger::Level::INFO);
             std::cerr << "Error during verification: " << e.what() << std::endl;
             return false;
         }
