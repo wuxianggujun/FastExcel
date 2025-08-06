@@ -39,6 +39,11 @@ public:
         CRITICAL = 5,
         OFF = 6
     };
+    
+    enum class WriteMode {
+        TRUNCATE = 0,  // 覆盖模式（默认）
+        APPEND = 1     // 追加模式
+    };
 
     static Logger& getInstance();
     
@@ -46,7 +51,8 @@ public:
                    Level level = Level::INFO, 
                    bool enable_console = true,
                    size_t max_file_size = 10 * 1024 * 1024,
-                   size_t max_files = 5);
+                   size_t max_files = 5,
+                   WriteMode write_mode = WriteMode::TRUNCATE);
     
     void setLevel(Level level);
     Level getLevel() const;
@@ -153,6 +159,7 @@ private:
     std::atomic<size_t> current_file_size_{0};
     size_t max_file_size_ = 10 * 1024 * 1024;
     size_t max_files_ = 5;
+    WriteMode write_mode_ = WriteMode::TRUNCATE;
 };
 
 #define LOG_TRACE(...)    fastexcel::Logger::getInstance().trace(__VA_ARGS__)

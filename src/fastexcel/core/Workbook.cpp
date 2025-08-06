@@ -179,7 +179,14 @@ std::shared_ptr<Worksheet> Workbook::addWorksheet(const std::string& name) {
     auto worksheet = std::make_shared<Worksheet>(sheet_name, std::shared_ptr<Workbook>(this, [](Workbook*){}), next_sheet_id_++);
     worksheets_.push_back(worksheet);
     
-    LOG_DEBUG("Added worksheet: {}", sheet_name);
+    // 关键修复：如果这是第一个工作表，自动设置为激活状态
+    if (worksheets_.size() == 1) {
+        worksheet->setTabSelected(true);
+        LOG_DEBUG("Added worksheet: {} (activated as first sheet)", sheet_name);
+    } else {
+        LOG_DEBUG("Added worksheet: {}", sheet_name);
+    }
+    
     return worksheet;
 }
 

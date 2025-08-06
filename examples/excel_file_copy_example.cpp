@@ -193,8 +193,13 @@ public:
                 std::cout << std::endl;
             }
             
-            // Step 5: 保存目标工作簿
-            std::cout << "\nStep 5: Saving target workbook..." << std::endl;
+            // Step 5: 设置激活工作表（确保只有第一个工作表被激活）
+            std::cout << "\nStep 5: Setting active worksheet..." << std::endl;
+            target_workbook->setActiveWorksheet(0);  // 设置第一个工作表为激活状态
+            std::cout << "OK: First worksheet set as active" << std::endl;
+            
+            // Step 6: 保存目标工作簿
+            std::cout << "\nStep 6: Saving target workbook..." << std::endl;
             auto save_start = std::chrono::high_resolution_clock::now();
             
             if (!target_workbook->save()) {
@@ -208,7 +213,7 @@ public:
             std::cout << "OK: Target workbook saved successfully" << std::endl;
             std::cout << "    Save time: " << save_duration.count() << "ms" << std::endl;
             
-            // Step 6: 显示统计信息
+            // Step 7: 显示统计信息
             auto end_time = std::chrono::high_resolution_clock::now();
             auto total_duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
             

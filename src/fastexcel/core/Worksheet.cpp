@@ -502,10 +502,15 @@ void Worksheet::generateXMLBatch(const std::function<void(const char*, size_t)>&
     writer.writeAttribute("ref", "A1");
     writer.endElement(); // dimension
     
-    // 关键修复：确保始终生成sheetViews元素（按照libxlsxwriter模版）
+    // 关键修复：只有被选中的工作表才设置tabSelected属性
     writer.startElement("sheetViews");
     writer.startElement("sheetView");
-    writer.writeAttribute("tabSelected", "1");
+    
+    // 只有当工作表被选中时才添加tabSelected属性
+    if (sheet_view_.tab_selected) {
+        writer.writeAttribute("tabSelected", "1");
+    }
+    
     writer.writeAttribute("workbookViewId", "0");
     writer.endElement(); // sheetView
     writer.endElement(); // sheetViews
@@ -645,9 +650,13 @@ void Worksheet::generateXMLStreaming(const std::function<void(const char*, size_
     const char* dimension = "<dimension ref=\"A1\"/>";
     callback(dimension, strlen(dimension));
     
-    // 关键修复：确保流式模式也生成正确的sheetViews（按照libxlsxwriter模版）
-    const char* sheet_views_start = "<sheetViews><sheetView tabSelected=\"1\" workbookViewId=\"0\"";
-    callback(sheet_views_start, strlen(sheet_views_start));
+    // 关键修复：流式模式也要正确处理tabSelected属性
+    std::string sheet_views_start = "<sheetViews><sheetView";
+    if (sheet_view_.tab_selected) {
+        sheet_views_start += " tabSelected=\"1\"";
+    }
+    sheet_views_start += " workbookViewId=\"0\"";
+    callback(sheet_views_start.c_str(), sheet_views_start.length());
     
     // 冻结窗格
     if (freeze_panes_) {

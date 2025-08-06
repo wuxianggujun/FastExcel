@@ -34,7 +34,8 @@ void Logger::initialize(const std::string& log_file_path,
                        Level level, 
                        bool enable_console,
                        size_t max_file_size,
-                       size_t max_files) {
+                       size_t max_files,
+                       WriteMode write_mode) {
     
     // 如果已经初始化或正在关闭，直接返回
     if (initialized_.load() || shutting_down_.load()) {
@@ -55,6 +56,7 @@ void Logger::initialize(const std::string& log_file_path,
         log_file_path_ = log_file_path;
         max_file_size_ = max_file_size;
         max_files_ = max_files;
+        write_mode_ = write_mode;
         
         // 创建日志目录
         std::filesystem::path log_path(log_file_path_);
@@ -64,10 +66,15 @@ void Logger::initialize(const std::string& log_file_path,
         }
         
         // 打开日志文件
-        file_stream_.open(log_file_path_, std::ios::app);
-        if (file_stream_.is_open()) {
+        std::ios::openmode open_mode = (write_mode_ == WriteMode::APPEND) ? 
+                                      (std::ios::out | std::ios::app) : 
+                                      (std::ios::out | std::ios::trunc);
+        file_stream_.open(log_file_path_, open_mode);
+        if (file_stream_.is_open() && write_mode_ == WriteMode::APPEND) {
             file_stream_.seekp(0, std::ios::end);
             current_file_size_.store(static_cast<size_t>(file_stream_.tellp()));
+        } else {
+            current_file_size_.store(0);
         }
         
 #ifdef _WIN32
@@ -93,7 +100,8 @@ void Logger::initialize(const std::string& log_file_path,
         // 记录初始化成功（不使用递归调用）
         if (should_log(Level::INFO)) {
             std::string msg = format_message(Level::INFO, 
-                fmt::format("Logger initialized successfully. Log file: {}", log_file_path));
+                fmt::format("Logger initialized successfully. Log file: {}, Mode: {}", 
+                    log_file_path, (write_mode_ == WriteMode::APPEND ? "APPEND" : "TRUNCATE")));
             
             if (enable_console_.load()) {
                 log_to_console(Level::INFO, msg);
