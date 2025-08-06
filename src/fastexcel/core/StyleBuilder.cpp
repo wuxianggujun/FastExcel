@@ -3,7 +3,7 @@
 namespace fastexcel {
 namespace core {
 
-StyleBuilder::StyleBuilder(const domain::FormatDescriptor& format) 
+StyleBuilder::StyleBuilder(const core::FormatDescriptor& format) 
     : font_name_(format.getFontName()),
       font_size_(format.getFontSize()),
       bold_(format.isBold()),
@@ -40,10 +40,10 @@ StyleBuilder::StyleBuilder(const domain::FormatDescriptor& format)
       hidden_(format.isHidden()) {
 }
 
-domain::FormatDescriptor StyleBuilder::build() const {
+core::FormatDescriptor StyleBuilder::build() const {
     // 这里我们直接调用FormatDescriptor的私有构造函数
     // 由于StyleBuilder是FormatDescriptor的友元类，这是允许的
-    return domain::FormatDescriptor(
+    return core::FormatDescriptor(
         font_name_,
         font_size_,
         bold_,

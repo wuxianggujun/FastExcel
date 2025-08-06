@@ -117,9 +117,6 @@ public:
     void setDirectFileMode(FILE* file, bool take_ownership = false);
     void setCallbackMode(WriteCallback callback, bool auto_flush = true);
     
-    // 已移除缓冲模式以获得极致性能
-    // void setBufferedMode();
-    
     // 文档操作
     void startDocument();
     void endDocument();
