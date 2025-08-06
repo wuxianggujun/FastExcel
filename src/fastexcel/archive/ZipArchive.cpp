@@ -2,11 +2,11 @@
 
 #include "fastexcel/utils/LogConfig.hpp"
 #include "fastexcel/utils/Logger.hpp"
+#include "fastexcel/utils/TimeUtils.hpp"
 #include <array>
 #include <cstddef>
 #include <cstdio>
 #include <cstring>
-#include <ctime>
 #include <filesystem>
 #include <mz.h>
 #include <mz_crypt.h>
@@ -15,11 +15,6 @@
 #include <mz_zip.h>
 #include <mz_zip_rw.h>
 #include <ostream>
-
-// 添加Windows平台特定的时间处理
-#ifdef _WIN32
-#include <windows.h>
-#endif
 
 namespace fastexcel {
 namespace archive {
@@ -111,24 +106,17 @@ void ZipArchive::initializeFileInfo(void* file_info_ptr, const std::string& path
     file_info.compression_method = MZ_COMPRESS_METHOD_STORE;
     LOG_ZIP_DEBUG("Batch mode: Using STORE compression method (no compression) to match Excel");
     
-    // 关键修复2：使用DOS时间格式而不是Unix时间戳
+    // 关键修复2：使用TimeUtils获取当前时间
     // Excel使用DOS时间格式，这是ZIP标准的一部分
-    std::time_t now = std::time(nullptr);
-    std::tm* tm_info = std::localtime(&now);
-    
-    // 转换为DOS时间格式
-    uint32_t dos_date = ((tm_info->tm_year - 80) << 9) |
-                        ((tm_info->tm_mon + 1) << 5) |
-                        tm_info->tm_mday;
-    uint32_t dos_time = (tm_info->tm_hour << 11) |
-                        (tm_info->tm_min << 5) |
-                        (tm_info->tm_sec / 2);
+    std::tm current_time = utils::TimeUtils::getCurrentTime();
+    std::time_t now = utils::TimeUtils::tmToTimeT(current_time);
     
     // minizip期望的是time_t格式，但我们需要确保时间是本地时间
     file_info.modified_date = now;
     file_info.creation_date = now;
     
-    LOG_DEBUG("Using local time for file timestamps");
+    LOG_DEBUG("Using TimeUtils for file timestamps: {}",
+              utils::TimeUtils::formatTime(current_time));
     
     // 关键修复3：批量模式不使用Data Descriptor，保持为0
     file_info.flag = 0;
@@ -310,8 +298,9 @@ ZipError ZipArchive::addFiles(std::vector<FileEntry>&& files) {
         file_info.compression_method = MZ_COMPRESS_METHOD_STORE;
         LOG_ZIP_DEBUG("Batch mode (move semantics): Using STORE compression method (no compression) to match Excel");
         
-        // 使用本地时间
-        std::time_t now = std::time(nullptr);
+        // 使用TimeUtils获取本地时间
+        std::tm current_time = utils::TimeUtils::getCurrentTime();
+        std::time_t now = utils::TimeUtils::tmToTimeT(current_time);
         file_info.modified_date = now;
         file_info.creation_date = now;
         
@@ -664,8 +653,9 @@ ZipError ZipArchive::openEntry(std::string_view internal_path) {
     file_info.compressed_size = 0;    // 流式写入时未知大小
     file_info.compression_method = MZ_COMPRESS_METHOD_DEFLATE;
     
-    // 使用本地时间
-    std::time_t now = std::time(nullptr);
+    // 使用TimeUtils获取本地时间
+    std::tm current_time = utils::TimeUtils::getCurrentTime();
+    std::time_t now = utils::TimeUtils::tmToTimeT(current_time);
     file_info.modified_date = now;
     file_info.creation_date = now;
     
