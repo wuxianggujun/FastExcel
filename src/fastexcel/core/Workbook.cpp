@@ -2001,4 +2001,26 @@ size_t Workbook::getTotalCellCount() const {
     return total_cells;
 }
 
+void Workbook::copyStylesFrom(const Workbook* source_workbook) {
+    if (!source_workbook || !source_workbook->format_pool_) {
+        LOG_WARN("copyStylesFrom: source workbook or format pool is null");
+        return;
+    }
+
+    LOG_DEBUG("开始从源工作簿复制样式数据");
+    
+    // 检查源工作簿是否有原始样式数据用于复制
+    if (source_workbook->format_pool_->hasRawStylesForCopy()) {
+        const auto& source_raw_styles = source_workbook->format_pool_->getRawStylesForCopy();
+        LOG_DEBUG("源工作簿包含{}个原始样式，复制到目标工作簿", source_raw_styles.size());
+        
+        // 将源工作簿的原始样式数据复制到目标工作簿的FormatPool
+        format_pool_->setRawStylesForCopy(source_raw_styles);
+        
+        LOG_INFO("样式数据复制完成：{}个原始样式已传递到目标工作簿", source_raw_styles.size());
+    } else {
+        LOG_DEBUG("源工作簿没有原始样式数据，跳过复制");
+    }
+}
+
 }} // namespace fastexcel::core

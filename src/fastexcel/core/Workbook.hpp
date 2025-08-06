@@ -321,6 +321,12 @@ public:
     FormatPool* getFormatPool() const { return format_pool_.get(); }
     
     /**
+     * @brief 从另一个工作簿复制样式数据（用于格式复制）
+     * @param source_workbook 源工作簿
+     */
+    void copyStylesFrom(const Workbook* source_workbook);
+    
+    /**
      * @brief 获取格式数量
      * @return 格式数量
      */

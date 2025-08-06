@@ -83,6 +83,9 @@ private:
   // 默认格式
   std::unique_ptr<Format> default_format_;
 
+  // 格式复制专用：原始样式数据（绕过去重机制）
+  std::unordered_map<int, std::shared_ptr<core::Format>> raw_styles_for_copy_;
+
 public:
   FormatPool();
   ~FormatPool() = default;
@@ -120,6 +123,27 @@ public:
    */
   void importStyles(
       const std::unordered_map<int, std::shared_ptr<core::Format>> &styles);
+
+  /**
+   * @brief 设置原始样式用于XML生成（格式复制专用）
+   * @param styles 原始样式映射
+   */
+  void setRawStylesForCopy(
+      const std::unordered_map<int, std::shared_ptr<core::Format>> &styles);
+
+  /**
+   * @brief 检查是否有原始样式用于复制
+   * @return 是否有原始样式
+   */
+  bool hasRawStylesForCopy() const { return !raw_styles_for_copy_.empty(); }
+
+  /**
+   * @brief 获取原始样式数据用于复制（只读访问）
+   * @return 原始样式数据的引用
+   */
+  const std::unordered_map<int, std::shared_ptr<core::Format>>& getRawStylesForCopy() const {
+    return raw_styles_for_copy_;
+  }
 
   /**
    * @brief 获取格式索引
