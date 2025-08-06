@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Color.hpp"
+#include "FormatTypes.hpp"  // 使用独立的格式类型定义
 #include <string>
 #include <cstdint>
 #include <functional>
@@ -8,91 +9,17 @@
 namespace fastexcel {
 namespace core {
 
-// 枚举定义保持不变但移到domain命名空间
-enum class UnderlineType : uint8_t {
-    None = 0,
-    Single = 1,
-    Double = 2,
-    SingleAccounting = 3,
-    DoubleAccounting = 4
-};
-
-enum class FontScript : uint8_t {
-    None = 0,
-    Superscript = 1,
-    Subscript = 2
-};
-
-enum class HorizontalAlign : uint8_t {
-    None = 0,
-    Left = 1,
-    Center = 2,
-    Right = 3,
-    Fill = 4,
-    Justify = 5,
-    CenterAcross = 6,
-    Distributed = 7
-};
-
-enum class VerticalAlign : uint8_t {
-    Top = 8,
-    Bottom = 9,
-    Center = 10,
-    Justify = 11,
-    Distributed = 12
-};
-
-enum class PatternType : uint8_t {
-    None = 0,
-    Solid = 1,
-    MediumGray = 2,
-    DarkGray = 3,
-    LightGray = 4,
-    DarkHorizontal = 5,
-    DarkVertical = 6,
-    DarkDown = 7,
-    DarkUp = 8,
-    DarkGrid = 9,
-    DarkTrellis = 10,
-    LightHorizontal = 11,
-    LightVertical = 12,
-    LightDown = 13,
-    LightUp = 14,
-    LightGrid = 15,
-    LightTrellis = 16,
-    Gray125 = 17,
-    Gray0625 = 18
-};
-
-enum class BorderStyle : uint8_t {
-    None = 0,
-    Thin = 1,
-    Medium = 2,
-    Dashed = 3,
-    Dotted = 4,
-    Thick = 5,
-    Double = 6,
-    Hair = 7,
-    MediumDashed = 8,
-    DashDot = 9,
-    MediumDashDot = 10,
-    DashDotDot = 11,
-    MediumDashDotDot = 12,
-    SlantDashDot = 13
-};
-
-enum class DiagonalBorderType : uint8_t {
-    None = 0,
-    Up = 1,
-    Down = 2,
-    UpDown = 3
-};
-
 /**
- * @brief 不可变的格式描述符 - 纯值对象
+ * @brief 不可变的格式描述符 - 值对象模式
  * 
- * 这是一个不可变的值类型，用于描述单元格的格式信息。
- * 创建后不能修改，确保线程安全和哈希一致性。
+ * 这是新架构的核心类，采用值对象模式，一旦创建就不可修改。
+ * 所有格式属性都在构造时确定，确保线程安全和缓存友好。
+ * 
+ * 设计原则：
+ * - 不可变性：所有字段都是const，创建后无法修改  
+ * - 值语义：支持复制、比较、哈希等操作
+ * - 线程安全：不可变对象天然线程安全
+ * - 缓存友好：可以安全地被多个工作簿共享
  */
 class FormatDescriptor {
 private:

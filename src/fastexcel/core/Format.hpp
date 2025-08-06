@@ -1,6 +1,8 @@
 #pragma once
 
 #include "fastexcel/core/Color.hpp"
+#include "FormatDescriptor.hpp"  // 包含枚举定义
+#include "FormatTypes.hpp"       // 包含NumberFormatType
 #include <string>
 #include <memory>
 #include <cstdint>
@@ -9,130 +11,11 @@
 namespace fastexcel {
 namespace core {
 
-// 为了向后兼容，保留颜色常量（但使用新的Color类）
-#define COLOR_BLACK   Color::BLACK
-#define COLOR_WHITE   Color::WHITE
-#define COLOR_RED     Color::RED
-#define COLOR_GREEN   Color::GREEN
-#define COLOR_BLUE    Color::BLUE
-#define COLOR_YELLOW  Color::YELLOW
-#define COLOR_MAGENTA Color::MAGENTA
-#define COLOR_CYAN    Color::CYAN
-#define COLOR_BROWN   Color::BROWN
-#define COLOR_GRAY    Color::GRAY
-#define COLOR_LIME    Color::LIME
-#define COLOR_NAVY    Color::NAVY
-#define COLOR_ORANGE  Color::ORANGE
-#define COLOR_PINK    Color::PINK
-#define COLOR_PURPLE  Color::PURPLE
-#define COLOR_SILVER  Color::SILVER
-
-// 下划线类型
-enum class UnderlineType : uint8_t {
-    None = 0,
-    Single = 1,
-    Double = 2,
-    SingleAccounting = 3,
-    DoubleAccounting = 4
-};
-
-// 字体脚本类型（上标/下标）
-enum class FontScript : uint8_t {
-    None = 0,
-    Superscript = 1,
-    Subscript = 2
-};
-
-// 水平对齐方式
-enum class HorizontalAlign : uint8_t {
-    None = 0,
-    Left = 1,
-    Center = 2,
-    Right = 3,
-    Fill = 4,
-    Justify = 5,
-    CenterAcross = 6,
-    Distributed = 7
-};
-
-// 垂直对齐方式
-enum class VerticalAlign : uint8_t {
-    Top = 8,
-    Bottom = 9,
-    Center = 10,
-    Justify = 11,
-    Distributed = 12
-};
-
-// 填充模式
-enum class PatternType : uint8_t {
-    None = 0,
-    Solid = 1,
-    MediumGray = 2,
-    DarkGray = 3,
-    LightGray = 4,
-    DarkHorizontal = 5,
-    DarkVertical = 6,
-    DarkDown = 7,
-    DarkUp = 8,
-    DarkGrid = 9,
-    DarkTrellis = 10,
-    LightHorizontal = 11,
-    LightVertical = 12,
-    LightDown = 13,
-    LightUp = 14,
-    LightGrid = 15,
-    LightTrellis = 16,
-    Gray125 = 17,
-    Gray0625 = 18
-};
-
-// 边框样式
-enum class BorderStyle : uint8_t {
-    None = 0,
-    Thin = 1,
-    Medium = 2,
-    Dashed = 3,
-    Dotted = 4,
-    Thick = 5,
-    Double = 6,
-    Hair = 7,
-    MediumDashed = 8,
-    DashDot = 9,
-    MediumDashDot = 10,
-    DashDotDot = 11,
-    MediumDashDotDot = 12,
-    SlantDashDot = 13
-};
-
-// 对角线边框类型
-enum class DiagonalBorderType : uint8_t {
-    None = 0,
-    Up = 1,
-    Down = 2,
-    UpDown = 3
-};
-
-// 对角线类型别名
-using DiagonalType = DiagonalBorderType;
-
-// 数字格式类型
-enum class NumberFormatType : uint8_t {
-    General = 0,
-    Number = 1,
-    Decimal = 2,
-    Currency = 3,
-    Accounting = 4,
-    Date = 14,
-    Time = 21,
-    Percentage = 10,
-    Fraction = 12,
-    Scientific = 11,
-    Text = 49
-};
-
 /**
  * @brief Format类 - Excel单元格格式化
+ * 
+ * 向后兼容的Format类，负责管理Excel单元格的所有格式属性。
+ * 在新架构中，建议使用FormatDescriptor和StyleBuilder。
  * 
  * 提供与libxlsxwriter兼容的格式化功能，包括：
  * - 字体设置（名称、大小、颜色、样式）

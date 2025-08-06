@@ -1,19 +1,18 @@
 #pragma once
 
-#include "../domain/FormatDescriptor.hpp"
-#include "../services/FormatRepository.hpp"
-#include "../services/StyleTransferContext.hpp"
-#include "../ui/StyleBuilder.hpp"
+#include "FormatDescriptor.hpp"
+#include "FormatRepository.hpp"
+#include "StyleTransferContext.hpp"
+#include "StyleBuilder.hpp"
 #include <memory>
 #include <string>
 #include <vector>
 
 namespace fastexcel {
-namespace api {
+namespace core {
 
 // 前向声明
 class Worksheet;
-class WorksheetImpl;
 
 /**
  * @brief Excel工作簿 - 重构后的高级API
@@ -62,34 +61,34 @@ public:
      * @param style 样式描述符
      * @return 样式ID
      */
-    int addStyle(const domain::FormatDescriptor& style);
+    int addStyle(const FormatDescriptor& style);
     
     /**
      * @brief 添加样式到工作簿（使用Builder）
      * @param builder 样式构建器
      * @return 样式ID
      */
-    int addStyle(const ui::StyleBuilder& builder);
+    int addStyle(const StyleBuilder& builder);
     
     /**
      * @brief 添加命名样式
      * @param named_style 命名样式
      * @return 样式ID
      */
-    int addNamedStyle(const ui::NamedStyle& named_style);
+    int addNamedStyle(const NamedStyle& named_style);
     
     /**
      * @brief 创建样式构建器
      * @return 样式构建器
      */
-    ui::StyleBuilder createStyleBuilder() const;
+    StyleBuilder createStyleBuilder() const;
     
     /**
      * @brief 根据ID获取样式
      * @param style_id 样式ID
      * @return 样式描述符，如果ID无效则返回默认样式
      */
-    std::shared_ptr<const domain::FormatDescriptor> getStyle(int style_id) const;
+    std::shared_ptr<const FormatDescriptor> getStyle(int style_id) const;
     
     /**
      * @brief 获取默认样式ID
@@ -114,7 +113,7 @@ public:
      * @brief 获取样式仓储（只读访问）
      * @return 样式仓储的常量引用
      */
-    const services::FormatRepository& getStyleRepository() const;
+    const FormatRepository& getStyleRepository() const;
     
     // ========== 工作表管理 ==========
     
@@ -175,7 +174,7 @@ public:
      * @param source_workbook 源工作簿
      * @return 样式传输上下文（用于ID映射）
      */
-    std::unique_ptr<services::StyleTransferContext> copyStylesFrom(
+    std::unique_ptr<StyleTransferContext> copyStylesFrom(
         const Workbook& source_workbook);
     
     /**
@@ -253,7 +252,7 @@ public:
      * @brief 获取样式去重统计
      * @return 去重统计信息
      */
-    services::FormatRepository::DeduplicationStats getStyleStats() const;
+    FormatRepository::DeduplicationStats getStyleStats() const;
     
     /**
      * @brief 获取内存使用估算
@@ -268,4 +267,4 @@ public:
     size_t optimize();
 };
 
-}} // namespace fastexcel::api
+}} // namespace fastexcel::core

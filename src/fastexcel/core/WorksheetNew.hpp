@@ -1,18 +1,17 @@
 #pragma once
 
-#include "../domain/FormatDescriptor.hpp"
-#include "../ui/StyleBuilder.hpp"
+#include "FormatDescriptor.hpp"
+#include "StyleBuilder.hpp"
 #include <string>
 #include <memory>
 #include <vector>
 #include <variant>
 
 namespace fastexcel {
-namespace api {
+namespace core {
 
 // 前向声明
 class Workbook;
-class WorksheetImpl;
 
 /**
  * @brief 单元格值类型
@@ -504,4 +503,4 @@ public:
     static std::string toA1Reference(size_t row, size_t col);
 };
 
-}} // namespace fastexcel::api
+}} // namespace fastexcel::core

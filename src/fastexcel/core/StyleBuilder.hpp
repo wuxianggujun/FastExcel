@@ -20,26 +20,26 @@ private:
     double font_size_ = 11.0;
     bool bold_ = false;
     bool italic_ = false;
-    domain::UnderlineType underline_ = domain::UnderlineType::None;
+    UnderlineType underline_ = UnderlineType::None;
     bool strikeout_ = false;
-    domain::FontScript script_ = domain::FontScript::None;
+    FontScript script_ = FontScript::None;
     core::Color font_color_ = core::Color::BLACK;
     uint8_t font_family_ = 2;
     uint8_t font_charset_ = 1;
     
-    domain::HorizontalAlign horizontal_align_ = domain::HorizontalAlign::None;
-    domain::VerticalAlign vertical_align_ = domain::VerticalAlign::Bottom;
+    HorizontalAlign horizontal_align_ = HorizontalAlign::None;
+    VerticalAlign vertical_align_ = VerticalAlign::Bottom;
     bool text_wrap_ = false;
     int16_t rotation_ = 0;
     uint8_t indent_ = 0;
     bool shrink_ = false;
     
-    domain::BorderStyle left_border_ = domain::BorderStyle::None;
-    domain::BorderStyle right_border_ = domain::BorderStyle::None;
-    domain::BorderStyle top_border_ = domain::BorderStyle::None;
-    domain::BorderStyle bottom_border_ = domain::BorderStyle::None;
-    domain::BorderStyle diag_border_ = domain::BorderStyle::None;
-    domain::DiagonalBorderType diag_type_ = domain::DiagonalBorderType::None;
+    BorderStyle left_border_ = BorderStyle::None;
+    BorderStyle right_border_ = BorderStyle::None;
+    BorderStyle top_border_ = BorderStyle::None;
+    BorderStyle bottom_border_ = BorderStyle::None;
+    BorderStyle diag_border_ = BorderStyle::None;
+    DiagonalBorderType diag_type_ = DiagonalBorderType::None;
     
     core::Color left_border_color_ = core::Color::BLACK;
     core::Color right_border_color_ = core::Color::BLACK;
@@ -47,7 +47,7 @@ private:
     core::Color bottom_border_color_ = core::Color::BLACK;
     core::Color diag_border_color_ = core::Color::BLACK;
     
-    domain::PatternType pattern_ = domain::PatternType::None;
+    PatternType pattern_ = PatternType::None;
     core::Color bg_color_ = core::Color::WHITE;
     core::Color fg_color_ = core::Color::BLACK;
     
@@ -61,7 +61,7 @@ public:
     StyleBuilder() = default;
     
     // 从现有格式创建Builder（用于修改现有格式）
-    explicit StyleBuilder(const domain::FormatDescriptor& format);
+    explicit StyleBuilder(const FormatDescriptor& format);
     
     // ========== 字体设置（链式调用） ==========
     
@@ -143,7 +143,7 @@ public:
      * @param type 下划线类型
      * @return Builder引用
      */
-    StyleBuilder& underline(domain::UnderlineType type = domain::UnderlineType::Single) {
+    StyleBuilder& underline(UnderlineType type = UnderlineType::Single) {
         underline_ = type;
         return *this;
     }
@@ -164,7 +164,7 @@ public:
      * @return Builder引用
      */
     StyleBuilder& superscript(bool is_super = true) {
-        script_ = is_super ? domain::FontScript::Superscript : domain::FontScript::None;
+        script_ = is_super ? FontScript::Superscript : FontScript::None;
         return *this;
     }
     
@@ -174,7 +174,7 @@ public:
      * @return Builder引用
      */
     StyleBuilder& subscript(bool is_sub = true) {
-        script_ = is_sub ? domain::FontScript::Subscript : domain::FontScript::None;
+        script_ = is_sub ? FontScript::Subscript : FontScript::None;
         return *this;
     }
     
@@ -185,7 +185,7 @@ public:
      * @param align 对齐方式
      * @return Builder引用
      */
-    StyleBuilder& horizontalAlign(domain::HorizontalAlign align) {
+    StyleBuilder& horizontalAlign(HorizontalAlign align) {
         horizontal_align_ = align;
         return *this;
     }
@@ -195,7 +195,7 @@ public:
      * @param align 对齐方式
      * @return Builder引用
      */
-    StyleBuilder& verticalAlign(domain::VerticalAlign align) {
+    StyleBuilder& verticalAlign(VerticalAlign align) {
         vertical_align_ = align;
         return *this;
     }
@@ -205,7 +205,7 @@ public:
      * @return Builder引用
      */
     StyleBuilder& leftAlign() {
-        return horizontalAlign(domain::HorizontalAlign::Left);
+        return horizontalAlign(HorizontalAlign::Left);
     }
     
     /**
@@ -213,7 +213,7 @@ public:
      * @return Builder引用
      */
     StyleBuilder& centerAlign() {
-        return horizontalAlign(domain::HorizontalAlign::Center);
+        return horizontalAlign(HorizontalAlign::Center);
     }
     
     /**
@@ -221,7 +221,7 @@ public:
      * @return Builder引用
      */
     StyleBuilder& rightAlign() {
-        return horizontalAlign(domain::HorizontalAlign::Right);
+        return horizontalAlign(HorizontalAlign::Right);
     }
     
     /**
@@ -229,7 +229,7 @@ public:
      * @return Builder引用
      */
     StyleBuilder& vcenterAlign() {
-        return verticalAlign(domain::VerticalAlign::Center);
+        return verticalAlign(VerticalAlign::Center);
     }
     
     /**
@@ -282,7 +282,7 @@ public:
      * @param color 边框颜色（可选）
      * @return Builder引用
      */
-    StyleBuilder& border(domain::BorderStyle style, core::Color color = core::Color::BLACK) {
+    StyleBuilder& border(BorderStyle style, core::Color color = core::Color::BLACK) {
         left_border_ = right_border_ = top_border_ = bottom_border_ = style;
         left_border_color_ = right_border_color_ = top_border_color_ = bottom_border_color_ = color;
         return *this;
@@ -294,7 +294,7 @@ public:
      * @param color 边框颜色（可选）
      * @return Builder引用
      */
-    StyleBuilder& leftBorder(domain::BorderStyle style, core::Color color = core::Color::BLACK) {
+    StyleBuilder& leftBorder(BorderStyle style, core::Color color = core::Color::BLACK) {
         left_border_ = style;
         left_border_color_ = color;
         return *this;
@@ -306,7 +306,7 @@ public:
      * @param color 边框颜色（可选）
      * @return Builder引用
      */
-    StyleBuilder& rightBorder(domain::BorderStyle style, core::Color color = core::Color::BLACK) {
+    StyleBuilder& rightBorder(BorderStyle style, core::Color color = core::Color::BLACK) {
         right_border_ = style;
         right_border_color_ = color;
         return *this;
@@ -318,7 +318,7 @@ public:
      * @param color 边框颜色（可选）
      * @return Builder引用
      */
-    StyleBuilder& topBorder(domain::BorderStyle style, core::Color color = core::Color::BLACK) {
+    StyleBuilder& topBorder(BorderStyle style, core::Color color = core::Color::BLACK) {
         top_border_ = style;
         top_border_color_ = color;
         return *this;
@@ -330,7 +330,7 @@ public:
      * @param color 边框颜色（可选）
      * @return Builder引用
      */
-    StyleBuilder& bottomBorder(domain::BorderStyle style, core::Color color = core::Color::BLACK) {
+    StyleBuilder& bottomBorder(BorderStyle style, core::Color color = core::Color::BLACK) {
         bottom_border_ = style;
         bottom_border_color_ = color;
         return *this;
@@ -343,8 +343,8 @@ public:
      * @param color 边框颜色（可选）
      * @return Builder引用
      */
-    StyleBuilder& diagonalBorder(domain::BorderStyle style, 
-                               domain::DiagonalBorderType type = domain::DiagonalBorderType::UpDown,
+    StyleBuilder& diagonalBorder(BorderStyle style, 
+                               DiagonalBorderType type = DiagonalBorderType::UpDown,
                                core::Color color = core::Color::BLACK) {
         diag_border_ = style;
         diag_type_ = type;
@@ -360,7 +360,7 @@ public:
      * @return Builder引用
      */
     StyleBuilder& fill(core::Color color) {
-        pattern_ = domain::PatternType::Solid;
+        pattern_ = PatternType::Solid;
         bg_color_ = color;
         return *this;
     }
@@ -372,7 +372,7 @@ public:
      * @param fg_color 前景色（可选）
      * @return Builder引用
      */
-    StyleBuilder& fill(domain::PatternType pattern, 
+    StyleBuilder& fill(PatternType pattern, 
                       core::Color bg_color, 
                       core::Color fg_color = core::Color::BLACK) {
         pattern_ = pattern;
@@ -387,8 +387,8 @@ public:
      * @return Builder引用
      */
     StyleBuilder& backgroundColor(core::Color color) {
-        if (pattern_ == domain::PatternType::None) {
-            pattern_ = domain::PatternType::Solid;
+        if (pattern_ == PatternType::None) {
+            pattern_ = PatternType::Solid;
         }
         bg_color_ = color;
         return *this;
@@ -420,9 +420,10 @@ public:
     
     // 常用数字格式的便捷方法
     StyleBuilder& currency() { return numberFormatIndex(7); }           // ¤#,##0.00
-    StyleBuilder& percentage() { return numberFormatIndex(10); }        // 0.00%\n StyleBuilder& date() { return numberFormatIndex(14); }            // m/d/yyyy
+    StyleBuilder& percentage() { return numberFormatIndex(10); }        // 0.00%
+    StyleBuilder& date() { return numberFormatIndex(14); }            // m/d/yyyy
     StyleBuilder& time() { return numberFormatIndex(21); }             // h:mm:ss AM/PM
-    StyleBuilder& dateTime() { return numberFormat(\"m/d/yyyy h:mm\"); }
+    StyleBuilder& dateTime() { return numberFormat("m/d/yyyy h:mm"); }
     StyleBuilder& scientific() { return numberFormatIndex(11); }        // 0.00E+00
     StyleBuilder& text() { return numberFormatIndex(49); }             // @
     
@@ -464,7 +465,7 @@ public:
      * @brief 构建不可变的格式描述符
      * @return 格式描述符对象
      */
-    domain::FormatDescriptor build() const;
+    FormatDescriptor build() const;
     
     // ========== 预定义样式的静态工厂方法 ==========
     
@@ -514,17 +515,17 @@ public:
 class NamedStyle {
 private:
     std::string name_;
-    domain::FormatDescriptor format_;
+    FormatDescriptor format_;
     
 public:
-    NamedStyle(const std::string& name, const domain::FormatDescriptor& format)
+    NamedStyle(const std::string& name, const FormatDescriptor& format)
         : name_(name), format_(format) {}
     
     NamedStyle(const std::string& name, const StyleBuilder& builder)
         : name_(name), format_(builder.build()) {}
     
     const std::string& getName() const { return name_; }
-    const domain::FormatDescriptor& getFormat() const { return format_; }
+    const FormatDescriptor& getFormat() const { return format_; }
     
     bool operator==(const NamedStyle& other) const {
         return name_ == other.name_ && format_ == other.format_;

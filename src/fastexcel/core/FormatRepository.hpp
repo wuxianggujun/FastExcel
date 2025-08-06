@@ -22,7 +22,7 @@ private:
     mutable std::shared_mutex mutex_;
     
     // 格式存储：不可变的格式描述符
-    std::vector<std::shared_ptr<const domain::FormatDescriptor>> formats_;
+    std::vector<std::shared_ptr<const FormatDescriptor>> formats_;
     
     // 哈希到ID的映射，用于快速查找
     std::unordered_map<size_t, int> hash_to_id_;
@@ -49,14 +49,14 @@ public:
      * @param format 格式描述符
      * @return 格式ID，如果已存在则返回现有ID
      */
-    int addFormat(const domain::FormatDescriptor& format);
+    int addFormat(const FormatDescriptor& format);
     
     /**
      * @brief 根据ID获取格式
      * @param id 格式ID
      * @return 格式描述符的共享指针，如果ID无效则返回默认格式
      */
-    std::shared_ptr<const domain::FormatDescriptor> getFormat(int id) const;
+    std::shared_ptr<const FormatDescriptor> getFormat(int id) const;
     
     /**
      * @brief 获取默认格式ID
@@ -68,7 +68,7 @@ public:
      * @brief 获取默认格式
      * @return 默认格式描述符
      */
-    std::shared_ptr<const domain::FormatDescriptor> getDefaultFormat() const;
+    std::shared_ptr<const FormatDescriptor> getDefaultFormat() const;
     
     /**
      * @brief 获取格式数量
@@ -128,11 +128,11 @@ public:
     
     class const_iterator {
     private:
-        std::vector<std::shared_ptr<const domain::FormatDescriptor>>::const_iterator iter_;
+        std::vector<std::shared_ptr<const FormatDescriptor>>::const_iterator iter_;
         int id_;
         
     public:
-        const_iterator(const std::vector<std::shared_ptr<const domain::FormatDescriptor>>::const_iterator& iter, int id)
+        const_iterator(const std::vector<std::shared_ptr<const FormatDescriptor>>::const_iterator& iter, int id)
             : iter_(iter), id_(id) {}
         
         const_iterator& operator++() { ++iter_; ++id_; return *this; }
@@ -140,7 +140,7 @@ public:
         
         struct value_type {
             int id;
-            std::shared_ptr<const domain::FormatDescriptor> format;
+            std::shared_ptr<const FormatDescriptor> format;
         };
         
         value_type operator*() const { return {id_, *iter_}; }
@@ -162,7 +162,7 @@ private:
      * @param format 格式描述符
      * @return 格式ID
      */
-    int addFormatInternal(const domain::FormatDescriptor& format);
+    int addFormatInternal(const FormatDescriptor& format);
 };
 
 }} // namespace fastexcel::core
