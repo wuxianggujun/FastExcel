@@ -5,6 +5,7 @@
 #include "fastexcel/xml/XMLStreamWriter.hpp"
 #include "fastexcel/xml/SharedStrings.hpp"
 #include "fastexcel/utils/Logger.hpp"
+#include "fastexcel/utils/TimeUtils.hpp"
 #include <sstream>
 #include <stdexcept>
 #include <algorithm>
@@ -99,25 +100,9 @@ void Worksheet::writeFormula(int row, int col, const std::string& formula, std::
 void Worksheet::writeDateTime(int row, int col, const std::tm& datetime, std::shared_ptr<Format> format) {
     validateCellPosition(row, col);
     
-    // 将tm结构转换为Excel日期序列号
-    // Excel使用1900年1月1日作为起始日期（序列号1）
-    std::tm epoch = {};
-    epoch.tm_year = 100; // 1900年
-    epoch.tm_mon = 0;    // 1月
-    epoch.tm_mday = 1;   // 1日
-    
-    std::time_t epoch_time = std::mktime(&epoch);
-    std::time_t input_time = std::mktime(const_cast<std::tm*>(&datetime));
-    
-    double days = std::difftime(input_time, epoch_time) / (24 * 60 * 60);
-    days += 1; // Excel从1开始计数
-    
-    // Excel错误地认为1900年是闰年，所以需要调整
-    if (days >= 60) {
-        days += 1;
-    }
-    
-    writeNumber(row, col, days, format);
+    // 使用 TimeUtils 将日期时间转换为Excel序列号
+    double excel_serial = utils::TimeUtils::toExcelSerialNumber(datetime);
+    writeNumber(row, col, excel_serial, format);
 }
 
 void Worksheet::writeUrl(int row, int col, const std::string& url, const std::string& string, 

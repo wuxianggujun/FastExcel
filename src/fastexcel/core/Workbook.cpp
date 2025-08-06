@@ -4,6 +4,7 @@
 #include "fastexcel/xml/Relationships.hpp"
 #include "fastexcel/xml/SharedStrings.hpp"
 #include "fastexcel/utils/Logger.hpp"
+#include "fastexcel/utils/TimeUtils.hpp"
 #include <sstream>
 #include <algorithm>
 #include <iomanip>
@@ -17,13 +18,8 @@ namespace core {
 // ========== DocumentProperties 实现 ==========
 
 DocumentProperties::DocumentProperties() {
-    // 设置默认时间为当前时间
-    std::time_t now = std::time(nullptr);
-#ifdef _WIN32
-    localtime_s(&created_time, &now);
-#else
-    created_time = *std::localtime(&now);
-#endif
+    // 使用 TimeUtils 获取当前时间
+    created_time = utils::TimeUtils::getCurrentTime();
     modified_time = created_time;
 }
 
@@ -67,13 +63,8 @@ bool Workbook::save() {
     }
     
     try {
-        // 更新修改时间
-        std::time_t now = std::time(nullptr);
-#ifdef _WIN32
-        localtime_s(&doc_properties_.modified_time, &now);
-#else
-        doc_properties_.modified_time = *std::localtime(&now);
-#endif
+        // 使用 TimeUtils 更新修改时间
+        doc_properties_.modified_time = utils::TimeUtils::getCurrentTime();
         
         // 设置ZIP压缩级别
         if (file_manager_->isOpen()) {
@@ -1406,9 +1397,8 @@ std::string Workbook::getWorksheetRelPath(int sheet_id) const {
 }
 
 std::string Workbook::formatTime(const std::tm& time) const {
-    std::ostringstream oss;
-    oss << std::put_time(&time, "%Y-%m-%dT%H:%M:%SZ");
-    return oss.str();
+    // 使用 TimeUtils 进行时间格式化
+    return utils::TimeUtils::formatTimeISO8601(time);
 }
 
 std::string Workbook::hashPassword(const std::string& password) const {
