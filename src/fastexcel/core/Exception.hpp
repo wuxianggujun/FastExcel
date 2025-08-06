@@ -298,8 +298,29 @@ private:
 } // namespace fastexcel
 
 // 便捷宏定义
+// 基础异常宏
+#define FASTEXCEL_THROW_BASE(ExceptionType, message) \
+    throw fastexcel::core::ExceptionType(message, fastexcel::core::ErrorCode::InternalError, __FILE__, __LINE__)
+
+// 参数异常宏
+#define FASTEXCEL_THROW_PARAM(message) \
+    throw fastexcel::core::ParameterException(message, "", __FILE__, __LINE__)
+
+// 操作异常宏
+#define FASTEXCEL_THROW_OP(message) \
+    throw fastexcel::core::OperationException(message, "", fastexcel::core::ErrorCode::InvalidArgument, __FILE__, __LINE__)
+
+// 文件异常宏
+#define FASTEXCEL_THROW_FILE(message, filename) \
+    throw fastexcel::core::FileException(message, filename, fastexcel::core::ErrorCode::FileNotFound, __FILE__, __LINE__)
+
+// 单元格异常宏
+#define FASTEXCEL_THROW_CELL(message, row, col) \
+    throw fastexcel::core::CellException(message, row, col, fastexcel::core::ErrorCode::InvalidCellReference, __FILE__, __LINE__)
+
+// 通用宏（与原来兼容）
 #define FASTEXCEL_THROW(ExceptionType, message) \
-    throw ExceptionType(message, __FILE__, __LINE__)
+    FASTEXCEL_THROW_BASE(ExceptionType, message)
 
 #define FASTEXCEL_THROW_IF(condition, ExceptionType, message) \
     do { if (condition) { FASTEXCEL_THROW(ExceptionType, message); } } while(0)

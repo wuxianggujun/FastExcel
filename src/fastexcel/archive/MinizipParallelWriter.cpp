@@ -27,7 +27,7 @@ thread_local int MinizipParallelWriter::current_compression_level_ = -1;
 thread_local std::vector<uint8_t> MinizipParallelWriter::compression_buffer_;
 
 MinizipParallelWriter::MinizipParallelWriter(size_t thread_count)
-    : thread_pool_(std::make_unique<utils::ThreadPool>(thread_count == 0 ? std::thread::hardware_concurrency() : thread_count)),
+    : thread_pool_(std::make_unique<core::ThreadPool>(thread_count == 0 ? std::thread::hardware_concurrency() : thread_count)),
       stats_{},
       completed_tasks_(0),
       failed_tasks_(0),

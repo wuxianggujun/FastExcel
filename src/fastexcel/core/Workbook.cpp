@@ -7,6 +7,7 @@
 #include "fastexcel/xml/Relationships.hpp"
 #include "fastexcel/xml/SharedStrings.hpp"
 #include "fastexcel/xml/XMLStreamWriter.hpp"
+#include "fastexcel/core/Exception.hpp"
 #include <algorithm>
 #include <ctime>
 #include <fstream>
@@ -78,7 +79,7 @@ bool Workbook::open() {
 
 bool Workbook::save() {
     if (!is_open_) {
-        throw std::runtime_error("Workbook is not open");
+        FASTEXCEL_THROW_OP("Workbook is not open");
     }
     
     try {
@@ -155,7 +156,7 @@ bool Workbook::close() {
 
 std::shared_ptr<Worksheet> Workbook::addWorksheet(const std::string& name) {
     if (!is_open_) {
-        throw std::runtime_error("Workbook is not open");
+        FASTEXCEL_THROW_OP("Workbook is not open");
     }
     
     std::string sheet_name;
@@ -358,7 +359,7 @@ void Workbook::setActiveWorksheet(size_t index) {
 
 std::shared_ptr<Format> Workbook::createFormat() {
     if (!is_open_) {
-        throw std::runtime_error("Workbook is not open");
+        FASTEXCEL_THROW_OP("Workbook is not open");
     }
     
     // 直接创建一个独立的格式对象，不添加到格式池

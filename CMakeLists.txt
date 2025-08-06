@@ -61,12 +61,12 @@ set(FASTEXCEL_SOURCES
         src/fastexcel/core/FormatPool.cpp
         src/fastexcel/core/MemoryPool.cpp
         src/fastexcel/core/ErrorCode.cpp
+        src/fastexcel/core/ThreadPool.cpp
         src/fastexcel/reader/XLSXReader.cpp
         src/fastexcel/reader/StylesParser.cpp
         src/fastexcel/reader/SharedStringsParser.cpp
         src/fastexcel/reader/WorksheetParser.cpp
         src/fastexcel/utils/Logger.cpp
-        src/fastexcel/utils/ThreadPool.cpp
         src/fastexcel/xml/ContentTypes.cpp
         src/fastexcel/xml/Relationships.cpp
         src/fastexcel/xml/SharedStrings.cpp

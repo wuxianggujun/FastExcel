@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <chrono>
 #include <limits>
+#include "../core/Exception.hpp"
 
 namespace fastexcel {
 namespace utils {
@@ -191,14 +192,14 @@ public:
 #define FASTEXCEL_VALIDATE_CELL_POSITION(row, col) \
     do { \
         if (!fastexcel::utils::CommonUtils::isValidCellPosition(row, col)) { \
-            throw std::invalid_argument("Invalid cell position: (" + std::to_string(row) + ", " + std::to_string(col) + ")"); \
+            FASTEXCEL_THROW_CELL("Invalid cell position: (" + std::to_string(row) + ", " + std::to_string(col) + ")", row, col); \
         } \
     } while(0)
 
 #define FASTEXCEL_VALIDATE_RANGE(first_row, first_col, last_row, last_col) \
     do { \
         if (!fastexcel::utils::CommonUtils::isValidRange(first_row, first_col, last_row, last_col)) { \
-            throw std::invalid_argument("Invalid range"); \
+            FASTEXCEL_THROW_PARAM("Invalid range"); \
         } \
     } while(0)
 

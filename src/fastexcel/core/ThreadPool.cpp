@@ -1,8 +1,8 @@
-#include "fastexcel/utils/ThreadPool.hpp"
+#include "fastexcel/core/ThreadPool.hpp"
 #include "fastexcel/utils/Logger.hpp"
 
 namespace fastexcel {
-namespace utils {
+namespace core {
 
 ThreadPool::ThreadPool(size_t threads) 
     : stop_(false), active_tasks_(0) {
@@ -89,4 +89,4 @@ void ThreadPool::wait_for_all_tasks() {
     });
 }
 
-}} // namespace fastexcel::utils
+}} // namespace fastexcel::core

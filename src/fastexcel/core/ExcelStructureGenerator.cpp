@@ -2,6 +2,7 @@
 #include "fastexcel/core/BatchFileWriter.hpp"
 #include "fastexcel/core/StreamingFileWriter.hpp"
 #include "fastexcel/utils/Logger.hpp"
+#include "fastexcel/core/Exception.hpp"
 #include <sstream>
 
 namespace fastexcel {
@@ -10,10 +11,10 @@ namespace core {
 ExcelStructureGenerator::ExcelStructureGenerator(const Workbook* workbook, std::unique_ptr<IFileWriter> writer)
     : workbook_(workbook), writer_(std::move(writer)) {
     if (!workbook_) {
-        throw std::invalid_argument("Workbook cannot be null");
+        FASTEXCEL_THROW_PARAM("Workbook cannot be null");
     }
     if (!writer_) {
-        throw std::invalid_argument("FileWriter cannot be null");
+        FASTEXCEL_THROW_PARAM("FileWriter cannot be null");
     }
 }
 

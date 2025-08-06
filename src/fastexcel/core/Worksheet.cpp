@@ -7,6 +7,7 @@
 #include "fastexcel/utils/Logger.hpp"
 #include "fastexcel/utils/LogConfig.hpp"
 #include "fastexcel/utils/TimeUtils.hpp"
+#include "fastexcel/core/Exception.hpp"
 #include <sstream>
 #include <stdexcept>
 #include <algorithm>
@@ -1734,7 +1735,7 @@ void Worksheet::sortRange(int first_row, int first_col, int last_row, int last_c
     
     int sort_col = first_col + sort_column;
     if (sort_col > last_col) {
-        throw std::invalid_argument("Sort column is outside the range");
+        FASTEXCEL_THROW_PARAM("Sort column is outside the range");
     }
     
     // 收集需要排序的行数据

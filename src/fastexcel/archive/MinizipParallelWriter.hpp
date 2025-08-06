@@ -1,6 +1,6 @@
 #pragma once
 
-#include "fastexcel/utils/ThreadPool.hpp"
+#include "fastexcel/core/ThreadPool.hpp"
 #include "mz.h"
 #include "mz_zip.h"
 #include "mz_strm_mem.h"
@@ -130,7 +130,7 @@ public:
     void resetStatistics();
 
 private:
-    std::unique_ptr<utils::ThreadPool> thread_pool_;
+    std::unique_ptr<core::ThreadPool> thread_pool_;
     
     // 统计信息
     mutable std::mutex stats_mutex_;

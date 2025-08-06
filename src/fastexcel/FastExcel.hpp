@@ -9,6 +9,7 @@
 #include "core/Format.hpp"
 #include "core/Workbook.hpp"
 #include "core/Worksheet.hpp"
+#include "core/ThreadPool.hpp"
 
 // XML处理层
 #include "xml/ContentTypes.hpp"

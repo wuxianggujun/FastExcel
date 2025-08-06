@@ -1,6 +1,6 @@
 #include "fastexcel/core/FormatPool.hpp"
 #include "fastexcel/xml/XMLStreamWriter.hpp"
-#include <stdexcept>
+#include "fastexcel/core/Exception.hpp"
 
 namespace fastexcel {
 namespace core {
@@ -168,7 +168,7 @@ size_t FormatPool::getFormatIndex(Format* format) const {
         return it->second;
     }
     
-    throw std::invalid_argument("Format not found in pool");
+    FASTEXCEL_THROW_PARAM("Format not found in pool");
 }
 
 Format* FormatPool::getFormatByIndex(size_t index) const {
@@ -183,7 +183,7 @@ Format* FormatPool::getFormatByIndex(size_t index) const {
         }
     }
     
-    throw std::out_of_range("Invalid format index: " + std::to_string(index));
+    FASTEXCEL_THROW_PARAM("Invalid format index: " + std::to_string(index));
 }
 
 double FormatPool::getCacheHitRate() const {

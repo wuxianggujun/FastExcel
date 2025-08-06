@@ -8,10 +8,10 @@
 #include <condition_variable>
 #include <future>
 #include <functional>
-#include <stdexcept>
+#include "Exception.hpp"
 
 namespace fastexcel {
-namespace utils {
+namespace core {
 
 /**
  * @brief 高性能线程池实现
@@ -98,7 +98,7 @@ auto ThreadPool::enqueue(F&& f, Args&&... args)
         
         // 不允许在停止状态下添加任务
         if (stop_) {
-            throw std::runtime_error("enqueue on stopped ThreadPool");
+            FASTEXCEL_THROW_OP("enqueue on stopped ThreadPool");
         }
         
         tasks_.emplace([task]() { (*task)(); });
@@ -109,4 +109,4 @@ auto ThreadPool::enqueue(F&& f, Args&&... args)
     return res;
 }
 
-}} // namespace fastexcel::utils
+}} // namespace fastexcel::core
