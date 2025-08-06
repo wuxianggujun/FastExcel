@@ -53,6 +53,7 @@ set(FASTEXCEL_SOURCES
         src/fastexcel/core/Color.cpp
         src/fastexcel/core/Cell.cpp
         src/fastexcel/core/Format.cpp
+        src/fastexcel/core/Path.cpp
         src/fastexcel/core/Workbook.cpp
         src/fastexcel/core/Worksheet.cpp
         src/fastexcel/core/SharedStringTable.cpp

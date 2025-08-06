@@ -145,6 +145,26 @@ else()
 endif()
 
 # =============================================================================
+# UTF8-CPP 配置 (header-only library)
+# =============================================================================
+# UTF8-CPP 是一个纯头文件库，用于处理UTF-8编码
+set(UTF8CPP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(UTF8CPP_BUILD_SAMPLES OFF CACHE BOOL "" FORCE)
+
+if(FASTEXCEL_USE_SYSTEM_LIBS)
+    find_package(utf8cpp QUIET)
+endif()
+
+if(NOT utf8cpp_FOUND)
+    add_subdirectory(utfcpp)
+    set(UTF8CPP_TARGET utf8cpp)
+    message(STATUS "FastExcel: Using bundled UTF8-CPP")
+else()
+    set(UTF8CPP_TARGET utf8cpp::utf8cpp)
+    message(STATUS "FastExcel: Using system UTF8-CPP")
+endif()
+
+# =============================================================================
 # GoogleTest 配置 (仅在需要测试时)
 # =============================================================================
 if(ENABLE_TESTS OR ENABLE_UNIT_TESTS OR FASTEXCEL_BUILD_TESTS)
@@ -186,6 +206,11 @@ if(DEFINED LIBDEFLATE_TARGET)
     set(FASTEXCEL_LIBDEFLATE_TARGET ${LIBDEFLATE_TARGET} PARENT_SCOPE)
 endif()
 
+# 导出 UTF8CPP 目标
+if(DEFINED UTF8CPP_TARGET)
+    set(FASTEXCEL_UTF8CPP_TARGET ${UTF8CPP_TARGET} PARENT_SCOPE)
+endif()
+
 if(DEFINED GTEST_TARGETS)
     set(FASTEXCEL_GTEST_TARGETS ${GTEST_TARGETS} PARENT_SCOPE)
 endif()
@@ -197,6 +222,7 @@ set(FASTEXCEL_THIRD_PARTY_INCLUDE_DIRS
     ${CMAKE_CURRENT_SOURCE_DIR}/ZlibMinizipBundle/third_party/zlib-ng
     ${CMAKE_CURRENT_BINARY_DIR}/ZlibMinizipBundle/third_party/zlib-ng
     ${CMAKE_CURRENT_SOURCE_DIR}/ZlibMinizipBundle/third_party/minizip-ng
+    ${CMAKE_CURRENT_SOURCE_DIR}/utfcpp/source
     PARENT_SCOPE
 )
 

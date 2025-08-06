@@ -10,7 +10,7 @@
 namespace fastexcel {
 namespace archive {
 
-FileManager::FileManager(const std::string& filename) : filename_(filename) {
+FileManager::FileManager(const core::Path& path) : filename_(path.string()), filepath_(path) {
 }
 
 FileManager::~FileManager() {
@@ -22,7 +22,7 @@ bool FileManager::open(bool create) {
         close();
     }
     
-    archive_ = std::make_unique<ZipArchive>(filename_);
+    archive_ = std::make_unique<ZipArchive>(filepath_);
     if (!archive_->open(create)) {
         LOG_ERROR("Failed to open archive: {}", filename_);
         return false;

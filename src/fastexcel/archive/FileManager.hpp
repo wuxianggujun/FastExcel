@@ -1,6 +1,7 @@
 #pragma once
 
 #include "fastexcel/archive/ZipArchive.hpp"
+#include "fastexcel/core/Path.hpp"
 #include <string>
 #include <memory>
 #include <unordered_map>
@@ -11,10 +12,11 @@ namespace archive {
 class FileManager {
 private:
     std::unique_ptr<ZipArchive> archive_;
-    std::string filename_;
+    std::string filename_;  // 保留用于日志
+    core::Path filepath_;   // 用于实际文件操作
     
 public:
-    explicit FileManager(const std::string& filename);
+    explicit FileManager(const core::Path& path);
     ~FileManager();
     
     // 文件操作

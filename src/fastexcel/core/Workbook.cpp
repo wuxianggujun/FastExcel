@@ -1,4 +1,5 @@
 #include "fastexcel/core/Workbook.hpp"
+#include "fastexcel/core/Path.hpp"
 #include "fastexcel/reader/XLSXReader.hpp"
 #include "fastexcel/utils/LogConfig.hpp"
 #include "fastexcel/utils/Logger.hpp"
@@ -26,12 +27,12 @@ DocumentProperties::DocumentProperties() {
 
 // ========== Workbook 实现 ==========
 
-std::unique_ptr<Workbook> Workbook::create(const std::string& filename) {
-    return std::make_unique<Workbook>(filename);
+std::unique_ptr<Workbook> Workbook::create(const Path& path) {
+    return std::make_unique<Workbook>(path);
 }
 
-Workbook::Workbook(const std::string& filename) : filename_(filename) {
-    file_manager_ = std::make_unique<archive::FileManager>(filename);
+Workbook::Workbook(const Path& path) : filename_(path.string()) {
+    file_manager_ = std::make_unique<archive::FileManager>(path);
     format_pool_ = std::make_unique<FormatPool>();
     
     // 设置默认文档属性
@@ -105,12 +106,12 @@ bool Workbook::saveAs(const std::string& filename) {
     filename_ = filename;
     
     // 重新创建文件管理器
-    file_manager_ = std::make_unique<archive::FileManager>(filename);
+    file_manager_ = std::make_unique<archive::FileManager>(core::Path(filename));
     
     if (!file_manager_->open(true)) {
         // 恢复原文件名
         filename_ = old_filename;
-        file_manager_ = std::make_unique<archive::FileManager>(old_filename);
+        file_manager_ = std::make_unique<archive::FileManager>(core::Path(old_filename));
         return false;
     }
     
@@ -435,6 +436,14 @@ bool Workbook::removeCustomProperty(const std::string& name) {
     }
     
     return false;
+}
+
+std::unordered_map<std::string, std::string> Workbook::getCustomProperties() const {
+    std::unordered_map<std::string, std::string> properties;
+    for (const auto& prop : custom_properties_) {
+        properties[prop.name] = prop.value;
+    }
+    return properties;
 }
 
 // ========== 定义名称 ==========
@@ -1538,20 +1547,18 @@ std::string Workbook::escapeXML(const std::string& text) const {
 
 // ========== 工作簿编辑功能实现 ==========
 
-std::unique_ptr<Workbook> Workbook::loadForEdit(const std::string& filename) {
+std::unique_ptr<Workbook> Workbook::loadForEdit(const Path& path) {
     try {
-        // 首先检查文件是否存在
-        std::ifstream file(filename, std::ios::binary);
-        if (!file.is_open()) {
-            LOG_ERROR("File not found for editing: {}", filename);
+        // 使用Path的内置文件检查
+        if (!path.exists()) {
+            LOG_ERROR("File not found for editing: {}", path.string());
             return nullptr;
         }
-        file.close();
         
         // 使用XLSXReader读取现有文件
-        reader::XLSXReader reader(filename);
+        reader::XLSXReader reader(path);
         if (!reader.open()) {
-            LOG_ERROR("Failed to open XLSX file for reading: {}", filename);
+            LOG_ERROR("Failed to open XLSX file for reading: {}", path.string());
             return nullptr;
         }
         
@@ -1560,15 +1567,15 @@ std::unique_ptr<Workbook> Workbook::loadForEdit(const std::string& filename) {
         reader.close();
         
         if (!loaded_workbook) {
-            LOG_ERROR("Failed to load workbook from file: {}", filename);
+            LOG_ERROR("Failed to load workbook from file: {}", path.string());
             return nullptr;
         }
         
-        LOG_INFO("Successfully loaded workbook for editing: {}", filename);
+        LOG_INFO("Successfully loaded workbook for editing: {}", path.string());
         return loaded_workbook;
         
     } catch (const std::exception& e) {
-        LOG_ERROR("Exception while loading workbook for edit: {}", e.what());
+        LOG_ERROR("Exception while loading workbook for editing: {}, error: {}", path.string(), e.what());
         return nullptr;
     }
 }
@@ -1588,7 +1595,8 @@ bool Workbook::refresh() {
         close();
         
         // 重新加载
-        auto refreshed_workbook = loadForEdit(current_filename);
+        Path current_path(current_filename);
+        auto refreshed_workbook = loadForEdit(current_path);
         if (!refreshed_workbook) {
             LOG_ERROR("Failed to refresh workbook: {}", current_filename);
             return false;
@@ -1707,7 +1715,7 @@ bool Workbook::exportWorksheets(const std::vector<std::string>& worksheet_names,
     
     try {
         // 创建新工作簿
-        auto export_workbook = create(output_filename);
+        auto export_workbook = create(Path(output_filename));
         if (!export_workbook->open()) {
             LOG_ERROR("Failed to create export workbook: {}", output_filename);
             return false;

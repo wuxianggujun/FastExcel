@@ -5,6 +5,7 @@
 #pragma once
 #include "fastexcel/core/Format.hpp"
 #include "fastexcel/core/Worksheet.hpp"
+#include "fastexcel/core/Path.hpp"
 #include "fastexcel/archive/ZipArchive.hpp"
 #include <memory>
 #include <unordered_map>
@@ -35,6 +36,7 @@ class XLSXReader {
 
 public:
   explicit XLSXReader(const std::string& filename);
+  explicit XLSXReader(const core::Path& path);
   ~XLSXReader();
 
   bool open();
@@ -49,6 +51,7 @@ public:
 
 private:
     // 成员变量
+    core::Path filepath_;
     std::string filename_;
     std::unique_ptr<archive::ZipArchive> zip_archive_;
     bool is_open_;

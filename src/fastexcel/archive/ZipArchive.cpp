@@ -1,4 +1,5 @@
 #include "fastexcel/archive/ZipArchive.hpp"
+#include "fastexcel/core/Path.hpp"
 
 #include "fastexcel/utils/LogConfig.hpp"
 #include "fastexcel/utils/Logger.hpp"
@@ -12,6 +13,7 @@
 #include <mz_crypt.h>
 #include <mz_os.h>
 #include <mz_strm.h>
+#include <mz_strm_os.h>
 #include <mz_zip.h>
 #include <mz_zip_rw.h>
 #include <ostream>
@@ -19,7 +21,7 @@
 namespace fastexcel {
 namespace archive {
 
-ZipArchive::ZipArchive(const std::string& filename) : filename_(filename) {
+ZipArchive::ZipArchive(const core::Path& path) : filename_(path.string()), filepath_(path) {
     zip_handle_ = nullptr;
     unzip_handle_ = nullptr;
     is_writable_ = false;
@@ -64,6 +66,20 @@ bool ZipArchive::close() {
         // 删除writer句柄
         mz_zip_writer_delete(&zip_handle_);
         zip_handle_ = nullptr;
+        
+        // 如果使用了临时文件，现在重命名到目标文件
+        if (!temp_filename_.empty() && success) {
+            core::Path temp_path(temp_filename_);
+            if (temp_path.exists()) {
+                if (temp_path.moveTo(filepath_)) {
+                    LOG_ZIP_DEBUG("Successfully renamed temporary file {} to {}", temp_filename_, filename_);
+                } else {
+                    LOG_ERROR("Failed to rename temporary file {} to {}", temp_filename_, filename_);
+                    success = false;
+                }
+            }
+            temp_filename_.clear();
+        }
     }
     
     // 清理其他资源
@@ -536,27 +552,53 @@ bool ZipArchive::initForWriting() {
     });
     
     // 检查文件是否存在
-    bool file_exists = std::filesystem::exists(filename_);
+    bool file_exists = filepath_.exists();
     LOG_DEBUG("Target file exists: {}", file_exists);
     
     // 如果文件已存在，先删除它以确保完全覆盖
     if (file_exists) {
-        std::filesystem::remove(filename_);
+        filepath_.remove();
         LOG_ZIP_DEBUG("Removed existing zip file: {}", filename_);
     }
     
-    // 打开文件进行写入，总是创建新文件（覆盖模式）
+    // 打开文件进行写入，使用Path类处理Unicode
     LOG_ZIP_DEBUG("Opening ZIP file for writing...");
-    int32_t result = mz_zip_writer_open_file(zip_handle_, filename_.c_str(), 0, 0);
-    LOG_ZIP_DEBUG("mz_zip_writer_open_file returned: {} (MZ_OK = {})", result, MZ_OK);
+    int32_t result;
+    
+#ifdef _WIN32
+    // 在Windows上，如果文件名包含Unicode字符，使用临时ASCII文件名
+    bool has_unicode = false;
+    for (char c : filename_) {
+        if (static_cast<unsigned char>(c) > 127) {
+            has_unicode = true;
+            break;
+        }
+    }
+    
+    std::string temp_filename;
+    if (has_unicode) {
+        // 创建临时ASCII文件名
+        temp_filename = "temp_zip_" + std::to_string(reinterpret_cast<uintptr_t>(this)) + ".xlsx";
+        temp_filename_ = temp_filename;  // 保存用于close时重命名
+        result = mz_zip_writer_open_file(zip_handle_, temp_filename.c_str(), 0, 0);
+        LOG_ZIP_DEBUG("Using temporary ASCII filename for Unicode path: {}", temp_filename);
+    } else {
+        temp_filename_.clear();  // 清空临时文件名
+#endif
+        // 对于ASCII文件名，使用原文件名
+        result = mz_zip_writer_open_file(zip_handle_, filename_.c_str(), 0, 0);
+        LOG_ZIP_DEBUG("Using direct filename: {}", filename_);
+#ifdef _WIN32
+    }
+#endif
     
     if (result != MZ_OK) {
         LOG_ERROR("Failed to open zip file for writing: {}, error: {}", filename_, result);
-        // 清理失败的句柄
         mz_zip_writer_delete(&zip_handle_);
         zip_handle_ = nullptr;
         return false;
     }
+    LOG_ZIP_DEBUG("mz_zip_writer_open returned: {} (MZ_OK = {})", result, MZ_OK);
     
     // 关键修复：不设置全局Data Descriptor，让每个条目自己控制
     // 这样批量写入可以使用flag=0，流式写入可以使用flag=DATA_DESCRIPTOR

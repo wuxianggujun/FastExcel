@@ -8,6 +8,7 @@
 #include "StylesParser.hpp"
 #include "fastexcel/core/Workbook.hpp"
 #include "fastexcel/archive/ZipArchive.hpp"
+#include "fastexcel/core/Path.hpp"
 #include <iostream>
 #include <sstream>
 #include <stdexcept>
@@ -17,8 +18,17 @@ namespace reader {
 
 // 构造函数
 XLSXReader::XLSXReader(const std::string& filename)
-    : filename_(filename)
-    , zip_archive_(std::make_unique<archive::ZipArchive>(filename))
+    : filepath_(filename)
+    , filename_(filename)
+    , zip_archive_(std::make_unique<archive::ZipArchive>(filepath_))
+    , is_open_(false) {
+}
+
+// Path构造函数
+XLSXReader::XLSXReader(const core::Path& path)
+    : filepath_(path)
+    , filename_(path.string())
+    , zip_archive_(std::make_unique<archive::ZipArchive>(filepath_))
     , is_open_(false) {
 }
 
@@ -91,9 +101,9 @@ std::unique_ptr<core::Workbook> XLSXReader::loadWorkbook() {
     }
     
     try {
-        // 创建新的工作簿，使用不同的临时文件名避免冲突
-        std::string temp_filename = filename_ + ".temp_workbook";
-        auto workbook = std::make_unique<core::Workbook>(temp_filename);
+        // 创建新的工作簿，使用Path::create来正确处理Unicode
+        core::Path temp_path("temp_workbook_" + std::to_string(reinterpret_cast<uintptr_t>(this)));
+        auto workbook = core::Workbook::create(temp_path);
         
         // 打开工作簿以便添加工作表
         if (!workbook->open()) {
@@ -176,7 +186,7 @@ std::shared_ptr<core::Worksheet> XLSXReader::loadWorksheet(const std::string& na
         }
         
         // 创建临时工作簿来容纳工作表
-        auto temp_workbook = std::make_shared<core::Workbook>("temp");
+        auto temp_workbook = std::make_shared<core::Workbook>(core::Path("temp"));
         auto worksheet = std::make_shared<core::Worksheet>(name, temp_workbook);
         
         // 解析工作表数据

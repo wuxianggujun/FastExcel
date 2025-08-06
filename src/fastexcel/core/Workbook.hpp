@@ -4,6 +4,7 @@
 #include "fastexcel/core/Format.hpp"
 #include "fastexcel/core/FormatPool.hpp"
 #include "fastexcel/core/WorkbookModeSelector.hpp"
+#include "fastexcel/core/Path.hpp"
 #include "fastexcel/archive/FileManager.hpp"
 #include "fastexcel/utils/CommonUtils.hpp"
 #include <string>
@@ -146,16 +147,16 @@ private:
 public:
     /**
      * @brief 创建工作簿
-     * @param filename 文件名
+     * @param path 文件路径
      * @return 工作簿智能指针
      */
-    static std::unique_ptr<Workbook> create(const std::string& filename);
+    static std::unique_ptr<Workbook> create(const Path& path);
     
     /**
      * @brief 构造函数
-     * @param filename 文件名
+     * @param path 文件路径
      */
-    explicit Workbook(const std::string& filename);
+    explicit Workbook(const Path& path);
     
     /**
      * @brief 析构函数
@@ -334,16 +335,34 @@ public:
     void setTitle(const std::string& title) { doc_properties_.title = title; }
     
     /**
+     * @brief 获取文档标题
+     * @return 标题
+     */
+    const std::string& getTitle() const { return doc_properties_.title; }
+    
+    /**
      * @brief 设置文档主题
      * @param subject 主题
      */
     void setSubject(const std::string& subject) { doc_properties_.subject = subject; }
     
     /**
+     * @brief 获取文档主题
+     * @return 主题
+     */
+    const std::string& getSubject() const { return doc_properties_.subject; }
+    
+    /**
      * @brief 设置文档作者
      * @param author 作者
      */
     void setAuthor(const std::string& author) { doc_properties_.author = author; }
+    
+    /**
+     * @brief 获取文档作者
+     * @return 作者
+     */
+    const std::string& getAuthor() const { return doc_properties_.author; }
     
     /**
      * @brief 设置文档管理者
@@ -435,6 +454,12 @@ public:
      * @return 是否成功
      */
     bool removeCustomProperty(const std::string& name);
+    
+    /**
+     * @brief 获取所有自定义属性
+     * @return 自定义属性映射 (名称 -> 值)
+     */
+    std::unordered_map<std::string, std::string> getCustomProperties() const;
     
     // ========== 定义名称 ==========
     
@@ -654,10 +679,10 @@ public:
     
     /**
      * @brief 从现有文件加载工作簿进行编辑
-     * @param filename 文件名
+     * @param path 文件路径
      * @return 工作簿智能指针，失败返回nullptr
      */
-    static std::unique_ptr<Workbook> loadForEdit(const std::string& filename);
+    static std::unique_ptr<Workbook> loadForEdit(const Path& path);
     
     /**
      * @brief 刷新工作簿（重新读取文件内容）
