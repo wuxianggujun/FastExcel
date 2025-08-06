@@ -66,20 +66,6 @@ bool ZipArchive::close() {
         // 删除writer句柄
         mz_zip_writer_delete(&zip_handle_);
         zip_handle_ = nullptr;
-        
-        // 如果使用了临时文件，现在重命名到目标文件
-        if (!temp_filename_.empty() && success) {
-            core::Path temp_path(temp_filename_);
-            if (temp_path.exists()) {
-                if (temp_path.moveTo(filepath_)) {
-                    LOG_ZIP_DEBUG("Successfully renamed temporary file {} to {}", temp_filename_, filename_);
-                } else {
-                    LOG_ERROR("Failed to rename temporary file {} to {}", temp_filename_, filename_);
-                    success = false;
-                }
-            }
-            temp_filename_.clear();
-        }
     }
     
     // 清理其他资源
@@ -561,36 +547,9 @@ bool ZipArchive::initForWriting() {
         LOG_ZIP_DEBUG("Removed existing zip file: {}", filename_);
     }
     
-    // 打开文件进行写入，使用Path类处理Unicode
+    // 打开文件进行写入，直接使用Path的c_str()
     LOG_ZIP_DEBUG("Opening ZIP file for writing...");
-    int32_t result;
-    
-#ifdef _WIN32
-    // 在Windows上，如果文件名包含Unicode字符，使用临时ASCII文件名
-    bool has_unicode = false;
-    for (char c : filename_) {
-        if (static_cast<unsigned char>(c) > 127) {
-            has_unicode = true;
-            break;
-        }
-    }
-    
-    std::string temp_filename;
-    if (has_unicode) {
-        // 创建临时ASCII文件名
-        temp_filename = "temp_zip_" + std::to_string(reinterpret_cast<uintptr_t>(this)) + ".xlsx";
-        temp_filename_ = temp_filename;  // 保存用于close时重命名
-        result = mz_zip_writer_open_file(zip_handle_, temp_filename.c_str(), 0, 0);
-        LOG_ZIP_DEBUG("Using temporary ASCII filename for Unicode path: {}", temp_filename);
-    } else {
-        temp_filename_.clear();  // 清空临时文件名
-#endif
-        // 对于ASCII文件名，使用原文件名
-        result = mz_zip_writer_open_file(zip_handle_, filename_.c_str(), 0, 0);
-        LOG_ZIP_DEBUG("Using direct filename: {}", filename_);
-#ifdef _WIN32
-    }
-#endif
+    int32_t result = mz_zip_writer_open_file(zip_handle_, filepath_.c_str(), 0, 0);
     
     if (result != MZ_OK) {
         LOG_ERROR("Failed to open zip file for writing: {}, error: {}", filename_, result);
@@ -633,7 +592,7 @@ bool ZipArchive::initForReading() {
         return false;
     }
     
-    int32_t result = mz_zip_reader_open_file(unzip_handle_, filename_.c_str());
+    int32_t result = mz_zip_reader_open_file(unzip_handle_, filepath_.c_str());
     if (result != MZ_OK) {
         LOG_ERROR("Failed to open zip file for reading: {}, error: {}", filename_, result);
         // 清理失败的句柄

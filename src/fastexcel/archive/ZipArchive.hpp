@@ -68,7 +68,6 @@ private:
     void* unzip_handle_ = nullptr;
     std::string filename_;  // UTF-8 filename for logging
     core::Path filepath_;   // Path object for actual file operations
-    std::string temp_filename_;  // Temporary ASCII filename for Unicode paths
     bool is_writable_ = false;
     bool is_readable_ = false;
     bool stream_entry_open_ = false;  // 流式写入条目是否已打开
