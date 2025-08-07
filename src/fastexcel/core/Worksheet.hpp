@@ -6,6 +6,7 @@
 #include "fastexcel/core/FormatRepository.hpp"
 #include "fastexcel/core/CellRangeManager.hpp"
 #include "fastexcel/utils/CommonUtils.hpp"
+#include "fastexcel/xml/XMLStreamWriter.hpp"
 #include <string>
 #include <vector>
 #include <map>
@@ -15,6 +16,7 @@
 #include <unordered_map>
 #include <set>
 #include <functional>
+#include <sstream>
 
 namespace fastexcel {
 namespace core {
@@ -1086,6 +1088,11 @@ private:
     void generatePrintOptionsXML(const std::function<void(const char*, size_t)>& callback) const;
     void generatePageMarginsXML(const std::function<void(const char*, size_t)>& callback) const;
     void generateSheetProtectionXML(const std::function<void(const char*, size_t)>& callback) const;
+    
+    // 🔧 新增的统一XML生成辅助方法
+    std::string escapeXmlText(const std::string& text) const;
+    void generateOtherXMLSections(std::ostringstream& xml_stream) const;
+    void generateOtherXMLWithWriter(xml::XMLStreamWriter& writer) const;
     
     // 内部状态管理
     void updateUsedRange(int row, int col);
