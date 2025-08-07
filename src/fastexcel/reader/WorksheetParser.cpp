@@ -16,7 +16,7 @@ namespace reader {
 bool WorksheetParser::parse(const std::string& xml_content, 
                            core::Worksheet* worksheet,
                            const std::unordered_map<int, std::string>& shared_strings,
-                           const std::unordered_map<int, std::shared_ptr<core::Format>>& styles) {
+                           const std::unordered_map<int, std::shared_ptr<core::FormatDescriptor>>& styles) {
     if (xml_content.empty() || !worksheet) {
         return false;
     }
@@ -34,7 +34,7 @@ bool WorksheetParser::parse(const std::string& xml_content,
 bool WorksheetParser::parseSheetData(const std::string& xml_content, 
                                     core::Worksheet* worksheet,
                                     const std::unordered_map<int, std::string>& shared_strings,
-                                    const std::unordered_map<int, std::shared_ptr<core::Format>>& styles) {
+                                    const std::unordered_map<int, std::shared_ptr<core::FormatDescriptor>>& styles) {
     // 查找 <sheetData> 标签
     size_t sheet_data_start = xml_content.find("<sheetData");
     if (sheet_data_start == std::string::npos) {
@@ -97,7 +97,7 @@ bool WorksheetParser::parseSheetData(const std::string& xml_content,
 bool WorksheetParser::parseRow(const std::string& row_xml, 
                               core::Worksheet* worksheet,
                               const std::unordered_map<int, std::string>& shared_strings,
-                              const std::unordered_map<int, std::shared_ptr<core::Format>>& styles) {
+                              const std::unordered_map<int, std::shared_ptr<core::FormatDescriptor>>& styles) {
     // 解析行中的所有单元格
     size_t pos = 0;
     while ((pos = row_xml.find("<c ", pos)) != std::string::npos) {
@@ -133,7 +133,7 @@ bool WorksheetParser::parseRow(const std::string& row_xml,
 bool WorksheetParser::parseCell(const std::string& cell_xml,
                                core::Worksheet* worksheet,
                                const std::unordered_map<int, std::string>& shared_strings,
-                               const std::unordered_map<int, std::shared_ptr<core::Format>>& styles) {
+                               const std::unordered_map<int, std::shared_ptr<core::FormatDescriptor>>& styles) {
     // 提取单元格引用 (r="A1")
     size_t r_start = cell_xml.find("r=\"");
     if (r_start == std::string::npos) {
@@ -400,7 +400,7 @@ std::string WorksheetParser::extractFormula(const std::string& cell_xml) {
 }
 
 bool WorksheetParser::isDateFormat(int style_index,
-                                  const std::unordered_map<int, std::shared_ptr<core::Format>>& styles) {
+                                  const std::unordered_map<int, std::shared_ptr<core::FormatDescriptor>>& styles) {
     if (style_index < 0) {
         return false;
     }

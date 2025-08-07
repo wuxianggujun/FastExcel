@@ -4,9 +4,9 @@
 
 #pragma once
 
-
 #include "fastexcel/core/Worksheet.hpp"
 #include "fastexcel/core/Cell.hpp"
+#include "fastexcel/core/FormatDescriptor.hpp"
 #include <string>
 #include <unordered_map>
 #include <memory>
@@ -36,24 +36,24 @@ public:
     bool parse(const std::string& xml_content,
                core::Worksheet* worksheet,
                const std::unordered_map<int, std::string>& shared_strings,
-               const std::unordered_map<int, std::shared_ptr<core::Format>>& styles);
+               const std::unordered_map<int, std::shared_ptr<core::FormatDescriptor>>& styles);
 
 private:
     // 辅助方法
     bool parseSheetData(const std::string& xml_content,
                        core::Worksheet* worksheet,
                        const std::unordered_map<int, std::string>& shared_strings,
-                       const std::unordered_map<int, std::shared_ptr<core::Format>>& styles);
+                       const std::unordered_map<int, std::shared_ptr<core::FormatDescriptor>>& styles);
     
     bool parseRow(const std::string& row_xml,
                   core::Worksheet* worksheet,
                   const std::unordered_map<int, std::string>& shared_strings,
-                  const std::unordered_map<int, std::shared_ptr<core::Format>>& styles);
+                  const std::unordered_map<int, std::shared_ptr<core::FormatDescriptor>>& styles);
     
     bool parseCell(const std::string& cell_xml,
                    core::Worksheet* worksheet,
                    const std::unordered_map<int, std::string>& shared_strings,
-                   const std::unordered_map<int, std::shared_ptr<core::Format>>& styles);
+                   const std::unordered_map<int, std::shared_ptr<core::FormatDescriptor>>& styles);
     
     // 工具方法
     std::pair<int, int> parseCellReference(const std::string& ref);
@@ -65,7 +65,7 @@ private:
     
     // 新增的工具方法
     std::string extractFormula(const std::string& cell_xml);
-    bool isDateFormat(int style_index, const std::unordered_map<int, std::shared_ptr<core::Format>>& styles);
+    bool isDateFormat(int style_index, const std::unordered_map<int, std::shared_ptr<core::FormatDescriptor>>& styles);
     std::string convertExcelDateToString(double excel_date);
 };
 

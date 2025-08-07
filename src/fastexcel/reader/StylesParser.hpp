@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include "fastexcel/core/Format.hpp"
+#include "fastexcel/core/FormatDescriptor.hpp"
 #include "fastexcel/core/Color.hpp"
 #include <string>
 #include <vector>
@@ -34,11 +34,11 @@ public:
     bool parse(const std::string& xml_content);
     
     /**
-     * @brief 根据XF索引获取格式对象
+     * @brief 根据XF索引获取格式描述符
      * @param xf_index XF索引
-     * @return 格式对象指针，如果索引无效返回nullptr
+     * @return 格式描述符指针，如果索引无效返回nullptr
      */
-    std::shared_ptr<core::Format> getFormat(int xf_index) const;
+    std::shared_ptr<core::FormatDescriptor> getFormat(int xf_index) const;
     
     /**
      * @brief 获取解析的格式数量

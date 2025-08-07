@@ -3,7 +3,8 @@
 //
 
 #include "StylesParser.hpp"
-#include "fastexcel/core/Format.hpp"
+#include "fastexcel/core/FormatDescriptor.hpp"
+#include "fastexcel/core/StyleBuilder.hpp"
 #include "fastexcel/core/Color.hpp"
 #include <iostream>
 #include <sstream>
@@ -41,25 +42,26 @@ bool StylesParser::parse(const std::string& xml_content) {
     }
 }
 
-std::shared_ptr<core::Format> StylesParser::getFormat(int xf_index) const {
+std::shared_ptr<core::FormatDescriptor> StylesParser::getFormat(int xf_index) const {
     if (xf_index < 0 || xf_index >= static_cast<int>(cell_xfs_.size())) {
         return nullptr;
     }
     
     const auto& xf = cell_xfs_[xf_index];
-    auto format = std::make_shared<core::Format>();
+    core::StyleBuilder builder;
     
     // 应用字体
     if (xf.font_id >= 0 && xf.font_id < static_cast<int>(fonts_.size())) {
         const auto& font = fonts_[xf.font_id];
-        format->setFontName(font.name);
-        format->setFontSize(font.size);
-        format->setBold(font.bold);
-        format->setItalic(font.italic);
-        format->setUnderline(font.underline ? core::UnderlineType::Single : core::UnderlineType::None);
-        format->setStrikeout(font.strikeout);
+        builder.fontName(font.name)
+               .fontSize(font.size)
+               .bold(font.bold)
+               .italic(font.italic)
+               .underline(font.underline ? core::UnderlineType::Single : core::UnderlineType::None)
+               .strikeout(font.strikeout);
+        
         if (font.color.getRed() != 0 || font.color.getGreen() != 0 || font.color.getBlue() != 0) {
-            format->setFontColor(font.color);
+            builder.fontColor(font.color);
         }
     }
     
@@ -67,7 +69,7 @@ std::shared_ptr<core::Format> StylesParser::getFormat(int xf_index) const {
     if (xf.fill_id >= 0 && xf.fill_id < static_cast<int>(fills_.size())) {
         const auto& fill = fills_[xf.fill_id];
         if (fill.pattern_type != "none" && (fill.fg_color.getRed() != 0 || fill.fg_color.getGreen() != 0 || fill.fg_color.getBlue() != 0)) {
-            format->setBackgroundColor(fill.fg_color);
+            builder.backgroundColor(fill.fg_color);
         }
     }
     
@@ -75,48 +77,53 @@ std::shared_ptr<core::Format> StylesParser::getFormat(int xf_index) const {
     if (xf.border_id >= 0 && xf.border_id < static_cast<int>(borders_.size())) {
         const auto& border = borders_[xf.border_id];
         if (!border.left.style.empty()) {
-            format->setLeftBorder(getBorderStyle(border.left.style));
+            builder.leftBorder(getBorderStyle(border.left.style));
             if (border.left.color.getRed() != 0 || border.left.color.getGreen() != 0 || border.left.color.getBlue() != 0) {
-                format->setLeftBorderColor(border.left.color);
+                // Note: StyleBuilder doesn't have leftBorderColor method, use leftBorder with color
+                builder.leftBorder(getBorderStyle(border.left.style), border.left.color);
             }
         }
         if (!border.right.style.empty()) {
-            format->setRightBorder(getBorderStyle(border.right.style));
+            builder.rightBorder(getBorderStyle(border.right.style));
             if (border.right.color.getRed() != 0 || border.right.color.getGreen() != 0 || border.right.color.getBlue() != 0) {
-                format->setRightBorderColor(border.right.color);
+                // Note: StyleBuilder doesn't have rightBorderColor method, use rightBorder with color
+                builder.rightBorder(getBorderStyle(border.right.style), border.right.color);
             }
         }
         if (!border.top.style.empty()) {
-            format->setTopBorder(getBorderStyle(border.top.style));
+            builder.topBorder(getBorderStyle(border.top.style));
             if (border.top.color.getRed() != 0 || border.top.color.getGreen() != 0 || border.top.color.getBlue() != 0) {
-                format->setTopBorderColor(border.top.color);
+                // Note: StyleBuilder doesn't have topBorderColor method, use topBorder with color
+                builder.topBorder(getBorderStyle(border.top.style), border.top.color);
             }
         }
         if (!border.bottom.style.empty()) {
-            format->setBottomBorder(getBorderStyle(border.bottom.style));
+            builder.bottomBorder(getBorderStyle(border.bottom.style));
             if (border.bottom.color.getRed() != 0 || border.bottom.color.getGreen() != 0 || border.bottom.color.getBlue() != 0) {
-                format->setBottomBorderColor(border.bottom.color);
+                // Note: StyleBuilder doesn't have bottomBorderColor method, use bottomBorder with color
+                builder.bottomBorder(getBorderStyle(border.bottom.style), border.bottom.color);
             }
         }
     }
     
     // 应用对齐
-    format->setHorizontalAlign(getAlignment(xf.horizontal_alignment));
-    format->setVerticalAlign(getVerticalAlignment(xf.vertical_alignment));
-    format->setTextWrap(xf.wrap_text);
+    builder.horizontalAlign(getAlignment(xf.horizontal_alignment))
+           .verticalAlign(getVerticalAlignment(xf.vertical_alignment))
+           .textWrap(xf.wrap_text);
     
     // 应用数字格式
     if (xf.num_fmt_id >= 0) {
         auto it = number_formats_.find(xf.num_fmt_id);
         if (it != number_formats_.end()) {
-            format->setNumberFormat(it->second);
+            builder.numberFormat(it->second);
         } else {
             // 使用内置格式
-            format->setNumberFormat(getBuiltinNumberFormat(xf.num_fmt_id));
+            builder.numberFormat(getBuiltinNumberFormat(xf.num_fmt_id));
         }
     }
     
-    return format;
+    // 构建FormatDescriptor并返回共享指针
+    return std::make_shared<core::FormatDescriptor>(builder.build());
 }
 
 void StylesParser::parseNumberFormats(const std::string& xml_content) {

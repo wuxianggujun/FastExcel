@@ -9,6 +9,7 @@ namespace core {
 
 // 前向声明
 class Format;
+class FormatDescriptor;
 
 enum class CellType : uint8_t {
     Empty = 0,
@@ -107,6 +108,11 @@ public:
     void setFormat(Format* format);  // 新增：直接指针版本
     std::shared_ptr<Format> getFormat() const;
     Format* getFormatPtr() const;    // 新增：获取原始指针
+    
+    // 新架构格式操作 - FormatDescriptor支持
+    void setFormat(std::shared_ptr<const FormatDescriptor> format);
+    std::shared_ptr<const FormatDescriptor> getFormatDescriptor() const;
+    
     bool hasFormat() const { return flags_.has_format; }
     
     // 超链接操作
@@ -139,6 +145,7 @@ public:
 private:
     // 格式的shared_ptr持有者（为了兼容性）
     mutable std::shared_ptr<Format> format_holder_;
+    mutable std::shared_ptr<const FormatDescriptor> format_descriptor_holder_;
 };
 
 }} // namespace fastexcel::core

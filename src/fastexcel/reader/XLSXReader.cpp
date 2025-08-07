@@ -172,10 +172,34 @@ core::ErrorCode XLSXReader::loadWorkbook(std::unique_ptr<core::Workbook>& workbo
             }
         }
         
-        // 注意：旧的格式导入功能已被新架构替代
-        // 新架构使用 FormatRepository 和 StyleBuilder，不再需要导入旧的 Format 对象
+        // 🔧 关键修复：将解析的FormatDescriptor样式导入到工作簿的FormatRepository中
         if (!styles_.empty()) {
-            LOG_DEBUG("检测到 {} 个旧格式，新架构将自动处理样式", styles_.size());
+            LOG_DEBUG("开始导入 {} 个FormatDescriptor样式到工作簿格式仓储", styles_.size());
+            
+            // 获取工作簿的格式仓储
+            auto& format_repo = const_cast<core::FormatRepository&>(workbook->getStyleRepository());
+            
+            // 按ID顺序导入样式
+            int imported_count = 0;
+            for (const auto& style_pair : styles_) {
+                int style_id = style_pair.first;
+                const auto& format_desc = style_pair.second;
+                
+                if (format_desc) {
+                    // 直接添加FormatDescriptor到仓储中
+                    int new_id = format_repo.addFormat(*format_desc);
+                    imported_count++;
+                    
+                    // 可选：记录ID映射日志以供调试
+                    if (new_id != style_id) {
+                        LOG_TRACE("样式ID映射: {} -> {}", style_id, new_id);
+                    }
+                }
+            }
+            
+            LOG_INFO("成功导入 {} 个FormatDescriptor样式到工作簿格式仓储", imported_count);
+        } else {
+            LOG_DEBUG("未检测到自定义样式，使用默认样式");
         }
         
         LOG_INFO("成功加载工作簿，包含 {} 个工作表", worksheet_names_.size());
@@ -677,7 +701,7 @@ std::string XLSXReader::getCellValue(const std::string& cell_xml, core::CellType
     return "";
 }
 
-std::shared_ptr<core::Format> XLSXReader::getStyleByIndex(int index) {
+std::shared_ptr<core::FormatDescriptor> XLSXReader::getStyleByIndex(int index) {
     auto it = styles_.find(index);
     if (it != styles_.end()) {
         return it->second;

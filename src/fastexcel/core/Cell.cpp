@@ -1,5 +1,6 @@
 #include "fastexcel/core/Cell.hpp"
 #include "fastexcel/core/Format.hpp"
+#include "fastexcel/core/FormatDescriptor.hpp"
 #include <cstring>
 #include <stdexcept>
 
@@ -175,6 +176,33 @@ std::shared_ptr<Format> Cell::getFormat() const {
 
 Format* Cell::getFormatPtr() const {
     return (flags_.has_format && extended_) ? extended_->format : nullptr;
+}
+
+// 新架构格式操作 - FormatDescriptor支持
+void Cell::setFormat(std::shared_ptr<const FormatDescriptor> format) {
+    if (format) {
+        format_descriptor_holder_ = format;
+        flags_.has_format = true;
+        // 清除旧的Format指针，因为我们现在使用FormatDescriptor
+        format_holder_.reset();
+        if (extended_) {
+            extended_->format = nullptr;
+        }
+    } else {
+        flags_.has_format = false;
+        format_descriptor_holder_.reset();
+        format_holder_.reset();
+        if (extended_) {
+            extended_->format = nullptr;
+        }
+    }
+}
+
+std::shared_ptr<const FormatDescriptor> Cell::getFormatDescriptor() const {
+    if (flags_.has_format && format_descriptor_holder_) {
+        return format_descriptor_holder_;
+    }
+    return nullptr;
 }
 
 void Cell::setHyperlink(const std::string& url) {

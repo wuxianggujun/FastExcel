@@ -3,7 +3,7 @@
 //
 
 #pragma once
-#include "fastexcel/core/Format.hpp"
+#include "fastexcel/core/FormatDescriptor.hpp"
 #include "fastexcel/core/Worksheet.hpp"
 #include "fastexcel/core/Path.hpp"
 #include "fastexcel/core/ErrorCode.hpp"
@@ -56,7 +56,7 @@ public:
   const std::string& getFilename() const { return filename_; }
   
   // 样式访问
-  const std::unordered_map<int, std::shared_ptr<core::Format>>& getStyles() const { return styles_; }
+  const std::unordered_map<int, std::shared_ptr<core::FormatDescriptor>>& getStyles() const { return styles_; }
 
 private:
     // 成员变量
@@ -71,7 +71,7 @@ private:
     std::vector<std::string> defined_names_;
     std::unordered_map<std::string, std::string> worksheet_paths_;  // name -> path
     std::unordered_map<int, std::string> shared_strings_;           // index -> string
-    std::unordered_map<int, std::shared_ptr<core::Format>> styles_; // index -> format
+    std::unordered_map<int, std::shared_ptr<core::FormatDescriptor>> styles_; // index -> format descriptor
     
     // 内部解析方法 - 系统层，使用ErrorCode
     core::ErrorCode parseWorkbookXML();
@@ -86,7 +86,7 @@ private:
     std::string extractXMLFromZip(const std::string& path);
     bool validateXLSXStructure();
     std::string getCellValue(const std::string& cell_xml, core::CellType& type);
-    std::shared_ptr<core::Format> getStyleByIndex(int index);
+    std::shared_ptr<core::FormatDescriptor> getStyleByIndex(int index);
     
     // 新增的XML解析辅助方法
     std::string extractAttribute(const std::string& xml, const std::string& attr_name);
