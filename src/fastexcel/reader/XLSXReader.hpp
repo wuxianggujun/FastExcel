@@ -58,6 +58,9 @@ public:
   // 样式访问
   const std::unordered_map<int, std::shared_ptr<core::FormatDescriptor>>& getStyles() const { return styles_; }
   const std::unordered_map<int, int>& getStyleIdMapping() const { return style_id_mapping_; }
+  
+  // 主题访问
+  const std::string& getThemeXML() const { return theme_xml_; }
 
 private:
     // 成员变量
@@ -74,6 +77,7 @@ private:
     std::unordered_map<int, std::string> shared_strings_;           // index -> string
     std::unordered_map<int, std::shared_ptr<core::FormatDescriptor>> styles_; // index -> format descriptor
     std::unordered_map<int, int> style_id_mapping_; // 原始样式ID -> FormatRepository中的ID
+    std::string theme_xml_; // 原始主题文件内容
     
     // 内部解析方法 - 系统层，使用ErrorCode
     core::ErrorCode parseWorkbookXML();
@@ -83,6 +87,7 @@ private:
     core::ErrorCode parseContentTypesXML();
     core::ErrorCode parseRelationshipsXML();
     core::ErrorCode parseDocPropsXML();
+    core::ErrorCode parseThemeXML();
     
     // 辅助方法
     std::string extractXMLFromZip(const std::string& path);

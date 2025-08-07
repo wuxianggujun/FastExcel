@@ -42,6 +42,39 @@ int32_t SharedStringTable::getStringId(const std::string& str) const {
     return (it != string_to_id_.end()) ? it->second : -1;
 }
 
+int32_t SharedStringTable::addStringWithId(const std::string& str, int32_t original_id) {
+    // 检查字符串是否已存在
+    auto it = string_to_id_.find(str);
+    if (it != string_to_id_.end()) {
+        return it->second;  // 返回已存在的ID
+    }
+    
+    // 确保id_to_string_数组足够大
+    if (static_cast<size_t>(original_id) >= id_to_string_.size()) {
+        id_to_string_.resize(original_id + 1);
+    }
+    
+    // 检查指定的ID位置是否已被占用
+    if (!id_to_string_[original_id].empty()) {
+        // 如果原始ID位置已被占用，使用新的ID
+        int32_t new_id = next_id_++;
+        string_to_id_[str] = new_id;
+        id_to_string_.push_back(str);
+        return new_id;
+    }
+    
+    // 使用原始ID
+    string_to_id_[str] = original_id;
+    id_to_string_[original_id] = str;
+    
+    // 更新next_id_以确保不会重复使用已占用的ID
+    if (original_id >= next_id_) {
+        next_id_ = original_id + 1;
+    }
+    
+    return original_id;
+}
+
 void SharedStringTable::clear() {
     string_to_id_.clear();
     id_to_string_.clear();

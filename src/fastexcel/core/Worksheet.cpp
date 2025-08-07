@@ -505,16 +505,35 @@ void Worksheet::generateXMLBatch(const std::function<void(const char*, size_t)>&
     writer.writeAttribute("defaultRowHeight", "15");
     writer.endElement(); // sheetFormatPr
     
-    // 🔧 关键修复：列信息生成 - 确保每一步都使用同一个 writer
+    // 🔧 关键修复：列信息生成 - 确保每一步都使用同一个 writer（支持范围合并）
     if (!column_info_.empty()) {
         LOG_INFO("🔧 UNIFIED WRITER: 生成<cols>XML，column_info_大小: {}", column_info_.size());
         
         writer.startElement("cols");
         
-        for (const auto& [col_num, col_info] : column_info_) {
+        // 🔧 关键修复：合并相邻的相同属性列
+        std::vector<std::pair<int, ColumnInfo>> sorted_columns(column_info_.begin(), column_info_.end());
+        std::sort(sorted_columns.begin(), sorted_columns.end());
+        
+        for (size_t i = 0; i < sorted_columns.size(); ) {
+            int min_col = sorted_columns[i].first;
+            const auto& col_info = sorted_columns[i].second;
+            int max_col = min_col;
+            
+            // 查找具有相同属性的连续列
+            while (i + 1 < sorted_columns.size() && 
+                   sorted_columns[i + 1].first == max_col + 1 &&
+                   sorted_columns[i + 1].second.width == col_info.width &&
+                   sorted_columns[i + 1].second.format_id == col_info.format_id &&
+                   sorted_columns[i + 1].second.hidden == col_info.hidden) {
+                max_col = sorted_columns[i + 1].first;
+                ++i;
+            }
+            
+            // 生成合并后的<col>标签
             writer.startElement("col");
-            writer.writeAttribute("min", std::to_string(col_num + 1).c_str());
-            writer.writeAttribute("max", std::to_string(col_num + 1).c_str());
+            writer.writeAttribute("min", std::to_string(min_col + 1).c_str());
+            writer.writeAttribute("max", std::to_string(max_col + 1).c_str());
             
             if (col_info.width > 0) {
                 writer.writeAttribute("width", std::to_string(col_info.width).c_str());
@@ -530,6 +549,11 @@ void Worksheet::generateXMLBatch(const std::function<void(const char*, size_t)>&
             }
             
             writer.endElement(); // col
+            
+            LOG_DEBUG("🔧 生成列范围: {}-{} (width={}, style={}, hidden={})", 
+                     min_col, max_col, col_info.width, col_info.format_id, col_info.hidden);
+            
+            ++i;
         }
         
         writer.endElement(); // cols

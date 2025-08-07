@@ -97,6 +97,9 @@ private:
     // 格式管理 - 新样式架构
     std::unique_ptr<FormatRepository> format_repo_;
     
+    // 主题管理
+    std::string theme_xml_; // 自定义主题XML内容
+    
     // ID管理
     int next_sheet_id_ = 1;
     
@@ -366,6 +369,18 @@ public:
      * @return 样式仓储的常量引用
      */
     const FormatRepository& getStyleRepository() const;
+    
+    /**
+     * @brief 设置自定义主题XML
+     * @param theme_xml 主题XML内容
+     */
+    void setThemeXML(const std::string& theme_xml);
+    
+    /**
+     * @brief 获取当前主题XML
+     * @return 主题XML内容
+     */
+    const std::string& getThemeXML() const;
     
     /**
      * @brief 从另一个工作簿复制样式
@@ -742,6 +757,14 @@ public:
      * @return 字符串索引
      */
     int addSharedString(const std::string& str);
+
+    /**
+     * @brief 添加共享字符串并保持原始索引（用于文件复制）
+     * @param str 字符串
+     * @param original_index 原始文件中的索引
+     * @return 实际使用的索引
+     */
+    int addSharedStringWithIndex(const std::string& str, int original_index);
     
     /**
      * @brief 获取共享字符串索引

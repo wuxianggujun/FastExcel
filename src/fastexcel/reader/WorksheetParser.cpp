@@ -5,6 +5,7 @@
 #include "WorksheetParser.hpp"
 
 #include "fastexcel/utils/Logger.hpp"
+#include "fastexcel/core/Workbook.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -112,17 +113,24 @@ bool WorksheetParser::parseRow(const std::string& row_xml,
     // 解析行中的所有单元格
     size_t pos = 0;
     while ((pos = row_xml.find("<c ", pos)) != std::string::npos) {
-        // 找到单元格的结束位置
-        size_t cell_end = row_xml.find("</c>", pos);
+        // 首先检查这个单元格是否是自闭合的
+        size_t tag_end = row_xml.find(">", pos);
+        if (tag_end == std::string::npos) {
+            break;
+        }
+        
+        // 检查标签是否以 "/>" 结尾（自闭合标签）
+        if (tag_end > 0 && row_xml[tag_end - 1] == '/') {
+            // 🔧 修复：自闭合标签处理
+            std::string cell_xml = row_xml.substr(pos, tag_end - pos + 1);
+            parseCell(cell_xml, worksheet, shared_strings, styles, style_id_mapping);
+            pos = tag_end + 1;
+            continue;
+        }
+        
+        // 非自闭合标签：寻找对应的 </c> 结束标签
+        size_t cell_end = row_xml.find("</c>", tag_end);
         if (cell_end == std::string::npos) {
-            // 尝试查找自闭合单元格标签
-            size_t self_close = row_xml.find("/>", pos);
-            if (self_close != std::string::npos && self_close < row_xml.find("<c ", pos + 1)) {
-                std::string cell_xml = row_xml.substr(pos, self_close - pos + 2);
-                parseCell(cell_xml, worksheet, shared_strings, styles, style_id_mapping);
-                pos = self_close + 2;
-                continue;
-            }
             break;
         }
         
@@ -131,7 +139,7 @@ bool WorksheetParser::parseRow(const std::string& row_xml,
         
         // 解析单元格
         if (!parseCell(cell_xml, worksheet, shared_strings, styles, style_id_mapping)) {
-            std::cerr << "解析单元格失败" << std::endl;
+            std::cerr << "解析单元格失败: " << cell_xml << std::endl;
             // 继续处理其他单元格
         }
         
@@ -184,6 +192,10 @@ bool WorksheetParser::parseCell(const std::string& cell_xml,
             int string_index = std::stoi(cell_value);
             auto it = shared_strings.find(string_index);
             if (it != shared_strings.end()) {
+                // 🔧 关键修复：使用addSharedStringWithIndex保持原始索引
+                if (auto wb = worksheet->getParentWorkbook()) {
+                    wb->addSharedStringWithIndex(it->second, string_index);
+                }
                 worksheet->writeString(row, col, it->second);
             }
         } catch (const std::exception& e) {

@@ -59,6 +59,14 @@ public:
     int32_t getStringId(const std::string& str) const;
     
     /**
+     * @brief 添加字符串并保留原始ID（用于文件复制时保持索引一致性）
+     * @param str 要添加的字符串
+     * @param original_id 原始文件中的ID
+     * @return 实际使用的ID
+     */
+    int32_t addStringWithId(const std::string& str, int32_t original_id);
+    
+    /**
      * @brief 获取字符串数量
      * @return 字符串数量
      */

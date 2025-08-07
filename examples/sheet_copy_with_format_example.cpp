@@ -59,14 +59,8 @@ public:
             }
             std::cout << "OK: Source workbook loaded with " << source_workbook->getWorksheetCount() << " worksheets" << std::endl;
             
-            // 检查是否有第三个工作表
-            if (source_workbook->getWorksheetCount() < 3) {
-                std::cerr << "Error: Source workbook has less than 3 worksheets" << std::endl;
-                return false;
-            }
             
-            // 获取第三个工作表（索引2）
-            auto source_worksheet = source_workbook->getWorksheet(2);
+            auto source_worksheet = source_workbook->getWorksheet(0);
             if (!source_worksheet) {
                 std::cerr << "Error: Failed to get third worksheet" << std::endl;
                 return false;
@@ -261,7 +255,7 @@ int main() {
         auto start_time = std::chrono::high_resolution_clock::now();
         
         // 定义文件路径
-        Path source_file("./辅材处理-张玥 机房建设项目（2025-JW13-W1007）-配电系统(甲方客户报表).xlsx");
+        Path source_file("./辅材处理-张玥 机房建设项目（2025-JW13-W1007）测试.xlsx");
         Path target_file("./屏柜分项表_复制.xlsx");
         
         // 创建复制器并执行复制

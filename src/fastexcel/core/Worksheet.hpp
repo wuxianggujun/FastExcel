@@ -33,6 +33,27 @@ struct ColumnInfo {
     bool hidden = false;           // 是否隐藏
     bool collapsed = false;        // 是否折叠
     uint8_t outline_level = 0;     // 大纲级别
+    
+    // 🔧 关键修复：添加比较操作符以支持排序
+    bool operator==(const ColumnInfo& other) const {
+        return width == other.width &&
+               format_id == other.format_id &&
+               hidden == other.hidden &&
+               collapsed == other.collapsed &&
+               outline_level == other.outline_level;
+    }
+    
+    bool operator!=(const ColumnInfo& other) const {
+        return !(*this == other);
+    }
+    
+    bool operator<(const ColumnInfo& other) const {
+        if (format_id != other.format_id) return format_id < other.format_id;
+        if (width != other.width) return width < other.width;
+        if (hidden != other.hidden) return hidden < other.hidden;
+        if (collapsed != other.collapsed) return collapsed < other.collapsed;
+        return outline_level < other.outline_level;
+    }
 };
 
 // 行信息结构
@@ -672,6 +693,12 @@ public:
      * @return 工作表ID
      */
     int getSheetId() const { return sheet_id_; }
+    
+    /**
+     * @brief 获取父工作簿
+     * @return 父工作簿指针
+     */
+    std::shared_ptr<Workbook> getParentWorkbook() const { return parent_workbook_; }
     
     /**
      * @brief 获取使用范围

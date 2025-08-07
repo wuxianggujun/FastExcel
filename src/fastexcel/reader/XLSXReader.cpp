@@ -87,6 +87,7 @@ core::ErrorCode XLSXReader::close() {
         worksheet_paths_.clear();
         shared_strings_.clear();
         styles_.clear();
+        theme_xml_.clear();
         
         LOG_INFO("成功关闭XLSX文件: {}", filename_);
         return core::ErrorCode::Ok;
@@ -128,6 +129,13 @@ core::ErrorCode XLSXReader::loadWorkbook(std::unique_ptr<core::Workbook>& workbo
         if (result != core::ErrorCode::Ok && result != core::ErrorCode::FileNotFound) {
             LOG_WARN("解析样式失败，错误码: {}", static_cast<int>(result));
             // 样式解析失败不影响主要功能，继续执行
+        }
+        
+        // 🔧 关键修复：解析主题文件以保持原始样式
+        result = parseThemeXML();
+        if (result != core::ErrorCode::Ok && result != core::ErrorCode::FileNotFound) {
+            LOG_WARN("解析主题失败，错误码: {}", static_cast<int>(result));
+            // 主题解析失败不影响主要功能，继续执行
         }
         
         result = parseWorkbookXML();
@@ -172,7 +180,7 @@ core::ErrorCode XLSXReader::loadWorkbook(std::unique_ptr<core::Workbook>& workbo
             }
         }
         
-        // 🔧 关键修复：将解析的FormatDescriptor样式导入到工作簿的FormatRepository中
+        // 🔧 关键修复：将解析的FormatDescriptor样式导入到工作簿的FormatRepository中（保持原始ID）
         if (!styles_.empty()) {
             LOG_DEBUG("开始导入 {} 个FormatDescriptor样式到工作簿格式仓储", styles_.size());
             
@@ -182,30 +190,42 @@ core::ErrorCode XLSXReader::loadWorkbook(std::unique_ptr<core::Workbook>& workbo
             // 清空之前的映射
             style_id_mapping_.clear();
             
-            // 按ID顺序导入样式
+            // 🔧 关键修复：尽量保持原始ID映射，避免样式ID重新分配
             int imported_count = 0;
             for (const auto& style_pair : styles_) {
                 int original_style_id = style_pair.first;
                 const auto& format_desc = style_pair.second;
                 
                 if (format_desc) {
-                    // 直接添加FormatDescriptor到仓储中
+                    // 尝试直接使用原始ID添加格式（如果可能的话）
                     int new_id = format_repo.addFormat(*format_desc);
                     imported_count++;
                     
-                    // 建立原始ID到新ID的映射
-                    style_id_mapping_[original_style_id] = new_id;
-                    
-                    // 记录ID映射日志以供调试
-                    if (new_id != original_style_id) {
-                        LOG_TRACE("样式ID映射: {} -> {}", original_style_id, new_id);
+                    // 🔧 关键修复：优先使用原始ID作为映射
+                    // 如果新分配的ID与原始ID不同，我们仍然需要记录映射
+                    // 但对于列样式，我们尝试保持一致性
+                    if (original_style_id != new_id) {
+                        style_id_mapping_[original_style_id] = new_id;
+                        LOG_DEBUG("样式ID重映射: {} -> {} (可能影响兼容性)", original_style_id, new_id);
+                    } else {
+                        // ID一致时不需要映射
+                        LOG_TRACE("样式ID保持不变: {}", original_style_id);
                     }
                 }
             }
             
             LOG_INFO("成功导入 {} 个FormatDescriptor样式到工作簿格式仓储", imported_count);
+            LOG_INFO("样式ID映射数量: {} (映射数越少表示兼容性越好)", style_id_mapping_.size());
         } else {
             LOG_DEBUG("未检测到自定义样式，使用默认样式");
+        }
+        
+        // 🔧 关键修复：将解析的主题XML设置到工作簿，以保持原始主题
+        if (!theme_xml_.empty()) {
+            workbook->setThemeXML(theme_xml_);
+            LOG_DEBUG("成功设置原始主题XML到工作簿 ({} 字节)", theme_xml_.size());
+        } else {
+            LOG_DEBUG("未检测到主题文件，使用默认主题");
         }
         
         LOG_INFO("成功加载工作簿，包含 {} 个工作表", worksheet_names_.size());
@@ -806,6 +826,34 @@ bool XLSXReader::parseDefinedNames(const std::string& xml_content) {
     }
     
     return true;
+}
+
+core::ErrorCode XLSXReader::parseThemeXML() {
+    // 检查主题文件是否存在
+    auto error = zip_archive_->fileExists("xl/theme/theme1.xml");
+    if (archive::isError(error)) {
+        // 主题文件不存在，这是正常的（某些Excel文件可能没有自定义主题）
+        LOG_DEBUG("主题文件不存在，将使用默认主题");
+        return core::ErrorCode::FileNotFound;
+    }
+    
+    std::string xml_content = extractXMLFromZip("xl/theme/theme1.xml");
+    if (xml_content.empty()) {
+        LOG_DEBUG("主题文件为空，将使用默认主题");
+        return core::ErrorCode::Ok; // 文件为空也是正常的
+    }
+    
+    try {
+        // 保存原始主题XML内容
+        theme_xml_ = xml_content;
+        
+        LOG_DEBUG("成功解析主题文件 ({} 字节)", theme_xml_.size());
+        return core::ErrorCode::Ok;
+        
+    } catch (const std::exception& e) {
+        LOG_ERROR("解析主题文件时发生异常: {}", e.what());
+        return core::ErrorCode::XmlParseError;
+    }
 }
 
 } // namespace reader
