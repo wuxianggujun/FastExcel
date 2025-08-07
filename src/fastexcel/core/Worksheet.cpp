@@ -39,88 +39,91 @@ const Cell& Worksheet::getCell(int row, int col) const {
     return it->second;
 }
 
-// 私有辅助方法：通用的单元格写入逻辑
-template<typename T>
-void Worksheet::writeCellValue(int row, int col, T&& value, std::shared_ptr<Format> format) {
-    validateCellPosition(row, col);
+// ========== 基本写入方法 ==========
+
+void Worksheet::writeString(int row, int col, const std::string& value) {
+    this->validateCellPosition(row, col);
     
     Cell cell;
-    if constexpr (std::is_same_v<std::decay_t<T>, std::string>) {
-        if (sst_) {
-            // 使用共享字符串表
-            sst_->addString(value);
-            // 注意：这里需要修改Cell类来支持SST ID，暂时直接设置值
-            cell.setValue(value);
-        } else {
-            cell.setValue(value);
-        }
+    if (sst_) {
+        // 使用共享字符串表
+        sst_->addString(value);
+        cell.setValue(value);
     } else {
-        cell.setValue(std::forward<T>(value));
+        cell.setValue(value);
     }
     
     if (optimize_mode_) {
-        writeOptimizedCell(row, col, std::move(cell), format);
+        this->writeOptimizedCell(row, col, std::move(cell));
     } else {
         auto& target_cell = cells_[std::make_pair(row, col)];
         target_cell = std::move(cell);
-        if (format) {
-            target_cell.setFormat(format);
-        }
-        updateUsedRange(row, col);
+        this->updateUsedRange(row, col);
     }
 }
 
-void Worksheet::writeString(int row, int col, const std::string& value, std::shared_ptr<Format> format) {
-    writeCellValue(row, col, value, format);
+void Worksheet::writeNumber(int row, int col, double value) {
+    this->validateCellPosition(row, col);
+    
+    Cell cell;
+    cell.setValue(value);
+    
+    if (optimize_mode_) {
+        this->writeOptimizedCell(row, col, std::move(cell));
+    } else {
+        auto& target_cell = cells_[std::make_pair(row, col)];
+        target_cell = std::move(cell);
+        this->updateUsedRange(row, col);
+    }
 }
 
-void Worksheet::writeNumber(int row, int col, double value, std::shared_ptr<Format> format) {
-    writeCellValue(row, col, value, format);
+void Worksheet::writeBoolean(int row, int col, bool value) {
+    this->validateCellPosition(row, col);
+    
+    Cell cell;
+    cell.setValue(value);
+    
+    if (optimize_mode_) {
+        this->writeOptimizedCell(row, col, std::move(cell));
+    } else {
+        auto& target_cell = cells_[std::make_pair(row, col)];
+        target_cell = std::move(cell);
+        this->updateUsedRange(row, col);
+    }
 }
 
-void Worksheet::writeBoolean(int row, int col, bool value, std::shared_ptr<Format> format) {
-    writeCellValue(row, col, value, format);
-}
-
-void Worksheet::writeFormula(int row, int col, const std::string& formula, std::shared_ptr<Format> format) {
-    validateCellPosition(row, col);
+void Worksheet::writeFormula(int row, int col, const std::string& formula) {
+    this->validateCellPosition(row, col);
     
     Cell cell;
     cell.setFormula(formula);
     
     if (optimize_mode_) {
-        writeOptimizedCell(row, col, std::move(cell), format);
+        this->writeOptimizedCell(row, col, std::move(cell));
     } else {
         auto& target_cell = cells_[std::make_pair(row, col)];
         target_cell = std::move(cell);
-        if (format) {
-            target_cell.setFormat(format);
-        }
-        updateUsedRange(row, col);
+        this->updateUsedRange(row, col);
     }
 }
 
-void Worksheet::writeDateTime(int row, int col, const std::tm& datetime, std::shared_ptr<Format> format) {
-    validateCellPosition(row, col);
+void Worksheet::writeDateTime(int row, int col, const std::tm& datetime) {
+    this->validateCellPosition(row, col);
     
     // 使用 TimeUtils 将日期时间转换为Excel序列号
     double excel_serial = utils::TimeUtils::toExcelSerialNumber(datetime);
-    writeNumber(row, col, excel_serial, format);
+    this->writeNumber(row, col, excel_serial);
 }
 
-void Worksheet::writeUrl(int row, int col, const std::string& url, const std::string& string, 
-                        std::shared_ptr<Format> format) {
-    validateCellPosition(row, col);
+void Worksheet::writeUrl(int row, int col, const std::string& url, const std::string& string) {
+    this->validateCellPosition(row, col);
     auto& cell = cells_[std::make_pair(row, col)];
     
     std::string display_text = string.empty() ? url : string;
     cell.setValue(display_text);
     cell.setHyperlink(url);
     
-    if (format) {
-        cell.setFormat(format);
-    }
-    updateUsedRange(row, col);
+    this->updateUsedRange(row, col);
 }
 
 // ========== 批量数据操作 ==========
@@ -155,17 +158,9 @@ void Worksheet::setColumnWidth(int first_col, int last_col, double width) {
     }
 }
 
-void Worksheet::setColumnFormat(int col, std::shared_ptr<Format> format) {
-    validateCellPosition(0, col);
-    column_info_[col].format = format;
-}
+// setColumnFormat方法已移除，请使用FormatDescriptor架构
 
-void Worksheet::setColumnFormat(int first_col, int last_col, std::shared_ptr<Format> format) {
-    validateRange(0, first_col, 0, last_col);
-    for (int col = first_col; col <= last_col; ++col) {
-        column_info_[col].format = format;
-    }
-}
+// setColumnFormat范围方法已移除，请使用FormatDescriptor架构
 
 void Worksheet::hideColumn(int col) {
     validateCellPosition(0, col);
@@ -184,10 +179,7 @@ void Worksheet::setRowHeight(int row, double height) {
     row_info_[row].height = height;
 }
 
-void Worksheet::setRowFormat(int row, std::shared_ptr<Format> format) {
-    validateCellPosition(row, 0);
-    row_info_[row].format = format;
-}
+// setRowFormat方法已移除，请使用FormatDescriptor架构
 
 void Worksheet::hideRow(int row) {
     validateCellPosition(row, 0);
@@ -206,12 +198,6 @@ void Worksheet::hideRow(int first_row, int last_row) {
 void Worksheet::mergeCells(int first_row, int first_col, int last_row, int last_col) {
     validateRange(first_row, first_col, last_row, last_col);
     merge_ranges_.emplace_back(first_row, first_col, last_row, last_col);
-}
-
-void Worksheet::mergeRange(int first_row, int first_col, int last_row, int last_col, 
-                          const std::string& value, std::shared_ptr<Format> format) {
-    mergeCells(first_row, first_col, last_row, last_col);
-    writeString(first_row, first_col, value, format);
 }
 
 // ========== 自动筛选 ==========
@@ -392,21 +378,9 @@ double Worksheet::getRowHeight(int row) const {
     return default_row_height_;
 }
 
-std::shared_ptr<Format> Worksheet::getColumnFormat(int col) const {
-    auto it = column_info_.find(col);
-    if (it != column_info_.end()) {
-        return it->second.format;
-    }
-    return nullptr;
-}
+// getColumnFormat方法已移除，请使用FormatDescriptor架构
 
-std::shared_ptr<Format> Worksheet::getRowFormat(int row) const {
-    auto it = row_info_.find(row);
-    if (it != row_info_.end()) {
-        return it->second.format;
-    }
-    return nullptr;
-}
+// getRowFormat方法已移除，请使用FormatDescriptor架构
 
 bool Worksheet::isColumnHidden(int col) const {
     auto it = column_info_.find(col);
@@ -548,11 +522,28 @@ void Worksheet::generateXMLBatch(const std::function<void(const char*, size_t)>&
             
             // 应用单元格格式
             if (cell->hasFormat()) {
-                int xf_index = cell->getFormat()->getXfIndex();
-                // 修复：如果xf_index无效，使用默认样式ID 0
+                int xf_index = -1;
+                
+                // 获取FormatDescriptor并查找其在FormatRepository中的ID
+                auto format_descriptor = cell->getFormatDescriptor();
+                if (format_descriptor && parent_workbook_) {
+                    auto& format_repo = parent_workbook_->getStyleRepository();
+                    
+                    // 通过比较找到匹配的格式ID
+                    for (size_t i = 0; i < format_repo.getFormatCount(); ++i) {
+                        auto stored_format = format_repo.getFormat(static_cast<int>(i));
+                        if (stored_format && *stored_format == *format_descriptor) {
+                            xf_index = static_cast<int>(i);
+                            break;
+                        }
+                    }
+                }
+                
+                // 如果找不到格式，使用默认样式ID 0
                 if (xf_index < 0) {
                     xf_index = 0;
                 }
+                
                 writer.writeAttribute("s", std::to_string(xf_index).c_str());
             }
             
@@ -949,15 +940,8 @@ void Worksheet::generateSheetDataXML(const std::function<void(const char*, size_
             
             xml_content += "<c r=\"" + utils::CommonUtils::cellReference(row_num, col_num) + "\"";
             
-            // 应用单元格格式
-            if (cell->hasFormat()) {
-                int xf_index = cell->getFormat()->getXfIndex();
-                // 修复：如果xf_index无效，使用默认样式ID 0
-                if (xf_index < 0) {
-                    xf_index = 0;
-                }
-                xml_content += " s=\"" + std::to_string(xf_index) + "\"";
-            }
+            // 应用单元格格式 - 已移除，现在使用FormatDescriptor架构
+            // 这个旧方法已经不再使用
             
             // 只有在单元格不为空时才写入值
             if (!cell->isEmpty()) {
@@ -1356,14 +1340,12 @@ void Worksheet::flushCurrentRow() {
     }
     
     // 更新行信息
-    if (current_row_->height > 0 || current_row_->format || current_row_->hidden) {
+    if (current_row_->height > 0 || current_row_->hidden) {
         RowInfo& row_info = row_info_[row_num];
         if (current_row_->height > 0) {
             row_info.height = current_row_->height;
         }
-        if (current_row_->format) {
-            row_info.format = current_row_->format;
-        }
+        // format字段已移除，请使用FormatDescriptor架构
         if (current_row_->hidden) {
             row_info.hidden = current_row_->hidden;
         }
@@ -1444,21 +1426,10 @@ void Worksheet::switchToNewRow(int row_num) {
     current_row_ = std::make_unique<WorksheetRow>(row_num);
 }
 
-void Worksheet::writeOptimizedCell(int row, int col, Cell&& cell, std::shared_ptr<Format> format) {
-    updateUsedRangeOptimized(row, col);
+void Worksheet::writeOptimizedCell(int row, int col, Cell&& cell) {
+    this->updateUsedRangeOptimized(row, col);
     
-    // 处理格式
-    if (format) {
-        if (format_repo_) {
-            // 使用格式仓储去重
-            // FormatRepository会自动处理去重，直接设置格式
-            cell.setFormat(format);
-        } else {
-            cell.setFormat(format);
-        }
-    }
-    
-    ensureCurrentRow(row);
+    this->ensureCurrentRow(row);
     current_row_->cells[col] = std::move(cell);
     current_row_->data_changed = true;
 }
@@ -1475,7 +1446,7 @@ void Worksheet::editCellValueImpl(int row, int col, T&& value, bool preserve_for
     validateCellPosition(row, col);
     
     auto& cell = getCell(row, col);
-    auto old_format = preserve_format ? cell.getFormat() : nullptr;
+    auto old_format = preserve_format ? cell.getFormatDescriptor() : nullptr;
     
     cell.setValue(std::forward<T>(value));
     
@@ -1498,14 +1469,7 @@ void Worksheet::editCellValue(int row, int col, bool value, bool preserve_format
     editCellValueImpl(row, col, value, preserve_format);
 }
 
-void Worksheet::editCellFormat(int row, int col, std::shared_ptr<Format> format) {
-    validateCellPosition(row, col);
-    
-    auto& cell = getCell(row, col);
-    cell.setFormat(format);
-    
-    updateUsedRange(row, col);
-}
+// editCellFormat方法已移除，请使用FormatDescriptor架构
 
 void Worksheet::copyCell(int src_row, int src_col, int dst_row, int dst_col, bool copy_format) {
     validateCellPosition(src_row, src_col);
@@ -1531,7 +1495,7 @@ void Worksheet::copyCell(int src_row, int src_col, int dst_row, int dst_col, boo
     
     // 复制格式
     if (copy_format && src_cell.hasFormat()) {
-        dst_cell.setFormat(src_cell.getFormat());
+        dst_cell.setFormat(src_cell.getFormatDescriptor());
     }
     
     // 复制超链接
@@ -1884,11 +1848,28 @@ void Worksheet::generateSheetDataStreaming(const std::function<void(const char*,
                 
                 // 应用单元格格式
                 if (cell.hasFormat()) {
-                    int xf_index = cell.getFormat()->getXfIndex();
-                    // 修复：如果xf_index无效，使用默认样式ID 0
+                    int xf_index = -1;
+                    
+                    // 获取FormatDescriptor并查找其在FormatRepository中的ID
+                    auto format_descriptor = cell.getFormatDescriptor();
+                    if (format_descriptor && parent_workbook_) {
+                        auto& format_repo = parent_workbook_->getStyleRepository();
+                        
+                        // 通过比较找到匹配的格式ID
+                        for (size_t i = 0; i < format_repo.getFormatCount(); ++i) {
+                            auto stored_format = format_repo.getFormat(static_cast<int>(i));
+                            if (stored_format && *stored_format == *format_descriptor) {
+                                xf_index = static_cast<int>(i);
+                                break;
+                            }
+                        }
+                    }
+                    
+                    // 如果找不到格式，使用默认样式ID 0
                     if (xf_index < 0) {
                         xf_index = 0;
                     }
+                    
                     cell_xml += " s=\"" + std::to_string(xf_index) + "\"";
                 }
                 

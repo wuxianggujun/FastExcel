@@ -157,7 +157,7 @@ public:
                 }
                     
                     // 复制格式
-                    auto source_format = source_cell.getFormat();
+                    auto source_format = source_cell.getFormatDescriptor();
                     if (source_format) {
                         target_cell.setFormat(source_format);
                         formatted_cells++;

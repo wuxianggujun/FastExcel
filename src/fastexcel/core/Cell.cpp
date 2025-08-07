@@ -138,63 +138,14 @@ double Cell::getFormulaResult() const {
     return 0.0;
 }
 
-void Cell::setFormat(std::shared_ptr<Format> format) {
-    if (format) {
-        ensureExtended();
-        extended_->format = format.get();
-        format_holder_ = format;  // 保持shared_ptr引用
-        flags_.has_format = true;
-    } else {
-        flags_.has_format = false;
-        format_holder_.reset();
-        if (extended_) {
-            extended_->format = nullptr;
-        }
-    }
-}
-
-void Cell::setFormat(Format* format) {
-    if (format) {
-        ensureExtended();
-        extended_->format = format;
-        flags_.has_format = true;
-        // 不设置format_holder_，表示外部管理生命周期
-    } else {
-        flags_.has_format = false;
-        if (extended_) {
-            extended_->format = nullptr;
-        }
-    }
-}
-
-std::shared_ptr<Format> Cell::getFormat() const {
-    if (flags_.has_format && format_holder_) {
-        return format_holder_;
-    }
-    return nullptr;
-}
-
-Format* Cell::getFormatPtr() const {
-    return (flags_.has_format && extended_) ? extended_->format : nullptr;
-}
-
-// 新架构格式操作 - FormatDescriptor支持
+// FormatDescriptor架构格式操作
 void Cell::setFormat(std::shared_ptr<const FormatDescriptor> format) {
     if (format) {
         format_descriptor_holder_ = format;
         flags_.has_format = true;
-        // 清除旧的Format指针，因为我们现在使用FormatDescriptor
-        format_holder_.reset();
-        if (extended_) {
-            extended_->format = nullptr;
-        }
     } else {
         flags_.has_format = false;
         format_descriptor_holder_.reset();
-        format_holder_.reset();
-        if (extended_) {
-            extended_->format = nullptr;
-        }
     }
 }
 
@@ -235,7 +186,8 @@ void Cell::clear() {
     flags_.has_hyperlink = false;
     flags_.has_formula_result = false;
     value_.number = 0.0;
-    format_holder_.reset();
+    // 重置FormatDescriptor
+    format_descriptor_holder_.reset();
     clearExtended();
 }
 
@@ -253,9 +205,7 @@ size_t Cell::getMemoryUsage() const {
         if (extended_->hyperlink) {
             usage += sizeof(std::string) + extended_->hyperlink->capacity();
         }
-        if (extended_->format) {
-            usage += sizeof(Format*);  // 格式指针
-        }
+        // Format相关内存计算已移除，现在使用FormatDescriptor
     }
     return usage;
 }
@@ -280,7 +230,7 @@ Cell::Cell(Cell&& other) noexcept : extended_(nullptr) {
     flags_ = other.flags_;
     value_ = other.value_;
     extended_ = other.extended_;
-    format_holder_ = std::move(other.format_holder_);
+    format_descriptor_holder_ = std::move(other.format_descriptor_holder_);
     
     // 重置源对象
     other.resetToEmpty();
@@ -289,12 +239,13 @@ Cell::Cell(Cell&& other) noexcept : extended_(nullptr) {
 Cell& Cell::operator=(Cell&& other) noexcept {
     if (this != &other) {
         clearExtended();
-        format_holder_.reset();
+        // 重置FormatDescriptor
+    format_descriptor_holder_.reset();
         
         flags_ = other.flags_;
         value_ = other.value_;
         extended_ = other.extended_;
-        format_holder_ = std::move(other.format_holder_);
+        format_descriptor_holder_ = std::move(other.format_descriptor_holder_);
         
         // 重置源对象
         other.resetToEmpty();
@@ -309,7 +260,7 @@ void Cell::deepCopyExtendedData(const Cell& other) {
         copyStringField(extended_->long_string, other.extended_->long_string);
         copyStringField(extended_->formula, other.extended_->formula);
         copyStringField(extended_->hyperlink, other.extended_->hyperlink);
-        extended_->format = other.extended_->format;
+        // Format相关复制已移除，现在使用FormatDescriptor
         extended_->formula_result = other.extended_->formula_result;
     }
 }
@@ -331,24 +282,26 @@ void Cell::resetToEmpty() {
     flags_.has_hyperlink = false;
     flags_.has_formula_result = false;
     extended_ = nullptr;
-    format_holder_.reset();
+    // 重置FormatDescriptor
+    format_descriptor_holder_.reset();
 }
 
 Cell::Cell(const Cell& other) : extended_(nullptr) {
     flags_ = other.flags_;
     value_ = other.value_;
-    format_holder_ = other.format_holder_;
+    format_descriptor_holder_ = other.format_descriptor_holder_;
     deepCopyExtendedData(other);
 }
 
 Cell& Cell::operator=(const Cell& other) {
     if (this != &other) {
         clearExtended();
-        format_holder_.reset();
+        // 重置FormatDescriptor
+    format_descriptor_holder_.reset();
         
         flags_ = other.flags_;
         value_ = other.value_;
-        format_holder_ = other.format_holder_;
+        format_descriptor_holder_ = other.format_descriptor_holder_;
         deepCopyExtendedData(other);
     }
     return *this;

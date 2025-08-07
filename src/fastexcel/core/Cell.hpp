@@ -51,11 +51,11 @@ private:
         std::string* long_string;    // 长字符串
         std::string* formula;        // 公式
         std::string* hyperlink;      // 超链接
-        Format* format;              // 格式（原始指针，避免shared_ptr开销）
+        // 格式相关字段已移除，现在使用FormatDescriptor
         double formula_result;       // 公式计算结果
         
         ExtendedData() : long_string(nullptr), formula(nullptr),
-                        hyperlink(nullptr), format(nullptr), formula_result(0.0) {}
+                        hyperlink(nullptr), formula_result(0.0) {}
     };
     
     ExtendedData* extended_;  // 只在需要时分配
@@ -103,13 +103,7 @@ public:
     std::string getFormula() const;
     double getFormulaResult() const;
     
-    // 格式操作 - 兼容原有API
-    void setFormat(std::shared_ptr<Format> format);
-    void setFormat(Format* format);  // 新增：直接指针版本
-    std::shared_ptr<Format> getFormat() const;
-    Format* getFormatPtr() const;    // 新增：获取原始指针
-    
-    // 新架构格式操作 - FormatDescriptor支持
+    // 格式操作 - FormatDescriptor架构
     void setFormat(std::shared_ptr<const FormatDescriptor> format);
     std::shared_ptr<const FormatDescriptor> getFormatDescriptor() const;
     
@@ -143,8 +137,7 @@ public:
     Cell& operator=(const Cell& other);
 
 private:
-    // 格式的shared_ptr持有者（为了兼容性）
-    mutable std::shared_ptr<Format> format_holder_;
+    // FormatDescriptor的shared_ptr持有者
     mutable std::shared_ptr<const FormatDescriptor> format_descriptor_holder_;
 };
 

@@ -27,7 +27,7 @@ class FormatRepository;
 // 列信息结构
 struct ColumnInfo {
     double width = -1.0;           // 列宽，-1表示默认
-    std::shared_ptr<Format> format; // 列格式
+    // format字段已移除，请使用FormatDescriptor架构
     bool hidden = false;           // 是否隐藏
     bool collapsed = false;        // 是否折叠
     uint8_t outline_level = 0;     // 大纲级别
@@ -36,7 +36,7 @@ struct ColumnInfo {
 // 行信息结构
 struct RowInfo {
     double height = -1.0;          // 行高，-1表示默认
-    std::shared_ptr<Format> format; // 行格式
+    // format字段已移除，请使用FormatDescriptor架构
     bool hidden = false;           // 是否隐藏
     bool collapsed = false;        // 是否折叠
     uint8_t outline_level = 0;     // 大纲级别
@@ -156,7 +156,7 @@ private:
         int row_num;
         std::map<int, Cell> cells;
         double height = -1.0;
-        std::shared_ptr<Format> format;
+        // format字段已移除，请使用FormatDescriptor架构
         bool hidden = false;
         bool data_changed = false;
         
@@ -279,45 +279,40 @@ public:
      * @param row 行号
      * @param col 列号
      * @param value 字符串值
-     * @param format 格式（可选）
      */
-    void writeString(int row, int col, const std::string& value, std::shared_ptr<Format> format = nullptr);
+    void writeString(int row, int col, const std::string& value);
     
     /**
      * @brief 写入数字
      * @param row 行号
      * @param col 列号
      * @param value 数字值
-     * @param format 格式（可选）
      */
-    void writeNumber(int row, int col, double value, std::shared_ptr<Format> format = nullptr);
+    void writeNumber(int row, int col, double value);
     
     /**
      * @brief 写入布尔值
      * @param row 行号
      * @param col 列号
      * @param value 布尔值
-     * @param format 格式（可选）
      */
-    void writeBoolean(int row, int col, bool value, std::shared_ptr<Format> format = nullptr);
+    void writeBoolean(int row, int col, bool value);
     
     /**
      * @brief 写入公式
      * @param row 行号
      * @param col 列号
      * @param formula 公式（不包含=号）
-     * @param format 格式（可选）
      */
-    void writeFormula(int row, int col, const std::string& formula, std::shared_ptr<Format> format = nullptr);
+    void writeFormula(int row, int col, const std::string& formula);
     
     /**
      * @brief 写入日期时间
      * @param row 行号
      * @param col 列号
      * @param datetime 日期时间
-     * @param format 格式（可选）
      */
-    void writeDateTime(int row, int col, const std::tm& datetime, std::shared_ptr<Format> format = nullptr);
+    void writeDateTime(int row, int col, const std::tm& datetime);
     
     /**
      * @brief 写入URL链接
@@ -325,10 +320,8 @@ public:
      * @param col 列号
      * @param url URL地址
      * @param string 显示文本（可选）
-     * @param format 格式（可选）
      */
-    void writeUrl(int row, int col, const std::string& url, const std::string& string = "", 
-                  std::shared_ptr<Format> format = nullptr);
+    void writeUrl(int row, int col, const std::string& url, const std::string& string = "");
     
     // ========== 批量数据操作 ==========
     
@@ -448,10 +441,7 @@ public:
      * @param last_row 结束行
      * @param last_col 结束列
      * @param value 内容
-     * @param format 格式（可选）
      */
-    void mergeRange(int first_row, int first_col, int last_row, int last_col, 
-                    const std::string& value, std::shared_ptr<Format> format = nullptr);
     
     // ========== 自动筛选 ==========
     
@@ -1048,15 +1038,12 @@ private:
     
     // 模板化的单元格操作辅助方法
     template<typename T>
-    void writeCellValue(int row, int col, T&& value, std::shared_ptr<Format> format);
-    
-    template<typename T>
     void editCellValueImpl(int row, int col, T&& value, bool preserve_format);
     
     // 优化相关辅助方法
     void ensureCurrentRow(int row_num);
     void switchToNewRow(int row_num);
-    void writeOptimizedCell(int row, int col, Cell&& cell, std::shared_ptr<Format> format);
+    void writeOptimizedCell(int row, int col, Cell&& cell);
     void updateUsedRangeOptimized(int row, int col);
     
     // XML生成辅助方法（流式写入）
