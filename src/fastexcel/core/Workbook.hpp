@@ -65,7 +65,7 @@ struct WorkbookOptions {
     WorkbookMode mode = WorkbookMode::AUTO;  // 工作簿模式（默认自动选择）
     bool streaming_xml = true;        // 流式XML写入（已废弃，使用mode代替）
     size_t row_buffer_size = 5000;    // 行缓冲大小（默认较大缓冲）
-    int compression_level = 1;        // ZIP压缩级别（默认轻度压缩，避免STORE模式）
+    int compression_level = 6;        // ZIP压缩级别（默认平衡压缩）
     size_t xml_buffer_size = 4 * 1024 * 1024; // XML缓冲区大小（4MB）
     
     // 自动模式阈值
