@@ -539,39 +539,30 @@ void StyleSerializer::collectUniqueFonts(
     std::vector<std::shared_ptr<const core::FormatDescriptor>>& unique_fonts,
     std::vector<int>& format_to_font_id) {
     
-    // 使用lambda比较字体属性是否相同
-    auto fontEquals = [](const core::FormatDescriptor& a, const core::FormatDescriptor& b) {
-        return a.getFontName() == b.getFontName() &&
-               a.getFontSize() == b.getFontSize() &&
-               a.isBold() == b.isBold() &&
-               a.isItalic() == b.isItalic() &&
-               a.getUnderline() == b.getUnderline() &&
-               a.isStrikeout() == b.isStrikeout() &&
-               a.getFontScript() == b.getFontScript() &&
-               a.getFontColor() == b.getFontColor() &&
-               a.getFontFamily() == b.getFontFamily() &&
-               a.getFontCharset() == b.getFontCharset();
-    };
+    // 使用unordered_map实现O(1)查找优化，替换原来的O(n²)算法
+    std::unordered_map<std::string, int> font_hash_to_id;
     
+    // 预分配内存以减少重新分配
     format_to_font_id.reserve(repository.getFormatCount());
+    unique_fonts.reserve(std::min(repository.getFormatCount(), size_t(1000)));
+    font_hash_to_id.reserve(std::min(repository.getFormatCount(), size_t(1000)));
     
     for (const auto& format_pair : repository) {
         const auto& format = format_pair.format;
         
-        // 查找是否已存在相同的字体
-        bool found = false;
-        for (size_t i = 0; i < unique_fonts.size(); ++i) {
-            if (fontEquals(*format, *unique_fonts[i])) {
-                format_to_font_id.push_back(static_cast<int>(i));
-                found = true;
-                break;
-            }
-        }
+        // 使用哈希表实现O(1)查找
+        std::string font_key = createFontHashKey(*format);
         
-        // 如果没有找到相同字体，添加新的唯一字体
-        if (!found) {
+        auto it = font_hash_to_id.find(font_key);
+        if (it != font_hash_to_id.end()) {
+            // 找到匹配的字体，使用现有ID
+            format_to_font_id.push_back(it->second);
+        } else {
+            // 添加新的唯一字体
             unique_fonts.push_back(format);
-            format_to_font_id.push_back(static_cast<int>(unique_fonts.size() - 1));
+            int new_font_id = static_cast<int>(unique_fonts.size() - 1);
+            font_hash_to_id[font_key] = new_font_id;
+            format_to_font_id.push_back(new_font_id);
         }
     }
 }
@@ -581,56 +572,42 @@ void StyleSerializer::collectUniqueFills(
     std::vector<std::shared_ptr<const core::FormatDescriptor>>& unique_fills,
     std::vector<int>& format_to_fill_id) {
     
-    // 使用lambda比较填充属性是否相同
-    auto fillEquals = [](const core::FormatDescriptor& a, const core::FormatDescriptor& b) {
-        // Gray125是特殊的填充模式，永远不与其他模式合并
-        if (a.getPattern() == core::PatternType::Gray125 || b.getPattern() == core::PatternType::Gray125) {
-            return a.getPattern() == b.getPattern();  // 只有两个都是Gray125才认为相同
-        }
-        
-        return a.getPattern() == b.getPattern() &&
-               a.getBackgroundColor() == b.getBackgroundColor() &&
-               a.getForegroundColor() == b.getForegroundColor();
-    };
+    // 使用unordered_map实现O(1)查找优化，替换原来的O(n²)算法
+    std::unordered_map<std::string, int> fill_hash_to_id;
     
+    // 预分配内存以减少重新分配
     format_to_fill_id.reserve(repository.getFormatCount());
+    unique_fills.reserve(std::min(repository.getFormatCount(), size_t(1000)));
+    fill_hash_to_id.reserve(std::min(repository.getFormatCount(), size_t(1000)));
     
     for (const auto& format_pair : repository) {
         const auto& format = format_pair.format;
         
-        std::cerr << "🔧 DEBUG: collectUniqueFills处理格式ID=" << format_pair.id << ", pattern=" << (int)format->getPattern() << std::endl;
-        
         // 特殊处理：None模式映射到fillId=0
         if (format->getPattern() == core::PatternType::None) {
             format_to_fill_id.push_back(0);
-            std::cerr << "🔧 DEBUG: 格式ID=" << format_pair.id << "映射到标准fillId=0 (none)" << std::endl;
             continue;
         }
         
         // 特殊处理：Gray125模式映射到fillId=1
         if (format->getPattern() == core::PatternType::Gray125) {
             format_to_fill_id.push_back(1);
-            std::cerr << "🔧 DEBUG: 格式ID=" << format_pair.id << "映射到标准fillId=1 (gray125)" << std::endl;
             continue;
         }
         
-        // 其他模式：从fillId=2开始分配
-        bool found = false;
-        for (size_t i = 0; i < unique_fills.size(); ++i) {
-            if (fillEquals(*format, *unique_fills[i])) {
-                format_to_fill_id.push_back(static_cast<int>(i + 2));  // +2 偏移
-                std::cerr << "🔧 DEBUG: 格式ID=" << format_pair.id << "映射到已存在的fillId=" << (i + 2) << std::endl;
-                found = true;
-                break;
-            }
-        }
+        // 其他模式：使用哈希表实现O(1)查找
+        std::string fill_key = createFillHashKey(*format);
         
-        // 如果没有找到相同填充，添加新的唯一填充
-        if (!found) {
+        auto it = fill_hash_to_id.find(fill_key);
+        if (it != fill_hash_to_id.end()) {
+            // 找到匹配的填充，使用现有ID
+            format_to_fill_id.push_back(it->second);
+        } else {
+            // 添加新的唯一填充
             unique_fills.push_back(format);
             int new_fill_id = static_cast<int>(unique_fills.size() - 1 + 2);  // +2 偏移
+            fill_hash_to_id[fill_key] = new_fill_id;
             format_to_fill_id.push_back(new_fill_id);
-            std::cerr << "🔧 DEBUG: 格式ID=" << format_pair.id << "创建新fillId=" << new_fill_id << ", pattern=" << (int)format->getPattern() << std::endl;
         }
     }
 }
@@ -640,40 +617,30 @@ void StyleSerializer::collectUniqueBorders(
     std::vector<std::shared_ptr<const core::FormatDescriptor>>& unique_borders,
     std::vector<int>& format_to_border_id) {
     
-    // 使用lambda比较边框属性是否相同
-    auto borderEquals = [](const core::FormatDescriptor& a, const core::FormatDescriptor& b) {
-        return a.getLeftBorder() == b.getLeftBorder() &&
-               a.getRightBorder() == b.getRightBorder() &&
-               a.getTopBorder() == b.getTopBorder() &&
-               a.getBottomBorder() == b.getBottomBorder() &&
-               a.getDiagBorder() == b.getDiagBorder() &&
-               a.getDiagType() == b.getDiagType() &&
-               a.getLeftBorderColor() == b.getLeftBorderColor() &&
-               a.getRightBorderColor() == b.getRightBorderColor() &&
-               a.getTopBorderColor() == b.getTopBorderColor() &&
-               a.getBottomBorderColor() == b.getBottomBorderColor() &&
-               a.getDiagBorderColor() == b.getDiagBorderColor();
-    };
+    // 使用unordered_map实现O(1)查找优化，替换原来的O(n²)算法
+    std::unordered_map<std::string, int> border_hash_to_id;
     
+    // 预分配内存以减少重新分配
     format_to_border_id.reserve(repository.getFormatCount());
+    unique_borders.reserve(std::min(repository.getFormatCount(), size_t(1000)));
+    border_hash_to_id.reserve(std::min(repository.getFormatCount(), size_t(1000)));
     
     for (const auto& format_pair : repository) {
         const auto& format = format_pair.format;
         
-        // 查找是否已存在相同的边框
-        bool found = false;
-        for (size_t i = 0; i < unique_borders.size(); ++i) {
-            if (borderEquals(*format, *unique_borders[i])) {
-                format_to_border_id.push_back(static_cast<int>(i));
-                found = true;
-                break;
-            }
-        }
+        // 使用哈希表实现O(1)查找
+        std::string border_key = createBorderHashKey(*format);
         
-        // 如果没有找到相同边框，添加新的唯一边框
-        if (!found) {
+        auto it = border_hash_to_id.find(border_key);
+        if (it != border_hash_to_id.end()) {
+            // 找到匹配的边框，使用现有ID
+            format_to_border_id.push_back(it->second);
+        } else {
+            // 添加新的唯一边框
             unique_borders.push_back(format);
-            format_to_border_id.push_back(static_cast<int>(unique_borders.size() - 1));
+            int new_border_id = static_cast<int>(unique_borders.size() - 1);
+            border_hash_to_id[border_key] = new_border_id;
+            format_to_border_id.push_back(new_border_id);
         }
     }
 }
@@ -701,6 +668,49 @@ void StyleSerializer::collectUniqueNumberFormats(
             format_to_numfmt_id.push_back(164 + static_cast<int>(it - unique_numfmts.begin()));
         }
     }
+}
+
+// ========== 哈希键生成函数（性能优化）==========
+
+std::string StyleSerializer::createFillHashKey(const core::FormatDescriptor& format) {
+    // Gray125是特殊模式，单独处理
+    if (format.getPattern() == core::PatternType::Gray125) {
+        return "gray125";
+    }
+    
+    // 生成填充哈希键：模式|背景色|前景色
+    return std::to_string(static_cast<int>(format.getPattern())) + "|" +
+           format.getBackgroundColor().toHex(false) + "|" +
+           format.getForegroundColor().toHex(false);
+}
+
+std::string StyleSerializer::createFontHashKey(const core::FormatDescriptor& format) {
+    // 生成字体哈希键：名称|大小|粗体|斜体|下划线|删除线|脚本|颜色|字族|字符集
+    return format.getFontName() + "|" +
+           std::to_string(format.getFontSize()) + "|" +
+           std::to_string(format.isBold()) + "|" +
+           std::to_string(format.isItalic()) + "|" +
+           std::to_string(static_cast<int>(format.getUnderline())) + "|" +
+           std::to_string(format.isStrikeout()) + "|" +
+           std::to_string(static_cast<int>(format.getFontScript())) + "|" +
+           format.getFontColor().toHex(false) + "|" +
+           std::to_string(format.getFontFamily()) + "|" +
+           std::to_string(format.getFontCharset());
+}
+
+std::string StyleSerializer::createBorderHashKey(const core::FormatDescriptor& format) {
+    // 生成边框哈希键：左|右|上|下|对角线|对角线类型|左色|右色|上色|下色|对角线色
+    return std::to_string(static_cast<int>(format.getLeftBorder())) + "|" +
+           std::to_string(static_cast<int>(format.getRightBorder())) + "|" +
+           std::to_string(static_cast<int>(format.getTopBorder())) + "|" +
+           std::to_string(static_cast<int>(format.getBottomBorder())) + "|" +
+           std::to_string(static_cast<int>(format.getDiagBorder())) + "|" +
+           std::to_string(static_cast<int>(format.getDiagType())) + "|" +
+           format.getLeftBorderColor().toHex(false) + "|" +
+           format.getRightBorderColor().toHex(false) + "|" +
+           format.getTopBorderColor().toHex(false) + "|" +
+           format.getBottomBorderColor().toHex(false) + "|" +
+           format.getDiagBorderColor().toHex(false);
 }
 
 }} // namespace fastexcel::xml

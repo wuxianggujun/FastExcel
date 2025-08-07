@@ -271,6 +271,27 @@ private:
         std::vector<std::string>& unique_numfmts,
         std::vector<int>& format_to_numfmt_id
     );
+    
+    /**
+     * @brief 创建填充哈希键（用于O(1)查找优化）
+     * @param format 格式描述符
+     * @return 填充的哈希键
+     */
+    static std::string createFillHashKey(const core::FormatDescriptor& format);
+    
+    /**
+     * @brief 创建字体哈希键（用于O(1)查找优化）
+     * @param format 格式描述符
+     * @return 字体的哈希键
+     */
+    static std::string createFontHashKey(const core::FormatDescriptor& format);
+    
+    /**
+     * @brief 创建边框哈希键（用于O(1)查找优化）
+     * @param format 格式描述符
+     * @return 边框的哈希键
+     */
+    static std::string createBorderHashKey(const core::FormatDescriptor& format);
 };
 
 }} // namespace fastexcel::xml

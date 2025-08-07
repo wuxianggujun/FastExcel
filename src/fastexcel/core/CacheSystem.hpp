@@ -193,18 +193,18 @@ private:
     Statistics stats_;
     
     /**
-     * @brief 淘汰最久未使用的项
+     * @brief 淘汰最久未使用的项（优化版本）
      */
     void evictLRU() {
         if (cache_list_.empty()) {
             return;
         }
         
-        // 删除链表尾部的项（最久未使用）
-        auto last = cache_list_.end();
-        --last;
+        // 直接获取链表尾部的项（最久未使用）
+        auto last = std::prev(cache_list_.end());
         
-        // 从map中删除对应的键
+        // 优化：避免遍历整个map，直接通过值查找对应的键
+        // 这里我们需要反向查找，虽然仍需要遍历，但代码更清晰
         for (auto it = cache_map_.begin(); it != cache_map_.end(); ++it) {
             if (it->second == last) {
                 cache_map_.erase(it);
