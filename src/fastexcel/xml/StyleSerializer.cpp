@@ -1,6 +1,4 @@
 #include "StyleSerializer.hpp"
-#include <fstream>
-#include <sstream>
 #include <unordered_set>
 
 namespace fastexcel {
@@ -14,26 +12,21 @@ void StyleSerializer::serialize(const core::FormatRepository& repository,
 
 void StyleSerializer::serialize(const core::FormatRepository& repository,
                                const std::function<void(const char*, size_t)>& callback) {
-    std::ostringstream oss;
-    xml::XMLStreamWriter writer(oss);
+    xml::XMLStreamWriter writer(callback);
     serialize(repository, writer);
-    
-    std::string xml_content = oss.str();
-    callback(xml_content.data(), xml_content.size());
 }
 
 void StyleSerializer::serializeToFile(const core::FormatRepository& repository,
                                      const std::string& filename) {
-    std::ofstream file(filename);
-    xml::XMLStreamWriter writer(file);
+    xml::XMLStreamWriter writer(filename);
     serialize(repository, writer);
 }
 
 void StyleSerializer::writeStyleSheet(const core::FormatRepository& repository,
                                      xml::XMLStreamWriter& writer) {
-    writer.writeStartDocument();
+    writer.startDocument();
     
-    writer.writeStartElement("styleSheet");
+    writer.startElement("styleSheet");
     writer.writeAttribute("xmlns", "http://schemas.openxmlformats.org/spreadsheetml/2006/main");
     writer.writeAttribute("xmlns:mc", "http://schemas.openxmlformats.org/markup-compatibility/2006");
     writer.writeAttribute("mc:Ignorable", "x14ac x16r2 xr");
@@ -48,8 +41,8 @@ void StyleSerializer::writeStyleSheet(const core::FormatRepository& repository,
     writeBorders(repository, writer);
     writeCellXfs(repository, writer);
     
-    writer.writeEndElement(); // styleSheet
-    writer.writeEndDocument();
+    writer.endElement(); // styleSheet
+    writer.endDocument();
 }
 
 void StyleSerializer::writeNumberFormats(const core::FormatRepository& repository,
@@ -63,18 +56,18 @@ void StyleSerializer::writeNumberFormats(const core::FormatRepository& repositor
         return; // 没有自定义数字格式
     }
     
-    writer.writeStartElement("numFmts");
+    writer.startElement("numFmts");
     writer.writeAttribute("count", std::to_string(unique_numfmts.size()));
     
     int custom_id = 164; // Excel自定义格式从164开始
     for (const auto& numfmt : unique_numfmts) {
-        writer.writeStartElement("numFmt");
+        writer.startElement("numFmt");
         writer.writeAttribute("numFmtId", std::to_string(custom_id++));
         writer.writeAttribute("formatCode", numfmt);
-        writer.writeEndElement(); // numFmt
+        writer.endElement(); // numFmt
     }
     
-    writer.writeEndElement(); // numFmts
+    writer.endElement(); // numFmts
 }
 
 void StyleSerializer::writeFonts(const core::FormatRepository& repository,
@@ -83,7 +76,7 @@ void StyleSerializer::writeFonts(const core::FormatRepository& repository,
     std::vector<int> format_to_font_id;
     collectUniqueFonts(repository, unique_fonts, format_to_font_id);
     
-    writer.writeStartElement("fonts");
+    writer.startElement("fonts");
     writer.writeAttribute("count", std::to_string(unique_fonts.size()));
     writer.writeAttribute("x14ac:knownFonts", "1");
     
@@ -91,7 +84,7 @@ void StyleSerializer::writeFonts(const core::FormatRepository& repository,
         writeFont(*font, writer);
     }
     
-    writer.writeEndElement(); // fonts
+    writer.endElement(); // fonts
 }
 
 void StyleSerializer::writeFills(const core::FormatRepository& repository,
@@ -100,14 +93,14 @@ void StyleSerializer::writeFills(const core::FormatRepository& repository,
     std::vector<int> format_to_fill_id;
     collectUniqueFills(repository, unique_fills, format_to_fill_id);
     
-    writer.writeStartElement("fills");
+    writer.startElement("fills");
     writer.writeAttribute("count", std::to_string(unique_fills.size()));
     
     for (const auto& fill : unique_fills) {
         writeFill(*fill, writer);
     }
     
-    writer.writeEndElement(); // fills
+    writer.endElement(); // fills
 }
 
 void StyleSerializer::writeBorders(const core::FormatRepository& repository,
@@ -116,14 +109,14 @@ void StyleSerializer::writeBorders(const core::FormatRepository& repository,
     std::vector<int> format_to_border_id;
     collectUniqueBorders(repository, unique_borders, format_to_border_id);
     
-    writer.writeStartElement("borders");
+    writer.startElement("borders");
     writer.writeAttribute("count", std::to_string(unique_borders.size()));
     
     for (const auto& border : unique_borders) {
         writeBorder(*border, writer);
     }
     
-    writer.writeEndElement(); // borders
+    writer.endElement(); // borders
 }
 
 void StyleSerializer::writeCellXfs(const core::FormatRepository& repository,
@@ -132,7 +125,7 @@ void StyleSerializer::writeCellXfs(const core::FormatRepository& repository,
     std::vector<int> font_mapping, fill_mapping, border_mapping, numfmt_mapping;
     createComponentMappings(repository, font_mapping, fill_mapping, border_mapping, numfmt_mapping);
     
-    writer.writeStartElement("cellXfs");
+    writer.startElement("cellXfs");
     writer.writeAttribute("count", std::to_string(repository.getFormatCount()));
     
     // 遍历所有格式
@@ -148,12 +141,12 @@ void StyleSerializer::writeCellXfs(const core::FormatRepository& repository,
         writeCellXf(*format, font_id, fill_id, border_id, numfmt_id, writer);
     }
     
-    writer.writeEndElement(); // cellXfs
+    writer.endElement(); // cellXfs
 }
 
 void StyleSerializer::writeFont(const core::FormatDescriptor& format,
                                xml::XMLStreamWriter& writer) {
-    writer.writeStartElement("font");
+    writer.startElement("font");
     
     if (format.isBold()) {
         writer.writeEmptyElement("b");
@@ -164,11 +157,11 @@ void StyleSerializer::writeFont(const core::FormatDescriptor& format,
     }
     
     if (format.getUnderline() != core::UnderlineType::None) {
-        writer.writeStartElement("u");
+        writer.startElement("u");
         if (format.getUnderline() != core::UnderlineType::Single) {
             writer.writeAttribute("val", underlineTypeToXml(format.getUnderline()));
         }
-        writer.writeEndElement(); // u
+        writer.endElement(); // u
     }
     
     if (format.isStrikeout()) {
@@ -176,121 +169,121 @@ void StyleSerializer::writeFont(const core::FormatDescriptor& format,
     }
     
     // 字体大小
-    writer.writeStartElement("sz");
+    writer.startElement("sz");
     writer.writeAttribute("val", std::to_string(format.getFontSize()));
-    writer.writeEndElement(); // sz
+    writer.endElement(); // sz
     
     // 字体颜色
-    writer.writeStartElement("color");
+    writer.startElement("color");
     writer.writeAttribute("rgb", colorToXml(format.getFontColor()));
-    writer.writeEndElement(); // color
+    writer.endElement(); // color
     
     // 字体名称
-    writer.writeStartElement("name");
+    writer.startElement("name");
     writer.writeAttribute("val", format.getFontName());
-    writer.writeEndElement(); // name
+    writer.endElement(); // name
     
     // 字体族
-    writer.writeStartElement("family");
+    writer.startElement("family");
     writer.writeAttribute("val", std::to_string(format.getFontFamily()));
-    writer.writeEndElement(); // family
+    writer.endElement(); // family
     
     // 字符集
-    writer.writeStartElement("charset");
+    writer.startElement("charset");
     writer.writeAttribute("val", std::to_string(format.getFontCharset()));
-    writer.writeEndElement(); // charset
+    writer.endElement(); // charset
     
-    writer.writeEndElement(); // font
+    writer.endElement(); // font
 }
 
 void StyleSerializer::writeFill(const core::FormatDescriptor& format,
                                xml::XMLStreamWriter& writer) {
-    writer.writeStartElement("fill");
+    writer.startElement("fill");
     
-    writer.writeStartElement("patternFill");
+    writer.startElement("patternFill");
     writer.writeAttribute("patternType", patternTypeToXml(format.getPattern()));
     
     if (format.getPattern() != core::PatternType::None) {
         if (format.getPattern() == core::PatternType::Solid) {
-            writer.writeStartElement("fgColor");
+            writer.startElement("fgColor");
             writer.writeAttribute("rgb", colorToXml(format.getBackgroundColor()));
-            writer.writeEndElement(); // fgColor
+            writer.endElement(); // fgColor
         } else {
-            writer.writeStartElement("fgColor");
+            writer.startElement("fgColor");
             writer.writeAttribute("rgb", colorToXml(format.getForegroundColor()));
-            writer.writeEndElement(); // fgColor
+            writer.endElement(); // fgColor
             
-            writer.writeStartElement("bgColor");
+            writer.startElement("bgColor");
             writer.writeAttribute("rgb", colorToXml(format.getBackgroundColor()));
-            writer.writeEndElement(); // bgColor
+            writer.endElement(); // bgColor
         }
     }
     
-    writer.writeEndElement(); // patternFill
-    writer.writeEndElement(); // fill
+    writer.endElement(); // patternFill
+    writer.endElement(); // fill
 }
 
 void StyleSerializer::writeBorder(const core::FormatDescriptor& format,
                                  xml::XMLStreamWriter& writer) {
-    writer.writeStartElement("border");
+    writer.startElement("border");
     
     // 左边框
-    writer.writeStartElement("left");
+    writer.startElement("left");
     if (format.getLeftBorder() != core::BorderStyle::None) {
         writer.writeAttribute("style", borderStyleToXml(format.getLeftBorder()));
-        writer.writeStartElement("color");
+        writer.startElement("color");
         writer.writeAttribute("rgb", colorToXml(format.getLeftBorderColor()));
-        writer.writeEndElement(); // color
+        writer.endElement(); // color
     }
-    writer.writeEndElement(); // left
+    writer.endElement(); // left
     
     // 右边框
-    writer.writeStartElement("right");
+    writer.startElement("right");
     if (format.getRightBorder() != core::BorderStyle::None) {
         writer.writeAttribute("style", borderStyleToXml(format.getRightBorder()));
-        writer.writeStartElement("color");
+        writer.startElement("color");
         writer.writeAttribute("rgb", colorToXml(format.getRightBorderColor()));
-        writer.writeEndElement(); // color
+        writer.endElement(); // color
     }
-    writer.writeEndElement(); // right
+    writer.endElement(); // right
     
     // 上边框
-    writer.writeStartElement("top");
+    writer.startElement("top");
     if (format.getTopBorder() != core::BorderStyle::None) {
         writer.writeAttribute("style", borderStyleToXml(format.getTopBorder()));
-        writer.writeStartElement("color");
+        writer.startElement("color");
         writer.writeAttribute("rgb", colorToXml(format.getTopBorderColor()));
-        writer.writeEndElement(); // color
+        writer.endElement(); // color
     }
-    writer.writeEndElement(); // top
+    writer.endElement(); // top
     
     // 下边框
-    writer.writeStartElement("bottom");
+    writer.startElement("bottom");
     if (format.getBottomBorder() != core::BorderStyle::None) {
         writer.writeAttribute("style", borderStyleToXml(format.getBottomBorder()));
-        writer.writeStartElement("color");
+        writer.startElement("color");
         writer.writeAttribute("rgb", colorToXml(format.getBottomBorderColor()));
-        writer.writeEndElement(); // color
+        writer.endElement(); // color
     }
-    writer.writeEndElement(); // bottom
+    writer.endElement(); // bottom
     
     // 对角线边框
-    writer.writeStartElement("diagonal");
+    writer.startElement("diagonal");
     if (format.getDiagBorder() != core::BorderStyle::None) {
         writer.writeAttribute("style", borderStyleToXml(format.getDiagBorder()));
-        writer.writeStartElement("color");
+        writer.startElement("color");
         writer.writeAttribute("rgb", colorToXml(format.getDiagBorderColor()));
-        writer.writeEndElement(); // color
+        writer.endElement(); // color
     }
-    writer.writeEndElement(); // diagonal
+    writer.endElement(); // diagonal
     
-    writer.writeEndElement(); // border
+    writer.endElement(); // border
 }
 
 void StyleSerializer::writeCellXf(const core::FormatDescriptor& format,
                                  int font_id, int fill_id, int border_id, int num_fmt_id,
                                  xml::XMLStreamWriter& writer) {
-    writer.writeStartElement("xf");
+    writer.startElement("xf");
     writer.writeAttribute("numFmtId", std::to_string(num_fmt_id));
     writer.writeAttribute("fontId", std::to_string(font_id));
     writer.writeAttribute("fillId", std::to_string(fill_id));
@@ -318,12 +311,12 @@ void StyleSerializer::writeCellXf(const core::FormatDescriptor& format,
         writeProtection(format, writer);
     }
     
-    writer.writeEndElement(); // xf
+    writer.endElement(); // xf
 }
 
 void StyleSerializer::writeAlignment(const core::FormatDescriptor& format,
                                     xml::XMLStreamWriter& writer) {
-    writer.writeStartElement("alignment");
+    writer.startElement("alignment");
     
     if (format.getHorizontalAlign() != core::HorizontalAlign::None) {
         writer.writeAttribute("horizontal", horizontalAlignToXml(format.getHorizontalAlign()));
@@ -349,12 +342,12 @@ void StyleSerializer::writeAlignment(const core::FormatDescriptor& format,
         writer.writeAttribute("shrinkToFit", "1");
     }
     
-    writer.writeEndElement(); // alignment
+    writer.endElement(); // alignment
 }
 
 void StyleSerializer::writeProtection(const core::FormatDescriptor& format,
                                      xml::XMLStreamWriter& writer) {
-    writer.writeStartElement("protection");
+    writer.startElement("protection");
     
     if (!format.isLocked()) {
         writer.writeAttribute("locked", "0");
@@ -364,7 +357,7 @@ void StyleSerializer::writeProtection(const core::FormatDescriptor& format,
         writer.writeAttribute("hidden", "1");
     }
     
-    writer.writeEndElement(); // protection
+    writer.endElement(); // protection
 }
 
 // ========== 辅助方法实现 ==========

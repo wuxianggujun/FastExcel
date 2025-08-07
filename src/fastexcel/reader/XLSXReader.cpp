@@ -156,8 +156,6 @@ core::ErrorCode XLSXReader::loadWorkbook(std::unique_ptr<core::Workbook>& workbo
                             FASTEXCEL_HANDLE_WARNING(
                                 "解析工作表失败: " + sheet_name, "loadWorkbook");
                             // 继续处理其他工作表
-                        } else {
-                            LOG_DEBUG("成功解析工作表: {}", sheet_name);
                         }
                     } else {
                         FASTEXCEL_HANDLE_WARNING(
