@@ -13,6 +13,11 @@
 #include <iostream>
 #include <string>
 #include <chrono>
+#include <fstream>
+#include <sstream>
+#include <vector>
+#include <set>
+#include <algorithm>
 
 using namespace fastexcel;
 using namespace fastexcel::core;
@@ -151,12 +156,13 @@ public:
                         }
                         break;
                     }
+                    case CellType::Empty:
                     default:
-                        // 空单元格或其他类型，跳过
+                        // 空单元格或其他类型，不复制值但仍需复制格式
                         break;
-                }
+                    }
                     
-                    // 复制格式
+                    // 复制格式（对所有单元格都执行，包括空单元格）
                     auto source_format = source_cell.getFormatDescriptor();
                     if (source_format) {
                         target_cell.setFormat(source_format);

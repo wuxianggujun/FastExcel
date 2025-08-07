@@ -467,20 +467,16 @@ void StyleSerializer::createComponentMappings(
     std::vector<int>& border_mapping,
     std::vector<int>& numfmt_mapping) {
     
-    // 这里应该实现子组件的去重映射逻辑
-    // 为了简化，暂时每个格式都映射到自己的ID
-    size_t count = repository.getFormatCount();
-    font_mapping.resize(count);
-    fill_mapping.resize(count);
-    border_mapping.resize(count);
-    numfmt_mapping.resize(count);
+    // 收集去重后的组件
+    std::vector<std::shared_ptr<const core::FormatDescriptor>> unique_fonts;
+    std::vector<std::shared_ptr<const core::FormatDescriptor>> unique_fills;
+    std::vector<std::shared_ptr<const core::FormatDescriptor>> unique_borders;
+    std::vector<std::string> unique_numfmts;
     
-    for (size_t i = 0; i < count; ++i) {
-        font_mapping[i] = static_cast<int>(i);
-        fill_mapping[i] = static_cast<int>(i);
-        border_mapping[i] = static_cast<int>(i);
-        numfmt_mapping[i] = static_cast<int>(i);
-    }
+    collectUniqueFonts(repository, unique_fonts, font_mapping);
+    collectUniqueFills(repository, unique_fills, fill_mapping);
+    collectUniqueBorders(repository, unique_borders, border_mapping);
+    collectUniqueNumberFormats(repository, unique_numfmts, numfmt_mapping);
 }
 
 void StyleSerializer::collectUniqueFonts(
@@ -488,10 +484,40 @@ void StyleSerializer::collectUniqueFonts(
     std::vector<std::shared_ptr<const core::FormatDescriptor>>& unique_fonts,
     std::vector<int>& format_to_font_id) {
     
-    // 简化实现：每个格式都是唯一字体
+    // 使用lambda比较字体属性是否相同
+    auto fontEquals = [](const core::FormatDescriptor& a, const core::FormatDescriptor& b) {
+        return a.getFontName() == b.getFontName() &&
+               a.getFontSize() == b.getFontSize() &&
+               a.isBold() == b.isBold() &&
+               a.isItalic() == b.isItalic() &&
+               a.getUnderline() == b.getUnderline() &&
+               a.isStrikeout() == b.isStrikeout() &&
+               a.getFontScript() == b.getFontScript() &&
+               a.getFontColor() == b.getFontColor() &&
+               a.getFontFamily() == b.getFontFamily() &&
+               a.getFontCharset() == b.getFontCharset();
+    };
+    
+    format_to_font_id.reserve(repository.getFormatCount());
+    
     for (const auto& format_pair : repository) {
-        unique_fonts.push_back(format_pair.format);
-        format_to_font_id.push_back(static_cast<int>(unique_fonts.size() - 1));
+        const auto& format = format_pair.format;
+        
+        // 查找是否已存在相同的字体
+        bool found = false;
+        for (size_t i = 0; i < unique_fonts.size(); ++i) {
+            if (fontEquals(*format, *unique_fonts[i])) {
+                format_to_font_id.push_back(static_cast<int>(i));
+                found = true;
+                break;
+            }
+        }
+        
+        // 如果没有找到相同字体，添加新的唯一字体
+        if (!found) {
+            unique_fonts.push_back(format);
+            format_to_font_id.push_back(static_cast<int>(unique_fonts.size() - 1));
+        }
     }
 }
 
@@ -500,10 +526,33 @@ void StyleSerializer::collectUniqueFills(
     std::vector<std::shared_ptr<const core::FormatDescriptor>>& unique_fills,
     std::vector<int>& format_to_fill_id) {
     
-    // 简化实现：每个格式都是唯一填充
+    // 使用lambda比较填充属性是否相同
+    auto fillEquals = [](const core::FormatDescriptor& a, const core::FormatDescriptor& b) {
+        return a.getPattern() == b.getPattern() &&
+               a.getBackgroundColor() == b.getBackgroundColor() &&
+               a.getForegroundColor() == b.getForegroundColor();
+    };
+    
+    format_to_fill_id.reserve(repository.getFormatCount());
+    
     for (const auto& format_pair : repository) {
-        unique_fills.push_back(format_pair.format);
-        format_to_fill_id.push_back(static_cast<int>(unique_fills.size() - 1));
+        const auto& format = format_pair.format;
+        
+        // 查找是否已存在相同的填充
+        bool found = false;
+        for (size_t i = 0; i < unique_fills.size(); ++i) {
+            if (fillEquals(*format, *unique_fills[i])) {
+                format_to_fill_id.push_back(static_cast<int>(i));
+                found = true;
+                break;
+            }
+        }
+        
+        // 如果没有找到相同填充，添加新的唯一填充
+        if (!found) {
+            unique_fills.push_back(format);
+            format_to_fill_id.push_back(static_cast<int>(unique_fills.size() - 1));
+        }
     }
 }
 
@@ -512,10 +561,41 @@ void StyleSerializer::collectUniqueBorders(
     std::vector<std::shared_ptr<const core::FormatDescriptor>>& unique_borders,
     std::vector<int>& format_to_border_id) {
     
-    // 简化实现：每个格式都是唯一边框
+    // 使用lambda比较边框属性是否相同
+    auto borderEquals = [](const core::FormatDescriptor& a, const core::FormatDescriptor& b) {
+        return a.getLeftBorder() == b.getLeftBorder() &&
+               a.getRightBorder() == b.getRightBorder() &&
+               a.getTopBorder() == b.getTopBorder() &&
+               a.getBottomBorder() == b.getBottomBorder() &&
+               a.getDiagBorder() == b.getDiagBorder() &&
+               a.getDiagType() == b.getDiagType() &&
+               a.getLeftBorderColor() == b.getLeftBorderColor() &&
+               a.getRightBorderColor() == b.getRightBorderColor() &&
+               a.getTopBorderColor() == b.getTopBorderColor() &&
+               a.getBottomBorderColor() == b.getBottomBorderColor() &&
+               a.getDiagBorderColor() == b.getDiagBorderColor();
+    };
+    
+    format_to_border_id.reserve(repository.getFormatCount());
+    
     for (const auto& format_pair : repository) {
-        unique_borders.push_back(format_pair.format);
-        format_to_border_id.push_back(static_cast<int>(unique_borders.size() - 1));
+        const auto& format = format_pair.format;
+        
+        // 查找是否已存在相同的边框
+        bool found = false;
+        for (size_t i = 0; i < unique_borders.size(); ++i) {
+            if (borderEquals(*format, *unique_borders[i])) {
+                format_to_border_id.push_back(static_cast<int>(i));
+                found = true;
+                break;
+            }
+        }
+        
+        // 如果没有找到相同边框，添加新的唯一边框
+        if (!found) {
+            unique_borders.push_back(format);
+            format_to_border_id.push_back(static_cast<int>(unique_borders.size() - 1));
+        }
     }
 }
 

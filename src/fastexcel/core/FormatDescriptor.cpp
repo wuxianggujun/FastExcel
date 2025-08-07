@@ -152,7 +152,12 @@ bool FormatDescriptor::hasBorder() const {
            top_border_ != default_desc.top_border_ ||
            bottom_border_ != default_desc.bottom_border_ ||
            diag_border_ != default_desc.diag_border_ ||
-           diag_type_ != default_desc.diag_type_;
+           diag_type_ != default_desc.diag_type_ ||
+           left_border_color_ != default_desc.left_border_color_ ||
+           right_border_color_ != default_desc.right_border_color_ ||
+           top_border_color_ != default_desc.top_border_color_ ||
+           bottom_border_color_ != default_desc.bottom_border_color_ ||
+           diag_border_color_ != default_desc.diag_border_color_;
 }
 
 bool FormatDescriptor::hasAlignment() const {
