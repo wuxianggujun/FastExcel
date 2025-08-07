@@ -13,6 +13,7 @@
 #include <iostream>
 #include <string>
 #include <iomanip>
+#include <utility>
 
 using namespace fastexcel;
 using namespace fastexcel::core;
@@ -25,7 +26,7 @@ private:
     Path file_path_;
     
 public:
-    ExcelFormatParser(const Path& file_path) : file_path_(file_path) {}
+    ExcelFormatParser(Path  file_path) : file_path_(std::move(file_path)) {}
     
     /**
      * @brief 使用Workbook API解析Excel文件格式
@@ -283,9 +284,6 @@ int main() {
     std::cout << "Using Workbook, Worksheet, Cell and Format APIs" << std::endl;
     std::cout << "Version: " << fastexcel::getVersion() << std::endl;
     
-    // 使用固定的测试文件路径
-    Path target_file("./辅材处理-张玥 机房建设项目（2025-JW13-W1007）-配电系统(甲方客户报表).xlsx");
-    
     try {
         // 初始化FastExcel库
         if (!fastexcel::initialize("logs/excel_format_parser_example.log", true)) {
@@ -294,7 +292,7 @@ int main() {
         }
         
         // 创建格式解析器并执行解析
-        ExcelFormatParser parser(target_file);
+        ExcelFormatParser parser(Path("./辅材处理-张玥 机房建设项目（2025-JW13-W1007）-配电系统(甲方客户报表).xlsx"));
         
         if (parser.parseExcelFormat()) {
             std::cout << "\nSuccess: Excel format parsing completed!" << std::endl;
