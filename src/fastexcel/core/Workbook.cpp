@@ -2013,6 +2013,20 @@ std::unique_ptr<StyleTransferContext> Workbook::copyStylesFrom(const Workbook& s
     LOG_DEBUG("完成样式复制，传输了{}个格式，去重了{}个", 
              stats.transferred_count, stats.deduplicated_count);
     
+    // 🔧 关键修复：自动复制主题XML以保持颜色和字体一致性
+    const std::string& source_theme = source_workbook.getThemeXML();
+    if (!source_theme.empty()) {
+        // 只有当前工作簿没有自定义主题时才复制源主题
+        if (theme_xml_.empty()) {
+            theme_xml_ = source_theme;
+            LOG_DEBUG("自动复制主题XML ({} 字节)", theme_xml_.size());
+        } else {
+            LOG_DEBUG("当前工作簿已有自定义主题，保持现有主题不变");
+        }
+    } else {
+        LOG_DEBUG("源工作簿无自定义主题，保持默认主题");
+    }
+    
     return transfer_context;
 }
 

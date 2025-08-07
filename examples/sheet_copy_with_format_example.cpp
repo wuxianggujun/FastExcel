@@ -82,10 +82,10 @@ public:
             }
             std::cout << "OK: Target workbook created" << std::endl;
             
-            // 复制样式数据
-            std::cout << "\\nStep 3: Copying styles..." << std::endl;
+            // 复制样式数据和主题
+            std::cout << "\\nStep 3: Copying styles and theme..." << std::endl;
             target_workbook->copyStylesFrom(*source_workbook);
-            std::cout << "OK: Styles copied" << std::endl;
+            std::cout << "OK: Styles and theme copied automatically" << std::endl;
             
             // 创建目标工作表（使用源工作表名称）
             auto target_worksheet = target_workbook->addWorksheet(source_worksheet->getName());

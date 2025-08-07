@@ -120,6 +120,7 @@ private:
     core::HorizontalAlign getAlignment(const std::string& alignment) const;
     core::VerticalAlign getVerticalAlignment(const std::string& alignment) const;
     core::BorderStyle getBorderStyle(const std::string& style) const;
+    core::PatternType getPatternType(const std::string& pattern) const;
     
     // 内置数字格式
     std::string getBuiltinNumberFormat(int format_id) const;

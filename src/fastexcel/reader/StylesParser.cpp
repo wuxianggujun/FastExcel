@@ -60,7 +60,7 @@ std::shared_ptr<core::FormatDescriptor> StylesParser::getFormat(int xf_index) co
                .underline(font.underline ? core::UnderlineType::Single : core::UnderlineType::None)
                .strikeout(font.strikeout);
         
-        if (font.color.getRed() != 0 || font.color.getGreen() != 0 || font.color.getBlue() != 0) {
+        if (font.color.getType() != core::Color::Type::RGB || font.color.getRGB() != 0x000000) {
             builder.fontColor(font.color);
         }
     }
@@ -68,8 +68,24 @@ std::shared_ptr<core::FormatDescriptor> StylesParser::getFormat(int xf_index) co
     // 应用填充
     if (xf.fill_id >= 0 && xf.fill_id < static_cast<int>(fills_.size())) {
         const auto& fill = fills_[xf.fill_id];
-        if (fill.pattern_type != "none" && (fill.fg_color.getRed() != 0 || fill.fg_color.getGreen() != 0 || fill.fg_color.getBlue() != 0)) {
+        
+        // 获取填充模式
+        core::PatternType pattern = getPatternType(fill.pattern_type);
+        
+        std::cerr << "🔧 DEBUG: getFormat xf_index=" << xf_index << ", fill_id=" << xf.fill_id << ", pattern_type='" << fill.pattern_type << "', pattern=" << (int)pattern << std::endl;
+        
+        if (pattern == core::PatternType::Gray125) {
+            // gray125是特殊的无颜色填充模式，使用默认的黑色但不会在XML中输出颜色
+            std::cerr << "🔧 DEBUG: 发现gray125填充，fill_id=" << xf.fill_id << ", pattern_type='" << fill.pattern_type << "'" << std::endl;
+            builder.fill(core::PatternType::Gray125, core::Color());
+        } else if (pattern == core::PatternType::Solid && 
+                  (fill.fg_color.getType() != core::Color::Type::RGB || fill.fg_color.getRGB() != 0x000000)) {
+            // solid模式需要颜色
             builder.backgroundColor(fill.fg_color);
+        } else if (pattern != core::PatternType::None && pattern != core::PatternType::Solid &&
+                  (fill.fg_color.getType() != core::Color::Type::RGB || fill.fg_color.getRGB() != 0x000000)) {
+            // 其他有颜色的模式
+            builder.fill(pattern, fill.fg_color, fill.bg_color);
         }
     }
     
@@ -78,29 +94,29 @@ std::shared_ptr<core::FormatDescriptor> StylesParser::getFormat(int xf_index) co
         const auto& border = borders_[xf.border_id];
         if (!border.left.style.empty()) {
             builder.leftBorder(getBorderStyle(border.left.style));
-            if (border.left.color.getRed() != 0 || border.left.color.getGreen() != 0 || border.left.color.getBlue() != 0) {
-                // Note: StyleBuilder doesn't have leftBorderColor method, use leftBorder with color
+            // 修复：不要通过getRGB()判断颜色，直接检查颜色类型是否有效
+            if (border.left.color.getType() != core::Color::Type::RGB || border.left.color.getRGB() != 0x000000) {
                 builder.leftBorder(getBorderStyle(border.left.style), border.left.color);
             }
         }
         if (!border.right.style.empty()) {
             builder.rightBorder(getBorderStyle(border.right.style));
-            if (border.right.color.getRed() != 0 || border.right.color.getGreen() != 0 || border.right.color.getBlue() != 0) {
-                // Note: StyleBuilder doesn't have rightBorderColor method, use rightBorder with color
+            // 修复：不要通过getRGB()判断颜色，直接检查颜色类型是否有效
+            if (border.right.color.getType() != core::Color::Type::RGB || border.right.color.getRGB() != 0x000000) {
                 builder.rightBorder(getBorderStyle(border.right.style), border.right.color);
             }
         }
         if (!border.top.style.empty()) {
             builder.topBorder(getBorderStyle(border.top.style));
-            if (border.top.color.getRed() != 0 || border.top.color.getGreen() != 0 || border.top.color.getBlue() != 0) {
-                // Note: StyleBuilder doesn't have topBorderColor method, use topBorder with color
+            // 修复：不要通过getRGB()判断颜色，直接检查颜色类型是否有效
+            if (border.top.color.getType() != core::Color::Type::RGB || border.top.color.getRGB() != 0x000000) {
                 builder.topBorder(getBorderStyle(border.top.style), border.top.color);
             }
         }
         if (!border.bottom.style.empty()) {
             builder.bottomBorder(getBorderStyle(border.bottom.style));
-            if (border.bottom.color.getRed() != 0 || border.bottom.color.getGreen() != 0 || border.bottom.color.getBlue() != 0) {
-                // Note: StyleBuilder doesn't have bottomBorderColor method, use bottomBorder with color
+            // 修复：不要通过getRGB()判断颜色，直接检查颜色类型是否有效
+            if (border.bottom.color.getType() != core::Color::Type::RGB || border.bottom.color.getRGB() != 0x000000) {
                 builder.bottomBorder(getBorderStyle(border.bottom.style), border.bottom.color);
             }
         }
@@ -260,6 +276,7 @@ void StylesParser::parseFills(const std::string& xml_content) {
         size_t pattern_pos = fill_xml.find("<patternFill ");
         if (pattern_pos != std::string::npos) {
             fill.pattern_type = extractStringAttribute(fill_xml.substr(pattern_pos), "patternType");
+            std::cerr << "🔧 DEBUG: 解析fill，pattern_type='" << fill.pattern_type << "'" << std::endl;
             
             // 解析前景色
             size_t fgColor_pos = fill_xml.find("<fgColor ", pattern_pos);
@@ -417,7 +434,7 @@ core::Color StylesParser::parseColor(const std::string& color_xml) {
             int g = (color_value >> 8) & 0xFF;
             int b = color_value & 0xFF;
             return core::Color(static_cast<uint32_t>((r << 16) | (g << 8) | b));
-        } catch (const std::exception& e) {
+        } catch (const std::exception&) {
             // 解析失败，返回无效颜色
         }
     }
@@ -425,7 +442,17 @@ core::Color StylesParser::parseColor(const std::string& color_xml) {
     // 解析theme属性
     int theme = extractIntAttribute(color_xml, "theme");
     if (theme >= 0) {
-        return core::Color(static_cast<uint8_t>(theme)); // 主题颜色构造函数
+        // 解析tint属性（如果存在）
+        double tint = 0.0;
+        std::string tint_str = extractStringAttribute(color_xml, "tint");
+        if (!tint_str.empty()) {
+            try {
+                tint = std::stod(tint_str);
+            } catch (const std::exception&) {
+                // tint解析失败，使用默认值0
+            }
+        }
+        return core::Color(static_cast<uint8_t>(theme), tint);
     }
     
     // 解析indexed属性
@@ -434,7 +461,7 @@ core::Color StylesParser::parseColor(const std::string& color_xml) {
         return core::Color::fromIndex(static_cast<uint8_t>(indexed));
     }
     
-    return core::Color(); // 返回无效颜色
+    return core::Color(); // 返回默认颜色（黑色）
 }
 
 int StylesParser::extractIntAttribute(const std::string& xml, const std::string& attr_name) {
@@ -520,6 +547,29 @@ core::BorderStyle StylesParser::getBorderStyle(const std::string& style) const {
     if (style == "dashDot") return core::BorderStyle::DashDot;
     if (style == "dashDotDot") return core::BorderStyle::DashDotDot;
     return core::BorderStyle::None;
+}
+
+core::PatternType StylesParser::getPatternType(const std::string& pattern) const {
+    if (pattern.empty() || pattern == "none") return core::PatternType::None;
+    if (pattern == "solid") return core::PatternType::Solid;
+    if (pattern == "gray125") return core::PatternType::Gray125;
+    if (pattern == "gray0625") return core::PatternType::Gray0625;
+    if (pattern == "mediumGray") return core::PatternType::MediumGray;
+    if (pattern == "darkGray") return core::PatternType::DarkGray;
+    if (pattern == "lightGray") return core::PatternType::LightGray;
+    if (pattern == "darkHorizontal") return core::PatternType::DarkHorizontal;
+    if (pattern == "darkVertical") return core::PatternType::DarkVertical;
+    if (pattern == "darkDown") return core::PatternType::DarkDown;
+    if (pattern == "darkUp") return core::PatternType::DarkUp;
+    if (pattern == "darkGrid") return core::PatternType::DarkGrid;
+    if (pattern == "darkTrellis") return core::PatternType::DarkTrellis;
+    if (pattern == "lightHorizontal") return core::PatternType::LightHorizontal;
+    if (pattern == "lightVertical") return core::PatternType::LightVertical;
+    if (pattern == "lightDown") return core::PatternType::LightDown;
+    if (pattern == "lightUp") return core::PatternType::LightUp;
+    if (pattern == "lightGrid") return core::PatternType::LightGrid;
+    if (pattern == "lightTrellis") return core::PatternType::LightTrellis;
+    return core::PatternType::None;
 }
 
 std::string StylesParser::getBuiltinNumberFormat(int format_id) const {

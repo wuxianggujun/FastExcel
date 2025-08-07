@@ -93,11 +93,30 @@ void StyleSerializer::writeFills(const core::FormatRepository& repository,
     std::vector<int> format_to_fill_id;
     collectUniqueFills(repository, unique_fills, format_to_fill_id);
     
-    writer.startElement("fills");
-    writer.writeAttribute("count", std::to_string(unique_fills.size()));
+    // 确保count至少为2（Excel标准要求），+2是因为我们强制输出了none和gray125
+    size_t fill_count = std::max<size_t>(2, unique_fills.size() + 2);
     
-    for (const auto& fill : unique_fills) {
-        writeFill(*fill, writer);
+    writer.startElement("fills");
+    writer.writeAttribute("count", std::to_string(fill_count));
+    
+    // 强制输出Excel标准的前两个填充
+    // fillId=0: none 填充
+    writer.startElement("fill");
+    writer.startElement("patternFill");
+    writer.writeAttribute("patternType", "none");
+    writer.endElement(); // patternFill
+    writer.endElement(); // fill
+    
+    // fillId=1: gray125 填充（Excel标准默认）
+    writer.startElement("fill");
+    writer.startElement("patternFill");
+    writer.writeAttribute("patternType", "gray125");
+    writer.endElement(); // patternFill
+    writer.endElement(); // fill
+    
+    // 输出其余的自定义填充（从索引0开始，对应fillId=2+）
+    for (size_t i = 0; i < unique_fills.size(); ++i) {
+        writeFill(*unique_fills[i], writer);
     }
     
     writer.endElement(); // fills
@@ -175,7 +194,7 @@ void StyleSerializer::writeFont(const core::FormatDescriptor& format,
     
     // 字体颜色
     writer.startElement("color");
-    writer.writeAttribute("rgb", colorToXml(format.getFontColor()));
+    writeColorAttributes(format.getFontColor(), writer);
     writer.endElement(); // color
     
     // 字体名称
@@ -204,17 +223,19 @@ void StyleSerializer::writeFill(const core::FormatDescriptor& format,
     writer.writeAttribute("patternType", patternTypeToXml(format.getPattern()));
     
     if (format.getPattern() != core::PatternType::None) {
-        if (format.getPattern() == core::PatternType::Solid) {
+        if (format.getPattern() == core::PatternType::Gray125) {
+            // gray125模式不需要颜色，就像原始Excel文件中的格式
+        } else if (format.getPattern() == core::PatternType::Solid) {
             writer.startElement("fgColor");
-            writer.writeAttribute("rgb", colorToXml(format.getBackgroundColor()));
+            writeColorAttributes(format.getBackgroundColor(), writer);
             writer.endElement(); // fgColor
         } else {
             writer.startElement("fgColor");
-            writer.writeAttribute("rgb", colorToXml(format.getForegroundColor()));
+            writeColorAttributes(format.getForegroundColor(), writer);
             writer.endElement(); // fgColor
             
             writer.startElement("bgColor");
-            writer.writeAttribute("rgb", colorToXml(format.getBackgroundColor()));
+            writeColorAttributes(format.getBackgroundColor(), writer);
             writer.endElement(); // bgColor
         }
     }
@@ -232,7 +253,7 @@ void StyleSerializer::writeBorder(const core::FormatDescriptor& format,
     if (format.getLeftBorder() != core::BorderStyle::None) {
         writer.writeAttribute("style", borderStyleToXml(format.getLeftBorder()));
         writer.startElement("color");
-        writer.writeAttribute("rgb", colorToXml(format.getLeftBorderColor()));
+        writeColorAttributes(format.getLeftBorderColor(), writer);
         writer.endElement(); // color
     }
     writer.endElement(); // left
@@ -242,7 +263,7 @@ void StyleSerializer::writeBorder(const core::FormatDescriptor& format,
     if (format.getRightBorder() != core::BorderStyle::None) {
         writer.writeAttribute("style", borderStyleToXml(format.getRightBorder()));
         writer.startElement("color");
-        writer.writeAttribute("rgb", colorToXml(format.getRightBorderColor()));
+        writeColorAttributes(format.getRightBorderColor(), writer);
         writer.endElement(); // color
     }
     writer.endElement(); // right
@@ -252,7 +273,7 @@ void StyleSerializer::writeBorder(const core::FormatDescriptor& format,
     if (format.getTopBorder() != core::BorderStyle::None) {
         writer.writeAttribute("style", borderStyleToXml(format.getTopBorder()));
         writer.startElement("color");
-        writer.writeAttribute("rgb", colorToXml(format.getTopBorderColor()));
+        writeColorAttributes(format.getTopBorderColor(), writer);
         writer.endElement(); // color
     }
     writer.endElement(); // top
@@ -262,7 +283,7 @@ void StyleSerializer::writeBorder(const core::FormatDescriptor& format,
     if (format.getBottomBorder() != core::BorderStyle::None) {
         writer.writeAttribute("style", borderStyleToXml(format.getBottomBorder()));
         writer.startElement("color");
-        writer.writeAttribute("rgb", colorToXml(format.getBottomBorderColor()));
+        writeColorAttributes(format.getBottomBorderColor(), writer);
         writer.endElement(); // color
     }
     writer.endElement(); // bottom
@@ -272,7 +293,7 @@ void StyleSerializer::writeBorder(const core::FormatDescriptor& format,
     if (format.getDiagBorder() != core::BorderStyle::None) {
         writer.writeAttribute("style", borderStyleToXml(format.getDiagBorder()));
         writer.startElement("color");
-        writer.writeAttribute("rgb", colorToXml(format.getDiagBorderColor()));
+        writeColorAttributes(format.getDiagBorderColor(), writer);
         writer.endElement(); // color
     }
     writer.endElement(); // diagonal
@@ -441,6 +462,40 @@ std::string StyleSerializer::verticalAlignToXml(core::VerticalAlign align) {
     }
 }
 
+void StyleSerializer::writeColorAttributes(const core::Color& color, xml::XMLStreamWriter& writer) {
+    // 根据颜色类型写入正确的XML属性
+    switch (color.getType()) {
+        case core::Color::Type::Theme:
+            writer.writeAttribute("theme", std::to_string(color.getValue()));
+            if (color.getTint() != 0.0) {
+                writer.writeAttribute("tint", std::to_string(color.getTint()));
+            }
+            break;
+            
+        case core::Color::Type::Indexed:
+            writer.writeAttribute("indexed", std::to_string(color.getValue()));
+            break;
+            
+        case core::Color::Type::Auto:
+            writer.writeAttribute("auto", "1");
+            break;
+            
+        case core::Color::Type::RGB:
+        default:
+            {
+                // 返回带有Alpha通道的ARGB格式（Excel XML标准格式）
+                std::string hex = color.toHex(false);  // 不包含#前缀
+                // 确保格式为8位十六进制（包含Alpha通道）
+                if (hex.length() == 6) {
+                    hex = "FF" + hex;  // 添加完全不透明的Alpha通道
+                }
+                writer.writeAttribute("rgb", hex);
+            }
+            break;
+    }
+}
+
+// 保留旧版本兼容性（已弃用）
 std::string StyleSerializer::colorToXml(const core::Color& color) {
     // 返回带有Alpha通道的ARGB格式（Excel XML标准格式）
     std::string hex = color.toHex(false);  // 不包含#前缀
@@ -528,6 +583,11 @@ void StyleSerializer::collectUniqueFills(
     
     // 使用lambda比较填充属性是否相同
     auto fillEquals = [](const core::FormatDescriptor& a, const core::FormatDescriptor& b) {
+        // Gray125是特殊的填充模式，永远不与其他模式合并
+        if (a.getPattern() == core::PatternType::Gray125 || b.getPattern() == core::PatternType::Gray125) {
+            return a.getPattern() == b.getPattern();  // 只有两个都是Gray125才认为相同
+        }
+        
         return a.getPattern() == b.getPattern() &&
                a.getBackgroundColor() == b.getBackgroundColor() &&
                a.getForegroundColor() == b.getForegroundColor();
@@ -538,11 +598,28 @@ void StyleSerializer::collectUniqueFills(
     for (const auto& format_pair : repository) {
         const auto& format = format_pair.format;
         
-        // 查找是否已存在相同的填充
+        std::cerr << "🔧 DEBUG: collectUniqueFills处理格式ID=" << format_pair.id << ", pattern=" << (int)format->getPattern() << std::endl;
+        
+        // 特殊处理：None模式映射到fillId=0
+        if (format->getPattern() == core::PatternType::None) {
+            format_to_fill_id.push_back(0);
+            std::cerr << "🔧 DEBUG: 格式ID=" << format_pair.id << "映射到标准fillId=0 (none)" << std::endl;
+            continue;
+        }
+        
+        // 特殊处理：Gray125模式映射到fillId=1
+        if (format->getPattern() == core::PatternType::Gray125) {
+            format_to_fill_id.push_back(1);
+            std::cerr << "🔧 DEBUG: 格式ID=" << format_pair.id << "映射到标准fillId=1 (gray125)" << std::endl;
+            continue;
+        }
+        
+        // 其他模式：从fillId=2开始分配
         bool found = false;
         for (size_t i = 0; i < unique_fills.size(); ++i) {
             if (fillEquals(*format, *unique_fills[i])) {
-                format_to_fill_id.push_back(static_cast<int>(i));
+                format_to_fill_id.push_back(static_cast<int>(i + 2));  // +2 偏移
+                std::cerr << "🔧 DEBUG: 格式ID=" << format_pair.id << "映射到已存在的fillId=" << (i + 2) << std::endl;
                 found = true;
                 break;
             }
@@ -551,7 +628,9 @@ void StyleSerializer::collectUniqueFills(
         // 如果没有找到相同填充，添加新的唯一填充
         if (!found) {
             unique_fills.push_back(format);
-            format_to_fill_id.push_back(static_cast<int>(unique_fills.size() - 1));
+            int new_fill_id = static_cast<int>(unique_fills.size() - 1 + 2);  // +2 偏移
+            format_to_fill_id.push_back(new_fill_id);
+            std::cerr << "🔧 DEBUG: 格式ID=" << format_pair.id << "创建新fillId=" << new_fill_id << ", pattern=" << (int)format->getPattern() << std::endl;
         }
     }
 }

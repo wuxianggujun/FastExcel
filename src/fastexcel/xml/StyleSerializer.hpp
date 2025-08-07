@@ -187,6 +187,13 @@ private:
     static std::string colorToXml(const core::Color& color);
     
     /**
+     * @brief 写入颜色属性到XML元素
+     * @param color 颜色对象
+     * @param writer XML写入器
+     */
+    static void writeColorAttributes(const core::Color& color, xml::XMLStreamWriter& writer);
+    
+    /**
      * @brief 检查格式是否需要对齐信息
      * @param format 格式描述符
      * @return 是否需要对齐信息
