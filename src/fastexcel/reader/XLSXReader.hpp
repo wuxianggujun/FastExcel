@@ -57,6 +57,7 @@ public:
   
   // 样式访问
   const std::unordered_map<int, std::shared_ptr<core::FormatDescriptor>>& getStyles() const { return styles_; }
+  const std::unordered_map<int, int>& getStyleIdMapping() const { return style_id_mapping_; }
 
 private:
     // 成员变量
@@ -72,6 +73,7 @@ private:
     std::unordered_map<std::string, std::string> worksheet_paths_;  // name -> path
     std::unordered_map<int, std::string> shared_strings_;           // index -> string
     std::unordered_map<int, std::shared_ptr<core::FormatDescriptor>> styles_; // index -> format descriptor
+    std::unordered_map<int, int> style_id_mapping_; // 原始样式ID -> FormatRepository中的ID
     
     // 内部解析方法 - 系统层，使用ErrorCode
     core::ErrorCode parseWorkbookXML();

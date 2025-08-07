@@ -179,10 +179,13 @@ core::ErrorCode XLSXReader::loadWorkbook(std::unique_ptr<core::Workbook>& workbo
             // 获取工作簿的格式仓储
             auto& format_repo = const_cast<core::FormatRepository&>(workbook->getStyleRepository());
             
+            // 清空之前的映射
+            style_id_mapping_.clear();
+            
             // 按ID顺序导入样式
             int imported_count = 0;
             for (const auto& style_pair : styles_) {
-                int style_id = style_pair.first;
+                int original_style_id = style_pair.first;
                 const auto& format_desc = style_pair.second;
                 
                 if (format_desc) {
@@ -190,9 +193,12 @@ core::ErrorCode XLSXReader::loadWorkbook(std::unique_ptr<core::Workbook>& workbo
                     int new_id = format_repo.addFormat(*format_desc);
                     imported_count++;
                     
-                    // 可选：记录ID映射日志以供调试
-                    if (new_id != style_id) {
-                        LOG_TRACE("样式ID映射: {} -> {}", style_id, new_id);
+                    // 建立原始ID到新ID的映射
+                    style_id_mapping_[original_style_id] = new_id;
+                    
+                    // 记录ID映射日志以供调试
+                    if (new_id != original_style_id) {
+                        LOG_TRACE("样式ID映射: {} -> {}", original_style_id, new_id);
                     }
                 }
             }
@@ -488,7 +494,7 @@ core::ErrorCode XLSXReader::parseWorksheetXML(const std::string& path, core::Wor
     
     try {
         WorksheetParser parser;
-        if (!parser.parse(xml_content, worksheet, shared_strings_, styles_)) {
+        if (!parser.parse(xml_content, worksheet, shared_strings_, styles_, style_id_mapping_)) {
             LOG_ERROR("解析工作表XML失败: {}", path);
             return core::ErrorCode::XmlParseError;
         }

@@ -159,6 +159,18 @@ void Worksheet::setColumnWidth(int first_col, int last_col, double width) {
     }
 }
 
+void Worksheet::setColumnFormatId(int col, int format_id) {
+    validateCellPosition(0, col);
+    column_info_[col].format_id = format_id;
+}
+
+void Worksheet::setColumnFormatId(int first_col, int last_col, int format_id) {
+    validateRange(0, first_col, 0, last_col);
+    for (int col = first_col; col <= last_col; ++col) {
+        column_info_[col].format_id = format_id;
+    }
+}
+
 // setColumnFormat方法已移除，请使用FormatDescriptor架构
 
 // setColumnFormat范围方法已移除，请使用FormatDescriptor架构
@@ -371,6 +383,14 @@ double Worksheet::getColumnWidth(int col) const {
     return default_col_width_;
 }
 
+int Worksheet::getColumnFormatId(int col) const {
+    auto it = column_info_.find(col);
+    if (it != column_info_.end()) {
+        return it->second.format_id;
+    }
+    return -1;
+}
+
 double Worksheet::getRowHeight(int row) const {
     auto it = row_info_.find(row);
     if (it != row_info_.end() && it->second.height > 0) {
@@ -487,8 +507,34 @@ void Worksheet::generateXMLBatch(const std::function<void(const char*, size_t)>&
     writer.writeAttribute("defaultRowHeight", "15");
     writer.endElement(); // sheetFormatPr
     
-    // 列信息
-    generateColumnsXML(callback);
+    // 列信息 - 🔧 关键修复：直接在这里生成列XML，不调用单独的方法
+    if (!column_info_.empty()) {
+        LOG_INFO("🔧 CRITICAL DEBUG: 直接生成<cols>XML，column_info_大小: {}", column_info_.size());
+        
+        writer.startElement("cols");
+        for (const auto& [col_num, col_info] : column_info_) {
+            writer.startElement("col");
+            writer.writeAttribute("min", std::to_string(col_num + 1).c_str());
+            writer.writeAttribute("max", std::to_string(col_num + 1).c_str());
+            
+            if (col_info.width > 0) {
+                writer.writeAttribute("width", std::to_string(col_info.width).c_str());
+                writer.writeAttribute("customWidth", "1");
+            }
+            
+            if (col_info.format_id >= 0) {
+                writer.writeAttribute("style", std::to_string(col_info.format_id).c_str());
+            }
+            
+            if (col_info.hidden) {
+                writer.writeAttribute("hidden", "1");
+            }
+            
+            writer.endElement(); // col
+        }
+        writer.endElement(); // cols
+        LOG_INFO("🔧 CRITICAL DEBUG: 直接生成<cols>XML完成");
+    }
     
     // 关键修复：使用XMLStreamWriter生成sheetData，而不是直接调用generateSheetDataXML
     writer.startElement("sheetData");
@@ -999,14 +1045,24 @@ void Worksheet::generateSheetDataXML(const std::function<void(const char*, size_
 }
 
 void Worksheet::generateColumnsXML(const std::function<void(const char*, size_t)>& callback) const {
+    LOG_INFO("🔧 CRITICAL DEBUG: generateColumnsXML被调用，column_info_大小: {}", column_info_.size());
+    
     if (column_info_.empty()) {
+        LOG_INFO("🔧 CRITICAL DEBUG: column_info_为空，不生成<cols>标签");
         return;
     }
     
-    xml::XMLStreamWriter writer(callback);
-    writer.startElement("cols");
+    LOG_INFO("🔧 CRITICAL DEBUG: 开始生成<cols>XML");
     
+    xml::XMLStreamWriter writer(callback);
+    LOG_INFO("🔧 CRITICAL DEBUG: XMLStreamWriter创建完成");
+    writer.startElement("cols");
+    LOG_INFO("🔧 CRITICAL DEBUG: <cols>元素开始");
+    
+    int processed_cols = 0;
     for (const auto& [col_num, col_info] : column_info_) {
+        LOG_INFO("🔧 CRITICAL DEBUG: 处理列 {} width={} format_id={}", col_num, col_info.width, col_info.format_id);
+        
         writer.startElement("col");
         writer.writeAttribute("min", std::to_string(col_num + 1).c_str());
         writer.writeAttribute("max", std::to_string(col_num + 1).c_str());
@@ -1016,14 +1072,22 @@ void Worksheet::generateColumnsXML(const std::function<void(const char*, size_t)
             writer.writeAttribute("customWidth", "1");
         }
         
+        // 🔧 关键修复：添加样式属性
+        if (col_info.format_id >= 0) {
+            writer.writeAttribute("style", std::to_string(col_info.format_id).c_str());
+        }
+        
         if (col_info.hidden) {
             writer.writeAttribute("hidden", "1");
         }
         
         writer.endElement(); // col
+        processed_cols++;
     }
     
+    LOG_INFO("🔧 CRITICAL DEBUG: 处理了 {} 列，结束<cols>元素", processed_cols);
     writer.endElement(); // cols
+    LOG_INFO("🔧 CRITICAL DEBUG: generateColumnsXML完成");
 }
 
 void Worksheet::generateMergeCellsXML(const std::function<void(const char*, size_t)>& callback) const {

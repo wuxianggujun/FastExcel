@@ -27,7 +27,7 @@ class FormatRepository;
 // 列信息结构
 struct ColumnInfo {
     double width = -1.0;           // 列宽，-1表示默认
-    // format字段已移除，请使用FormatDescriptor架构
+    int format_id = -1;            // FormatRepository中的格式ID，-1表示无格式
     bool hidden = false;           // 是否隐藏
     bool collapsed = false;        // 是否折叠
     uint8_t outline_level = 0;     // 大纲级别
@@ -371,6 +371,21 @@ public:
     /**
      * @brief 设置列格式
      * @param col 列号
+     * @param format_id FormatRepository中的格式ID
+     */
+    void setColumnFormatId(int col, int format_id);
+    
+    /**
+     * @brief 设置列格式范围
+     * @param first_col 起始列
+     * @param last_col 结束列
+     * @param format_id FormatRepository中的格式ID
+     */
+    void setColumnFormatId(int first_col, int last_col, int format_id);
+    
+    /**
+     * @brief 设置列格式
+     * @param col 列号
      * @param format 格式
      */
     void setColumnFormat(int col, std::shared_ptr<Format> format);
@@ -703,6 +718,19 @@ public:
      * @return 行格式
      */
     std::shared_ptr<Format> getRowFormat(int row) const;
+    
+    /**
+     * @brief 获取列格式ID
+     * @param col 列号
+     * @return 列格式ID，-1表示无格式
+     */
+    int getColumnFormatId(int col) const;
+    
+    /**
+     * @brief 获取所有列信息
+     * @return 列信息映射
+     */
+    const std::unordered_map<int, ColumnInfo>& getColumnInfo() const { return column_info_; }
     
     /**
      * @brief 检查列是否隐藏

@@ -31,29 +31,39 @@ public:
      * @param worksheet 目标工作表对象
      * @param shared_strings 共享字符串映射
      * @param styles 样式映射
+     * @param style_id_mapping 样式ID映射（原始ID -> FormatRepository ID）
      * @return 是否解析成功
      */
     bool parse(const std::string& xml_content,
                core::Worksheet* worksheet,
                const std::unordered_map<int, std::string>& shared_strings,
-               const std::unordered_map<int, std::shared_ptr<core::FormatDescriptor>>& styles);
+               const std::unordered_map<int, std::shared_ptr<core::FormatDescriptor>>& styles,
+               const std::unordered_map<int, int>& style_id_mapping = {});
 
 private:
     // 辅助方法
     bool parseSheetData(const std::string& xml_content,
                        core::Worksheet* worksheet,
                        const std::unordered_map<int, std::string>& shared_strings,
-                       const std::unordered_map<int, std::shared_ptr<core::FormatDescriptor>>& styles);
+                       const std::unordered_map<int, std::shared_ptr<core::FormatDescriptor>>& styles,
+                       const std::unordered_map<int, int>& style_id_mapping);
+    
+    bool parseColumns(const std::string& xml_content,
+                     core::Worksheet* worksheet,
+                     const std::unordered_map<int, std::shared_ptr<core::FormatDescriptor>>& styles,
+                     const std::unordered_map<int, int>& style_id_mapping);
     
     bool parseRow(const std::string& row_xml,
                   core::Worksheet* worksheet,
                   const std::unordered_map<int, std::string>& shared_strings,
-                  const std::unordered_map<int, std::shared_ptr<core::FormatDescriptor>>& styles);
+                  const std::unordered_map<int, std::shared_ptr<core::FormatDescriptor>>& styles,
+                  const std::unordered_map<int, int>& style_id_mapping);
     
     bool parseCell(const std::string& cell_xml,
                    core::Worksheet* worksheet,
                    const std::unordered_map<int, std::string>& shared_strings,
-                   const std::unordered_map<int, std::shared_ptr<core::FormatDescriptor>>& styles);
+                   const std::unordered_map<int, std::shared_ptr<core::FormatDescriptor>>& styles,
+                   const std::unordered_map<int, int>& style_id_mapping);
     
     // 工具方法
     std::pair<int, int> parseCellReference(const std::string& ref);
@@ -62,6 +72,11 @@ private:
     int extractStyleIndex(const std::string& cell_xml);
     std::string decodeXMLEntities(const std::string& text);
     int columnLetterToNumber(const std::string& column);
+    
+    // XML属性提取工具方法
+    int extractIntAttribute(const std::string& xml, const std::string& attr_name);
+    double extractDoubleAttribute(const std::string& xml, const std::string& attr_name);
+    std::string extractStringAttribute(const std::string& xml, const std::string& attr_name);
     
     // 新增的工具方法
     std::string extractFormula(const std::string& cell_xml);

@@ -3,11 +3,14 @@
 //
 
 #include "WorksheetParser.hpp"
-#include <iostream>
-#include <sstream>
+
+#include "fastexcel/utils/Logger.hpp"
+
 #include <algorithm>
 #include <cctype>
 #include <ctime>
+#include <iostream>
+#include <sstream>
 #include <string>
 
 namespace fastexcel {
@@ -16,14 +19,20 @@ namespace reader {
 bool WorksheetParser::parse(const std::string& xml_content, 
                            core::Worksheet* worksheet,
                            const std::unordered_map<int, std::string>& shared_strings,
-                           const std::unordered_map<int, std::shared_ptr<core::FormatDescriptor>>& styles) {
+                           const std::unordered_map<int, std::shared_ptr<core::FormatDescriptor>>& styles,
+                           const std::unordered_map<int, int>& style_id_mapping) {
     if (xml_content.empty() || !worksheet) {
         return false;
     }
     
     try {
+        // 🔧 关键修复：先解析列样式定义
+        LOG_DEBUG("开始解析列样式定义");
+        parseColumns(xml_content, worksheet, styles, style_id_mapping);
+        LOG_DEBUG("列样式解析完成");
+        
         // 解析工作表数据
-        return parseSheetData(xml_content, worksheet, shared_strings, styles);
+        return parseSheetData(xml_content, worksheet, shared_strings, styles, style_id_mapping);
         
     } catch (const std::exception& e) {
         std::cerr << "解析工作表时发生错误: " << e.what() << std::endl;
@@ -34,7 +43,8 @@ bool WorksheetParser::parse(const std::string& xml_content,
 bool WorksheetParser::parseSheetData(const std::string& xml_content, 
                                     core::Worksheet* worksheet,
                                     const std::unordered_map<int, std::string>& shared_strings,
-                                    const std::unordered_map<int, std::shared_ptr<core::FormatDescriptor>>& styles) {
+                                    const std::unordered_map<int, std::shared_ptr<core::FormatDescriptor>>& styles,
+                                    const std::unordered_map<int, int>& style_id_mapping) {
     // 查找 <sheetData> 标签
     size_t sheet_data_start = xml_content.find("<sheetData");
     if (sheet_data_start == std::string::npos) {
@@ -83,7 +93,7 @@ bool WorksheetParser::parseSheetData(const std::string& xml_content,
         std::string row_xml = sheet_data_content.substr(pos, row_end - pos + 6); // 包含 </row>
         
         // 解析行
-        if (!parseRow(row_xml, worksheet, shared_strings, styles)) {
+        if (!parseRow(row_xml, worksheet, shared_strings, styles, style_id_mapping)) {
             std::cerr << "解析行失败" << std::endl;
             // 继续处理其他行
         }
@@ -97,7 +107,8 @@ bool WorksheetParser::parseSheetData(const std::string& xml_content,
 bool WorksheetParser::parseRow(const std::string& row_xml, 
                               core::Worksheet* worksheet,
                               const std::unordered_map<int, std::string>& shared_strings,
-                              const std::unordered_map<int, std::shared_ptr<core::FormatDescriptor>>& styles) {
+                              const std::unordered_map<int, std::shared_ptr<core::FormatDescriptor>>& styles,
+                              const std::unordered_map<int, int>& style_id_mapping) {
     // 解析行中的所有单元格
     size_t pos = 0;
     while ((pos = row_xml.find("<c ", pos)) != std::string::npos) {
@@ -108,7 +119,7 @@ bool WorksheetParser::parseRow(const std::string& row_xml,
             size_t self_close = row_xml.find("/>", pos);
             if (self_close != std::string::npos && self_close < row_xml.find("<c ", pos + 1)) {
                 std::string cell_xml = row_xml.substr(pos, self_close - pos + 2);
-                parseCell(cell_xml, worksheet, shared_strings, styles);
+                parseCell(cell_xml, worksheet, shared_strings, styles, style_id_mapping);
                 pos = self_close + 2;
                 continue;
             }
@@ -119,7 +130,7 @@ bool WorksheetParser::parseRow(const std::string& row_xml,
         std::string cell_xml = row_xml.substr(pos, cell_end - pos + 4); // 包含 </c>
         
         // 解析单元格
-        if (!parseCell(cell_xml, worksheet, shared_strings, styles)) {
+        if (!parseCell(cell_xml, worksheet, shared_strings, styles, style_id_mapping)) {
             std::cerr << "解析单元格失败" << std::endl;
             // 继续处理其他单元格
         }
@@ -133,7 +144,8 @@ bool WorksheetParser::parseRow(const std::string& row_xml,
 bool WorksheetParser::parseCell(const std::string& cell_xml,
                                core::Worksheet* worksheet,
                                const std::unordered_map<int, std::string>& shared_strings,
-                               const std::unordered_map<int, std::shared_ptr<core::FormatDescriptor>>& styles) {
+                               const std::unordered_map<int, std::shared_ptr<core::FormatDescriptor>>& styles,
+                               const std::unordered_map<int, int>& style_id_mapping) {
     // 提取单元格引用 (r="A1")
     size_t r_start = cell_xml.find("r=\"");
     if (r_start == std::string::npos) {
@@ -225,7 +237,16 @@ bool WorksheetParser::parseCell(const std::string& cell_xml,
     
     // 应用样式（如果有）
     if (style_index >= 0) {
-        auto style_it = styles.find(style_index);
+        // 🔧 关键修复：使用样式ID映射来获取正确的FormatRepository中的样式
+        int mapped_style_id = style_index;
+        if (!style_id_mapping.empty()) {
+            auto mapping_it = style_id_mapping.find(style_index);
+            if (mapping_it != style_id_mapping.end()) {
+                mapped_style_id = mapping_it->second;
+            }
+        }
+        
+        auto style_it = styles.find(mapped_style_id);
         if (style_it != styles.end()) {
             auto& cell = worksheet->getCell(row, col);
             cell.setFormat(style_it->second);
@@ -441,6 +462,171 @@ std::string WorksheetParser::convertExcelDateToString(double excel_date) {
     
     // 如果转换失败，返回原始数字的字符串表示
     return std::to_string(excel_date);
+}
+
+bool WorksheetParser::parseColumns(const std::string& xml_content,
+                                  core::Worksheet* worksheet,
+                                  const std::unordered_map<int, std::shared_ptr<core::FormatDescriptor>>& styles,
+                                  const std::unordered_map<int, int>& style_id_mapping) {
+    LOG_DEBUG("parseColumns被调用，xml_content长度: {}", xml_content.length());
+    
+    // 查找 <cols> 标签
+    size_t cols_start = xml_content.find("<cols");
+    if (cols_start == std::string::npos) {
+        // 没有列定义，这是正常的
+        LOG_DEBUG("没有找到<cols>标签");
+        return true;
+    }
+    
+    LOG_DEBUG("找到<cols>标签在位置: {}", cols_start);
+    
+    // 找到 <cols> 标签的结束位置
+    size_t content_start = xml_content.find(">", cols_start);
+    if (content_start == std::string::npos) {
+        return false;
+    }
+    content_start++;
+    
+    // 检查是否是自闭合标签
+    if (xml_content.substr(cols_start, content_start - cols_start).find("/>") != std::string::npos) {
+        // 自闭合标签，没有列定义
+        return true;
+    }
+    
+    // 找到 </cols> 标签
+    size_t cols_end = xml_content.find("</cols>", content_start);
+    if (cols_end == std::string::npos) {
+        return false;
+    }
+    
+    // 提取 cols 内容
+    std::string cols_content = xml_content.substr(content_start, cols_end - content_start);
+    
+    // 解析所有列定义
+    size_t pos = 0;
+    while ((pos = cols_content.find("<col ", pos)) != std::string::npos) {
+        // 找到列定义的结束位置
+        size_t col_end = cols_content.find("/>", pos);
+        if (col_end == std::string::npos) {
+            // 查找完整的col标签
+            col_end = cols_content.find("</col>", pos);
+            if (col_end == std::string::npos) {
+                break;
+            }
+            col_end += 6;
+        } else {
+            col_end += 2;
+        }
+        
+        // 提取列定义内容
+        std::string col_xml = cols_content.substr(pos, col_end - pos);
+        
+        // 解析列属性
+        int min_col = extractIntAttribute(col_xml, "min");
+        int max_col = extractIntAttribute(col_xml, "max");
+        double width = extractDoubleAttribute(col_xml, "width");
+        int style_index = extractIntAttribute(col_xml, "style");
+        bool custom_width = extractStringAttribute(col_xml, "customWidth") == "1";
+        bool hidden = extractStringAttribute(col_xml, "hidden") == "1";
+        
+        if (min_col > 0 && max_col > 0) {
+            // Excel列索引从1开始，转换为0开始
+            int first_col = min_col - 1;
+            int last_col = max_col - 1;
+            
+            // 设置列宽
+            if (width > 0 && custom_width) {
+                worksheet->setColumnWidth(first_col, last_col, width);
+            }
+            
+            // 设置列样式
+            if (style_index >= 0) {
+                // 🔧 关键修复：使用样式ID映射来获取正确的格式
+                int mapped_style_id = style_index;
+                if (!style_id_mapping.empty()) {
+                    auto mapping_it = style_id_mapping.find(style_index);
+                    if (mapping_it != style_id_mapping.end()) {
+                        mapped_style_id = mapping_it->second;
+                    }
+                }
+                
+                auto style_it = styles.find(mapped_style_id);
+                if (style_it != styles.end()) {
+                    // 🔧 关键修复：设置列格式ID到工作表
+                    worksheet->setColumnFormatId(first_col, last_col, mapped_style_id);
+                    LOG_DEBUG("设置列样式：列 {}-{} 原始样式ID {} 映射样式ID {}", first_col, last_col, style_index, mapped_style_id);
+                }
+            }
+            
+            // 设置隐藏状态
+            if (hidden) {
+                worksheet->hideColumn(first_col, last_col);
+            }
+        }
+        
+        pos = col_end;
+    }
+    
+    return true;
+}
+
+// 辅助方法：提取整数属性
+int WorksheetParser::extractIntAttribute(const std::string& xml, const std::string& attr_name) {
+    std::string pattern = attr_name + "=\"";
+    size_t start = xml.find(pattern);
+    if (start == std::string::npos) {
+        return -1;
+    }
+    
+    start += pattern.length();
+    size_t end = xml.find("\"", start);
+    if (end == std::string::npos) {
+        return -1;
+    }
+    
+    try {
+        return std::stoi(xml.substr(start, end - start));
+    } catch (const std::exception& e) {
+        return -1;
+    }
+}
+
+// 辅助方法：提取双精度浮点数属性
+double WorksheetParser::extractDoubleAttribute(const std::string& xml, const std::string& attr_name) {
+    std::string pattern = attr_name + "=\"";
+    size_t start = xml.find(pattern);
+    if (start == std::string::npos) {
+        return -1.0;
+    }
+    
+    start += pattern.length();
+    size_t end = xml.find("\"", start);
+    if (end == std::string::npos) {
+        return -1.0;
+    }
+    
+    try {
+        return std::stod(xml.substr(start, end - start));
+    } catch (const std::exception& e) {
+        return -1.0;
+    }
+}
+
+// 辅助方法：提取字符串属性
+std::string WorksheetParser::extractStringAttribute(const std::string& xml, const std::string& attr_name) {
+    std::string pattern = attr_name + "=\"";
+    size_t start = xml.find(pattern);
+    if (start == std::string::npos) {
+        return "";
+    }
+    
+    start += pattern.length();
+    size_t end = xml.find("\"", start);
+    if (end == std::string::npos) {
+        return "";
+    }
+    
+    return xml.substr(start, end - start);
 }
 
 } // namespace reader

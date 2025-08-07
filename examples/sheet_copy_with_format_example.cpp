@@ -178,6 +178,49 @@ public:
             
             std::cout << "OK: Copied " << copied_cells << " cells with " << formatted_cells << " formatted cells" << std::endl;
             
+            // 🔧 关键修复：复制列信息（宽度和格式）
+            std::cout << "\nStep 4.5: Copying column information..." << std::endl;
+            
+            // 调试：显示源工作表的列信息总数
+            const auto& source_column_info = source_worksheet->getColumnInfo();
+            std::cout << "DEBUG: Source worksheet has " << source_column_info.size() << " column configurations" << std::endl;
+            
+            int copied_columns = 0;
+            int copied_column_formats = 0;
+            for (int col = min_col; col <= max_col; ++col) {
+                // 复制列宽
+                double col_width = source_worksheet->getColumnWidth(col);
+                if (col_width != target_worksheet->getColumnWidth(col)) {
+                    target_worksheet->setColumnWidth(col, col_width);
+                    copied_columns++;
+                }
+                
+                // 复制列格式ID
+                int col_format_id = source_worksheet->getColumnFormatId(col);
+                if (col_format_id >= 0) {
+                    target_worksheet->setColumnFormatId(col, col_format_id);
+                    copied_column_formats++;
+                    std::cout << "DEBUG: Copied column " << col << " format ID: " << col_format_id << std::endl;
+                }
+                
+                // 复制列隐藏状态
+                if (source_worksheet->isColumnHidden(col)) {
+                    target_worksheet->hideColumn(col);
+                }
+            }
+            std::cout << "OK: Copied " << copied_columns << " column width configurations and " 
+                     << copied_column_formats << " column format configurations" << std::endl;
+            
+            // 🔧 最终诊断：检查目标工作表保存前的列信息状态
+            const auto& target_column_info = target_worksheet->getColumnInfo();
+            std::cout << "🔧 FINAL DEBUG: Target worksheet column_info_ size before save: " << target_column_info.size() << std::endl;
+            for (int i = 0; i < 9; ++i) {
+                int format_id = target_worksheet->getColumnFormatId(i);
+                if (format_id >= 0) {
+                    std::cout << "🔧 Target column " << i << " has format ID: " << format_id << std::endl;
+                }
+            }
+            
             // 保存目标工作簿
             std::cout << "\\nStep 5: Saving target workbook..." << std::endl;
             bool saved = target_workbook->save();
