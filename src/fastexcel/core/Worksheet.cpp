@@ -548,7 +548,12 @@ void Worksheet::generateXMLBatch(const std::function<void(const char*, size_t)>&
             
             // 应用单元格格式
             if (cell->hasFormat()) {
-                writer.writeAttribute("s", std::to_string(cell->getFormat()->getXfIndex()).c_str());
+                int xf_index = cell->getFormat()->getXfIndex();
+                // 修复：如果xf_index无效，使用默认样式ID 0
+                if (xf_index < 0) {
+                    xf_index = 0;
+                }
+                writer.writeAttribute("s", std::to_string(xf_index).c_str());
             }
             
             // 只有在单元格不为空时才写入值
@@ -946,7 +951,12 @@ void Worksheet::generateSheetDataXML(const std::function<void(const char*, size_
             
             // 应用单元格格式
             if (cell->hasFormat()) {
-                xml_content += " s=\"" + std::to_string(cell->getFormat()->getXfIndex()) + "\"";
+                int xf_index = cell->getFormat()->getXfIndex();
+                // 修复：如果xf_index无效，使用默认样式ID 0
+                if (xf_index < 0) {
+                    xf_index = 0;
+                }
+                xml_content += " s=\"" + std::to_string(xf_index) + "\"";
             }
             
             // 只有在单元格不为空时才写入值
@@ -1874,7 +1884,12 @@ void Worksheet::generateSheetDataStreaming(const std::function<void(const char*,
                 
                 // 应用单元格格式
                 if (cell.hasFormat()) {
-                    cell_xml += " s=\"" + std::to_string(cell.getFormat()->getXfIndex()) + "\"";
+                    int xf_index = cell.getFormat()->getXfIndex();
+                    // 修复：如果xf_index无效，使用默认样式ID 0
+                    if (xf_index < 0) {
+                        xf_index = 0;
+                    }
+                    cell_xml += " s=\"" + std::to_string(xf_index) + "\"";
                 }
                 
                 // 只有在单元格不为空时才写入值

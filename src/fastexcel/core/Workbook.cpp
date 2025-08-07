@@ -105,12 +105,14 @@ bool Workbook::save() {
             }
         }
         
-        // 根据选项决定是否收集共享字符串
+        // 🔧 修复SharedStrings生成逻辑：移除手动收集，依赖工作表XML生成时自动添加
+        // 清空共享字符串列表，让工作表XML生成时自动填充
         if (options_.use_shared_strings) {
-            LOG_DEBUG("Collecting shared strings (enabled)");
-            collectSharedStrings();
+            LOG_DEBUG("SharedStrings enabled - will be auto-populated during worksheet XML generation");
+            shared_strings_.clear();
+            shared_strings_list_.clear();
         } else {
-            LOG_DEBUG("Skipping shared strings collection (disabled for performance)");
+            LOG_DEBUG("SharedStrings disabled for performance");
             shared_strings_.clear();
             shared_strings_list_.clear();
         }
@@ -632,15 +634,6 @@ bool Workbook::generateExcelStructureBatch() {
     });
     files.emplace_back("xl/styles.xml", std::move(styles_xml));
     
-    // 只有启用共享字符串且有内容时才生成sharedStrings.xml文件
-    if (options_.use_shared_strings && !shared_strings_list_.empty()) {
-        std::string shared_strings_xml;
-        generateSharedStringsXML([&shared_strings_xml](const char* data, size_t size) {
-            shared_strings_xml.append(data, size);
-        });
-        files.emplace_back("xl/sharedStrings.xml", std::move(shared_strings_xml));
-    }
-    
     // Theme文件
     std::string theme_xml;
     generateThemeXML([&theme_xml](const char* data, size_t size) {
@@ -648,6 +641,7 @@ bool Workbook::generateExcelStructureBatch() {
     });
     files.emplace_back("xl/theme/theme1.xml", std::move(theme_xml));
     
+    // 🔧 修复SharedStrings生成顺序：先生成工作表XML（会自动添加共享字符串），再生成sharedStrings.xml
     // 工作表文件
     for (size_t i = 0; i < worksheets_.size(); ++i) {
         std::string worksheet_xml;
@@ -666,6 +660,17 @@ bool Workbook::generateExcelStructureBatch() {
             std::string rels_path = "xl/worksheets/_rels/sheet" + std::to_string(i + 1) + ".xml.rels";
             files.emplace_back(std::move(rels_path), std::move(worksheet_rels_xml));
         }
+    }
+    
+    // 🔧 关键修复：如果启用共享字符串，总是生成sharedStrings.xml文件（即使为空）
+    // Excel需要这个文件才能正确处理 t="s" 引用
+    if (options_.use_shared_strings) {
+        std::string shared_strings_xml;
+        generateSharedStringsXML([&shared_strings_xml](const char* data, size_t size) {
+            shared_strings_xml.append(data, size);
+        });
+        files.emplace_back("xl/sharedStrings.xml", std::move(shared_strings_xml));
+        LOG_DEBUG("Generated sharedStrings.xml with {} entries", shared_strings_list_.size());
     }
     
     LOG_INFO("Generated {} files, starting batch write to ZIP", files.size());
@@ -808,21 +813,7 @@ bool Workbook::generateExcelStructureStreaming() {
             return false;
         }
         
-        // xl/sharedStrings.xml - 流式写入（如果需要）
-        if (options_.use_shared_strings && !shared_strings_list_.empty()) {
-            if (!file_manager_->openStreamingFile("xl/sharedStrings.xml")) {
-                LOG_ERROR("Failed to open streaming file: xl/sharedStrings.xml");
-                return false;
-            }
-            generateSharedStringsXML([this](const char* data, size_t size) {
-                file_manager_->writeStreamingChunk(data, size);
-            });
-            if (!file_manager_->closeStreamingFile()) {
-                LOG_ERROR("Failed to close streaming file: xl/sharedStrings.xml");
-                return false;
-            }
-        }
-        
+        // 🔧 修复SharedStrings生成顺序：先生成工作表文件（会自动添加共享字符串），再生成sharedStrings.xml
         // 工作表文件（流式写入）
         for (size_t i = 0; i < worksheets_.size(); ++i) {
             std::string worksheet_path = getWorksheetPath(static_cast<int>(i + 1));
@@ -853,6 +844,23 @@ bool Workbook::generateExcelStructureStreaming() {
                     return false;
                 }
             }
+        }
+        
+        // 🔧 关键修复：如果启用共享字符串，总是生成sharedStrings.xml文件（即使为空）
+        // Excel需要这个文件才能正确处理 t="s" 引用
+        if (options_.use_shared_strings) {
+            if (!file_manager_->openStreamingFile("xl/sharedStrings.xml")) {
+                LOG_ERROR("Failed to open streaming file: xl/sharedStrings.xml");
+                return false;
+            }
+            generateSharedStringsXML([this](const char* data, size_t size) {
+                file_manager_->writeStreamingChunk(data, size);
+            });
+            if (!file_manager_->closeStreamingFile()) {
+                LOG_ERROR("Failed to close streaming file: xl/sharedStrings.xml");
+                return false;
+            }
+            LOG_DEBUG("Generated streaming sharedStrings.xml with {} entries", shared_strings_list_.size());
         }
         
         LOG_INFO("Excel structure generation completed successfully in streaming mode");
@@ -1183,9 +1191,9 @@ void Workbook::generateContentTypesXML(const std::function<void(const char*, siz
         writer.endElement(); // Override
     }
     
-    // 关键修复：严格按照libxlsxwriter模版，空文件不应该包含sharedStrings.xml引用
-    // 只有在实际有共享字符串数据时才添加
-    if (options_.use_shared_strings && !shared_strings_list_.empty()) {
+    // 🔧 关键修复：如果启用共享字符串，总是包含sharedStrings.xml引用，无论当前是否有内容
+    // Excel需要这些引用才能正确处理共享字符串
+    if (options_.use_shared_strings) {
         writer.startElement("Override");
         writer.writeAttribute("PartName", "/xl/sharedStrings.xml");
         writer.writeAttribute("ContentType", "application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml");
@@ -1272,8 +1280,9 @@ void Workbook::generateWorkbookRelsXML(const std::function<void(const char*, siz
     writer.writeAttribute("Target", "styles.xml");
     writer.endElement(); // Relationship
     
-    // 只有启用共享字符串且有内容时才添加共享字符串关系
-    if (options_.use_shared_strings && !shared_strings_list_.empty()) {
+    // 🔧 关键修复：如果启用共享字符串，总是包含sharedStrings关系，无论当前是否有内容
+    // Excel需要这个关系才能正确处理共享字符串
+    if (options_.use_shared_strings) {
         writer.startElement("Relationship");
         writer.writeAttribute("Id", ("rId" + std::to_string(rId++)).c_str());
         writer.writeAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings");
