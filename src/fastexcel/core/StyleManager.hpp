@@ -1,7 +1,7 @@
 #pragma once
 
 #include "fastexcel/core/StyleTemplate.hpp"
-#include "fastexcel/core/FormatPool.hpp"
+#include "fastexcel/core/FormatRepository.hpp"
 #include <memory>
 #include <unordered_map>
 #include <vector>
@@ -10,12 +10,12 @@ namespace fastexcel {
 namespace core {
 
 /**
- * @brief 高级样式管理器 - 整合样式模板和格式池功能
+ * @brief 高级样式管理器 - 整合样式模板和格式仓储功能
  */
 class StyleManager {
 private:
     std::unique_ptr<StyleTemplate> template_;
-    std::unique_ptr<FormatPool> format_pool_;
+    std::unique_ptr<FormatRepository> format_repo_;
     
     // 样式索引映射：原始索引 -> 新索引
     std::unordered_map<int, size_t> style_index_mapping_;
@@ -47,14 +47,14 @@ public:
     /**
      * @brief 获取样式索引（通过原始索引）
      * @param original_index 原始样式索引
-     * @return 新的格式池索引
+     * @return 新的格式仓储索引
      */
     size_t getStyleIndex(int original_index) const;
     
     /**
      * @brief 获取预定义样式索引
      * @param style_name 样式名称
-     * @return 格式池索引
+     * @return 格式仓储索引
      */
     size_t getPredefinedStyleIndex(const std::string& style_name);
     
@@ -66,7 +66,7 @@ public:
      * @param bold 粗体
      * @param italic 斜体
      * @param color 颜色
-     * @return 格式池索引
+     * @return 格式仓储索引
      */
     size_t createFontStyle(const std::string& style_key,
                           const std::string& font_name = "Calibri",
@@ -99,9 +99,9 @@ public:
                                const std::string& border_key = "");
     
     /**
-     * @brief 获取格式池（用于XML生成）
+     * @brief 获取格式仓储（用于样式操作）
      */
-    FormatPool* getFormatPool() { return format_pool_.get(); }
+    FormatRepository* getFormatRepository() { return format_repo_.get(); }
     
     /**
      * @brief 获取样式模板（用于高级操作）

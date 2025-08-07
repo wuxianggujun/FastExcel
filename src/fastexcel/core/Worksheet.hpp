@@ -3,7 +3,7 @@
 #include "fastexcel/core/Cell.hpp"
 #include "fastexcel/core/Format.hpp"
 #include "fastexcel/core/SharedStringTable.hpp"
-#include "fastexcel/core/FormatPool.hpp"
+#include "fastexcel/core/FormatRepository.hpp"
 #include "fastexcel/core/CellRangeManager.hpp"
 #include "fastexcel/utils/CommonUtils.hpp"
 #include <string>
@@ -22,7 +22,7 @@ namespace core {
 // 前向声明
 class Workbook;
 class SharedStringTable;
-class FormatPool;
+class FormatRepository;
 
 // 列信息结构
 struct ColumnInfo {
@@ -148,7 +148,7 @@ private:
     
     // 优化组件
     SharedStringTable* sst_ = nullptr;
-    FormatPool* format_pool_ = nullptr;
+    FormatRepository* format_repo_ = nullptr;
     bool optimize_mode_ = false;
     
     // 优化模式下的行缓存
@@ -222,10 +222,10 @@ public:
     void setSharedStringTable(SharedStringTable* sst) { sst_ = sst; }
     
     /**
-     * @brief 设置格式池
-     * @param format_pool 格式池指针
+     * @brief 设置格式仓储
+     * @param format_repo 格式仓储指针
      */
-    void setFormatPool(FormatPool* format_pool) { format_pool_ = format_pool; }
+    void setFormatRepository(FormatRepository* format_repo) { format_repo_ = format_repo; }
     
     /**
      * @brief 启用/禁用优化模式

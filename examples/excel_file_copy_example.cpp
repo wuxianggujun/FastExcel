@@ -78,7 +78,7 @@ public:
             }
             std::cout << "OK: Target workbook created successfully" << std::endl;
             
-            // Step 2.5: 复制样式数据（关键修复：传递源工作簿的FormatPool原始样式数据）
+            // 样式复制已经在工作簿级别完成，直接复制单元格值
             std::cout << "\nStep 2.5: Copying styles data..." << std::endl;
             target_workbook->copyStylesFrom(source_workbook.get());
             std::cout << "OK: Styles data copied" << std::endl;
@@ -155,31 +155,13 @@ public:
                                     break;
                             }
                             
-                            // 复制单元格格式（修复版本）
+                            // 复制单元格值（样式已在工作簿级别复制）
                             auto source_format = source_cell.getFormat();
                             if (source_format) {
-                                // 关键修复：通过目标工作簿的FormatPool获取或创建对应格式
-                                auto target_format_pool = target_workbook->getFormatPool();
-                                
-                                // 方法1：通过原始样式索引获取格式（如果有的话）
-                                int original_index = source_format->getXfIndex();
-                                if (original_index >= 0) {
-                                    auto raw_styles = target_format_pool->getRawStylesForCopy();
-                                    auto raw_style_it = raw_styles.find(original_index);
-                                    if (raw_style_it != raw_styles.end()) {
-                                        // 使用原始样式创建新格式
-                                        auto new_format = target_format_pool->getOrCreateFormat(*raw_style_it->second);
-                                        auto& target_cell = target_worksheet->getCell(row, col);
-                                        target_cell.setFormat(new_format);
-                                        copied_formats++;
-                                    }
-                                } else {
-                                    // 方法2：复制格式属性创建新格式
-                                    auto new_format = target_format_pool->getOrCreateFormat(*source_format);
-                                    auto& target_cell = target_worksheet->getCell(row, col);
-                                    target_cell.setFormat(new_format);
-                                    copied_formats++;
-                                }
+                                // 样式已经通过 copyStylesFrom 处理，这里只需要复制单元格的格式引用
+                                auto& target_cell = target_worksheet->getCell(row, col);
+                                target_cell.setFormat(source_format); // 样式已经复制到目标工作簿
+                                copied_formats++;
                             }
                             copied_cells++;
                         }

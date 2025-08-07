@@ -1,7 +1,7 @@
 #include "fastexcel/core/Worksheet.hpp"
 #include "fastexcel/core/Workbook.hpp"
 #include "fastexcel/core/SharedStringTable.hpp"
-#include "fastexcel/core/FormatPool.hpp"
+#include "fastexcel/core/FormatRepository.hpp"
 #include "fastexcel/core/CellRangeManager.hpp"
 #include "fastexcel/xml/XMLStreamWriter.hpp"
 #include "fastexcel/xml/SharedStrings.hpp"
@@ -1408,9 +1408,9 @@ Worksheet::PerformanceStats Worksheet::getPerformanceStats() const {
         stats.sst_compression_ratio = 0.0;
     }
     
-    if (format_pool_) {
-        stats.unique_formats = format_pool_->getFormatCount();
-        auto dedup_stats = format_pool_->getDeduplicationStats();
+    if (format_repo_) {
+        stats.unique_formats = format_repo_->getFormatCount();
+        auto dedup_stats = format_repo_->getDeduplicationStats();
         stats.format_deduplication_ratio = dedup_stats.deduplication_ratio;
     } else {
         stats.unique_formats = 0;
@@ -1439,9 +1439,9 @@ void Worksheet::writeOptimizedCell(int row, int col, Cell&& cell, std::shared_pt
     
     // 处理格式
     if (format) {
-        if (format_pool_) {
-            // 使用格式池去重
-            format_pool_->getFormatIndex(format.get()); // 确保格式在池中
+        if (format_repo_) {
+            // 使用格式仓储去重
+            // FormatRepository会自动处理去重，直接设置格式
             cell.setFormat(format);
         } else {
             cell.setFormat(format);
