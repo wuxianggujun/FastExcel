@@ -26,6 +26,7 @@ Worksheet::Worksheet(const std::string& name, std::shared_ptr<Workbook> workbook
 
 Cell& Worksheet::getCell(int row, int col) {
     validateCellPosition(row, col);
+    updateUsedRange(row, col);
     return cells_[std::make_pair(row, col)];
 }
 
