@@ -6,6 +6,7 @@
 #include <chrono>
 #include <iomanip>
 #include <sstream>
+#include <algorithm>
 
 namespace fastexcel {
 namespace archive {
@@ -285,6 +286,57 @@ bool FileManager::closeStreamingFile() {
     }
     
     LOG_DEBUG("Closed streaming file");
+    return true;
+}
+
+bool FileManager::copyFromExistingPackage(const core::Path& source_package,
+                                          const std::vector<std::string>& skip_prefixes) {
+    if (!isOpen()) {
+        LOG_ERROR("Archive not open for writing when copying from existing package");
+        return false;
+    }
+
+    // 打开源包用于读取
+    ZipArchive src(source_package);
+    if (!src.open(false)) {
+        LOG_ERROR("Failed to open source package for copy: {}", source_package.string());
+        return false;
+    }
+
+    auto paths = src.listFiles();
+    LOG_INFO("Copy-through existing entries: {} files to scan", paths.size());
+
+    for (const auto& p : paths) {
+        bool skip = false;
+        for (const auto& prefix : skip_prefixes) {
+            if (!prefix.empty() && p.rfind(prefix, 0) == 0) { // starts with
+                skip = true;
+                break;
+            }
+        }
+        if (skip) {
+            LOG_DEBUG("Skip passthrough: {}", p);
+            continue;
+        }
+
+        std::vector<uint8_t> data;
+        if (src.extractFile(p, data) == ZipError::Ok) {
+            if (archive_->fileExists(p) == ZipError::Ok) {
+                LOG_DEBUG("Target already has {}, skipping overwrite", p);
+                continue;
+            }
+            if (archive_->addFile(p, data.data(), data.size()) != ZipError::Ok) {
+                LOG_ERROR("Failed to write passthrough entry: {}", p);
+                src.close();
+                return false;
+            }
+            LOG_DEBUG("Pass-through copied: {} ({} bytes)", p, data.size());
+        } else {
+            LOG_WARN("Failed to extract entry from source for passthrough: {}", p);
+        }
+    }
+
+    src.close();
     return true;
 }
 

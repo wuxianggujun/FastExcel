@@ -43,10 +43,10 @@ bool ExcelStructureGenerator::generate() {
             }
         }
         
-        // 1. 生成基础文件
-        reportProgress("Generating basic files", 10, 100);
-        auto basic_start = std::chrono::high_resolution_clock::now();
-        if (!generateBasicFiles()) {
+    // 1. 生成基础文件
+    reportProgress("Generating basic files", 10, 100);
+    auto basic_start = std::chrono::high_resolution_clock::now();
+    if (!generateBasicFiles()) {
             LOG_ERROR("Failed to generate basic Excel files");
             return false;
         }
@@ -124,71 +124,89 @@ bool ExcelStructureGenerator::generateBasicFiles() {
     LOG_DEBUG("Generating {} basic Excel files", estimated_files);
     
     // 使用统一的文件生成方法，支持真正的流式写入
-    if (!generateFileWithCallback("[Content_Types].xml",
-        [this](const std::function<void(const char*, size_t)>& callback) {
-            workbook_->generateContentTypesXML(callback);
-        })) {
-        return false;
+    if (workbook_->shouldGenerateContentTypes()) {
+        if (!generateFileWithCallback("[Content_Types].xml",
+            [this](const std::function<void(const char*, size_t)>& callback) {
+                workbook_->generateContentTypesXML(callback);
+            })) {
+            return false;
+        }
     }
     
-    if (!generateFileWithCallback("_rels/.rels",
-        [this](const std::function<void(const char*, size_t)>& callback) {
-            workbook_->generateRelsXML(callback);
-        })) {
-        return false;
+    if (workbook_->shouldGenerateRootRels()) {
+        if (!generateFileWithCallback("_rels/.rels",
+            [this](const std::function<void(const char*, size_t)>& callback) {
+                workbook_->generateRelsXML(callback);
+            })) {
+            return false;
+        }
     }
     
-    if (!generateFileWithCallback("docProps/app.xml",
-        [this](const std::function<void(const char*, size_t)>& callback) {
-            workbook_->generateDocPropsAppXML(callback);
-        })) {
-        return false;
+    if (workbook_->shouldGenerateDocPropsApp()) {
+        if (!generateFileWithCallback("docProps/app.xml",
+            [this](const std::function<void(const char*, size_t)>& callback) {
+                workbook_->generateDocPropsAppXML(callback);
+            })) {
+            return false;
+        }
     }
     
-    if (!generateFileWithCallback("docProps/core.xml",
-        [this](const std::function<void(const char*, size_t)>& callback) {
-            workbook_->generateDocPropsCoreXML(callback);
-        })) {
-        return false;
+    if (workbook_->shouldGenerateDocPropsCore()) {
+        if (!generateFileWithCallback("docProps/core.xml",
+            [this](const std::function<void(const char*, size_t)>& callback) {
+                workbook_->generateDocPropsCoreXML(callback);
+            })) {
+            return false;
+        }
     }
     
     // 生成自定义属性（如果有）
-    if (!generateFileWithCallbackIfNotEmpty("docProps/custom.xml",
-        [this](const std::function<void(const char*, size_t)>& callback) {
-            workbook_->generateDocPropsCustomXML(callback);
-        })) {
-        return false;
+    if (workbook_->shouldGenerateDocPropsCustom()) {
+        if (!generateFileWithCallbackIfNotEmpty("docProps/custom.xml",
+            [this](const std::function<void(const char*, size_t)>& callback) {
+                workbook_->generateDocPropsCustomXML(callback);
+            })) {
+            return false;
+        }
     }
     
-    if (!generateFileWithCallback("xl/_rels/workbook.xml.rels",
-        [this](const std::function<void(const char*, size_t)>& callback) {
-            workbook_->generateWorkbookRelsXML(callback);
-        })) {
-        return false;
+    if (workbook_->shouldGenerateWorkbookCore()) {
+        if (!generateFileWithCallback("xl/_rels/workbook.xml.rels",
+            [this](const std::function<void(const char*, size_t)>& callback) {
+                workbook_->generateWorkbookRelsXML(callback);
+            })) {
+            return false;
+        }
     }
     
-    if (!generateFileWithCallback("xl/workbook.xml",
-        [this](const std::function<void(const char*, size_t)>& callback) {
-            workbook_->generateWorkbookXML(callback);
-        })) {
-        return false;
+    if (workbook_->shouldGenerateWorkbookCore()) {
+        if (!generateFileWithCallback("xl/workbook.xml",
+            [this](const std::function<void(const char*, size_t)>& callback) {
+                workbook_->generateWorkbookXML(callback);
+            })) {
+            return false;
+        }
     }
     
-    if (!generateFileWithCallback("xl/styles.xml",
-        [this](const std::function<void(const char*, size_t)>& callback) {
-            workbook_->generateStylesXML(callback);
-        })) {
-        return false;
+    if (workbook_->shouldGenerateStyles()) {
+        if (!generateFileWithCallback("xl/styles.xml",
+            [this](const std::function<void(const char*, size_t)>& callback) {
+                workbook_->generateStylesXML(callback);
+            })) {
+            return false;
+        }
     }
     
     // 注意：sharedStrings.xml 将在所有工作表生成后，在 finalize() 中生成
     // 这样可以确保共享字符串表已经被填充
     
-    if (!generateFileWithCallback("xl/theme/theme1.xml",
-        [this](const std::function<void(const char*, size_t)>& callback) {
-            workbook_->generateThemeXML(callback);
-        })) {
-        return false;
+    if (workbook_->shouldGenerateTheme()) {
+        if (!generateFileWithCallback("xl/theme/theme1.xml",
+            [this](const std::function<void(const char*, size_t)>& callback) {
+                workbook_->generateThemeXML(callback);
+            })) {
+            return false;
+        }
     }
     
     LOG_DEBUG("Successfully generated basic Excel files");
@@ -212,6 +230,12 @@ bool ExcelStructureGenerator::generateWorksheets() {
         }
         
         std::string worksheet_path = "xl/worksheets/sheet" + std::to_string(i + 1) + ".xml";
+
+        // 若为透传编辑且该sheet未变更，则跳过生成，保留透传版本
+        if (!workbook_->shouldGenerateSheet(i)) {
+            LOG_DEBUG("Skip generating sheet{} due to pass-through mode", i + 1);
+            continue;
+        }
         
         // 智能决策：根据工作表大小选择生成方式
         if (shouldUseStreamingForWorksheet(worksheet)) {
@@ -233,7 +257,7 @@ bool ExcelStructureGenerator::generateWorksheets() {
         worksheet->generateRelsXML([&worksheet_rels_xml](const char* data, size_t size) {
             worksheet_rels_xml.append(data, size);
         });
-        if (!worksheet_rels_xml.empty()) {
+        if (!worksheet_rels_xml.empty() && workbook_->shouldGenerateSheetRels(i)) {
             std::string rels_path = "xl/worksheets/_rels/sheet" + std::to_string(i + 1) + ".xml.rels";
             if (!writer_->writeFile(rels_path, worksheet_rels_xml)) {
                 LOG_ERROR("Failed to generate worksheet relations file: {}", rels_path);
@@ -253,7 +277,7 @@ bool ExcelStructureGenerator::generateWorksheets() {
 bool ExcelStructureGenerator::finalize() {
     // 生成共享字符串文件（如果启用）
     // 这必须在所有工作表生成之后进行，因为工作表生成时会填充共享字符串表
-    if (workbook_->getOptions().use_shared_strings) {
+    if (workbook_->shouldGenerateSharedStrings()) {
         LOG_DEBUG("Generating shared strings XML");
         
         if (!generateFileWithCallback("xl/sharedStrings.xml",

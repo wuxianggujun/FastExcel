@@ -5,6 +5,7 @@
 #include <string>
 #include <memory>
 #include <unordered_map>
+#include <vector>
 
 namespace fastexcel {
 namespace archive {
@@ -57,6 +58,11 @@ public:
     bool addContentTypes();
     bool addWorkbookRels();
     bool addRootRels();
+
+    // 从现有包中复制未修改的条目（编辑模式保真写回）
+    // skip_prefixes: 以这些前缀开头的路径将被跳过，不复制（因为将由新的生成逻辑覆盖）
+    bool copyFromExistingPackage(const core::Path& source_package,
+                                 const std::vector<std::string>& skip_prefixes);
     
 private:
     bool createExcelStructure();

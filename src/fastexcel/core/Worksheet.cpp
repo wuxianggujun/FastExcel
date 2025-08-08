@@ -1,5 +1,6 @@
 #include "fastexcel/core/Worksheet.hpp"
 #include "fastexcel/core/Workbook.hpp"
+#include "fastexcel/core/DirtyManager.hpp"
 #include "fastexcel/core/SharedStringTable.hpp"
 #include "fastexcel/core/FormatRepository.hpp"
 #include "fastexcel/core/CellRangeManager.hpp"
@@ -43,6 +44,10 @@ const Cell& Worksheet::getCell(int row, int col) const {
 // ========== 基本写入方法 ==========
 
 void Worksheet::writeString(int row, int col, const std::string& value) {
+    if (parent_workbook_ && parent_workbook_->getDirtyManager()) {
+        std::string sheet_path = "xl/worksheets/sheet" + std::to_string(sheet_id_) + ".xml";
+        parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::CONTENT);
+    }
     this->validateCellPosition(row, col);
     
     Cell cell;
@@ -64,6 +69,10 @@ void Worksheet::writeString(int row, int col, const std::string& value) {
 }
 
 void Worksheet::writeNumber(int row, int col, double value) {
+    if (parent_workbook_ && parent_workbook_->getDirtyManager()) {
+        std::string sheet_path = "xl/worksheets/sheet" + std::to_string(sheet_id_) + ".xml";
+        parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::CONTENT);
+    }
     this->validateCellPosition(row, col);
     
     Cell cell;
@@ -79,6 +88,10 @@ void Worksheet::writeNumber(int row, int col, double value) {
 }
 
 void Worksheet::writeBoolean(int row, int col, bool value) {
+    if (parent_workbook_ && parent_workbook_->getDirtyManager()) {
+        std::string sheet_path = "xl/worksheets/sheet" + std::to_string(sheet_id_) + ".xml";
+        parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::CONTENT);
+    }
     this->validateCellPosition(row, col);
     
     Cell cell;
@@ -94,6 +107,10 @@ void Worksheet::writeBoolean(int row, int col, bool value) {
 }
 
 void Worksheet::writeFormula(int row, int col, const std::string& formula) {
+    if (parent_workbook_ && parent_workbook_->getDirtyManager()) {
+        std::string sheet_path = "xl/worksheets/sheet" + std::to_string(sheet_id_) + ".xml";
+        parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::CONTENT);
+    }
     this->validateCellPosition(row, col);
     
     Cell cell;
@@ -109,6 +126,10 @@ void Worksheet::writeFormula(int row, int col, const std::string& formula) {
 }
 
 void Worksheet::writeDateTime(int row, int col, const std::tm& datetime) {
+    if (parent_workbook_ && parent_workbook_->getDirtyManager()) {
+        std::string sheet_path = "xl/worksheets/sheet" + std::to_string(sheet_id_) + ".xml";
+        parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::CONTENT);
+    }
     this->validateCellPosition(row, col);
     
     // 使用 TimeUtils 将日期时间转换为Excel序列号
@@ -117,6 +138,12 @@ void Worksheet::writeDateTime(int row, int col, const std::tm& datetime) {
 }
 
 void Worksheet::writeUrl(int row, int col, const std::string& url, const std::string& string) {
+    if (parent_workbook_ && parent_workbook_->getDirtyManager()) {
+        std::string sheet_path = "xl/worksheets/sheet" + std::to_string(sheet_id_) + ".xml";
+        std::string rels_path = "xl/worksheets/_rels/sheet" + std::to_string(sheet_id_) + ".xml.rels";
+        parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::CONTENT);
+        parent_workbook_->getDirtyManager()->markDirty(rels_path, DirtyManager::DirtyLevel::CONTENT);
+    }
     this->validateCellPosition(row, col);
     auto& cell = cells_[std::make_pair(row, col)];
     
@@ -148,11 +175,19 @@ void Worksheet::writeRange(int start_row, int start_col, const std::vector<std::
 // ========== 行列操作 ==========
 
 void Worksheet::setColumnWidth(int col, double width) {
+    if (parent_workbook_ && parent_workbook_->getDirtyManager()) {
+        std::string sheet_path = "xl/worksheets/sheet" + std::to_string(sheet_id_) + ".xml";
+        parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::METADATA);
+    }
     validateCellPosition(0, col);
     column_info_[col].width = width;
 }
 
 void Worksheet::setColumnWidth(int first_col, int last_col, double width) {
+    if (parent_workbook_ && parent_workbook_->getDirtyManager()) {
+        std::string sheet_path = "xl/worksheets/sheet" + std::to_string(sheet_id_) + ".xml";
+        parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::METADATA);
+    }
     validateRange(0, first_col, 0, last_col);
     for (int col = first_col; col <= last_col; ++col) {
         column_info_[col].width = width;
@@ -160,11 +195,19 @@ void Worksheet::setColumnWidth(int first_col, int last_col, double width) {
 }
 
 void Worksheet::setColumnFormatId(int col, int format_id) {
+    if (parent_workbook_ && parent_workbook_->getDirtyManager()) {
+        std::string sheet_path = "xl/worksheets/sheet" + std::to_string(sheet_id_) + ".xml";
+        parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::METADATA);
+    }
     validateCellPosition(0, col);
     column_info_[col].format_id = format_id;
 }
 
 void Worksheet::setColumnFormatId(int first_col, int last_col, int format_id) {
+    if (parent_workbook_ && parent_workbook_->getDirtyManager()) {
+        std::string sheet_path = "xl/worksheets/sheet" + std::to_string(sheet_id_) + ".xml";
+        parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::METADATA);
+    }
     validateRange(0, first_col, 0, last_col);
     for (int col = first_col; col <= last_col; ++col) {
         column_info_[col].format_id = format_id;
@@ -176,11 +219,19 @@ void Worksheet::setColumnFormatId(int first_col, int last_col, int format_id) {
 // setColumnFormat范围方法已移除，请使用FormatDescriptor架构
 
 void Worksheet::hideColumn(int col) {
+    if (parent_workbook_ && parent_workbook_->getDirtyManager()) {
+        std::string sheet_path = "xl/worksheets/sheet" + std::to_string(sheet_id_) + ".xml";
+        parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::METADATA);
+    }
     validateCellPosition(0, col);
     column_info_[col].hidden = true;
 }
 
 void Worksheet::hideColumn(int first_col, int last_col) {
+    if (parent_workbook_ && parent_workbook_->getDirtyManager()) {
+        std::string sheet_path = "xl/worksheets/sheet" + std::to_string(sheet_id_) + ".xml";
+        parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::METADATA);
+    }
     validateRange(0, first_col, 0, last_col);
     for (int col = first_col; col <= last_col; ++col) {
         column_info_[col].hidden = true;
@@ -188,6 +239,10 @@ void Worksheet::hideColumn(int first_col, int last_col) {
 }
 
 void Worksheet::setRowHeight(int row, double height) {
+    if (parent_workbook_ && parent_workbook_->getDirtyManager()) {
+        std::string sheet_path = "xl/worksheets/sheet" + std::to_string(sheet_id_) + ".xml";
+        parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::METADATA);
+    }
     validateCellPosition(row, 0);
     row_info_[row].height = height;
 }
@@ -195,11 +250,19 @@ void Worksheet::setRowHeight(int row, double height) {
 // setRowFormat方法已移除，请使用FormatDescriptor架构
 
 void Worksheet::hideRow(int row) {
+    if (parent_workbook_ && parent_workbook_->getDirtyManager()) {
+        std::string sheet_path = "xl/worksheets/sheet" + std::to_string(sheet_id_) + ".xml";
+        parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::METADATA);
+    }
     validateCellPosition(row, 0);
     row_info_[row].hidden = true;
 }
 
 void Worksheet::hideRow(int first_row, int last_row) {
+    if (parent_workbook_ && parent_workbook_->getDirtyManager()) {
+        std::string sheet_path = "xl/worksheets/sheet" + std::to_string(sheet_id_) + ".xml";
+        parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::METADATA);
+    }
     validateRange(first_row, 0, last_row, 0);
     for (int row = first_row; row <= last_row; ++row) {
         row_info_[row].hidden = true;
@@ -209,6 +272,10 @@ void Worksheet::hideRow(int first_row, int last_row) {
 // ========== 合并单元格 ==========
 
 void Worksheet::mergeCells(int first_row, int first_col, int last_row, int last_col) {
+    if (parent_workbook_ && parent_workbook_->getDirtyManager()) {
+        std::string sheet_path = "xl/worksheets/sheet" + std::to_string(sheet_id_) + ".xml";
+        parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::METADATA);
+    }
     validateRange(first_row, first_col, last_row, last_col);
     merge_ranges_.emplace_back(first_row, first_col, last_row, last_col);
 }
@@ -216,28 +283,48 @@ void Worksheet::mergeCells(int first_row, int first_col, int last_row, int last_
 // ========== 自动筛选 ==========
 
 void Worksheet::setAutoFilter(int first_row, int first_col, int last_row, int last_col) {
+    if (parent_workbook_ && parent_workbook_->getDirtyManager()) {
+        std::string sheet_path = "xl/worksheets/sheet" + std::to_string(sheet_id_) + ".xml";
+        parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::METADATA);
+    }
     validateRange(first_row, first_col, last_row, last_col);
     autofilter_ = std::make_unique<AutoFilterRange>(first_row, first_col, last_row, last_col);
 }
 
 void Worksheet::removeAutoFilter() {
+    if (parent_workbook_ && parent_workbook_->getDirtyManager()) {
+        std::string sheet_path = "xl/worksheets/sheet" + std::to_string(sheet_id_) + ".xml";
+        parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::METADATA);
+    }
     autofilter_.reset();
 }
 
 // ========== 冻结窗格 ==========
 
 void Worksheet::freezePanes(int row, int col) {
+    if (parent_workbook_ && parent_workbook_->getDirtyManager()) {
+        std::string sheet_path = "xl/worksheets/sheet" + std::to_string(sheet_id_) + ".xml";
+        parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::METADATA);
+    }
     validateCellPosition(row, col);
     freeze_panes_ = std::make_unique<FreezePanes>(row, col);
 }
 
 void Worksheet::freezePanes(int row, int col, int top_left_row, int top_left_col) {
+    if (parent_workbook_ && parent_workbook_->getDirtyManager()) {
+        std::string sheet_path = "xl/worksheets/sheet" + std::to_string(sheet_id_) + ".xml";
+        parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::METADATA);
+    }
     validateCellPosition(row, col);
     validateCellPosition(top_left_row, top_left_col);
     freeze_panes_ = std::make_unique<FreezePanes>(row, col, top_left_row, top_left_col);
 }
 
 void Worksheet::splitPanes(int row, int col) {
+    if (parent_workbook_ && parent_workbook_->getDirtyManager()) {
+        std::string sheet_path = "xl/worksheets/sheet" + std::to_string(sheet_id_) + ".xml";
+        parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::METADATA);
+    }
     validateCellPosition(row, col);
     // 分割窗格的实现与冻结窗格类似，但使用不同的XML属性
     freeze_panes_ = std::make_unique<FreezePanes>(row, col);
@@ -246,6 +333,10 @@ void Worksheet::splitPanes(int row, int col) {
 // ========== 打印设置 ==========
 
 void Worksheet::setPrintArea(int first_row, int first_col, int last_row, int last_col) {
+    if (parent_workbook_ && parent_workbook_->getDirtyManager()) {
+        std::string sheet_path = "xl/worksheets/sheet" + std::to_string(sheet_id_) + ".xml";
+        parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::METADATA);
+    }
     validateRange(first_row, first_col, last_row, last_col);
     print_settings_.print_area_first_row = first_row;
     print_settings_.print_area_first_col = first_col;
@@ -254,28 +345,48 @@ void Worksheet::setPrintArea(int first_row, int first_col, int last_row, int las
 }
 
 void Worksheet::setRepeatRows(int first_row, int last_row) {
+    if (parent_workbook_ && parent_workbook_->getDirtyManager()) {
+        std::string sheet_path = "xl/worksheets/sheet" + std::to_string(sheet_id_) + ".xml";
+        parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::METADATA);
+    }
     validateRange(first_row, 0, last_row, 0);
     print_settings_.repeat_rows_first = first_row;
     print_settings_.repeat_rows_last = last_row;
 }
 
 void Worksheet::setRepeatColumns(int first_col, int last_col) {
+    if (parent_workbook_ && parent_workbook_->getDirtyManager()) {
+        std::string sheet_path = "xl/worksheets/sheet" + std::to_string(sheet_id_) + ".xml";
+        parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::METADATA);
+    }
     validateRange(0, first_col, 0, last_col);
     print_settings_.repeat_cols_first = first_col;
     print_settings_.repeat_cols_last = last_col;
 }
 
 void Worksheet::setLandscape(bool landscape) {
+    if (parent_workbook_ && parent_workbook_->getDirtyManager()) {
+        std::string sheet_path = "xl/worksheets/sheet" + std::to_string(sheet_id_) + ".xml";
+        parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::METADATA);
+    }
     print_settings_.landscape = landscape;
 }
 
 void Worksheet::setPaperSize(int paper_size) {
+    if (parent_workbook_ && parent_workbook_->getDirtyManager()) {
+        std::string sheet_path = "xl/worksheets/sheet" + std::to_string(sheet_id_) + ".xml";
+        parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::METADATA);
+    }
     // 纸张大小代码的实现
     // 这里可以根据需要添加具体的纸张大小映射
     (void)paper_size; // 避免未使用参数警告
 }
 
 void Worksheet::setMargins(double left, double right, double top, double bottom) {
+    if (parent_workbook_ && parent_workbook_->getDirtyManager()) {
+        std::string sheet_path = "xl/worksheets/sheet" + std::to_string(sheet_id_) + ".xml";
+        parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::METADATA);
+    }
     print_settings_.left_margin = left;
     print_settings_.right_margin = right;
     print_settings_.top_margin = top;

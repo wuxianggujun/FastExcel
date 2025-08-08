@@ -5,6 +5,7 @@
 #include "fastexcel/core/Path.hpp"
 #include "fastexcel/core/CustomPropertyManager.hpp"
 #include "fastexcel/core/DefinedNameManager.hpp"
+#include "fastexcel/core/DirtyManager.hpp"
 #include "fastexcel/archive/FileManager.hpp"
 #include "fastexcel/utils/CommonUtils.hpp"
 #include "fastexcel/theme/Theme.hpp"
@@ -137,6 +138,14 @@ private:
     bool lock_structure_ = false;
     bool lock_windows_ = false;
 
+    // 编辑来源信息（用于保留未编辑部件）
+    bool opened_from_existing_ = false;
+    std::string original_package_path_;
+    bool preserve_unknown_parts_ = true;
+
+    // 新的智能脏数据管理器
+    std::unique_ptr<DirtyManager> dirty_manager_;
+
 public:
     /**
      * @brief 创建工作簿（直接可用，无需再调用open）
@@ -193,6 +202,10 @@ public:
      */
     bool close();
     
+    // ========== 编辑模式/保真写回配置 ==========
+    void setPreserveUnknownParts(bool enable) { preserve_unknown_parts_ = enable; }
+    bool getPreserveUnknownParts() const { return preserve_unknown_parts_; }
+
     // ========== 工作表管理 ==========
     
     /**
@@ -752,6 +765,23 @@ public:
     void setHighPerformanceMode(bool enable);
     
     // ========== 获取状态 ==========
+
+    // 获取脏数据管理器
+    DirtyManager* getDirtyManager() { return dirty_manager_.get(); }
+    const DirtyManager* getDirtyManager() const { return dirty_manager_.get(); }
+    
+    // 生成控制（基于DirtyManager的新实现）
+    bool shouldGenerateContentTypes() const;
+    bool shouldGenerateRootRels() const;
+    bool shouldGenerateWorkbookCore() const;
+    bool shouldGenerateStyles() const;
+    bool shouldGenerateTheme() const;
+    bool shouldGenerateSharedStrings() const;
+    bool shouldGenerateDocPropsCore() const;
+    bool shouldGenerateDocPropsApp() const;
+    bool shouldGenerateDocPropsCustom() const;
+    bool shouldGenerateSheet(size_t index) const;
+    bool shouldGenerateSheetRels(size_t index) const;
     
     /**
      * @brief 检查是否已打开
@@ -967,6 +997,9 @@ private:
     // 智能模式选择辅助方法
     size_t estimateMemoryUsage() const;
     size_t getTotalCellCount() const;
+
+    // 内部：根据编辑/透传状态返回“是否在编辑模式下且启用透传”
+    bool isPassThroughEditMode() const { return opened_from_existing_ && preserve_unknown_parts_; }
 };
 
 }} // namespace fastexcel::core

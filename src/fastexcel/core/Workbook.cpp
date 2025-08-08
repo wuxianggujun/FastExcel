@@ -59,8 +59,10 @@ Workbook::Workbook(const Path& path) : filename_(path.string()) {
     // 初始化管理器
     custom_property_manager_ = std::make_unique<CustomPropertyManager>();
     defined_name_manager_ = std::make_unique<DefinedNameManager>();
-    custom_property_manager_ = std::make_unique<CustomPropertyManager>();
-    defined_name_manager_ = std::make_unique<DefinedNameManager>();
+    
+    // 初始化智能脏数据管理器
+    dirty_manager_ = std::make_unique<DirtyManager>();
+    dirty_manager_->setIsNewFile(!path.exists()); // 如果文件不存在，则是新文件
     
     // 设置默认文档属性
     doc_properties_.author = "FastExcel";
@@ -122,7 +124,15 @@ bool Workbook::save() {
             if (shared_string_table_) shared_string_table_->clear();
         }
         
-        // 生成Excel文件结构
+        // 编辑模式下，先将原包中未被我们生成的条目拷贝过来（绘图、图片、打印设置等）
+        if (opened_from_existing_ && preserve_unknown_parts_ && !original_package_path_.empty() && file_manager_ && file_manager_->isOpen()) {
+            // 我们将跳过这些前缀（由生成逻辑负责写入/覆盖）
+            // 透传阶段：不跳过任何前缀，先复制全部条目；后续生成阶段会覆盖我们需要更新的部件
+            std::vector<std::string> skip_prefixes = { };
+            file_manager_->copyFromExistingPackage(core::Path(original_package_path_), skip_prefixes);
+        }
+
+        // 生成Excel文件结构（会覆盖我们管理的核心部件）
         if (!generateExcelStructure()) {
             LOG_ERROR("Failed to generate Excel structure");
             return false;
@@ -138,6 +148,35 @@ bool Workbook::save() {
 
 bool Workbook::saveAs(const std::string& filename) {
     std::string old_filename = filename_;
+    std::string original_source = original_package_path_;
+    bool was_from_existing = opened_from_existing_;
+
+    // 检查是否保存到同一个文件
+    bool is_same_file = (filename == old_filename) || (filename == original_source);
+    
+    if (is_same_file && was_from_existing && !original_source.empty()) {
+        // 如果保存到同一个文件，需要先复制原文件到临时位置
+        LOG_INFO("Saving to same file, creating temporary backup for resource preservation");
+        
+        // 创建临时文件路径
+        std::string temp_backup = original_source + ".tmp_backup";
+        core::Path source_path(original_source);
+        core::Path temp_path(temp_backup);
+        
+        // 复制原文件到临时位置
+        try {
+            if (temp_path.exists()) {
+                temp_path.remove();
+            }
+            source_path.copyTo(temp_path);
+            original_package_path_ = temp_backup;  // 更新源路径为临时文件
+            LOG_DEBUG("Created temporary backup: {}", temp_backup);
+        } catch (const std::exception& e) {
+            LOG_ERROR("Failed to create temporary backup: {}", e.what());
+            return false;
+        }
+    }
+
     filename_ = filename;
     
     // 重新创建文件管理器
@@ -147,10 +186,35 @@ bool Workbook::saveAs(const std::string& filename) {
         // 恢复原文件名
         filename_ = old_filename;
         file_manager_ = std::make_unique<archive::FileManager>(core::Path(old_filename));
+        
+        // 如果创建了临时文件，删除它
+        if (is_same_file && original_package_path_.find(".tmp_backup") != std::string::npos) {
+            core::Path temp_path(original_package_path_);
+            if (temp_path.exists()) {
+                temp_path.remove();
+            }
+            original_package_path_ = original_source;  // 恢复原路径
+        }
         return false;
     }
+
+    // 在另存为场景下，如果当前工作簿是从现有包打开的，那么保留 original_package_path_ 用于拷贝未修改部件
+    opened_from_existing_ = was_from_existing;
+    // original_package_path_ 已经在上面设置好了（可能是临时文件或原始文件）
     
-    return save();
+    bool save_result = save();
+    
+    // 清理临时文件（如果有）
+    if (is_same_file && original_package_path_.find(".tmp_backup") != std::string::npos) {
+        core::Path temp_path(original_package_path_);
+        if (temp_path.exists()) {
+            temp_path.remove();
+            LOG_DEBUG("Removed temporary backup: {}", original_package_path_);
+        }
+        original_package_path_ = original_source;  // 恢复原路径
+    }
+    
+    return save_result;
 }
 
 bool Workbook::close() {
@@ -592,6 +656,70 @@ void Workbook::unprotect() {
 void Workbook::setCalcOptions(bool calc_on_load, bool full_calc_on_load) {
     options_.calc_on_load = calc_on_load;
     options_.full_calc_on_load = full_calc_on_load;
+}
+
+// ========== 生成控制判定（使用DirtyManager智能管理） ==========
+
+bool Workbook::shouldGenerateContentTypes() const {
+    if (!dirty_manager_) return true;
+    return dirty_manager_->shouldUpdate("[Content_Types].xml");
+}
+
+bool Workbook::shouldGenerateRootRels() const {
+    if (!dirty_manager_) return true;
+    return dirty_manager_->shouldUpdate("_rels/.rels");
+}
+
+bool Workbook::shouldGenerateWorkbookCore() const {
+    if (!dirty_manager_) return true;
+    return dirty_manager_->shouldUpdate("xl/workbook.xml");
+}
+
+bool Workbook::shouldGenerateStyles() const {
+    if (!dirty_manager_) return true;
+    return dirty_manager_->shouldUpdate("xl/styles.xml");
+}
+
+bool Workbook::shouldGenerateTheme() const {
+    if (!dirty_manager_) return true;
+    // 主题特殊处理：如果有主题内容则需要生成
+    if (!theme_xml_.empty() || !theme_xml_original_.empty() || theme_) {
+        return true;
+    }
+    return dirty_manager_->shouldUpdate("xl/theme/theme1.xml");
+}
+
+bool Workbook::shouldGenerateSharedStrings() const {
+    if (!options_.use_shared_strings) return false; // 未启用SST
+    if (!dirty_manager_) return true;
+    return dirty_manager_->shouldUpdate("xl/sharedStrings.xml");
+}
+
+bool Workbook::shouldGenerateDocPropsCore() const {
+    if (!dirty_manager_) return true;
+    return dirty_manager_->shouldUpdate("docProps/core.xml");
+}
+
+bool Workbook::shouldGenerateDocPropsApp() const {
+    if (!dirty_manager_) return true;
+    return dirty_manager_->shouldUpdate("docProps/app.xml");
+}
+
+bool Workbook::shouldGenerateDocPropsCustom() const {
+    if (!dirty_manager_) return true;
+    return dirty_manager_->shouldUpdate("docProps/custom.xml");
+}
+
+bool Workbook::shouldGenerateSheet(size_t index) const {
+    if (!dirty_manager_) return true;
+    std::string sheetPart = "xl/worksheets/sheet" + std::to_string(index + 1) + ".xml";
+    return dirty_manager_->shouldUpdate(sheetPart);
+}
+
+bool Workbook::shouldGenerateSheetRels(size_t index) const {
+    if (!dirty_manager_) return true;
+    std::string sheetRelsPart = "xl/worksheets/_rels/sheet" + std::to_string(index + 1) + ".xml.rels";
+    return dirty_manager_->shouldUpdate(sheetRelsPart);
 }
 
 // ========== 共享字符串管理 ==========
@@ -1303,6 +1431,12 @@ std::unique_ptr<Workbook> Workbook::open(const Path& path) {
         if (result != core::ErrorCode::Ok) {
             LOG_ERROR("Failed to load workbook from file: {}, error code: {}", path.string(), static_cast<int>(result));
             return nullptr;
+        }
+        
+        // 标记来源以便保存时进行未修改部件的保真写回
+        if (loaded_workbook) {
+            loaded_workbook->opened_from_existing_ = true;
+            loaded_workbook->original_package_path_ = path.string();
         }
         
         LOG_INFO("Successfully loaded workbook for editing: {}", path.string());
