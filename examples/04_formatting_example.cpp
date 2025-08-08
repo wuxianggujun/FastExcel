@@ -16,8 +16,8 @@ int main() {
         
         // 创建工作簿
         auto workbook = fastexcel::core::Workbook::create("formatting_example.xlsx");
-        if (!workbook->open()) {
-            std::cerr << "无法打开工作簿" << std::endl;
+        if (!workbook) {
+            std::cerr << "无法创建工作簿" << std::endl;
             return -1;
         }
         

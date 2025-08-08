@@ -19,7 +19,7 @@ void demonstrateBasicReadWrite() {
     try {
         // 1. 创建新工作簿并写入数据
         auto workbook = core::Workbook::create("sample_data.xlsx");
-        if (!workbook->open()) {
+        if (!workbook) {
             std::cerr << "无法创建工作簿" << std::endl;
             return;
         }
@@ -146,7 +146,7 @@ void demonstrateEditingFeatures() {
     
     try {
         // 加载现有文件进行编辑
-        auto workbook = core::Workbook::loadForEdit("sample_data.xlsx");
+        auto workbook = core::Workbook::open("sample_data.xlsx");
         if (!workbook) {
             std::cerr << "无法加载文件进行编辑" << std::endl;
             return;
@@ -237,7 +237,7 @@ void demonstrateAdvancedFeatures() {
     try {
         // 创建一个复杂的工作簿
         auto workbook = core::Workbook::create("advanced_example.xlsx");
-        if (!workbook->open()) {
+        if (!workbook) {
             std::cerr << "无法创建高级示例工作簿" << std::endl;
             return;
         }

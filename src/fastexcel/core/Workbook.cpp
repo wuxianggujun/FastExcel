@@ -1279,7 +1279,7 @@ std::string Workbook::escapeXML(const std::string& text) const {
 
 // ========== 工作簿编辑功能实现 ==========
 
-std::unique_ptr<Workbook> Workbook::loadForEdit(const Path& path) {
+std::unique_ptr<Workbook> Workbook::open(const Path& path) {
     try {
         // 使用Path的内置文件检查
         if (!path.exists()) {
@@ -1330,7 +1330,7 @@ bool Workbook::refresh() {
         
         // 重新加载
         Path current_path(current_filename);
-        auto refreshed_workbook = loadForEdit(current_path);
+        auto refreshed_workbook = open(current_path);
         if (!refreshed_workbook) {
             LOG_ERROR("Failed to refresh workbook: {}", current_filename);
             return false;

@@ -52,7 +52,7 @@ public:
             
             // 加载源工作簿
             std::cout << "\\nStep 1: Loading source workbook..." << std::endl;
-            auto source_workbook = Workbook::loadForEdit(source_file_);
+            auto source_workbook = Workbook::open(source_file_);
             if (!source_workbook) {
                 std::cerr << "Error: Failed to load source workbook" << std::endl;
                 return false;
@@ -75,11 +75,7 @@ public:
                 return false;
             }
             
-            // 打开工作簿以启用编辑操作
-            if (!target_workbook->open()) {
-                std::cerr << "Error: Failed to open target workbook" << std::endl;
-                return false;
-            }
+            // 目标工作簿已经在create时自动打开，无需再次调用open
             std::cout << "OK: Target workbook created" << std::endl;
             
             // 复制样式数据和主题

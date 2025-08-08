@@ -245,8 +245,8 @@ TEST_F(WorkbookEditTest, LoadForEditAndRefresh) {
     // 关闭当前工作簿
     workbook->close();
     
-    // 使用loadForEdit重新加载
-    auto loaded_workbook = core::Workbook::loadForEdit("test_workbook_edit.xlsx");
+    // 使用open重新加载
+    auto loaded_workbook = core::Workbook::open("test_workbook_edit.xlsx");
     ASSERT_NE(loaded_workbook, nullptr);
     
     // 验证加载的内容

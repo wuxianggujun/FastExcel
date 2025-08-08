@@ -139,25 +139,13 @@ private:
 
 public:
     /**
-     * @brief 创建工作簿
+     * @brief 创建工作簿（直接可用，无需再调用open）
      * @param path 文件路径
-     * @return 工作簿智能指针
+     * @return 工作簿智能指针，失败返回nullptr
      */
     static std::unique_ptr<Workbook> create(const Path& path);
     
-    /**
-     * @brief 创建新的工作簿（新API，静态工厂方法）
-     * @param filename 文件名
-     * @return 工作簿智能指针
-     */
-    static std::unique_ptr<Workbook> createNew(const std::string& filename);
-    
-    /**
-     * @brief 打开现有工作簿（新API，静态工厂方法）
-     * @param filename 文件名
-     * @return 工作簿智能指针
-     */
-    static std::unique_ptr<Workbook> openExisting(const std::string& filename);
+
     
     /**
      * @brief 构造函数
@@ -828,11 +816,11 @@ public:
     // ========== 工作簿编辑功能 ==========
     
     /**
-     * @brief 从现有文件加载工作簿进行编辑
+     * @brief 打开现有文件进行编辑（直接可用，无需再调用open）
      * @param path 文件路径
      * @return 工作簿智能指针，失败返回nullptr
      */
-    static std::unique_ptr<Workbook> loadForEdit(const Path& path);
+    static std::unique_ptr<Workbook> open(const Path& path);
     
     /**
      * @brief 刷新工作簿（重新读取文件内容）

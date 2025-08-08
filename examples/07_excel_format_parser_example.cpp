@@ -3,7 +3,7 @@
  * @brief Excel格式解析示例，使用FastExcel的Workbook高级API
  * 
  * 这个示例演示如何使用FastExcel库的高级API来解析Excel文件格式：
- * - 使用Workbook::loadForEdit()加载Excel文件
+ * - 使用Workbook::open()加载Excel文件
  * - 通过Worksheet API读取单元格数据和格式
  * - 使用Cell API获取格式信息
  * - 通过Format API解析详细的样式属性
@@ -43,9 +43,9 @@ public:
                 return false;
             }
             
-            // 使用Workbook::loadForEdit()加载Excel文件
+            // 使用Workbook::open()加载Excel文件
             std::cout << "\nLoading Excel file using Workbook API..." << std::endl;
-            auto workbook = core::Workbook::loadForEdit(file_path_);
+            auto workbook = core::Workbook::open(file_path_);
             if (!workbook) {
                 std::cerr << "Error: Failed to load workbook" << std::endl;
                 return false;

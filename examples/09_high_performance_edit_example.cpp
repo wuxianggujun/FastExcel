@@ -91,8 +91,8 @@ void demonstrateHighPerformanceEditing() {
     
     // 创建工作簿并启用超高性能模式
     auto workbook = Workbook::create("large_file_edit.xlsx");
-    if (!workbook->open()) {
-        std::cout << "✗ 无法打开工作簿" << std::endl;
+    if (!workbook) {
+        std::cout << "✗ 无法创建工作簿" << std::endl;
         return;
     }
     
@@ -176,11 +176,14 @@ void demonstrateMemoryOptimizedEditing() {
     std::cout << "\n=== 示例3：内存优化编辑 ===" << std::endl;
     
     // 加载现有文件进行编辑
-    auto workbook = Workbook::loadForEdit("test_data.xlsx");
+    auto workbook = Workbook::open("test_data.xlsx");
     if (!workbook) {
         std::cout << "✗ 无法加载文件，创建新文件" << std::endl;
         workbook = Workbook::create("test_data.xlsx");
-        workbook->open();
+        if (!workbook) {
+            std::cout << "✗ 无法创建新文件" << std::endl;
+            return;
+        }
         
         // 创建测试数据
         auto ws = workbook->addWorksheet("测试数据");
@@ -241,7 +244,10 @@ void demonstrateStreamingProcessing() {
     Timer timer("流式处理");
     
     auto workbook = Workbook::create("streaming_large.xlsx");
-    workbook->open();
+    if (!workbook) {
+        std::cout << "✗ 无法创建工作簿" << std::endl;
+        return;
+    }
     
     // 确保启用流式模式
     workbook->setStreamingXML(true);

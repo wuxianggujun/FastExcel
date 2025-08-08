@@ -29,7 +29,7 @@ using namespace fastexcel;
 int main() {
     try {
         // 🚀 直接打开XLSX文件进行编辑（如果文件不存在会自动创建）
-        auto workbook = core::Workbook::loadForEdit("data.xlsx");
+        auto workbook = core::Workbook::open("data.xlsx");
         if (!workbook) {
             workbook = core::Workbook::create("data.xlsx");
             workbook->open();

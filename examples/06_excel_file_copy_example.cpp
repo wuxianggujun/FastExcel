@@ -3,7 +3,7 @@
  * @brief Complete Excel file copy example using FastExcel's high-level interfaces
  * 
  * This example demonstrates the proper way to use FastExcel library:
- * - Uses high-level Workbook interfaces (create, loadForEdit, etc.)
+ * - Uses high-level Workbook interfaces (create, open, etc.)
  * - Leverages FastExcel's built-in Unicode file support through Path class
  * - Follows the library's architectural design
  * - Uses utf8cpp library for proper Unicode handling
@@ -26,7 +26,7 @@ using namespace fastexcel::core;
  * @brief Excel文件复制器，使用FastExcel高级接口
  * 
  * 这个类演示了如何正确使用FastExcel库的架构设计：
- * 1. 使用 Workbook::loadForEdit() 读取现有文件
+ * 1. 使用 Workbook::open() 读取现有文件
  * 2. 使用 Workbook::create() 创建新文件  
  * 3. 通过工作表接口进行数据复制
  * 4. 保持格式和元数据的完整性
@@ -61,7 +61,7 @@ public:
                 return false;
             }
             
-            auto source_workbook = core::Workbook::loadForEdit(source_file_);
+            auto source_workbook = core::Workbook::open(source_file_);
             if (!source_workbook) {
                 std::cerr << "Error: Failed to load source workbook: " << source_file_ << std::endl;
                 return false;
@@ -72,7 +72,7 @@ public:
             // Step 2: 创建目标工作簿
             std::cout << "\nStep 2: Creating target workbook..." << std::endl;
             auto target_workbook = core::Workbook::create(target_file_);
-            if (!target_workbook->open()) {
+            if (!target_workbook) {
                 std::cerr << "Error: Failed to create target workbook: " << target_file_ << std::endl;
                 return false;
             }
@@ -212,7 +212,7 @@ public:
             
             // 关闭工作簿
             target_workbook->close();
-            source_workbook->close(); // loadForEdit返回的工作簿也需要关闭
+            source_workbook->close(); // open返回的工作簿也需要关闭
             
             std::cout << "\n=== Excel File Copy Completed Successfully ===" << std::endl;
             return true;
@@ -235,7 +235,7 @@ public:
             fastexcel::Logger::getInstance().setLevel(fastexcel::Logger::Level::CRITICAL);
             
             // 验证目标文件是否存在
-            auto target_workbook = core::Workbook::loadForEdit(target_file_);
+            auto target_workbook = core::Workbook::open(target_file_);
             if (!target_workbook) {
                 std::cerr << "Verification failed: Cannot load target file" << std::endl;
                 // 恢复日志级别
@@ -244,7 +244,7 @@ public:
             }
             
             // 验证源文件
-            auto source_workbook = core::Workbook::loadForEdit(source_file_);
+            auto source_workbook = core::Workbook::open(source_file_);
             if (!source_workbook) {
                 std::cerr << "Verification failed: Cannot load source file" << std::endl;
                 // 恢复日志级别
