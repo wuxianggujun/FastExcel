@@ -8,6 +8,7 @@
 #include "fastexcel/core/Workbook.hpp"
 
 #include <algorithm>
+#include "fastexcel/utils/TimeUtils.hpp"
 #include <cctype>
 #include <ctime>
 #include <iostream>
@@ -298,7 +299,7 @@ std::pair<int, int> WorksheetParser::parseCellReference(const std::string& ref) 
         int row = std::stoi(row_str) - 1; // Excel行号从1开始，转换为0开始
         int col = columnLetterToNumber(column);
         return {row, col};
-    } catch (const std::exception& e) {
+    } catch (const std::exception& /*e*/) {
         return {-1, -1};
     }
 }
@@ -360,7 +361,7 @@ int WorksheetParser::extractStyleIndex(const std::string& cell_xml) {
     
     try {
         return std::stoi(cell_xml.substr(s_start, s_end - s_start));
-    } catch (const std::exception& e) {
+    } catch (const std::exception& /*e*/) {
         return -1;
     }
 }
@@ -464,13 +465,14 @@ std::string WorksheetParser::convertExcelDateToString(double excel_date) {
     // 转换为Unix时间戳
     time_t unix_time = static_cast<time_t>((excel_date - EXCEL_EPOCH_OFFSET) * SECONDS_PER_DAY);
     
-    // 转换为可读的日期字符串
-    struct tm* time_info = gmtime(&unix_time);
-    if (time_info) {
-        char buffer[32];
-        strftime(buffer, sizeof(buffer), "%Y-%m-%d", time_info);
-        return std::string(buffer);
-    }
+    // 使用项目时间工具类格式化
+    std::tm time_info_buf{};
+#ifdef _WIN32
+    gmtime_s(&time_info_buf, &unix_time);
+#else
+    gmtime_r(&unix_time, &time_info_buf);
+#endif
+    return fastexcel::utils::TimeUtils::formatTime(time_info_buf, "%Y-%m-%d");
     
     // 如果转换失败，返回原始数字的字符串表示
     return std::to_string(excel_date);
@@ -619,7 +621,7 @@ double WorksheetParser::extractDoubleAttribute(const std::string& xml, const std
     
     try {
         return std::stod(xml.substr(start, end - start));
-    } catch (const std::exception& e) {
+    } catch (const std::exception& /*e*/) {
         return -1.0;
     }
 }

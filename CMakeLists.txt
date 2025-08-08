@@ -76,6 +76,8 @@ set(FASTEXCEL_SOURCES
         src/fastexcel/xml/XMLStreamWriter.cpp
         src/fastexcel/xml/XMLStreamReader.cpp
         src/fastexcel/xml/StyleSerializer.cpp
+         src/fastexcel/theme/Theme.cpp
+         src/fastexcel/theme/ThemeParser.cpp
         
 )
 

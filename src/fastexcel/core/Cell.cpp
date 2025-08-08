@@ -45,6 +45,38 @@ Cell::~Cell() {
     clearExtended();
 }
 
+// ========== V3风格赋值运算 ==========
+
+Cell& Cell::operator=(double value) {
+    setValue(value);
+    return *this;
+}
+
+Cell& Cell::operator=(int value) {
+    setValue(static_cast<double>(value));
+    return *this;
+}
+
+Cell& Cell::operator=(bool value) {
+    setValue(value);
+    return *this;
+}
+
+Cell& Cell::operator=(const std::string& value) {
+    setValue(value);
+    return *this;
+}
+
+Cell& Cell::operator=(std::string_view value) {
+    setValue(std::string(value));
+    return *this;
+}
+
+Cell& Cell::operator=(const char* value) {
+    setValue(std::string(value));
+    return *this;
+}
+
 void Cell::setValue(double value) {
     clear();
     flags_.type = CellType::Number;
@@ -180,6 +212,27 @@ std::string Cell::getHyperlink() const {
     return "";
 }
 
+// 批注（注释）
+void Cell::setComment(const std::string& comment) {
+    if (!comment.empty()) {
+        ensureExtended();
+        if (!extended_->comment) {
+            extended_->comment = new std::string();
+        }
+        *extended_->comment = comment;
+    } else if (extended_ && extended_->comment) {
+        delete extended_->comment;
+        extended_->comment = nullptr;
+    }
+}
+
+std::string Cell::getComment() const {
+    if (extended_ && extended_->comment) {
+        return *extended_->comment;
+    }
+    return "";
+}
+
 void Cell::clear() {
     flags_.type = CellType::Empty;
     flags_.has_format = false;
@@ -221,6 +274,7 @@ void Cell::clearExtended() {
         delete extended_->long_string;
         delete extended_->formula;
         delete extended_->hyperlink;
+        delete extended_->comment;
         delete extended_;
         extended_ = nullptr;
     }

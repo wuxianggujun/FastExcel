@@ -1,6 +1,8 @@
 #pragma once
 
 #include <string>
+#include <string_view>
+#include <optional>
 #include <memory>
 #include <cstdint>
 
@@ -51,11 +53,12 @@ private:
         std::string* long_string;    // 长字符串
         std::string* formula;        // 公式
         std::string* hyperlink;      // 超链接
+        std::string* comment;        // 批注
         // 格式相关字段已移除，现在使用FormatDescriptor
         double formula_result;       // 公式计算结果
         
         ExtendedData() : long_string(nullptr), formula(nullptr),
-                        hyperlink(nullptr), formula_result(0.0) {}
+                        hyperlink(nullptr), comment(nullptr), formula_result(0.0) {}
     };
     
     ExtendedData* extended_;  // 只在需要时分配
@@ -78,6 +81,14 @@ public:
     explicit Cell(double value);
     explicit Cell(int value);
     explicit Cell(bool value);
+
+    // 赋值运算（V3风格便捷API）
+    Cell& operator=(double value);
+    Cell& operator=(int value);
+    Cell& operator=(bool value);
+    Cell& operator=(const std::string& value);
+    Cell& operator=(std::string_view value);
+    Cell& operator=(const char* value);
     
     // 基本值设置
     void setValue(double value);
@@ -113,6 +124,11 @@ public:
     void setHyperlink(const std::string& url);
     std::string getHyperlink() const;
     bool hasHyperlink() const { return flags_.has_hyperlink; }
+
+    // 批注（注释）操作
+    void setComment(const std::string& comment);
+    std::string getComment() const;
+    bool hasComment() const { return extended_ && extended_->comment; }
     
     // 状态检查
     bool isEmpty() const { return flags_.type == CellType::Empty; }
