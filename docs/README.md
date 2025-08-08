@@ -4,19 +4,16 @@ FastExcel 是一个高性能的 C++ Excel 文件处理库，专注于快速生�
 
 ## 📚 文档目录
 
-### 核心文档
-- **[API 参考文档](FastExcel_API_Reference.md)** - 完整的 API 参考和使用指南
-- **[性能优化指南](Performance_Optimization_Guide.md)** - 性能优化最佳实践
-- **[架构分析](FastExcel_Architecture_Analysis.md)** - 项目架构设计文档
+> 💡 **快速导航**: 查看 **[文档索引](INDEX.md)** 获取完整的文档导航和分类
 
-### 设计文档
-- **[统一接口提案](Workbook_Unified_Interface_Proposal.md)** - 工作簿统一接口设计
-- **[模式选择指南](Workbook_Mode_Selection_Guide.md)** - 工作簿模式选择建议
-- **[设计模式改进](Design_Pattern_Improvements.md)** - 设计模式应用和改进
-- **[架构图表](FastExcel_Architecture_Diagrams.md)** - 系统架构图表
+### 核心文档
+- **[架构设计文档](architecture-design.md)** - 完整的项目架构设计和优化方案
+- **[性能优化指南](performance-optimization-guide.md)** - 性能优化最佳实践和实施方案
+- **[批量与流式架构详解](streaming-vs-batch-architecture-explained.md)** - 批量和流式模式的详细实现机制
 
 ### 实现文档
-- **[XLSXReader 实现](XLSXReader_Implementation.md)** - XLSX 读取器实现细节
+- **[XML 生成统一规范](xml-generation-guide.md)** - XML 生成的统一规范和实施指引
+- **[主题实现指南](theme-implementation-guide.md)** - Excel 主题功能的实现指南
 
 ## 🚀 快速开始
 
@@ -49,28 +46,28 @@ int main() {
 ```
 
 ### 高级功能
-- **批量写入**: 支持高效的批量数据写入
-- **流式处理**: 支持大文件的流式处理，节省内存
-- **格式化**: 完整的单元格格式化支持
-- **多工作表**: 支持多个工作表管理
-- **时间处理**: 统一的时间工具类
+- **智能模式选择**: 自动根据数据量选择批量或流式模式
+- **统一 XML 生成**: 采用策略模式的统一 XML 生成架构
+- **内存池管理**: 高效的内存分配和回收机制
+- **并行处理**: 支持多线程并行处理大数据集
+- **完整样式支持**: 支持 Excel 的完整样式和主题系统
 
 ## 🏗️ 项目架构
 
-FastExcel 采用现代 C++ 设计，主要组件包括：
+FastExcel 采用现代 C++17 设计，主要组件包括：
 
-- **Core**: 核心功能模块（Workbook, Worksheet, Format, Cell）
-- **Archive**: ZIP 归档处理模块
-- **XML**: XML 流式写入器
-- **Utils**: 工具类（TimeUtils, Logger 等）
-- **Reader**: XLSX 文件读取器
+- **Core**: 核心功能模块（Workbook, Worksheet, Cell, ExcelStructureGenerator）
+- **Archive**: ZIP 归档处理模块（FileManager, ZipArchive）
+- **XML**: 统一 XML 生成系统（IFileWriter, BatchFileWriter, StreamingFileWriter）
+- **Utils**: 工具类（Logger, TimeUtils, MemoryPool）
+- **Reader**: XLSX 文件读取器（XLSXReader）
 
 ## 📊 性能特性
 
-- **高性能**: 相比 libxlsxwriter 提升 20-40% 性能
-- **内存优化**: 智能内存管理和缓存系统
-- **流式处理**: 支持大文件的常量内存处理
-- **批量操作**: 优化的批量数据写入
+- **智能写入策略**: 根据数据量自动选择最优的写入模式
+- **零缓存流式处理**: 流式模式实现真正的常量内存使用
+- **内存优化**: Cell 类优化至 24 字节，支持内存池管理
+- **并行处理**: 支持工作表级别的并行生成和处理
 
 ## 🔧 编译和安装
 
@@ -117,7 +114,8 @@ ctest
 
 ## 📈 版本历史
 
-- **v1.3.0** (当前) - 统一接口设计，性能优化，测试规范化
+- **v2.1.0** (当前) - 修复编译错误，完善架构设计，统一 XML 生成，智能模式选择
+- **v2.0.0** - 统一接口设计，性能优化，测试规范化
 - **v1.2.0** - 添加流式处理支持
 - **v1.1.0** - 格式化功能完善
 - **v1.0.0** - 初始版本
@@ -139,9 +137,21 @@ ctest
 
 ## 🔗 相关链接
 
-- [项目主页](https://github.com/fastexcel/FastExcel)
-- [问题反馈](https://github.com/fastexcel/FastExcel/issues)
-- [API 文档](FastExcel_API_Reference.md)
+- [架构设计详解](architecture-design.md) - 了解 FastExcel 的完整架构设计
+- [性能优化指南](performance-optimization-guide.md) - 获取最佳性能的使用建议
+- [批量与流式模式详解](streaming-vs-batch-architecture-explained.md) - 深入理解两种处理模式
+
+## 📋 当前开发状态
+
+FastExcel 已完成重大架构优化，主要改进包括：
+
+- ✅ 统一 XML 生成架构已完成
+- ✅ 批量/流式模式智能选择已实现
+- ✅ 编译错误修复和架构完善已完成
+- ✅ 策略模式实现和性能优化已完成
+- 📋 后续计划：内存池优化、并行处理、完整测试覆盖
+
+项目现在具有稳定的架构基础和完善的文档体系。
 
 ---
 

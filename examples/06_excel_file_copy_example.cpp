@@ -1,5 +1,5 @@
 /**
- * @file excel_file_copy_example.cpp
+ * @file 06_excel_file_copy_example.cpp
  * @brief Complete Excel file copy example using FastExcel's high-level interfaces
  * 
  * This example demonstrates the proper way to use FastExcel library:
