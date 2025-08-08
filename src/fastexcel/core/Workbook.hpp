@@ -24,6 +24,10 @@
 #include <functional>
 
 namespace fastexcel {
+namespace opc {
+    class PackageEditor;  // 前向声明PackageEditor
+}
+
 namespace core {
 
 // 前向声明
@@ -94,6 +98,7 @@ struct WorkbookOptions {
  */
 class Workbook {
     friend class ExcelStructureGenerator;
+    friend class ::fastexcel::opc::PackageEditor;  // 让PackageEditor能访问私有方法
 private:
     std::string filename_;
     std::vector<std::shared_ptr<Worksheet>> worksheets_;
