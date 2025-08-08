@@ -12,6 +12,7 @@
 #include "fastexcel/core/Path.hpp"
 #include "fastexcel/core/Workbook.hpp"
 #include "fastexcel/utils/Logger.hpp"
+#include "fastexcel/theme/ThemeParser.hpp"
 #include <iostream>
 #include <sstream>
 
@@ -88,6 +89,7 @@ core::ErrorCode XLSXReader::close() {
         shared_strings_.clear();
         styles_.clear();
         theme_xml_.clear();
+        parsed_theme_.reset();
         
         LOG_INFO("成功关闭XLSX文件: {}", filename_);
         return core::ErrorCode::Ok;
@@ -846,10 +848,18 @@ core::ErrorCode XLSXReader::parseThemeXML() {
     try {
         // 保存原始主题XML内容
         theme_xml_ = xml_content;
-        
+
+        // 使用 ThemeParser 解析为结构化对象，便于颜色/字体主题映射
+        parsed_theme_ = theme::ThemeParser::parseFromXML(xml_content);
+        if (!parsed_theme_) {
+            LOG_WARN("主题XML解析为对象失败，继续使用原始XML");
+        } else {
+            LOG_DEBUG("成功解析主题对象: name={}", parsed_theme_->getName());
+        }
+
         LOG_DEBUG("成功解析主题文件 ({} 字节)", theme_xml_.size());
         return core::ErrorCode::Ok;
-        
+
     } catch (const std::exception& e) {
         LOG_ERROR("解析主题文件时发生异常: {}", e.what());
         return core::ErrorCode::XmlParseError;

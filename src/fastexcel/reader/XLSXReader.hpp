@@ -8,6 +8,7 @@
 #include "fastexcel/core/Path.hpp"
 #include "fastexcel/core/ErrorCode.hpp"
 #include "fastexcel/archive/ZipArchive.hpp"
+#include "fastexcel/theme/Theme.hpp"
 #include <memory>
 #include <unordered_map>
 #include <vector>
@@ -61,6 +62,8 @@ public:
   
   // 主题访问
   const std::string& getThemeXML() const { return theme_xml_; }
+   // 解析后的主题对象（可能为nullptr，表示未解析或无主题文件）
+   const theme::Theme* getParsedTheme() const { return parsed_theme_.get(); }
 
 private:
     // 成员变量
@@ -78,6 +81,7 @@ private:
     std::unordered_map<int, std::shared_ptr<core::FormatDescriptor>> styles_; // index -> format descriptor
     std::unordered_map<int, int> style_id_mapping_; // 原始样式ID -> FormatRepository中的ID
     std::string theme_xml_; // 原始主题文件内容
+    std::unique_ptr<theme::Theme> parsed_theme_; // 解析后的主题对象
     
     // 内部解析方法 - 系统层，使用ErrorCode
     core::ErrorCode parseWorkbookXML();
