@@ -52,6 +52,10 @@ private:
                      core::Worksheet* worksheet,
                      const std::unordered_map<int, std::shared_ptr<core::FormatDescriptor>>& styles,
                      const std::unordered_map<int, int>& style_id_mapping);
+
+    // 解析合并单元格 (<mergeCells><mergeCell ref="A1:C3"/></mergeCells>)
+    bool parseMergeCells(const std::string& xml_content,
+                         core::Worksheet* worksheet);
     
     bool parseRow(const std::string& row_xml,
                   core::Worksheet* worksheet,
@@ -82,6 +86,9 @@ private:
     std::string extractFormula(const std::string& cell_xml);
     bool isDateFormat(int style_index, const std::unordered_map<int, std::shared_ptr<core::FormatDescriptor>>& styles);
     std::string convertExcelDateToString(double excel_date);
+
+    // 解析区间引用（例如 A1:C3）
+    bool parseRangeRef(const std::string& ref, int& first_row, int& first_col, int& last_row, int& last_col);
 };
 
 } // namespace reader

@@ -32,8 +32,13 @@ bool WorksheetParser::parse(const std::string& xml_content,
         LOG_DEBUG("开始解析列样式定义");
         parseColumns(xml_content, worksheet, styles, style_id_mapping);
         LOG_DEBUG("列样式解析完成");
+
+        // 解析合并单元格（否则编辑保存后会丢失）
+        LOG_DEBUG("开始解析合并单元格");
+        parseMergeCells(xml_content, worksheet);
+        LOG_DEBUG("合并单元格解析完成");
         
-        // 解析工作表数据
+        // 解析工作表数据（行/单元格），并在行级别读取行高
         return parseSheetData(xml_content, worksheet, shared_strings, styles, style_id_mapping);
         
     } catch (const std::exception& e) {
@@ -111,6 +116,24 @@ bool WorksheetParser::parseRow(const std::string& row_xml,
                               const std::unordered_map<int, std::string>& shared_strings,
                               const std::unordered_map<int, std::shared_ptr<core::FormatDescriptor>>& styles,
                               const std::unordered_map<int, int>& style_id_mapping) {
+    // 先解析行级属性：r（行号）、ht（行高）、customHeight、hidden
+    int excel_row = extractIntAttribute(row_xml, "r");
+    if (excel_row > 0) {
+        int row_index = excel_row - 1; // 转为0基
+        double ht = extractDoubleAttribute(row_xml, "ht");
+        std::string custom_height = extractStringAttribute(row_xml, "customHeight");
+        std::string hidden = extractStringAttribute(row_xml, "hidden");
+        if (ht > 0 && (custom_height == "1" || custom_height == "true" || !custom_height.empty())) {
+            // 只有明确设置自定义行高时才设置；部分文件也会直接提供ht且customHeight缺省，兼容性处理：只要有ht就设置
+            worksheet->setRowHeight(row_index, ht);
+        } else if (ht > 0) {
+            worksheet->setRowHeight(row_index, ht);
+        }
+        if (hidden == "1" || hidden == "true") {
+            worksheet->hideRow(row_index);
+        }
+    }
+
     // 解析行中的所有单元格
     size_t pos = 0;
     while ((pos = row_xml.find("<c ", pos)) != std::string::npos) {
@@ -642,6 +665,69 @@ std::string WorksheetParser::extractStringAttribute(const std::string& xml, cons
     }
     
     return xml.substr(start, end - start);
+}
+
+// 解析合并单元格
+bool WorksheetParser::parseMergeCells(const std::string& xml_content,
+                                     core::Worksheet* worksheet) {
+    size_t merges_start = xml_content.find("<mergeCells");
+    if (merges_start == std::string::npos) {
+        return true; // 没有合并单元格，正常
+    }
+
+    // 找到开始标签结束符
+    size_t merges_tag_end = xml_content.find('>', merges_start);
+    if (merges_tag_end == std::string::npos) {
+        return false;
+    }
+
+    // 查找闭合标签位置
+    size_t merges_end = xml_content.find("</mergeCells>", merges_tag_end);
+    if (merges_end == std::string::npos) {
+        return false;
+    }
+
+    std::string merges_content = xml_content.substr(merges_tag_end + 1, merges_end - (merges_tag_end + 1));
+
+    size_t pos = 0;
+    while ((pos = merges_content.find("<mergeCell", pos)) != std::string::npos) {
+        size_t tag_end = merges_content.find("/>", pos);
+        if (tag_end == std::string::npos) {
+            tag_end = merges_content.find('>', pos);
+            if (tag_end == std::string::npos) break;
+        }
+        std::string mc_xml = merges_content.substr(pos, tag_end - pos + 2);
+        std::string ref = extractStringAttribute(mc_xml, "ref");
+        if (!ref.empty()) {
+            int r1, c1, r2, c2;
+            if (parseRangeRef(ref, r1, c1, r2, c2)) {
+                worksheet->mergeCells(r1, c1, r2, c2);
+            }
+        }
+        pos = tag_end + 2;
+    }
+
+    return true;
+}
+
+// 解析区间引用 A1:C3 -> (r1,c1,r2,c2)
+bool WorksheetParser::parseRangeRef(const std::string& ref, int& first_row, int& first_col, int& last_row, int& last_col) {
+    size_t colon = ref.find(':');
+    if (colon == std::string::npos) {
+        // 单一单元格区间
+        auto [r, c] = parseCellReference(ref);
+        if (r < 0 || c < 0) return false;
+        first_row = last_row = r;
+        first_col = last_col = c;
+        return true;
+    }
+    std::string start_ref = ref.substr(0, colon);
+    std::string end_ref = ref.substr(colon + 1);
+    auto [r1, c1] = parseCellReference(start_ref);
+    auto [r2, c2] = parseCellReference(end_ref);
+    if (r1 < 0 || c1 < 0 || r2 < 0 || c2 < 0) return false;
+    first_row = r1; first_col = c1; last_row = r2; last_col = c2;
+    return true;
 }
 
 } // namespace reader

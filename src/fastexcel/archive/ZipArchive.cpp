@@ -112,6 +112,8 @@ void ZipArchive::initializeFileInfo(void* file_info_ptr, const std::string& path
         LOG_ZIP_DEBUG("Batch mode: Using DEFLATE compression method (compression_level: {})", compression_level_);
     }
     
+    LOG_DEBUG("Final compression settings: method={}, level={}", file_info.compression_method, compression_level_);
+    
     // 关键修复2：使用TimeUtils获取当前时间
     // Excel使用DOS时间格式，这是ZIP标准的一部分
     std::tm current_time = utils::TimeUtils::getCurrentTime();
@@ -308,6 +310,8 @@ ZipError ZipArchive::addFiles(std::vector<FileEntry>&& files) {
             file_info.compression_method = MZ_COMPRESS_METHOD_DEFLATE;
             LOG_ZIP_DEBUG("Batch mode (move semantics): Using DEFLATE compression method (compression_level: {})", compression_level_);
         }
+        
+        LOG_DEBUG("Final compression settings (move semantics): method={}, level={}", file_info.compression_method, compression_level_);
         
         // 使用TimeUtils获取本地时间
         std::tm current_time = utils::TimeUtils::getCurrentTime();
@@ -530,11 +534,12 @@ bool ZipArchive::initForWriting() {
     }
     LOG_ZIP_DEBUG("ZIP writer handle created successfully: {}", (void*)zip_handle_);
     
-    // 关键修复：设置为DEFLATE方法并使用压缩级别1，实现真正的流式写入
-    // 压缩级别0会被minizip自动降级为STORE，必须使用级别1或更高
+    // 关键修复：使用实际设置的压缩级别而不是硬编码的值
+    // 使用compression_level_成员变量，保证与Workbook中的设置一致
     mz_zip_writer_set_compress_method(zip_handle_, MZ_COMPRESS_METHOD_DEFLATE);
-    mz_zip_writer_set_compress_level(zip_handle_, 1);  // 最小的DEFLATE压缩级别
-    LOG_DEBUG("Set default compression to DEFLATE with level 1 for streaming compatibility");
+    mz_zip_writer_set_compress_level(zip_handle_, compression_level_);
+    LOG_DEBUG("Set compression to DEFLATE with level {} (from compression_level_ member)", compression_level_);
+    LOG_DEBUG("This will be used as default for all entries unless overridden per-entry");
     
     // 设置覆盖回调函数，总是覆盖已存在的文件
     LOG_DEBUG("Setting overwrite callback");
