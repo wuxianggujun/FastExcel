@@ -1,88 +1,10 @@
 #include "fastexcel/opc/ZipRepackWriter.hpp"
-#include "fastexcel/archive/ZipArchive.hpp"  // 使用你现有的ZipArchive
+#include "fastexcel/archive/ZipArchive.hpp" 
 #include "fastexcel/utils/Logger.hpp"
 #include <algorithm>
 
 namespace fastexcel {
 namespace opc {
-
-// ========== ZipReader 实现 ==========
-
-class ZipReader::Impl {
-public:
-    archive::ZipArchive zip_;
-    core::Path path_;
-    bool is_open_ = false;
-    
-    explicit Impl(const core::Path& path) : zip_(path), path_(path) {}
-};
-
-ZipReader::ZipReader(const core::Path& path)
-    : impl_(std::make_unique<Impl>(path)) {
-}
-
-ZipReader::~ZipReader() {
-    close();
-}
-
-bool ZipReader::open() {
-    if (impl_->is_open_) return true;
-    
-    impl_->is_open_ = impl_->zip_.open(false);  // false = 只读模式
-    if (impl_->is_open_) {
-        LOG_DEBUG("Opened ZIP for reading: {}", impl_->path_.string());
-    }
-    return impl_->is_open_;
-}
-
-void ZipReader::close() {
-    if (impl_->is_open_) {
-        impl_->zip_.close();
-        impl_->is_open_ = false;
-    }
-}
-
-std::vector<std::string> ZipReader::listEntries() const {
-    if (!impl_->is_open_) return {};
-    return impl_->zip_.listFiles();
-}
-
-bool ZipReader::hasEntry(const std::string& path) const {
-    if (!impl_->is_open_) return false;
-    return impl_->zip_.fileExists(path) == archive::ZipError::Ok;
-}
-
-bool ZipReader::readEntry(const std::string& path, std::string& content) const {
-    if (!impl_->is_open_) return false;
-    return impl_->zip_.extractFile(path, content) == archive::ZipError::Ok;
-}
-
-bool ZipReader::readEntry(const std::string& path, std::vector<uint8_t>& data) const {
-    if (!impl_->is_open_) return false;
-    return impl_->zip_.extractFile(path, data) == archive::ZipError::Ok;
-}
-
-bool ZipReader::getEntryInfo(const std::string& path, EntryInfo& info) const {
-    if (!impl_->is_open_) return false;
-    
-    // 简化实现，主要用于获取大小信息
-    std::vector<uint8_t> data;
-    if (impl_->zip_.extractFile(path, data) == archive::ZipError::Ok) {
-        info.path = path;
-        info.uncompressed_size = data.size();
-        info.compressed_size = data.size();  // 简化
-        info.crc32 = 0;  // TODO: 计算CRC
-        info.compression_method = 8;  // DEFLATE
-        return true;
-    }
-    return false;
-}
-
-bool ZipReader::getRawEntry(const std::string& path, std::vector<uint8_t>& raw_data) const {
-    // 对于流复制，暂时使用解压后重压的方式
-    // TODO: 实现真正的原始数据复制
-    return readEntry(path, raw_data);
-}
 
 // ========== ZipRepackWriter 实现 ==========
 
@@ -148,8 +70,9 @@ bool ZipRepackWriter::add(const std::string& path, const void* data, size_t size
     return false;
 }
 
-bool ZipRepackWriter::copyFrom(ZipReader* source, const std::string& entry_path) {
-    if (!source || !source->hasEntry(entry_path)) {
+bool ZipRepackWriter::copyFrom(archive::ZipReader* source, const std::string& entry_path) {
+    // Check if file exists using fileExists
+    if (!source || source->fileExists(entry_path) != archive::ZipError::Ok) {
         LOG_ERROR("Source entry not found: {}", entry_path);
         return false;
     }
@@ -159,9 +82,9 @@ bool ZipRepackWriter::copyFrom(ZipReader* source, const std::string& entry_path)
         return true;
     }
     
-    // 读取源数据
+    // 读取源数据 using extractFile
     std::vector<uint8_t> data;
-    if (!source->readEntry(entry_path, data)) {
+    if (source->extractFile(entry_path, data) != archive::ZipError::Ok) {
         LOG_ERROR("Failed to read source entry: {}", entry_path);
         return false;
     }
@@ -177,7 +100,7 @@ bool ZipRepackWriter::copyFrom(ZipReader* source, const std::string& entry_path)
     return false;
 }
 
-bool ZipRepackWriter::copyBatch(ZipReader* source, const std::vector<std::string>& paths) {
+bool ZipRepackWriter::copyBatch(archive::ZipReader* source, const std::vector<std::string>& paths) {
     LOG_DEBUG("Batch copying {} entries", paths.size());
     
     // 可以使用批量写入优化
@@ -190,7 +113,8 @@ bool ZipRepackWriter::copyBatch(ZipReader* source, const std::vector<std::string
         }
         
         std::vector<uint8_t> data;
-        if (source->readEntry(path, data)) {
+        // Use extractFile instead of readEntry
+        if (source->extractFile(path, data) == archive::ZipError::Ok) {
             batch_data.emplace_back(path, std::move(data));
         } else {
             LOG_WARN("Failed to read entry for batch copy: {}", path);

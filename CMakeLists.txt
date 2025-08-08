@@ -46,6 +46,8 @@ add_subdirectory(third_party)
 set(FASTEXCEL_SOURCES
         src/fastexcel/FastExcel.cpp
         src/fastexcel/archive/ZipArchive.cpp
+        src/fastexcel/archive/ZipReader.cpp
+        src/fastexcel/archive/ZipWriter.cpp
         src/fastexcel/archive/FileManager.cpp
         src/fastexcel/archive/MinizipParallelWriter.cpp
         src/fastexcel/archive/CompressionEngine.cpp
@@ -85,6 +87,7 @@ set(FASTEXCEL_SOURCES
         # OPC Repack Architecture (New)
         src/fastexcel/opc/PackageEditor.cpp
         src/fastexcel/opc/ZipRepackWriter.cpp
+        src/fastexcel/opc/PartGraph.cpp
         
 )
 

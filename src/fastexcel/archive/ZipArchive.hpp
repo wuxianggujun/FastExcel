@@ -1,12 +1,13 @@
 #pragma once
 
+#include "fastexcel/core/Path.hpp"
+#include "fastexcel/archive/ZipReader.hpp"
+#include "fastexcel/archive/ZipWriter.hpp"
 #include <string>
 #include <vector>
+#include <memory>
 #include <cstdint>
 #include <string_view>
-#include <mutex>
-#include <unordered_set>
-#include "fastexcel/core/Path.hpp"
 
 namespace fastexcel {
 namespace archive {
@@ -38,67 +39,53 @@ constexpr bool isError(ZipError error) noexcept {
     return error != ZipError::Ok;
 }
 
+/**
+ * @brief ZIP归档类 - 组合ZipReader和ZipWriter提供完整功能
+ * 
+ * 这个类组合了ZipReader和ZipWriter，提供了同时读写ZIP文件的能力。
+ * 如果只需要读或写，建议直接使用ZipReader或ZipWriter以获得更好的性能。
+ */
 class ZipArchive {
 public:
-    // 批量写入的文件条目结构
-    struct FileEntry {
-        std::string internal_path;
-        std::string content;
-        
-        FileEntry() = default;
-        
-        // 移动构造函数
-        FileEntry(std::string&& path, std::string&& data)
-            : internal_path(std::move(path)), content(std::move(data)) {}
-            
-        // 拷贝构造函数
-        FileEntry(const std::string& path, const std::string& data)
-            : internal_path(path), content(data) {}
-            
-        // 混合构造函数
-        FileEntry(std::string&& path, const std::string& data)
-            : internal_path(std::move(path)), content(data) {}
-            
-        FileEntry(const std::string& path, std::string&& data)
-            : internal_path(path), content(std::move(data)) {}
-    };
-
-private:
-    void* zip_handle_ = nullptr;
-    void* unzip_handle_ = nullptr;
-    std::string filename_;  // UTF-8 filename for logging
-    core::Path filepath_;   // Path object for actual file operations
-    bool is_writable_ = false;
-    bool is_readable_ = false;
-    bool stream_entry_open_ = false;  // 流式写入条目是否已打开
-    int compression_level_ = 6;  // 压缩级别，默认为6
-    mutable std::mutex mutex_;  // 线程安全互斥锁
-    std::unordered_set<std::string> written_paths_;  // 跟踪已写入的路径，防止重复
+    // 使用ZipWriter的FileEntry
+    using FileEntry = ZipWriter::FileEntry;
     
-    
-public:
+    // 构造/析构
     explicit ZipArchive(const core::Path& path);
     ~ZipArchive();
     
-    // 文件操作
+    // ========== 文件操作 ==========
+    
+    /**
+     * 打开ZIP文件
+     * @param create true=创建新文件（写模式），false=打开现有文件（读模式）
+     * @return 是否成功
+     */
     bool open(bool create = true);
+    
+    /**
+     * 关闭ZIP文件
+     * @return 是否成功
+     */
     bool close();
     
-    // 写入操作
+    // ========== 写入操作（委托给ZipWriter） ==========
+    
     ZipError addFile(std::string_view internal_path, std::string_view content);
     ZipError addFile(std::string_view internal_path, const uint8_t* data, size_t size);
     ZipError addFile(std::string_view internal_path, const void* data, size_t size);
     
-    // 批量写入操作 - 高性能模式
+    // 批量写入
     ZipError addFiles(const std::vector<FileEntry>& files);
-    ZipError addFiles(std::vector<FileEntry>&& files); // 移动语义版本
+    ZipError addFiles(std::vector<FileEntry>&& files);
     
-    // 流式写入操作 - 用于大文件
+    // 流式写入
     ZipError openEntry(std::string_view internal_path);
     ZipError writeChunk(const void* data, size_t size);
     ZipError closeEntry();
     
-    // 读取操作
+    // ========== 读取操作（委托给ZipReader） ==========
+    
     ZipError extractFile(std::string_view internal_path, std::string& content);
     ZipError extractFile(std::string_view internal_path, std::vector<uint8_t>& data);
     ZipError extractFileToStream(std::string_view internal_path, std::ostream& output);
@@ -107,23 +94,38 @@ public:
     // 文件列表
     std::vector<std::string> listFiles() const;
     
-    // 获取状态
-    bool isOpen() const { return is_writable_ || is_readable_; }
-    bool isWritable() const { return is_writable_; }
-    bool isReadable() const { return is_readable_; }
+    // ========== 状态查询 ==========
     
-    // 压缩配置
+    bool isOpen() const { return is_open_; }
+    bool isWritable() const { return mode_ == Mode::Write || mode_ == Mode::ReadWrite; }
+    bool isReadable() const { return mode_ == Mode::Read || mode_ == Mode::ReadWrite; }
+    
+    // ========== 配置 ==========
+    
     ZipError setCompressionLevel(int level);
     
-private:
-    // 内部辅助函数
-    void cleanup();
-    bool initForWriting();
-    bool initForReading();
+    // ========== 直接访问底层对象 ==========
     
-    // 文件操作辅助方法 - 使用 void* 避免头文件依赖
-    void initializeFileInfo(void* file_info, const std::string& path, size_t size);
-    ZipError writeFileEntry(const std::string& internal_path, const void* data, size_t size);
+    /**
+     * 获取ZipReader对象（如果可用）
+     * @return ZipReader指针，如果不在读模式则返回nullptr
+     */
+    ZipReader* getReader() { return reader_.get(); }
+    const ZipReader* getReader() const { return reader_.get(); }
+    
+    /**
+     * 获取ZipWriter对象（如果可用）
+     * @return ZipWriter指针，如果不在写模式则返回nullptr
+     */
+    ZipWriter* getWriter() { return writer_.get(); }
+    const ZipWriter* getWriter() const { return writer_.get(); }
+    
+private:
+    core::Path filepath_;
+    std::unique_ptr<ZipReader> reader_;
+    std::unique_ptr<ZipWriter> writer_;
+    bool is_open_ = false;
+    enum class Mode { None, Read, Write, ReadWrite } mode_ = Mode::None;
 };
 
 }} // namespace fastexcel::archive

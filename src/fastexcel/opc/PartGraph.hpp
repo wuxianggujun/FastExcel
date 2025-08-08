@@ -7,6 +7,12 @@
 #include <memory>
 
 namespace fastexcel {
+
+// Forward declarations
+namespace archive {
+    class ZipReader;
+}
+
 namespace opc {
 
 /**
@@ -35,9 +41,9 @@ public:
     ~PartGraph();
     
     /**
-     * 从ZIP包构建关系图
+     * 从archive::ZipReader构建关系图
      */
-    bool buildFromZip(class ZipReader* reader);
+    bool buildFromZipReader(archive::ZipReader* reader);
     
     /**
      * 添加部件

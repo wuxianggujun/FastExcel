@@ -1,6 +1,8 @@
 #include "fastexcel/opc/PackageEditor.hpp"
 #include "fastexcel/opc/ZipRepackWriter.hpp"
 #include "fastexcel/opc/PartGraph.hpp"
+#include "fastexcel/archive/ZipReader.hpp"  // Add missing include
+#include "fastexcel/archive/ZipArchive.hpp" // For ZipError enum
 #include "fastexcel/utils/Logger.hpp"
 #include "fastexcel/utils/CommonUtils.hpp"
 #include "fastexcel/xml/StyleSerializer.hpp"
@@ -130,7 +132,7 @@ bool PackageEditor::initialize(const core::Path& xlsx_path) {
     source_path_ = xlsx_path;
     
     // 1. 打开源ZIP（只读）
-    source_reader_ = std::make_unique<ZipReader>(xlsx_path);
+    source_reader_ = std::make_unique<archive::ZipReader>(xlsx_path);
     if (!source_reader_->open()) {
         LOG_ERROR("Failed to open source ZIP: {}", xlsx_path.string());
         return false;
@@ -138,7 +140,8 @@ bool PackageEditor::initialize(const core::Path& xlsx_path) {
     
     // 2. 构建部件关系图
     part_graph_ = std::make_unique<PartGraph>();
-    if (!part_graph_->buildFromZip(source_reader_.get())) {
+    // Use archive::ZipReader interface
+    if (!part_graph_->buildFromZipReader(source_reader_.get())) {
         LOG_ERROR("Failed to build part graph");
         return false;
     }
@@ -146,7 +149,8 @@ bool PackageEditor::initialize(const core::Path& xlsx_path) {
     // 3. 解析Content_Types
     content_types_ = std::make_unique<ContentTypes>();
     std::string content_types_xml;
-    if (source_reader_->readEntry("[Content_Types].xml", content_types_xml)) {
+    // Use extractFile instead of readEntry
+    if (source_reader_->extractFile("[Content_Types].xml", content_types_xml) == archive::ZipError::Ok) {
         content_types_->parse(content_types_xml);
     }
     
@@ -280,7 +284,8 @@ bool PackageEditor::commit(const core::Path& dst) {
     LOG_DEBUG("Phase 2: Copying unchanged parts");
     
     if (source_reader_) {
-        auto all_entries = source_reader_->listEntries();
+        // Use listFiles instead of listEntries
+        auto all_entries = source_reader_->listFiles();
         std::vector<std::string> to_copy;
         
         for (const auto& entry : all_entries) {
@@ -502,7 +507,8 @@ void PackageEditor::ensureSheetModel(const SheetId& sheet) const {
     if (source_reader_) {
         std::string sheet_xml;
         std::string sheet_path = "xl/worksheets/" + sheet + ".xml";
-        if (source_reader_->readEntry(sheet_path, sheet_xml)) {
+        // Use extractFile instead of readEntry
+        if (source_reader_->extractFile(sheet_path, sheet_xml) == archive::ZipError::Ok) {
             // TODO: 解析现有的工作表数据
         }
     }
@@ -517,7 +523,8 @@ void PackageEditor::ensureStylesModel() const {
     // 如果是编辑现有文件，加载现有的样式
     if (source_reader_) {
         std::string styles_xml;
-        if (source_reader_->readEntry("xl/styles.xml", styles_xml)) {
+        // Use extractFile instead of readEntry
+        if (source_reader_->extractFile("xl/styles.xml", styles_xml) == archive::ZipError::Ok) {
             // TODO: 解析现有的样式
         }
     }
@@ -532,7 +539,8 @@ void PackageEditor::ensureSharedStringsModel() const {
     // 如果是编辑现有文件，加载现有的共享字符串
     if (source_reader_) {
         std::string sst_xml;
-        if (source_reader_->readEntry("xl/sharedStrings.xml", sst_xml)) {
+        // Use extractFile instead of readEntry
+        if (source_reader_->extractFile("xl/sharedStrings.xml", sst_xml) == archive::ZipError::Ok) {
             // TODO: 解析现有的共享字符串
         }
     }

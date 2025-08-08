@@ -14,11 +14,15 @@ namespace core {
     class Workbook;
 }
 
+namespace archive {
+    class ZipReader;
+    class ZipWriter;
+}
+
 namespace opc {
 
 // 前向声明
-class ZipReader;
-class ZipRepackWriter;
+class ZipRepackWriter;  // 保留用于兼容性
 class PartGraph;
 class ContentTypes;
 
@@ -239,7 +243,7 @@ private:
     
     // 源包信息
     core::Path source_path_;
-    std::unique_ptr<ZipReader> source_reader_;
+    std::unique_ptr<archive::ZipReader> source_reader_;
     
     // 部件图和类型
     std::unique_ptr<PartGraph> part_graph_;
