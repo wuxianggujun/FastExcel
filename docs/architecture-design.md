@@ -776,3 +776,41 @@ public:
 4. **代码质量**：现代C++实践，设计模式应用，测试覆盖
 
 通过分阶段实施，可以在保证稳定性的同时，逐步提升库的性能和功能，最终实现一个高性能、功能完整、易于使用的Excel处理库。
+## XML 生成统一规范（补充）
+
+为统一所有 XML 的生成时序、职责划分与写入策略，新增专章文档：[docs/xml-generation-guide.md](docs/xml-generation-guide.md)
+
+关键结论与落地方式（摘要）：
+- 统一调度：由 [ExcelStructureGenerator::generate()](src/fastexcel/core/ExcelStructureGenerator.cpp:23) 负责“顺序控制 + 写入”，彻底避免在多个类中分散控制全局流程。
+- 领域内聚：Workbook/Worksheet/SharedStringTable 仅提供各自的 generate...XML 回调，如：
+  - [Workbook::generateWorkbookXML()](src/fastexcel/core/Workbook.cpp:973)
+  - [Workbook::generateWorkbookRelsXML()](src/fastexcel/core/Workbook.cpp:1348)
+  - [Workbook::generateContentTypesXML()](src/fastexcel/core/Workbook.cpp:1239)
+  - [Workbook::generateStylesXML()](src/fastexcel/core/Workbook.cpp:1029)
+  - [Workbook::generateDocPropsAppXML()](src/fastexcel/core/Workbook.cpp:1066)
+  - [Workbook::generateDocPropsCoreXML()](src/fastexcel/core/Workbook.cpp:1140)
+  - [Workbook::generateDocPropsCustomXML()](src/fastexcel/core/Workbook.cpp:1210)
+  - [Workbook::generateThemeXML()](src/fastexcel/core/Workbook.cpp:1393)
+  - [Workbook::generateSharedStringsXML()](src/fastexcel/core/Workbook.cpp:1034)
+  - [Workbook::generateWorksheetXML()](src/fastexcel/core/Workbook.cpp:1062)
+  - Worksheet: generateXML()/generateRelsXML()（接口见 [src/fastexcel/core/Worksheet.hpp](src/fastexcel/core/Worksheet.hpp)）
+  - SharedStringTable: [SharedStringTable::generateXML()](src/fastexcel/core/SharedStringTable.cpp:84)
+
+- 策略写入：通过 IFileWriter 抽象（批量 [src/fastexcel/core/BatchFileWriter.hpp](src/fastexcel/core/BatchFileWriter.hpp) / 流式 [src/fastexcel/core/StreamingFileWriter.hpp](src/fastexcel/core/StreamingFileWriter.hpp)），统一一套流程、两种实现。
+- 顺序稳定：严格的写出顺序由调度器统一保证，跨模式一致，详见 [docs/xml-generation-guide.md](docs/xml-generation-guide.md)“统一的 XML 生成顺序”。
+
+与共享字符串（SST）的统一策略：
+- 唯一来源：工作表在生成单元格时，通过 [Workbook::addSharedString()](src/fastexcel/core/Workbook.cpp:596) 累积到 [SharedStringTable](src/fastexcel/core/SharedStringTable.hpp)。
+- 生成时机：所有 sheetN.xml 完成后，统一生成 xl/sharedStrings.xml（允许为空），由 [Workbook::generateSharedStringsXML()](src/fastexcel/core/Workbook.cpp:1034) 调用 [SharedStringTable::generateXML()](src/fastexcel/core/SharedStringTable.cpp:84)。
+- 关系与类型：当启用 use_shared_strings 时，在 [Content_Types].xml 与 workbook.xml.rels 中必须包含 sharedStrings 的条目/关系（见 [Workbook::generateContentTypesXML()](src/fastexcel/core/Workbook.cpp:1239) 与 [Workbook::generateWorkbookRelsXML()](src/fastexcel/core/Workbook.cpp:1348) 的实现）。
+
+迁移建议（步骤）：
+1) 保留 Workbook 侧已存在的 generateExcelStructure... 接口作为兼容层，但其内部改为构造并委托给 [ExcelStructureGenerator](src/fastexcel/core/ExcelStructureGenerator.hpp) 执行，以消除重复实现。
+2) 在单测中增加断言：文件输出顺序、rId 顺序、sharedStrings 启用但空表时依旧生成空 sst。
+3) 将写入策略（批量/流式）的选择逻辑集中在 ExcelStructureGenerator：显式模式优先（AUTO/BATCH/STREAMING），AUTO 再按阈值对 Worksheet 进行细粒度选择，调用：
+   - [ExcelStructureGenerator::shouldUseStreamingForWorksheet()](src/fastexcel/core/ExcelStructureGenerator.cpp:258)
+   - [ExcelStructureGenerator::generateWorksheetStreaming()](src/fastexcel/core/ExcelStructureGenerator.cpp:275)
+   - [ExcelStructureGenerator::generateWorksheetBatch()](src/fastexcel/core/ExcelStructureGenerator.cpp:295)
+4) 在文档中统一声明顺序与约束，团队变更仅需修改 ExcelStructureGenerator 与 IFileWriter 实现，无需触碰领域对象的 XML 片段逻辑。
+
+说明：更详细的规范、顺序与断言清单见：[docs/xml-generation-guide.md](docs/xml-generation-guide.md)

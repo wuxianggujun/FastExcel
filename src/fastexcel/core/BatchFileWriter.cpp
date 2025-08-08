@@ -29,7 +29,7 @@ bool BatchFileWriter::writeFile(const std::string& path, const std::string& cont
     stats_.batch_files++;
     stats_.total_bytes += content.size();
     
-    LOG_BATCH_DEBUG("Collected file for batch write: {} ({} bytes)", path, content.size());
+    LOG_DEBUG("Collected file for batch write: {} ({} bytes)", path, content.size());
     return true;
 }
 
@@ -43,7 +43,7 @@ bool BatchFileWriter::openStreamingFile(const std::string& path) {
     current_content_.clear();
     streaming_file_open_ = true;
     
-    LOG_BATCH_DEBUG("Opened streaming file for batch collection: {}", path);
+    LOG_DEBUG("Opened streaming file for batch collection: {}", path);
     return true;
 }
 
@@ -72,7 +72,7 @@ bool BatchFileWriter::closeStreamingFile() {
     
     if (success) {
         stats_.streaming_files++;
-        LOG_BATCH_DEBUG("Closed streaming file and added to batch: {} ({} bytes)",
+        LOG_DEBUG("Closed streaming file and added to batch: {} ({} bytes)",
                  current_path_, current_content_.size());
     }
     
@@ -91,7 +91,7 @@ bool BatchFileWriter::flush() {
     }
     
     if (files_.empty()) {
-        LOG_BATCH_DEBUG("No files to flush in batch mode");
+        LOG_DEBUG("No files to flush in batch mode");
         return true;
     }
     
@@ -140,12 +140,12 @@ void BatchFileWriter::clear() {
     current_content_.clear();
     stats_ = WriteStats{};
     
-    LOG_BATCH_DEBUG("Cleared all collected files in batch writer");
+    LOG_DEBUG("Cleared all collected files in batch writer");
 }
 
 void BatchFileWriter::reserve(size_t expected_files) {
     files_.reserve(expected_files);
-    LOG_BATCH_DEBUG("Reserved space for {} files in batch writer", expected_files);
+    LOG_DEBUG("Reserved space for {} files in batch writer", expected_files);
 }
 
 }} // namespace fastexcel::core

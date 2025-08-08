@@ -64,6 +64,10 @@ set(FASTEXCEL_SOURCES
         src/fastexcel/core/ErrorCode.cpp
         src/fastexcel/core/ThreadPool.cpp
         src/fastexcel/core/StyleTransferContext.cpp
+        # Unified XML generation pipeline and writers
+        src/fastexcel/core/ExcelStructureGenerator.cpp
+        src/fastexcel/core/BatchFileWriter.cpp
+        src/fastexcel/core/StreamingFileWriter.cpp
         src/fastexcel/core/StyleBuilder.cpp
         src/fastexcel/reader/XLSXReader.cpp
         src/fastexcel/reader/StylesParser.cpp

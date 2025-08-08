@@ -162,18 +162,8 @@ bool ExcelStructureGenerator::generateBasicFiles() {
         return false;
     }
     
-    // 生成 xl/sharedStrings.xml（如果需要）
-    if (workbook_->getOptions().use_shared_strings) {
-        std::string shared_strings_xml;
-        workbook_->generateSharedStringsXML([&shared_strings_xml](const char* data, size_t size) {
-            shared_strings_xml.append(data, size);
-        });
-        if (!shared_strings_xml.empty()) {
-            if (!writer_->writeFile("xl/sharedStrings.xml", shared_strings_xml)) {
-                return false;
-            }
-        }
-    }
+    // 注意：sharedStrings.xml 将在所有工作表生成后，在 finalize() 中生成
+    // 这样可以确保共享字符串表已经被填充
     
     // 生成 xl/theme/theme1.xml
     std::string theme_xml;
@@ -214,7 +204,7 @@ bool ExcelStructureGenerator::generateWorksheets() {
                 return false;
             }
         } else {
-            LOG_BATCH_DEBUG("Using batch mode for small worksheet: {}", worksheet->getName());
+            LOG_DEBUG("Using batch mode for small worksheet: {}", worksheet->getName());
             if (!generateWorksheetBatch(worksheet, worksheet_path)) {
                 LOG_ERROR("Failed to generate worksheet {} in batch mode", worksheet->getName());
                 return false;
@@ -244,9 +234,26 @@ bool ExcelStructureGenerator::generateWorksheets() {
 }
 
 bool ExcelStructureGenerator::finalize() {
+    // 生成共享字符串文件（如果启用）
+    // 这必须在所有工作表生成之后进行，因为工作表生成时会填充共享字符串表
+    if (workbook_->getOptions().use_shared_strings) {
+        LOG_DEBUG("Generating shared strings XML");
+        std::string shared_strings_xml;
+        workbook_->generateSharedStringsXML([&shared_strings_xml](const char* data, size_t size) {
+            shared_strings_xml.append(data, size);
+        });
+        
+        // 即使是空的共享字符串表也要生成文件，因为Content_Types.xml和workbook.xml.rels已经引用了它
+        if (!writer_->writeFile("xl/sharedStrings.xml", shared_strings_xml)) {
+            LOG_ERROR("Failed to write shared strings file");
+            return false;
+        }
+        LOG_DEBUG("Shared strings XML generated successfully");
+    }
+    
     // 对于批量模式，需要调用flush
     if (auto batch_writer = dynamic_cast<BatchFileWriter*>(writer_.get())) {
-        LOG_BATCH_DEBUG("Flushing batch writer");
+        LOG_DEBUG("Flushing batch writer");
         return batch_writer->flush();
     }
     
@@ -255,7 +262,7 @@ bool ExcelStructureGenerator::finalize() {
     return true;
 }
 
-bool ExcelStructureGenerator::shouldUseStreamingForWorksheet(const std::shared_ptr<Worksheet>& worksheet) const {
+bool ExcelStructureGenerator::shouldUseStreamingForWorksheet(const std::shared_ptr<const Worksheet>& worksheet) const {
     if (!worksheet) {
         return false;
     }
@@ -272,7 +279,7 @@ bool ExcelStructureGenerator::shouldUseStreamingForWorksheet(const std::shared_p
     return use_streaming;
 }
 
-bool ExcelStructureGenerator::generateWorksheetStreaming(const std::shared_ptr<Worksheet>& worksheet, const std::string& path) {
+bool ExcelStructureGenerator::generateWorksheetStreaming(const std::shared_ptr<const Worksheet>& worksheet, const std::string& path) {
     if (!writer_->openStreamingFile(path)) {
         return false;
     }
@@ -292,7 +299,7 @@ bool ExcelStructureGenerator::generateWorksheetStreaming(const std::shared_ptr<W
     return success;
 }
 
-bool ExcelStructureGenerator::generateWorksheetBatch(const std::shared_ptr<Worksheet>& worksheet, const std::string& path) {
+bool ExcelStructureGenerator::generateWorksheetBatch(const std::shared_ptr<const Worksheet>& worksheet, const std::string& path) {
     std::string worksheet_xml;
     worksheet->generateXML([&worksheet_xml](const char* data, size_t size) {
         worksheet_xml.append(data, size);
@@ -312,7 +319,7 @@ void ExcelStructureGenerator::reportProgress(const std::string& stage, int curre
     }
 }
 
-size_t ExcelStructureGenerator::estimateWorksheetSize(const std::shared_ptr<Worksheet>& worksheet) const {
+size_t ExcelStructureGenerator::estimateWorksheetSize(const std::shared_ptr<const Worksheet>& worksheet) const {
     if (!worksheet) {
         return 0;
     }

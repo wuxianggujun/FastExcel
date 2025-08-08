@@ -27,6 +27,7 @@ namespace core {
 
 // 前向声明
 class NamedStyle;
+class ExcelStructureGenerator;
 
 // 文档属性结构
 struct DocumentProperties {
@@ -91,6 +92,7 @@ struct WorkbookOptions {
  * - 多种保存选项：支持不同的性能优化模式
  */
 class Workbook {
+    friend class ExcelStructureGenerator;
 private:
     std::string filename_;
     std::vector<std::shared_ptr<Worksheet>> worksheets_;
@@ -941,9 +943,7 @@ private:
     
     // 生成Excel文件结构
     bool generateExcelStructure();
-    bool generateExcelStructureBatch();
-    bool generateExcelStructureStreaming();
-    bool generateWorksheetXMLStreaming(const std::shared_ptr<Worksheet>& worksheet, const std::string& path);
+    bool generateWithGenerator(bool use_streaming_writer);
     
     // 生成各种XML文件（流式写入）
     void generateWorkbookXML(const std::function<void(const char*, size_t)>& callback) const;

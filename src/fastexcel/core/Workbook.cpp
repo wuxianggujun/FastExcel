@@ -14,6 +14,9 @@
 #include "fastexcel/theme/Theme.hpp"
 #include "fastexcel/theme/ThemeParser.hpp"
 #include "fastexcel/core/Exception.hpp"
+#include "fastexcel/core/ExcelStructureGenerator.hpp"
+#include "fastexcel/core/BatchFileWriter.hpp"
+#include "fastexcel/core/StreamingFileWriter.hpp"
 #include <algorithm>
 #include <ctime>
 #include <fstream>
@@ -656,319 +659,10 @@ bool Workbook::generateExcelStructure() {
         LOG_INFO("Constant memory mode enabled, forcing streaming mode");
     }
     
-    if (use_streaming) {
-        return generateExcelStructureStreaming();
-    } else {
-        return generateExcelStructureBatch();
-    }
+    return generateWithGenerator(use_streaming);
 }
 
-bool Workbook::generateExcelStructureBatch() {
-    LOG_INFO("Starting Excel structure generation with batch mode");
-    
-    // 预估文件数量：基础文件8个 + 工作表文件 + 工作表关系文件 + 自定义属性
-    size_t estimated_files = 8 + worksheets_.size() * 2;
-    if (!custom_property_manager_->empty()) {
-        estimated_files++;
-    }
-    
-    // 预分配空间以提高性能
-    std::vector<std::pair<std::string, std::string>> files;
-    files.reserve(estimated_files);
-    
-    // 收集所有文件内容（批量模式）
-    LOG_DEBUG("Generating XML content for {} estimated files", estimated_files);
-    
-    // 基础文件 - 使用回调函数生成XML内容
-    std::string content_types_xml;
-    generateContentTypesXML([&content_types_xml](const char* data, size_t size) {
-        content_types_xml.append(data, size);
-    });
-    files.emplace_back("[Content_Types].xml", std::move(content_types_xml));
-    
-    std::string rels_xml;
-    generateRelsXML([&rels_xml](const char* data, size_t size) {
-        rels_xml.append(data, size);
-    });
-    files.emplace_back("_rels/.rels", std::move(rels_xml));
-    
-    std::string app_xml;
-    generateDocPropsAppXML([&app_xml](const char* data, size_t size) {
-        app_xml.append(data, size);
-    });
-    files.emplace_back("docProps/app.xml", std::move(app_xml));
-    
-    std::string core_xml;
-    generateDocPropsCoreXML([&core_xml](const char* data, size_t size) {
-        core_xml.append(data, size);
-    });
-    files.emplace_back("docProps/core.xml", std::move(core_xml));
-    
-    // 自定义属性（如果有）
-    if (!custom_property_manager_->empty()) {
-        std::string custom_xml;
-        generateDocPropsCustomXML([&custom_xml](const char* data, size_t size) {
-            custom_xml.append(data, size);
-        });
-        files.emplace_back("docProps/custom.xml", std::move(custom_xml));
-    }
-    
-    // Excel核心文件
-    std::string workbook_rels_xml;
-    generateWorkbookRelsXML([&workbook_rels_xml](const char* data, size_t size) {
-        workbook_rels_xml.append(data, size);
-    });
-    files.emplace_back("xl/_rels/workbook.xml.rels", std::move(workbook_rels_xml));
-    
-    std::string workbook_xml;
-    generateWorkbookXML([&workbook_xml](const char* data, size_t size) {
-        workbook_xml.append(data, size);
-    });
-    files.emplace_back("xl/workbook.xml", std::move(workbook_xml));
-    
-    std::string styles_xml;
-    generateStylesXML([&styles_xml](const char* data, size_t size) {
-        styles_xml.append(data, size);
-    });
-    files.emplace_back("xl/styles.xml", std::move(styles_xml));
-    
-    // Theme文件
-    std::string theme_xml;
-    generateThemeXML([&theme_xml](const char* data, size_t size) {
-        theme_xml.append(data, size);
-    });
-    files.emplace_back("xl/theme/theme1.xml", std::move(theme_xml));
-    
-    // 🔧 修复SharedStrings生成顺序：先生成工作表XML（会自动添加共享字符串），再生成sharedStrings.xml
-    // 工作表文件
-    for (size_t i = 0; i < worksheets_.size(); ++i) {
-        std::string worksheet_xml;
-        generateWorksheetXML(worksheets_[i], [&worksheet_xml](const char* data, size_t size) {
-            worksheet_xml.append(data, size);
-        });
-        std::string worksheet_path = getWorksheetPath(static_cast<int>(i + 1));
-        files.emplace_back(std::move(worksheet_path), std::move(worksheet_xml));
-        
-        // 工作表关系文件（如果有超链接等）
-        std::string worksheet_rels_xml;
-        worksheets_[i]->generateRelsXML([&worksheet_rels_xml](const char* data, size_t size) {
-            worksheet_rels_xml.append(data, size);
-        });
-        if (!worksheet_rels_xml.empty()) {
-            std::string rels_path = "xl/worksheets/_rels/sheet" + std::to_string(i + 1) + ".xml.rels";
-            files.emplace_back(std::move(rels_path), std::move(worksheet_rels_xml));
-        }
-    }
-    
-    // 🔧 关键修复：如果启用共享字符串，总是生成sharedStrings.xml文件（即使为空）
-    // Excel需要这个文件才能正确处理 t="s" 引用
-    if (options_.use_shared_strings) {
-        std::string shared_strings_xml;
-        generateSharedStringsXML([&shared_strings_xml](const char* data, size_t size) {
-            shared_strings_xml.append(data, size);
-        });
-        files.emplace_back("xl/sharedStrings.xml", std::move(shared_strings_xml));
-        LOG_DEBUG("Generated sharedStrings.xml with {} entries", shared_string_table_ ? shared_string_table_->getStringCount() : 0);
-    }
-    
-    LOG_INFO("Generated {} files, starting batch write to ZIP", files.size());
-    
-    // 批量写入所有文件（使用移动语义提高性能）
-    bool success = file_manager_->writeFiles(std::move(files));
-    
-    if (success) {
-        LOG_INFO("Excel structure generation completed successfully in batch mode");
-    } else {
-        LOG_ERROR("Failed to write files in batch mode");
-    }
-    
-    return success;
-}
 
-bool Workbook::generateExcelStructureStreaming() {
-    LOG_INFO("Starting Excel structure generation with streaming mode");
-    
-    try {
-        // 🎯 纯流式模式：所有文件都使用流式写入（flag=DATA_DESCRIPTOR）
-        LOG_INFO("Using pure streaming mode: all files use streaming write with Data Descriptor");
-        
-        // Content_Types.xml - 流式写入
-        if (!file_manager_->openStreamingFile("[Content_Types].xml")) {
-            LOG_ERROR("Failed to open streaming file: [Content_Types].xml");
-            return false;
-        }
-        generateContentTypesXML([this](const char* data, size_t size) {
-            file_manager_->writeStreamingChunk(data, size);
-        });
-        if (!file_manager_->closeStreamingFile()) {
-            LOG_ERROR("Failed to close streaming file: [Content_Types].xml");
-            return false;
-        }
-        
-        // _rels/.rels - 流式写入
-        if (!file_manager_->openStreamingFile("_rels/.rels")) {
-            LOG_ERROR("Failed to open streaming file: _rels/.rels");
-            return false;
-        }
-        generateRelsXML([this](const char* data, size_t size) {
-            file_manager_->writeStreamingChunk(data, size);
-        });
-        if (!file_manager_->closeStreamingFile()) {
-            LOG_ERROR("Failed to close streaming file: _rels/.rels");
-            return false;
-        }
-        
-        // docProps/app.xml - 流式写入
-        if (!file_manager_->openStreamingFile("docProps/app.xml")) {
-            LOG_ERROR("Failed to open streaming file: docProps/app.xml");
-            return false;
-        }
-        generateDocPropsAppXML([this](const char* data, size_t size) {
-            file_manager_->writeStreamingChunk(data, size);
-        });
-        if (!file_manager_->closeStreamingFile()) {
-            LOG_ERROR("Failed to close streaming file: docProps/app.xml");
-            return false;
-        }
-        
-        // docProps/core.xml - 流式写入
-        if (!file_manager_->openStreamingFile("docProps/core.xml")) {
-            LOG_ERROR("Failed to open streaming file: docProps/core.xml");
-            return false;
-        }
-        generateDocPropsCoreXML([this](const char* data, size_t size) {
-            file_manager_->writeStreamingChunk(data, size);
-        });
-        if (!file_manager_->closeStreamingFile()) {
-            LOG_ERROR("Failed to close streaming file: docProps/core.xml");
-            return false;
-        }
-        
-        // 自定义属性（如果有）- 流式写入
-        if (!custom_property_manager_->empty()) {
-            if (!file_manager_->openStreamingFile("docProps/custom.xml")) {
-                LOG_ERROR("Failed to open streaming file: docProps/custom.xml");
-                return false;
-            }
-            generateDocPropsCustomXML([this](const char* data, size_t size) {
-                file_manager_->writeStreamingChunk(data, size);
-            });
-            if (!file_manager_->closeStreamingFile()) {
-                LOG_ERROR("Failed to close streaming file: docProps/custom.xml");
-                return false;
-            }
-        }
-        
-        // xl/_rels/workbook.xml.rels - 流式写入
-        if (!file_manager_->openStreamingFile("xl/_rels/workbook.xml.rels")) {
-            LOG_ERROR("Failed to open streaming file: xl/_rels/workbook.xml.rels");
-            return false;
-        }
-        generateWorkbookRelsXML([this](const char* data, size_t size) {
-            file_manager_->writeStreamingChunk(data, size);
-        });
-        if (!file_manager_->closeStreamingFile()) {
-            LOG_ERROR("Failed to close streaming file: xl/_rels/workbook.xml.rels");
-            return false;
-        }
-        
-        // xl/workbook.xml - 流式写入
-        if (!file_manager_->openStreamingFile("xl/workbook.xml")) {
-            LOG_ERROR("Failed to open streaming file: xl/workbook.xml");
-            return false;
-        }
-        generateWorkbookXML([this](const char* data, size_t size) {
-            file_manager_->writeStreamingChunk(data, size);
-        });
-        if (!file_manager_->closeStreamingFile()) {
-            LOG_ERROR("Failed to close streaming file: xl/workbook.xml");
-            return false;
-        }
-        
-        // xl/styles.xml - 流式写入
-        if (!file_manager_->openStreamingFile("xl/styles.xml")) {
-            LOG_ERROR("Failed to open streaming file: xl/styles.xml");
-            return false;
-        }
-        generateStylesXML([this](const char* data, size_t size) {
-            file_manager_->writeStreamingChunk(data, size);
-        });
-        if (!file_manager_->closeStreamingFile()) {
-            LOG_ERROR("Failed to close streaming file: xl/styles.xml");
-            return false;
-        }
-        
-        // xl/theme/theme1.xml - 流式写入
-        if (!file_manager_->openStreamingFile("xl/theme/theme1.xml")) {
-            LOG_ERROR("Failed to open streaming file: xl/theme/theme1.xml");
-            return false;
-        }
-        generateThemeXML([this](const char* data, size_t size) {
-            file_manager_->writeStreamingChunk(data, size);
-        });
-        if (!file_manager_->closeStreamingFile()) {
-            LOG_ERROR("Failed to close streaming file: xl/theme/theme1.xml");
-            return false;
-        }
-        
-        // 🔧 修复SharedStrings生成顺序：先生成工作表文件（会自动添加共享字符串），再生成sharedStrings.xml
-        // 工作表文件（流式写入）
-        for (size_t i = 0; i < worksheets_.size(); ++i) {
-            std::string worksheet_path = getWorksheetPath(static_cast<int>(i + 1));
-            
-            // 使用流式写入生成工作表XML
-            if (!generateWorksheetXMLStreaming(worksheets_[i], worksheet_path)) {
-                LOG_ERROR("Failed to write worksheet {}", worksheet_path);
-                return false;
-            }
-            
-            // 工作表关系文件（如果有超链接等）- 流式写入
-            std::string worksheet_rels_xml;
-            worksheets_[i]->generateRelsXML([&worksheet_rels_xml](const char* data, size_t size) {
-                worksheet_rels_xml.append(data, size);
-            });
-            if (!worksheet_rels_xml.empty()) {
-                std::string rels_path = "xl/worksheets/_rels/sheet" + std::to_string(i + 1) + ".xml.rels";
-                if (!file_manager_->openStreamingFile(rels_path)) {
-                    LOG_ERROR("Failed to open streaming file: {}", rels_path);
-                    return false;
-                }
-                if (!file_manager_->writeStreamingChunk(worksheet_rels_xml.data(), worksheet_rels_xml.size())) {
-                    LOG_ERROR("Failed to write streaming chunk for: {}", rels_path);
-                    return false;
-                }
-                if (!file_manager_->closeStreamingFile()) {
-                    LOG_ERROR("Failed to close streaming file: {}", rels_path);
-                    return false;
-                }
-            }
-        }
-        
-        // 🔧 关键修复：如果启用共享字符串，总是生成sharedStrings.xml文件（即使为空）
-        // Excel需要这个文件才能正确处理 t="s" 引用
-        if (options_.use_shared_strings) {
-            if (!file_manager_->openStreamingFile("xl/sharedStrings.xml")) {
-                LOG_ERROR("Failed to open streaming file: xl/sharedStrings.xml");
-                return false;
-            }
-            generateSharedStringsXML([this](const char* data, size_t size) {
-                file_manager_->writeStreamingChunk(data, size);
-            });
-            if (!file_manager_->closeStreamingFile()) {
-                LOG_ERROR("Failed to close streaming file: xl/sharedStrings.xml");
-                return false;
-            }
-            LOG_DEBUG("Generated streaming sharedStrings.xml with {} entries", shared_string_table_ ? shared_string_table_->getStringCount() : 0);
-        }
-        
-        LOG_INFO("Excel structure generation completed successfully in streaming mode");
-        return true;
-        
-    } catch (const std::exception& e) {
-        LOG_ERROR("Exception in streaming Excel structure generation: {}", e.what());
-        return false;
-    }
-}
 
 void Workbook::generateWorkbookXML(const std::function<void(const char*, size_t)>& callback) const {
     xml::XMLStreamWriter writer(callback);
@@ -1557,54 +1251,6 @@ void Workbook::setHighPerformanceMode(bool enable) {
     }
 }
 
-bool Workbook::generateWorksheetXMLStreaming(const std::shared_ptr<Worksheet>& worksheet, const std::string& path) {
-    LOG_DEBUG("Generating worksheet XML using true streaming mode: {}", path);
-    
-    try {
-        // 真正的流式写入：使用Data Descriptor标志
-        if (!file_manager_->openStreamingFile(path)) {
-            LOG_ERROR("Failed to open streaming file: {}", path);
-            return false;
-        }
-        
-        // 跟踪写入的数据用于计算CRC和大小
-        size_t total_bytes_written = 0;
-        uint32_t crc32 = 0;
-        bool write_success = true;
-        
-        // 使用流式XML生成：通过回调函数将XML内容直接写入ZIP流
-        worksheet->generateXML([this, &total_bytes_written, &crc32, &write_success](const char* data, size_t size) {
-            if (!write_success) return; // 如果之前已经失败，跳过后续写入
-            
-            if (!file_manager_->writeStreamingChunk(data, size)) {
-                LOG_ERROR("Failed to write streaming chunk to ZIP");
-                write_success = false;
-                return;
-            }
-            
-            // 更新CRC32和总字节数
-            // 注意：这里使用简单的CRC计算，实际应该使用zlib的crc32函数
-            total_bytes_written += size;
-            // TODO: 实现正确的CRC32计算
-            crc32 = 0; // 暂时设为0，让minizip-ng自动计算
-        });
-        
-        // 关闭流式ZIP写入，提供最终的大小信息
-        bool close_success = file_manager_->closeStreamingFile();
-        
-        if (write_success && close_success) {
-            LOG_INFO("Successfully generated streaming worksheet XML: {} ({} bytes)", path, total_bytes_written);
-        } else {
-            LOG_ERROR("Failed to write streaming worksheet XML: {}", path);
-        }
-        
-        return write_success && close_success;
-        
-    } catch (const std::exception& e) {
-        LOG_ERROR("Exception in streaming worksheet XML generation: {}", e.what());
-        return false;
-    }
-}
 
 
 // 辅助方法：XML转义
@@ -2093,6 +1739,21 @@ std::unique_ptr<StyleTransferContext> Workbook::copyStylesFrom(const Workbook& s
 
 FormatRepository::DeduplicationStats Workbook::getStyleStats() const {
     return format_repo_->getDeduplicationStats();
+}
+
+bool Workbook::generateWithGenerator(bool use_streaming_writer) {
+    if (!file_manager_) {
+        LOG_ERROR("FileManager is null - cannot write workbook");
+        return false;
+    }
+    std::unique_ptr<IFileWriter> writer;
+    if (use_streaming_writer) {
+        writer = std::make_unique<StreamingFileWriter>(file_manager_.get());
+    } else {
+        writer = std::make_unique<BatchFileWriter>(file_manager_.get());
+    }
+    ExcelStructureGenerator generator(this, std::move(writer));
+    return generator.generate();
 }
 
 }} // namespace fastexcel::core

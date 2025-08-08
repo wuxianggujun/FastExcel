@@ -107,7 +107,7 @@ private:
      * @param worksheet 工作表
      * @return 是否使用流式写入
      */
-    bool shouldUseStreamingForWorksheet(const std::shared_ptr<Worksheet>& worksheet) const;
+    bool shouldUseStreamingForWorksheet(const std::shared_ptr<const Worksheet>& worksheet) const;
     
     /**
      * @brief 生成工作表（流式模式）
@@ -115,7 +115,7 @@ private:
      * @param path 文件路径
      * @return 是否成功
      */
-    bool generateWorksheetStreaming(const std::shared_ptr<Worksheet>& worksheet, const std::string& path);
+    bool generateWorksheetStreaming(const std::shared_ptr<const Worksheet>& worksheet, const std::string& path);
     
     /**
      * @brief 生成工作表（批量模式）
@@ -123,7 +123,7 @@ private:
      * @param path 文件路径
      * @return 是否成功
      */
-    bool generateWorksheetBatch(const std::shared_ptr<Worksheet>& worksheet, const std::string& path);
+    bool generateWorksheetBatch(const std::shared_ptr<const Worksheet>& worksheet, const std::string& path);
     
     // ========== 辅助方法 ==========
     
@@ -140,7 +140,7 @@ private:
      * @param worksheet 工作表
      * @return 估算的单元格数量
      */
-    size_t estimateWorksheetSize(const std::shared_ptr<Worksheet>& worksheet) const;
+    size_t estimateWorksheetSize(const std::shared_ptr<const Worksheet>& worksheet) const;
     
     /**
      * @brief 验证生成的XML（如果启用）
