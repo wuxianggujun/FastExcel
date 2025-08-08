@@ -99,8 +99,10 @@ private:
     std::unique_ptr<FormatRepository> format_repo_;
     
     // 主题管理
-    std::string theme_xml_; // 自定义主题XML内容
-     std::unique_ptr<theme::Theme> theme_; // 结构化主题对象（优先用于生成）
+    std::string theme_xml_; // 自定义主题XML内容（编辑或外部设置）
+    std::string theme_xml_original_; // 从文件读取的原始主题XML（用于未编辑时的保真写回）
+    bool theme_dirty_ = false; // 主题是否被编辑
+    std::unique_ptr<theme::Theme> theme_; // 结构化主题对象（优先用于生成）
     
     // ID管理
     int next_sheet_id_ = 1;
@@ -377,6 +379,11 @@ public:
      * @param theme_xml 主题XML内容
      */
     void setThemeXML(const std::string& theme_xml);
+    
+    /**
+     * @brief 设置原始主题XML（仅供读取器使用，保持保真）
+     */
+    void setOriginalThemeXML(const std::string& theme_xml);
     
     /**
      * @brief 设置主题（结构化对象）

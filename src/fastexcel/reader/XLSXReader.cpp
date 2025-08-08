@@ -224,14 +224,11 @@ core::ErrorCode XLSXReader::loadWorkbook(std::unique_ptr<core::Workbook>& workbo
         
         // 🔧 关键修复：将解析的主题XML设置到工作簿，以保持原始主题
         if (!theme_xml_.empty()) {
-            // 优先注入结构化主题，便于后续编辑
-            if (parsed_theme_) {
-                workbook->setTheme(*parsed_theme_);
-                LOG_DEBUG("成功设置解析后的主题对象到工作簿: {}", parsed_theme_->getName());
-            } else {
-                workbook->setThemeXML(theme_xml_);
-                LOG_DEBUG("成功设置原始主题XML到工作簿 ({} 字节)", theme_xml_.size());
-            }
+            // 保真：保存原始主题XML到工作簿（不触发脏标记）
+            workbook->setOriginalThemeXML(theme_xml_);
+            // 同时，如果我们有解析对象，也顺带注入，便于后续编辑
+            // setOriginalThemeXML 内部会解析为对象并缓存到工作簿，不需要再次 setTheme 以避免置脏
+            LOG_DEBUG("已注入原始主题XML到工作簿 ({} 字节)", theme_xml_.size());
         } else {
             LOG_DEBUG("未检测到主题文件，使用默认主题");
         }

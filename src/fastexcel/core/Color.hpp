@@ -114,6 +114,9 @@ public:
      */
     uint32_t getRGB() const;
     
+    // 注意：getRGB 基于静态映射，不会引用工作簿主题。
+    // 如需按当前主题解析，请使用 ThemeUtils::resolveRGB(color, theme_ptr)。
+    
     /**
      * @brief 获取红色分量
      * @return 红色分量 (0-255)

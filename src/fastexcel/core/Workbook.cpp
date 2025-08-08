@@ -410,6 +410,7 @@ const FormatRepository& Workbook::getStyleRepository() const {
 
 void Workbook::setThemeXML(const std::string& theme_xml) {
     theme_xml_ = theme_xml;
+    theme_dirty_ = true; // 外部显式设置主题XML视为编辑
     LOG_DEBUG("设置自定义主题XML ({} 字节)", theme_xml_.size());
     // 尝试解析为结构化主题对象
     if (!theme_xml_.empty()) {
@@ -427,28 +428,44 @@ const std::string& Workbook::getThemeXML() const {
     return theme_xml_;
 }
 
+void Workbook::setOriginalThemeXML(const std::string& theme_xml) {
+    theme_xml_original_ = theme_xml;
+    LOG_DEBUG("保存原始主题XML ({} 字节)", theme_xml_original_.size());
+    // 同步解析一次，便于后续编辑
+    if (!theme_xml_original_.empty()) {
+        auto parsed = theme::ThemeParser::parseFromXML(theme_xml_original_);
+        if (parsed) {
+            theme_ = std::move(parsed);
+            LOG_DEBUG("原始主题XML已解析为对象: {}", theme_->getName());
+        }
+    }
+}
+
 void Workbook::setTheme(const theme::Theme& theme) {
     theme_ = std::make_unique<theme::Theme>(theme);
     // 同步XML缓存
     theme_xml_ = theme_->toXML();
+    theme_dirty_ = true;
 }
 
 void Workbook::setThemeName(const std::string& name) {
     if (!theme_) theme_ = std::make_unique<theme::Theme>();
     theme_->setName(name);
     theme_xml_.clear(); // 让生成时重新序列化
+    theme_dirty_ = true;
 }
 
 void Workbook::setThemeColor(theme::ThemeColorScheme::ColorType type, const core::Color& color) {
     if (!theme_) theme_ = std::make_unique<theme::Theme>();
     theme_->colors().setColor(type, color);
     theme_xml_.clear();
+    theme_dirty_ = true;
 }
 
 bool Workbook::setThemeColorByName(const std::string& name, const core::Color& color) {
     if (!theme_) theme_ = std::make_unique<theme::Theme>();
     bool ok = theme_->colors().setColorByName(name, color);
-    if (ok) theme_xml_.clear();
+    if (ok) { theme_xml_.clear(); theme_dirty_ = true; }
     return ok;
 }
 
@@ -456,36 +473,42 @@ void Workbook::setThemeMajorFontLatin(const std::string& name) {
     if (!theme_) theme_ = std::make_unique<theme::Theme>();
     theme_->fonts().setMajorFontLatin(name);
     theme_xml_.clear();
+    theme_dirty_ = true;
 }
 
 void Workbook::setThemeMajorFontEastAsia(const std::string& name) {
     if (!theme_) theme_ = std::make_unique<theme::Theme>();
     theme_->fonts().setMajorFontEastAsia(name);
     theme_xml_.clear();
+    theme_dirty_ = true;
 }
 
 void Workbook::setThemeMajorFontComplex(const std::string& name) {
     if (!theme_) theme_ = std::make_unique<theme::Theme>();
     theme_->fonts().setMajorFontComplex(name);
     theme_xml_.clear();
+    theme_dirty_ = true;
 }
 
 void Workbook::setThemeMinorFontLatin(const std::string& name) {
     if (!theme_) theme_ = std::make_unique<theme::Theme>();
     theme_->fonts().setMinorFontLatin(name);
     theme_xml_.clear();
+    theme_dirty_ = true;
 }
 
 void Workbook::setThemeMinorFontEastAsia(const std::string& name) {
     if (!theme_) theme_ = std::make_unique<theme::Theme>();
     theme_->fonts().setMinorFontEastAsia(name);
     theme_xml_.clear();
+    theme_dirty_ = true;
 }
 
 void Workbook::setThemeMinorFontComplex(const std::string& name) {
     if (!theme_) theme_ = std::make_unique<theme::Theme>();
     theme_->fonts().setMinorFontComplex(name);
     theme_xml_.clear();
+    theme_dirty_ = true;
 }
 
 // ========== 自定义属性 ==========
@@ -1416,20 +1439,26 @@ void Workbook::generateWorkbookRelsXML(const std::function<void(const char*, siz
 }
 
 void Workbook::generateThemeXML(const std::function<void(const char*, size_t)>& callback) const {
-    // 🔧 关键修复：如果有自定义主题XML，优先使用自定义主题
+    // 优先级：
+    // 1) 如果未脏且有原始XML，保真写回原始
+    if (!theme_dirty_ && !theme_xml_original_.empty()) {
+        LOG_DEBUG("使用原始主题XML保真写回 ({} 字节)", theme_xml_original_.size());
+        callback(theme_xml_original_.c_str(), theme_xml_original_.size());
+        return;
+    }
+    // 2) 有显式设置的自定义XML，直接写出
     if (!theme_xml_.empty()) {
         LOG_DEBUG("使用自定义主题XML ({} 字节)", theme_xml_.size());
         callback(theme_xml_.c_str(), theme_xml_.size());
         return;
     }
-    // 如果存在结构化主题对象，基于对象序列化
+    // 3) 有结构化主题对象，则序列化
     if (theme_) {
         const std::string xml = theme_->toXML();
         callback(xml.c_str(), xml.size());
         return;
     }
-    
-    // 回退：生成最小可用默认主题
+    // 4) 回退：生成最小可用默认主题
     theme::Theme default_theme("Office");
     const std::string xml = default_theme.toXML();
     callback(xml.c_str(), xml.size());
