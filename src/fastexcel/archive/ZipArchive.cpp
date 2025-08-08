@@ -103,10 +103,14 @@ void ZipArchive::initializeFileInfo(void* file_info_ptr, const std::string& path
     file_info.uncompressed_size = static_cast<uint64_t>(size);
     file_info.compressed_size = 0; // 让minizip自动计算
     
-    // 关键修复1：批量模式使用STORE方法（无压缩）来匹配Excel生成的文件
-    // Excel通常对小文件使用STORE方法，批量模式不使用Data Descriptor
-    file_info.compression_method = MZ_COMPRESS_METHOD_STORE;
-    LOG_ZIP_DEBUG("Batch mode: Using STORE compression method (no compression) to match Excel");
+    // 根据压缩级别选择压缩方法：0为无压缩，>0为DEFLATE压缩
+    if (compression_level_ == 0) {
+        file_info.compression_method = MZ_COMPRESS_METHOD_STORE;
+        LOG_ZIP_DEBUG("Batch mode: Using STORE compression method (compression_level: {})", compression_level_);
+    } else {
+        file_info.compression_method = MZ_COMPRESS_METHOD_DEFLATE;
+        LOG_ZIP_DEBUG("Batch mode: Using DEFLATE compression method (compression_level: {})", compression_level_);
+    }
     
     // 关键修复2：使用TimeUtils获取当前时间
     // Excel使用DOS时间格式，这是ZIP标准的一部分
@@ -296,9 +300,14 @@ ZipError ZipArchive::addFiles(std::vector<FileEntry>&& files) {
         file_info.uncompressed_size = static_cast<uint64_t>(file.content.size());
         file_info.compressed_size = 0; // 让minizip自动计算
         
-        // 批量模式（移动语义）：使用STORE方法（无压缩）来匹配Excel
-        file_info.compression_method = MZ_COMPRESS_METHOD_STORE;
-        LOG_ZIP_DEBUG("Batch mode (move semantics): Using STORE compression method (no compression) to match Excel");
+        // 根据压缩级别选择压缩方法：0为无压缩，>0为DEFLATE压缩
+        if (compression_level_ == 0) {
+            file_info.compression_method = MZ_COMPRESS_METHOD_STORE;
+            LOG_ZIP_DEBUG("Batch mode (move semantics): Using STORE compression method (compression_level: {})", compression_level_);
+        } else {
+            file_info.compression_method = MZ_COMPRESS_METHOD_DEFLATE;
+            LOG_ZIP_DEBUG("Batch mode (move semantics): Using DEFLATE compression method (compression_level: {})", compression_level_);
+        }
         
         // 使用TimeUtils获取本地时间
         std::tm current_time = utils::TimeUtils::getCurrentTime();

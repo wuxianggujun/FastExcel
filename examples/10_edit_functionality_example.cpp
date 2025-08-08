@@ -62,6 +62,11 @@ int main() {
             return -1;
         }
         
+        // 强制设置为批量模式，确保使用正确的压缩
+        workbook->getOptions().mode = WorkbookMode::BATCH;
+        workbook->setCompressionLevel(6);  // 明确设置压缩级别
+        LOG_INFO("   - 设置为批量模式，压缩级别: 6");
+        
         LOG_INFO("   - 工作簿打开成功");
         LOG_INFO("   - 工作表数量: {}", workbook->getWorksheetCount());
         
@@ -113,7 +118,7 @@ int main() {
         
         // 步骤5: 保存修改
         LOG_INFO("5. 保存修改...");
-        if (workbook->save()) {
+        if (workbook->saveAs(target_file)) {
             LOG_INFO("   - 文件保存成功");
         } else {
             LOG_ERROR("   - 文件保存失败");

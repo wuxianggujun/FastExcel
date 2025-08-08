@@ -1242,7 +1242,7 @@ void Workbook::setHighPerformanceMode(bool enable) {
         options_.mode = WorkbookMode::AUTO;           // 默认自动模式
         options_.use_shared_strings = true;           // 默认启用以匹配Excel格式
         options_.row_buffer_size = 5000;              // 默认较大缓冲
-        options_.compression_level = 0;               // 使用无压缩模式排除压缩算法影响
+        options_.compression_level = 6;               // 恢复到默认的中等压缩
         options_.xml_buffer_size = 4 * 1024 * 1024;  // 默认4MB
         
         // 恢复默认阈值

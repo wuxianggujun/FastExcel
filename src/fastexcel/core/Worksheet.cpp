@@ -618,8 +618,11 @@ void Worksheet::generateXMLBatch(const std::function<void(const char*, size_t)>&
                 writer.writeAttribute("s", std::to_string(xf_index).c_str());
             }
             
-            // 只有在单元格不为空时才写入值
-            if (!cell->isEmpty()) {
+            // 输出单元格（包括空单元格，但有格式的需要保留）
+            bool has_format = cell->hasFormat();
+            bool has_value = !cell->isEmpty();
+            
+            if (has_value || has_format) {
                 if (cell->isFormula()) {
                     writer.writeAttribute("t", "str");
                     writer.startElement("f");
@@ -997,8 +1000,11 @@ void Worksheet::generateSheetDataXML(const std::function<void(const char*, size_
             // 应用单元格格式 - 已移除，现在使用FormatDescriptor架构
             // 这个旧方法已经不再使用
             
-            // 只有在单元格不为空时才写入值
-            if (!cell->isEmpty()) {
+            // 输出单元格（包括有格式的空单元格）
+            bool has_format = cell->hasFormat();
+            bool has_value = !cell->isEmpty();
+            
+            if (has_value) {
                 if (cell->isFormula()) {
                     xml_content += " t=\"str\"><f>" + cell->getFormula() + "</f></c>";
                     LOG_WORKSHEET_DEBUG("Added formula cell: ({}, {})", row_num, col_num);
@@ -1031,9 +1037,13 @@ void Worksheet::generateSheetDataXML(const std::function<void(const char*, size_
                     xml_content += "/>";
                     LOG_WORKSHEET_DEBUG("Added empty cell with format: ({}, {})", row_num, col_num);
                 }
-            } else {
+            } else if (has_format) {
+                // 空单元格但有格式，仍需输出
                 xml_content += "/>";
-                LOG_WORKSHEET_DEBUG("Added empty cell: ({}, {})", row_num, col_num);
+                LOG_WORKSHEET_DEBUG("Added empty cell with format: ({}, {})", row_num, col_num);
+            } else {
+                // 既没值也没格式，跳过
+                continue;
             }
         }
         
@@ -1945,8 +1955,11 @@ void Worksheet::generateSheetDataStreaming(const std::function<void(const char*,
                     cell_xml += " s=\"" + std::to_string(xf_index) + "\"";
                 }
                 
-                // 只有在单元格不为空时才写入值
-                if (!cell.isEmpty()) {
+                // 输出单元格（包括有格式的空单元格）
+                bool has_format = cell.hasFormat();
+                bool has_value = !cell.isEmpty();
+                
+                if (has_value) {
                     if (cell.isFormula()) {
                         cell_xml += " t=\"str\"><f>" + cell.getFormula() + "</f></c>";
                     } else if (cell.isString()) {
@@ -1973,8 +1986,12 @@ void Worksheet::generateSheetDataStreaming(const std::function<void(const char*,
                     } else {
                         cell_xml += "/>";
                     }
-                } else {
+                } else if (has_format) {
+                    // 空单元格但有格式，仍需输出
                     cell_xml += "/>";
+                } else {
+                    // 既没值也没格式，跳过
+                    continue;
                 }
                 
                 callback(cell_xml.c_str(), cell_xml.length());
