@@ -593,7 +593,7 @@ core::ErrorCode XLSXReader::parseSharedStringsXML() {
         
         // 将解析结果复制到成员变量
         shared_strings_ = parser.getStrings();
-        
+
         LOG_DEBUG("成功解析 {} 个共享字符串", shared_strings_.size());
         return core::ErrorCode::Ok;
         

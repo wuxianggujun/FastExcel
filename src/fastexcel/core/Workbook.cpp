@@ -50,6 +50,8 @@ Workbook::Workbook(const Path& path) : filename_(path.string()) {
     }
     
     format_repo_ = std::make_unique<FormatRepository>();
+    // 初始化共享字符串表
+    shared_string_table_ = std::make_unique<SharedStringTable>();
     
     // 初始化管理器
     custom_property_manager_ = std::make_unique<CustomPropertyManager>();
@@ -110,13 +112,11 @@ bool Workbook::save() {
         // 🔧 修复SharedStrings生成逻辑：移除手动收集，依赖工作表XML生成时自动添加
         // 清空共享字符串列表，让工作表XML生成时自动填充
         if (options_.use_shared_strings) {
-            LOG_DEBUG("SharedStrings enabled - will be auto-populated during worksheet XML generation");
-            shared_strings_.clear();
-            shared_strings_list_.clear();
+            LOG_DEBUG("SharedStrings enabled - SST will be populated during worksheet XML generation");
+            if (shared_string_table_) shared_string_table_->clear();
         } else {
             LOG_DEBUG("SharedStrings disabled for performance");
-            shared_strings_.clear();
-            shared_strings_list_.clear();
+            if (shared_string_table_) shared_string_table_->clear();
         }
         
         // 生成Excel文件结构
@@ -594,53 +594,18 @@ void Workbook::setCalcOptions(bool calc_on_load, bool full_calc_on_load) {
 // ========== 共享字符串管理 ==========
 
 int Workbook::addSharedString(const std::string& str) {
-    auto it = shared_strings_.find(str);
-    if (it != shared_strings_.end()) {
-        return it->second;
-    }
-    
-    int index = static_cast<int>(shared_strings_list_.size());
-    shared_strings_[str] = index;
-    shared_strings_list_.push_back(str);
-    
-    return index;
+    if (!shared_string_table_) shared_string_table_ = std::make_unique<SharedStringTable>();
+    return static_cast<int>(shared_string_table_->addString(str));
 }
 
 int Workbook::addSharedStringWithIndex(const std::string& str, int original_index) {
-    // 检查字符串是否已存在
-    auto it = shared_strings_.find(str);
-    if (it != shared_strings_.end()) {
-        return it->second;  // 返回已存在的索引
-    }
-    
-    // 确保shared_strings_list_数组足够大
-    if (static_cast<size_t>(original_index) >= shared_strings_list_.size()) {
-        shared_strings_list_.resize(original_index + 1);
-    }
-    
-    // 检查指定的索引位置是否已被占用
-    if (!shared_strings_list_[original_index].empty()) {
-        // 如果原始索引位置已被占用，使用新的索引
-        int new_index = static_cast<int>(shared_strings_list_.size());
-        shared_strings_[str] = new_index;
-        shared_strings_list_.push_back(str);
-        return new_index;
-    }
-    
-    // 使用原始索引
-    shared_strings_[str] = original_index;
-    shared_strings_list_[original_index] = str;
-    
-    return original_index;
+    if (!shared_string_table_) shared_string_table_ = std::make_unique<SharedStringTable>();
+    return static_cast<int>(shared_string_table_->addStringWithId(str, original_index));
 }
 
 int Workbook::getSharedStringIndex(const std::string& str) const {
-    auto it = shared_strings_.find(str);
-    if (it != shared_strings_.end()) {
-        return it->second;
-    }
-    
-    return -1;
+    if (!shared_string_table_) return -1;
+    return static_cast<int>(shared_string_table_->getStringId(str));
 }
 
 // ========== 内部方法 ==========
@@ -803,7 +768,7 @@ bool Workbook::generateExcelStructureBatch() {
             shared_strings_xml.append(data, size);
         });
         files.emplace_back("xl/sharedStrings.xml", std::move(shared_strings_xml));
-        LOG_DEBUG("Generated sharedStrings.xml with {} entries", shared_strings_list_.size());
+        LOG_DEBUG("Generated sharedStrings.xml with {} entries", shared_string_table_ ? shared_string_table_->getStringCount() : 0);
     }
     
     LOG_INFO("Generated {} files, starting batch write to ZIP", files.size());
@@ -993,7 +958,7 @@ bool Workbook::generateExcelStructureStreaming() {
                 LOG_ERROR("Failed to close streaming file: xl/sharedStrings.xml");
                 return false;
             }
-            LOG_DEBUG("Generated streaming sharedStrings.xml with {} entries", shared_strings_list_.size());
+            LOG_DEBUG("Generated streaming sharedStrings.xml with {} entries", shared_string_table_ ? shared_string_table_->getStringCount() : 0);
         }
         
         LOG_INFO("Excel structure generation completed successfully in streaming mode");
@@ -1067,44 +1032,31 @@ void Workbook::generateStylesXML(const std::function<void(const char*, size_t)>&
 }
 
 void Workbook::generateSharedStringsXML(const std::function<void(const char*, size_t)>& callback) const {
-    xml::XMLStreamWriter writer(callback);
-    writer.startDocument();
-    writer.startElement("sst");
-    writer.writeAttribute("xmlns", "http://schemas.openxmlformats.org/spreadsheetml/2006/main");
-    
-    // 如果禁用了共享字符串，生成空的共享字符串文件
-    if (!options_.use_shared_strings || shared_strings_list_.empty()) {
+    if (!options_.use_shared_strings) {
+        // 输出空的SST文件
+        xml::XMLStreamWriter writer(callback);
+        writer.startDocument();
+        writer.startElement("sst");
+        writer.writeAttribute("xmlns", "http://schemas.openxmlformats.org/spreadsheetml/2006/main");
         writer.writeAttribute("count", "0");
         writer.writeAttribute("uniqueCount", "0");
-        writer.endElement(); // sst
+        writer.endElement();
         writer.endDocument();
         return;
     }
-    
-    // 🔧 修复：计算实际的非空字符串数量
-    size_t non_empty_count = 0;
-    for (const auto& str : shared_strings_list_) {
-        if (!str.empty()) {
-            non_empty_count++;
-        }
+    if (shared_string_table_) {
+        shared_string_table_->generateXML(callback);
+    } else {
+        // 仍然生成空SST
+        xml::XMLStreamWriter writer(callback);
+        writer.startDocument();
+        writer.startElement("sst");
+        writer.writeAttribute("xmlns", "http://schemas.openxmlformats.org/spreadsheetml/2006/main");
+        writer.writeAttribute("count", "0");
+        writer.writeAttribute("uniqueCount", "0");
+        writer.endElement();
+        writer.endDocument();
     }
-    
-    writer.writeAttribute("count", std::to_string(non_empty_count).c_str());
-    writer.writeAttribute("uniqueCount", std::to_string(non_empty_count).c_str());
-    
-    // 🔧 修复：按索引顺序输出，跳过空位置
-    for (const auto& str : shared_strings_list_) {
-        if (!str.empty()) {  // 只输出非空字符串
-            writer.startElement("si");
-            writer.startElement("t");
-            writer.writeText(str.c_str());
-            writer.endElement(); // t
-            writer.endElement(); // si
-        }
-    }
-    
-    writer.endElement(); // sst
-    writer.endDocument();
 }
 
 void Workbook::generateWorksheetXML(const std::shared_ptr<Worksheet>& worksheet, const std::function<void(const char*, size_t)>& callback) const {
@@ -1519,8 +1471,11 @@ bool Workbook::validateSheetName(const std::string& name) const {
 }
 
 void Workbook::collectSharedStrings() {
-    shared_strings_.clear();
-    shared_strings_list_.clear();
+    if (!shared_string_table_) {
+        shared_string_table_ = std::make_unique<SharedStringTable>();
+    } else {
+        shared_string_table_->clear();
+    }
     
     for (const auto& worksheet : worksheets_) {
         // 这里需要访问工作表的单元格来收集字符串
@@ -2070,8 +2025,8 @@ size_t Workbook::estimateMemoryUsage() const {
     total_memory += format_repo_->getMemoryUsage();
     
     // 估算共享字符串内存
-    for (const auto& str : shared_strings_list_) {
-        total_memory += str.size() + 32; // 字符串 + 开销
+    if (shared_string_table_) {
+        total_memory += shared_string_table_->getMemoryUsage();
     }
     
     // 估算XML生成时的临时内存（约为数据的2-3倍）

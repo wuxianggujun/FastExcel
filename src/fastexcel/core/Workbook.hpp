@@ -12,6 +12,7 @@
 #include "FormatRepository.hpp"
 #include "StyleTransferContext.hpp"
 #include "StyleBuilder.hpp"
+#include "SharedStringTable.hpp"
 #include <string>
 #include <vector>
 #include <map>
@@ -121,9 +122,8 @@ private:
     // 工作簿选项
     WorkbookOptions options_;
     
-    // 共享字符串
-    std::unordered_map<std::string, int> shared_strings_;
-    std::vector<std::string> shared_strings_list_;
+    // 共享字符串表
+    std::unique_ptr<SharedStringTable> shared_string_table_;
     
     // VBA项目
     std::string vba_project_path_;

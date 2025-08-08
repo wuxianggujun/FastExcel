@@ -1959,7 +1959,7 @@ void Worksheet::generateSheetDataStreaming(const std::function<void(const char*,
                                 cell_xml += std::to_string(sst_index);
                             } else {
                                 // 如果字符串不在SST中，添加它
-                                sst_index = parent_workbook_->addSharedString(cell.getStringValue());
+                            sst_index = parent_workbook_->addSharedString(cell.getStringValue());
                                 cell_xml += std::to_string(sst_index);
                             }
                             cell_xml += "</v></c>";
