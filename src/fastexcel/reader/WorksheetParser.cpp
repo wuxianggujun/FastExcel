@@ -548,9 +548,10 @@ bool WorksheetParser::parseColumns(const std::string& xml_content,
             int first_col = min_col - 1;
             int last_col = max_col - 1;
             
-            // 设置列宽
-            if (width > 0 && custom_width) {
+            // 设置列宽（保留Excel默认列宽，即使没有customWidth属性）
+            if (width > 0) {
                 worksheet->setColumnWidth(first_col, last_col, width);
+                LOG_DEBUG("设置列宽：列 {}-{} 宽度 {} custom_width={}", first_col, last_col, width, custom_width);
             }
             
             // 设置列样式
