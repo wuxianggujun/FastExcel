@@ -12,6 +12,7 @@
 #include "fastexcel/xml/XMLStreamWriter.hpp"
 #include "fastexcel/xml/StyleSerializer.hpp"
 #include "fastexcel/theme/Theme.hpp"
+#include "fastexcel/theme/ThemeParser.hpp"
 #include "fastexcel/core/Exception.hpp"
 #include <algorithm>
 #include <ctime>
@@ -410,10 +411,81 @@ const FormatRepository& Workbook::getStyleRepository() const {
 void Workbook::setThemeXML(const std::string& theme_xml) {
     theme_xml_ = theme_xml;
     LOG_DEBUG("设置自定义主题XML ({} 字节)", theme_xml_.size());
+    // 尝试解析为结构化主题对象
+    if (!theme_xml_.empty()) {
+        auto parsed = theme::ThemeParser::parseFromXML(theme_xml_);
+        if (parsed) {
+            theme_ = std::move(parsed);
+            LOG_DEBUG("主题XML已解析为对象: {}", theme_->getName());
+        } else {
+            LOG_WARN("主题XML解析失败，保留原始XML");
+        }
+    }
 }
 
 const std::string& Workbook::getThemeXML() const {
     return theme_xml_;
+}
+
+void Workbook::setTheme(const theme::Theme& theme) {
+    theme_ = std::make_unique<theme::Theme>(theme);
+    // 同步XML缓存
+    theme_xml_ = theme_->toXML();
+}
+
+void Workbook::setThemeName(const std::string& name) {
+    if (!theme_) theme_ = std::make_unique<theme::Theme>();
+    theme_->setName(name);
+    theme_xml_.clear(); // 让生成时重新序列化
+}
+
+void Workbook::setThemeColor(theme::ThemeColorScheme::ColorType type, const core::Color& color) {
+    if (!theme_) theme_ = std::make_unique<theme::Theme>();
+    theme_->colors().setColor(type, color);
+    theme_xml_.clear();
+}
+
+bool Workbook::setThemeColorByName(const std::string& name, const core::Color& color) {
+    if (!theme_) theme_ = std::make_unique<theme::Theme>();
+    bool ok = theme_->colors().setColorByName(name, color);
+    if (ok) theme_xml_.clear();
+    return ok;
+}
+
+void Workbook::setThemeMajorFontLatin(const std::string& name) {
+    if (!theme_) theme_ = std::make_unique<theme::Theme>();
+    theme_->fonts().setMajorFontLatin(name);
+    theme_xml_.clear();
+}
+
+void Workbook::setThemeMajorFontEastAsia(const std::string& name) {
+    if (!theme_) theme_ = std::make_unique<theme::Theme>();
+    theme_->fonts().setMajorFontEastAsia(name);
+    theme_xml_.clear();
+}
+
+void Workbook::setThemeMajorFontComplex(const std::string& name) {
+    if (!theme_) theme_ = std::make_unique<theme::Theme>();
+    theme_->fonts().setMajorFontComplex(name);
+    theme_xml_.clear();
+}
+
+void Workbook::setThemeMinorFontLatin(const std::string& name) {
+    if (!theme_) theme_ = std::make_unique<theme::Theme>();
+    theme_->fonts().setMinorFontLatin(name);
+    theme_xml_.clear();
+}
+
+void Workbook::setThemeMinorFontEastAsia(const std::string& name) {
+    if (!theme_) theme_ = std::make_unique<theme::Theme>();
+    theme_->fonts().setMinorFontEastAsia(name);
+    theme_xml_.clear();
+}
+
+void Workbook::setThemeMinorFontComplex(const std::string& name) {
+    if (!theme_) theme_ = std::make_unique<theme::Theme>();
+    theme_->fonts().setMinorFontComplex(name);
+    theme_xml_.clear();
 }
 
 // ========== 自定义属性 ==========
@@ -1350,9 +1422,14 @@ void Workbook::generateThemeXML(const std::function<void(const char*, size_t)>& 
         callback(theme_xml_.c_str(), theme_xml_.size());
         return;
     }
+    // 如果存在结构化主题对象，基于对象序列化
+    if (theme_) {
+        const std::string xml = theme_->toXML();
+        callback(xml.c_str(), xml.size());
+        return;
+    }
     
-    // 用新主题模块生成最小可用默认主题
-    // 头文件必须在文件顶部包含，这里仅引用命名空间
+    // 回退：生成最小可用默认主题
     theme::Theme default_theme("Office");
     const std::string xml = default_theme.toXML();
     callback(xml.c_str(), xml.size());

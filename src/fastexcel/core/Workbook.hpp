@@ -7,6 +7,7 @@
 #include "fastexcel/core/DefinedNameManager.hpp"
 #include "fastexcel/archive/FileManager.hpp"
 #include "fastexcel/utils/CommonUtils.hpp"
+#include "fastexcel/theme/Theme.hpp"
 #include "FormatDescriptor.hpp"
 #include "FormatRepository.hpp"
 #include "StyleTransferContext.hpp"
@@ -99,6 +100,7 @@ private:
     
     // 主题管理
     std::string theme_xml_; // 自定义主题XML内容
+     std::unique_ptr<theme::Theme> theme_; // 结构化主题对象（优先用于生成）
     
     // ID管理
     int next_sheet_id_ = 1;
@@ -375,6 +377,47 @@ public:
      * @param theme_xml 主题XML内容
      */
     void setThemeXML(const std::string& theme_xml);
+    
+    /**
+     * @brief 设置主题（结构化对象）
+     * @param theme 主题对象
+     */
+    void setTheme(const theme::Theme& theme);
+    
+    /**
+     * @brief 获取当前主题对象（只读，可能为nullptr）
+     */
+    const theme::Theme* getTheme() const { return theme_.get(); }
+    
+    /**
+     * @brief 设置主题名称
+     */
+    void setThemeName(const std::string& name);
+    
+    /**
+     * @brief 通过类型设置主题颜色
+     */
+    void setThemeColor(theme::ThemeColorScheme::ColorType type, const core::Color& color);
+    
+    /**
+     * @brief 通过名称设置主题颜色（如 "accent1"/"lt1"/"hlink" 等）
+     * @return 是否设置成功
+     */
+    bool setThemeColorByName(const std::string& name, const core::Color& color);
+    
+    /**
+     * @brief 设置主题的major字体族
+     */
+    void setThemeMajorFontLatin(const std::string& name);
+    void setThemeMajorFontEastAsia(const std::string& name);
+    void setThemeMajorFontComplex(const std::string& name);
+    
+    /**
+     * @brief 设置主题的minor字体族
+     */
+    void setThemeMinorFontLatin(const std::string& name);
+    void setThemeMinorFontEastAsia(const std::string& name);
+    void setThemeMinorFontComplex(const std::string& name);
     
     /**
      * @brief 获取当前主题XML
