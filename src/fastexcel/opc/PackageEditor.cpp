@@ -103,15 +103,50 @@ std::unique_ptr<PackageEditor> PackageEditor::open(const core::Path& xlsx_path) 
     return editor;
 }
 
+std::unique_ptr<PackageEditor> PackageEditor::fromWorkbook(core::Workbook* workbook) {
+    if (!workbook) {
+        LOG_ERROR("Cannot create PackageEditor from null Workbook");
+        return nullptr;
+    }
+    
+    auto editor = std::unique_ptr<PackageEditor>(new PackageEditor());
+    editor->workbook_ = workbook;
+    editor->owns_workbook_ = false;  // 不拥有外部传入的workbook
+    
+    if (!editor->initializeFromWorkbook()) {
+        LOG_ERROR("Failed to initialize PackageEditor from Workbook");
+        return nullptr;
+    }
+    
+    LOG_INFO("Created PackageEditor from existing Workbook with {} sheets", 
+             workbook->getWorksheetNames().size());
+    return editor;
+}
+
 std::unique_ptr<PackageEditor> PackageEditor::create() {
     auto editor = std::unique_ptr<PackageEditor>(new PackageEditor());
     
-    if (!editor->initializeEmpty()) {
+    // 先创建一个临时的 Workbook
+    core::Path temp_path("temp_new_workbook.xlsx");
+    auto temp_workbook = std::make_unique<core::Workbook>(temp_path);
+    if (!temp_workbook->open()) {
+        LOG_ERROR("无法创建临时 Workbook");
+        return nullptr;
+    }
+    
+    // 添加默认工作表
+    temp_workbook->addWorksheet("Sheet1");
+    
+    // 设置 Workbook 对象
+    editor->workbook_ = temp_workbook.release();  // 转移所有权
+    editor->owns_workbook_ = true;  // 我们拥有这个workbook的所有权
+    
+    if (!editor->initializeFromWorkbook()) {
         LOG_ERROR("Failed to initialize empty PackageEditor");
         return nullptr;
     }
     
-    LOG_INFO("Created new Excel package");
+    LOG_INFO("Created new Excel package with default sheet");
     return editor;
 }
 
@@ -123,6 +158,14 @@ PackageEditor::PackageEditor() {
 PackageEditor::~PackageEditor() {
     if (isDirty()) {
         LOG_WARN("PackageEditor destroyed with {} unsaved changes", edit_plan_.dirty_parts.size());
+    }
+    
+    // 清理 workbook_ 对象（如果我们拥有它的话）
+    // 注意：在 fromWorkbook 情况下，我们不拥有 workbook_ 的所有权
+    // 只有在 create() 情况下我们才拥有所有权
+    if (workbook_ && owns_workbook_) {
+        delete workbook_;
+        workbook_ = nullptr;
     }
 }
 
@@ -158,30 +201,73 @@ bool PackageEditor::initialize(const core::Path& xlsx_path) {
     return true;
 }
 
-bool PackageEditor::initializeEmpty() {
-    // 创建空的Excel结构
+bool PackageEditor::initializeFromWorkbook() {
+    // 从 workbook_ 初始化基本结构
     part_graph_ = std::make_unique<PartGraph>();
     content_types_ = std::make_unique<ContentTypes>();
     
-    // 添加基本的Content Types
+    // 添加基本的 Content Types
     content_types_->addDefault("rels", "application/vnd.openxmlformats-package.relationships+xml");
     content_types_->addDefault("xml", "application/xml");
     
-    // 添加必要的覆盖
+    // 添加核心覆盖类型
     content_types_->addOverride("/xl/workbook.xml", 
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml");
+    content_types_->addOverride("/xl/styles.xml",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml");
     
-    // 创建默认工作表
-    addSheet("Sheet1");
+    // 根据 Workbook 内容标记相应部件为 dirty
+    edit_plan_.markDirty("xl/workbook.xml");
+    edit_plan_.markDirty("xl/styles.xml");
+    edit_plan_.markDirty("[Content_Types].xml");
+    edit_plan_.markDirty("_rels/.rels");
+    edit_plan_.markDirty("xl/_rels/workbook.xml.rels");
     
+    // 为每个工作表添加内容类型和标记为dirty
+    auto sheet_names = workbook_->getWorksheetNames();
+    for (size_t i = 0; i < sheet_names.size(); ++i) {
+        std::string sheet_path = "xl/worksheets/sheet" + std::to_string(i + 1) + ".xml";
+        edit_plan_.markDirty(sheet_path);
+        
+        // 添加工作表的内容类型
+        content_types_->addOverride("/" + sheet_path,
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml");
+    }
+    
+    // 如果使用共享字符串，标记为dirty
+    if (workbook_->getOptions().use_shared_strings) {
+        edit_plan_.markDirty("xl/sharedStrings.xml");
+        content_types_->addOverride("/xl/sharedStrings.xml",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml");
+    }
+    
+    LOG_DEBUG("Initialized from Workbook with {} sheets, {} dirty parts", 
+              sheet_names.size(), edit_plan_.dirty_parts.size());
     return true;
 }
+
+    // 只留下必要的初始化方法
 
 // ========== 核心编辑API ==========
 
 void PackageEditor::setCell(const SheetId& sheet, const CellRef& ref, const CellValue& value) {
     // 验证单元格位置
-    FASTEXCEL_VALIDATE_CELL_POSITION(ref.row, ref.col);
+    if (!isValidCellRef(ref.row, ref.col)) {
+        LOG_ERROR("无效的单元格引用：行 {} 列 {}", ref.row, ref.col);
+        return;
+    }
+    
+    // 验证工作表名称
+    if (sheet.empty()) {
+        LOG_ERROR("工作表名称不能为空");
+        return;
+    }
+    
+    // 确保工作表存在
+    if (getSheetId(sheet) <= 0) {
+        LOG_ERROR("工作表 '{}' 不存在", sheet);
+        return;
+    }
     
     // 确保工作表模型已加载
     ensureSheetModel(sheet);
@@ -189,8 +275,14 @@ void PackageEditor::setCell(const SheetId& sheet, const CellRef& ref, const Cell
     // 更新模型
     // sheet_models_[sheet]->setCell(ref, value);
     
+    // 获取工作表路径
+    std::string sheet_path = getSheetPath(sheet);
+    if (sheet_path.empty()) {
+        LOG_ERROR("无法获取工作表路径：{}", sheet);
+        return;
+    }
+    
     // 标记工作表为dirty
-    std::string sheet_path = "xl/worksheets/" + sheet + ".xml";
     edit_plan_.markDirty(sheet_path);
     
     // 如果使用共享字符串
@@ -200,33 +292,57 @@ void PackageEditor::setCell(const SheetId& sheet, const CellRef& ref, const Cell
         edit_plan_.markDirty("xl/sharedStrings.xml");
     }
     
-    LOG_DEBUG("Set cell {} in sheet {}", ref.toString(),  sheet);
+    LOG_DEBUG("Set cell {} in sheet {} (path: {})", ref.toString(), sheet, sheet_path);
 }
 
 void PackageEditor::addSheet(const std::string& name) {
     // 验证工作表名称
-    if (!utils::CommonUtils::isValidSheetName(name)) {
-        LOG_ERROR("Invalid sheet name: {}", name);
+    if (!isValidSheetName(name)) {
+        LOG_ERROR("无效的工作表名称：'{}'", name);
         return;
     }
     
     // 必须有工作簿对象才能添加工作表
     if (!workbook_) {
-        LOG_ERROR("Cannot add sheet without a Workbook object");
+        LOG_ERROR("无法在没有 Workbook 对象的情况下添加工作表");
+        return;
+    }
+    
+    // 检查工作表名称是否已存在
+    if (getSheetId(name) > 0) {
+        LOG_WARN("工作表 '{}' 已存在，跳过添加", name);
+        return;
+    }
+    
+    // 检查工作表数量限制
+    auto existing_sheets = getSheetNames();
+    if (existing_sheets.size() >= 255) {  // Excel 的最大工作表数量
+        LOG_ERROR("已达到最大工作表数量限制 (255)");
         return;
     }
     
     // 通过Workbook添加新工作表
-    workbook_->addWorksheet(name);
-    auto worksheet = workbook_->getWorksheet(name);
-    if (!worksheet) {
-        LOG_ERROR("Failed to add worksheet: {}", name);
+    try {
+        workbook_->addWorksheet(name);
+        auto worksheet = workbook_->getWorksheet(name);
+        if (!worksheet) {
+            LOG_ERROR("在 Workbook 中添加工作表失败：{}", name);
+            return;
+        }
+    } catch (const std::exception& e) {
+        LOG_ERROR("添加工作表时发生异常：{} - {}", name, e.what());
         return;
     }
     
-    // 生成新的sheet ID
-    int sheet_id = static_cast<int>(getSheetNames().size());
-    std::string sheet_path = "xl/worksheets/sheet" + std::to_string(sheet_id) + ".xml";
+    // 重新构建映射（因为添加了新工作表）
+    rebuildSheetMapping();
+    
+    // 获取新工作表的路径
+    std::string sheet_path = getSheetPath(name);
+    if (sheet_path.empty()) {
+        LOG_ERROR("无法获取工作表路径：{}", name);
+        return;
+    }
     
     // 标记为dirty
     edit_plan_.markDirty(sheet_path);
@@ -237,7 +353,7 @@ void PackageEditor::addSheet(const std::string& name) {
         "application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml");
     edit_plan_.markDirty("[Content_Types].xml");
     
-    LOG_INFO("Added new sheet: {}", name);
+    LOG_INFO("添加新工作表成功：{} (路径：{})", name, sheet_path);
 }
 
 // ========== 提交（核心Repack逻辑） ==========
@@ -409,8 +525,35 @@ std::string PackageEditor::generatePart(const std::string& path) const {
     }
     if (path.find("xl/worksheets/sheet") == 0) {
         // 提取sheet名称
-        // TODO: 从path解析sheet ID
-        return generateWorksheet("Sheet1");
+        // 从路径提取sheet ID："xl/worksheets/sheet3.xml" -> "3"
+        size_t sheet_pos = path.find("sheet") + 5;  // "sheet"之后的位置
+        size_t xml_pos = path.find(".xml");
+        
+        if (sheet_pos < xml_pos && sheet_pos != std::string::npos && xml_pos != std::string::npos) {
+            std::string id_str = path.substr(sheet_pos, xml_pos - sheet_pos);
+            LOG_DEBUG("解析工作表路径：{} -> ID字符串: '{}'", path, id_str);
+            
+            try {
+                int sheet_id = std::stoi(id_str);
+                std::string sheet_name = getSheetName(sheet_id);
+                if (!sheet_name.empty()) {
+                    LOG_DEBUG("找到工作表ID {} 对应的名称：'{}'", sheet_id, sheet_name);
+                    return generateWorksheet(sheet_name);
+                }
+            } catch (const std::exception& e) {
+                LOG_ERROR("解析工作表ID失败：{} - {}", path, e.what());
+            }
+        }
+        
+        // 如果无法解析，尝试使用第一个工作表
+        auto sheet_names = getSheetNames();
+        if (!sheet_names.empty()) {
+            LOG_WARN("无法解析工作表路径 {}uff0c使用第一个工作表: '{}'", path, sheet_names[0]);
+            return generateWorksheet(sheet_names[0]);
+        }
+        
+        LOG_ERROR("无法解析工作表路径且没有可用的工作表：{}", path);
+        return "";
     }
     if (path == "xl/styles.xml") {
         return generateStyles();
@@ -475,7 +618,12 @@ std::string PackageEditor::generateWorksheet(const SheetId& sheet) const {
 std::vector<std::string> PackageEditor::getSheetNames() const {
     if (workbook_) {
         // 从工作簿获取所有工作表名称
-        return workbook_->getWorksheetNames();
+        auto names = workbook_->getWorksheetNames();
+        LOG_DEBUG("获取工作表名称列表：{} 个工作表", names.size());
+        for (const auto& name : names) {
+            LOG_DEBUG("  - '{}'", name);
+        }
+        return names;
     }
     
     // TODO: 从workbook_model_获取
@@ -600,10 +748,10 @@ std::string PackageEditor::generateRels(const std::string& rels_path) const {
         int rId = 1;
         
         // 工作表关系
-        for (const auto& name : getSheetNames()) {
+        for (size_t i = 0; i < getSheetNames().size(); ++i) {
             xml << "  <Relationship Id=\"rId" << rId++ 
                 << "\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet\" "
-                << "Target=\"worksheets/sheet" << rId - 1 << ".xml\"/>\r\n";
+                << "Target=\"worksheets/sheet" << (i + 1) << ".xml\"/>\r\n";
         }
         
         // 样式关系
@@ -621,6 +769,109 @@ std::string PackageEditor::generateRels(const std::string& rels_path) const {
     
     xml << "</Relationships>\r\n";
     return xml.str();
+}
+
+// ========== 验证方法 ==========
+
+bool PackageEditor::isValidSheetName(const std::string& name) {
+    if (name.empty() || name.length() > 31) {
+        return false;
+    }
+    
+    // 检查禁止的字符
+    static const std::string forbidden_chars = "[]\\/*?:";
+    for (char c : forbidden_chars) {
+        if (name.find(c) != std::string::npos) {
+            return false;
+        }
+    }
+    
+    // 检查是否以单引号开头或结尾
+    if (name.front() == '\'' || name.back() == '\'') {
+        return false;
+    }
+    
+    // 检查保留名称
+    static const std::vector<std::string> reserved_names = {
+        "History"
+    };
+    
+    for (const auto& reserved : reserved_names) {
+        if (name == reserved) {
+            return false;
+        }
+    }
+    
+    return true;
+}
+
+bool PackageEditor::isValidCellRef(int row, int col) {
+    return row >= 1 && row <= MAX_ROWS && col >= 1 && col <= MAX_COLS;
+}
+
+// ========== 工作表映射管理 ==========
+
+void PackageEditor::rebuildSheetMapping() const {
+    sheet_name_to_id_.clear();
+    sheet_id_to_name_.clear();
+    
+    if (!workbook_) {
+        return;
+    }
+    
+    auto sheet_names = workbook_->getWorksheetNames();
+    for (size_t i = 0; i < sheet_names.size(); ++i) {
+        int sheet_id = static_cast<int>(i + 1);
+        const auto& name = sheet_names[i];
+        
+        sheet_name_to_id_[name] = sheet_id;
+        sheet_id_to_name_[sheet_id] = name;
+    }
+    
+    LOG_DEBUG("重建了工作表映射：{} 个工作表", sheet_names.size());
+}
+
+int PackageEditor::getSheetId(const std::string& sheet_name) const {
+    // 始终重新构建映射以确保数据最新
+    rebuildSheetMapping();
+    
+    auto it = sheet_name_to_id_.find(sheet_name);
+    if (it != sheet_name_to_id_.end()) {
+        LOG_DEBUG("找到工作表 '{}' 的ID：{}", sheet_name, it->second);
+        return it->second;
+    }
+    
+    LOG_ERROR("找不到工作表：'{}'", sheet_name);
+    return -1;
+}
+
+std::string PackageEditor::getSheetName(int sheet_id) const {
+    if (sheet_id_to_name_.empty()) {
+        rebuildSheetMapping();
+    }
+    
+    auto it = sheet_id_to_name_.find(sheet_id);
+    if (it != sheet_id_to_name_.end()) {
+        return it->second;
+    }
+    
+    LOG_ERROR("找不到工作表ID：{}", sheet_id);
+    return "";
+}
+
+std::string PackageEditor::getSheetPath(const std::string& sheet_name) const {
+    int sheet_id = getSheetId(sheet_name);
+    if (sheet_id > 0) {
+        return "xl/worksheets/sheet" + std::to_string(sheet_id) + ".xml";
+    }
+    return "";
+}
+
+std::string PackageEditor::getSheetPath(int sheet_id) const {
+    if (sheet_id > 0) {
+        return "xl/worksheets/sheet" + std::to_string(sheet_id) + ".xml";
+    }
+    return "";
 }
 
 }} // namespace fastexcel::opc

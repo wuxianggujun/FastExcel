@@ -167,13 +167,27 @@ public:
      */
     std::vector<std::string> getDirtyParts() const;
     
+    /**
+     * 验证工作表名称是否合法
+     */
+    static bool isValidSheetName(const std::string& name);
+    
+    /**
+     * 验证单元格引用是否合法
+     */
+    static bool isValidCellRef(int row, int col);
+    
+    // 最大行数和列数常量
+    static constexpr int MAX_ROWS = 1048576;    // Excel 2007+ 最大行数
+    static constexpr int MAX_COLS = 16384;      // Excel 2007+ 最大列数 (XFD)
+    
 private:
     PackageEditor();
     
     // ========== 初始化 ==========
     
     bool initialize(const core::Path& xlsx_path);
-    bool initializeEmpty();
+    bool initializeFromWorkbook();
     
     // ========== 编辑计划 ==========
     
@@ -254,12 +268,17 @@ private:
     
     // Workbook对象（用于XML生成）
     core::Workbook* workbook_ = nullptr;
+    bool owns_workbook_ = false;  // 是否拥有workbook_的所有权
     
     // 懒加载的模型（只加载需要编辑的）
     mutable std::unique_ptr<WorkbookModel> workbook_model_;
     mutable std::unordered_map<SheetId, std::unique_ptr<WorksheetModel>> sheet_models_;
     mutable std::unique_ptr<StylesModel> styles_model_;
     mutable std::unique_ptr<SharedStringsModel> sst_model_;
+    
+    // 工作表名称到ID的映射
+    mutable std::unordered_map<std::string, int> sheet_name_to_id_;
+    mutable std::unordered_map<int, std::string> sheet_id_to_name_;
     
     // 配置选项
     struct Options {
@@ -275,6 +294,13 @@ private:
     void ensureSheetModel(const SheetId& sheet) const;
     void ensureStylesModel() const;
     void ensureSharedStringsModel() const;
+    
+    // 工作表映射管理
+    void rebuildSheetMapping() const;
+    int getSheetId(const std::string& sheet_name) const;
+    std::string getSheetName(int sheet_id) const;
+    std::string getSheetPath(const std::string& sheet_name) const;
+    std::string getSheetPath(int sheet_id) const;
 };
 
 }} // namespace fastexcel::opc

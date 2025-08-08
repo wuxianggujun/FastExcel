@@ -228,14 +228,75 @@ ContentTypes::ContentTypes() {
 ContentTypes::~ContentTypes() = default;
 
 bool ContentTypes::parse(const std::string& xml) {
-    // This is a simplified implementation
-    // In production, use proper XML parser
-    (void)xml;
+    // 简化的XML解析 - 在生产环境中应使用适当的XML解析器
+    defaults_.clear();
+    overrides_.clear();
     
-    // TODO: Parse the [Content_Types].xml content
-    // Extract <Default> and <Override> elements
+    // 解析 <Default> 元素
+    size_t pos = 0;
+    while ((pos = xml.find("<Default", pos)) != std::string::npos) {
+        size_t end = xml.find("/>", pos);
+        if (end == std::string::npos) break;
+        
+        std::string element = xml.substr(pos, end - pos + 2);
+        
+        // 提取 Extension
+        size_t ext_start = element.find("Extension=\"");
+        if (ext_start != std::string::npos) {
+            ext_start += 11;  // strlen("Extension=\"")
+            size_t ext_end = element.find("\"", ext_start);
+            if (ext_end != std::string::npos) {
+                std::string extension = element.substr(ext_start, ext_end - ext_start);
+                
+                // 提取 ContentType
+                size_t type_start = element.find("ContentType=\"");
+                if (type_start != std::string::npos) {
+                    type_start += 13;  // strlen("ContentType=\"")
+                    size_t type_end = element.find("\"", type_start);
+                    if (type_end != std::string::npos) {
+                        std::string content_type = element.substr(type_start, type_end - type_start);
+                        addDefault(extension, content_type);
+                    }
+                }
+            }
+        }
+        
+        pos = end + 2;
+    }
     
-    LOG_DEBUG("ContentTypes parsed (stub implementation)");
+    // 解析 <Override> 元素
+    pos = 0;
+    while ((pos = xml.find("<Override", pos)) != std::string::npos) {
+        size_t end = xml.find("/>", pos);
+        if (end == std::string::npos) break;
+        
+        std::string element = xml.substr(pos, end - pos + 2);
+        
+        // 提取 PartName
+        size_t name_start = element.find("PartName=\"");
+        if (name_start != std::string::npos) {
+            name_start += 10;  // strlen("PartName=\"")
+            size_t name_end = element.find("\"", name_start);
+            if (name_end != std::string::npos) {
+                std::string part_name = element.substr(name_start, name_end - name_start);
+                
+                // 提取 ContentType
+                size_t type_start = element.find("ContentType=\"");
+                if (type_start != std::string::npos) {
+                    type_start += 13;  // strlen("ContentType=\"")
+                    size_t type_end = element.find("\"", type_start);
+                    if (type_end != std::string::npos) {
+                        std::string content_type = element.substr(type_start, type_end - type_start);
+                        addOverride(part_name, content_type);
+                    }
+                }
+            }
+        }
+        
+        pos = end + 2;
+    }
+    
+    LOG_DEBUG("ContentTypes parsed: {} defaults, {} overrides", defaults_.size(), overrides_.size());
     return true;
 }
 
