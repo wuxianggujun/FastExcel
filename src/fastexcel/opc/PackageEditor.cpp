@@ -13,6 +13,7 @@
 #include <sstream>
 #include <algorithm>
 #include <cmath>
+#include <cctype>       // 添加用于isdigit函数
 
 namespace fastexcel {
 namespace opc {
@@ -524,25 +525,58 @@ std::string PackageEditor::generatePart(const std::string& path) const {
         return generateWorkbook();
     }
     if (path.find("xl/worksheets/sheet") == 0) {
-        // 提取sheet名称
-        // 从路径提取sheet ID："xl/worksheets/sheet3.xml" -> "3"
-        size_t sheet_pos = path.find("sheet") + 5;  // "sheet"之后的位置
-        size_t xml_pos = path.find(".xml");
+        LOG_DEBUG("进入工作表路径解析：{}", path);
         
-        if (sheet_pos < xml_pos && sheet_pos != std::string::npos && xml_pos != std::string::npos) {
-            std::string id_str = path.substr(sheet_pos, xml_pos - sheet_pos);
-            LOG_DEBUG("解析工作表路径：{} -> ID字符串: '{}'", path, id_str);
+        // 提取sheet名称，使用更安全的解析方式
+        // 从路径提取sheet ID："xl/worksheets/sheet3.xml" -> "3"
+        
+        // 使用正则表达式模式匹配会更精确，但为了保持简单，使用字符串操作
+        constexpr const char* prefix = "xl/worksheets/sheet";
+        constexpr size_t prefix_len = 19; // strlen("xl/worksheets/sheet") = 19, not 18!
+        
+        LOG_DEBUG("前缀长度：{}，路径长度：{}", prefix_len, path.length());
+        LOG_DEBUG("前缀内容：'{}'", prefix);
+        
+        // 验证前缀长度
+        size_t actual_prefix_len = std::string(prefix).length();
+        LOG_DEBUG("实际前缀长度：{}", actual_prefix_len);
+        
+        // 既然外层已经检查过前缀匹配，这里直接处理
+        if (path.length() > actual_prefix_len) {
+            LOG_DEBUG("前缀匹配成功");
+            size_t xml_pos = path.find(".xml");
+            LOG_DEBUG("找到.xml位置：{}", xml_pos);
             
-            try {
-                int sheet_id = std::stoi(id_str);
-                std::string sheet_name = getSheetName(sheet_id);
-                if (!sheet_name.empty()) {
-                    LOG_DEBUG("找到工作表ID {} 对应的名称：'{}'", sheet_id, sheet_name);
-                    return generateWorksheet(sheet_name);
+            if (xml_pos != std::string::npos && xml_pos > actual_prefix_len) {
+                std::string id_str = path.substr(actual_prefix_len, xml_pos - actual_prefix_len);
+                LOG_DEBUG("解析工作表路径：{} -> ID字符串: '{}' (长度: {})", path, id_str, id_str.length());
+                
+                // 检查每个字符
+                for (size_t i = 0; i < id_str.length(); ++i) {
+                    char c = id_str[i];
+                    LOG_DEBUG("  字符[{}]: '{}' (ASCII: {}) isdigit: {}", i, c, static_cast<int>(c), std::isdigit(c) ? "true" : "false");
                 }
-            } catch (const std::exception& e) {
-                LOG_ERROR("解析工作表ID失败：{} - {}", path, e.what());
+                
+                // 验证ID字符串只包含数字
+                if (!id_str.empty() && std::all_of(id_str.begin(), id_str.end(), ::isdigit)) {
+                    try {
+                        int sheet_id = std::stoi(id_str);
+                        std::string sheet_name = getSheetName(sheet_id);
+                        if (!sheet_name.empty()) {
+                            LOG_DEBUG("找到工作表ID {} 对应的名称：'{}'", sheet_id, sheet_name);
+                            return generateWorksheet(sheet_name);
+                        }
+                    } catch (const std::exception& e) {
+                        LOG_ERROR("解析工作表ID失败：{} - {}", path, e.what());
+                    }
+                } else {
+                    LOG_ERROR("无效的工作表ID格式：{} -> '{}' (长度: {})", path, id_str, id_str.length());
+                }
+            } else {
+                LOG_ERROR("未找到.xml后缀或位置不正确：xml_pos={}, actual_prefix_len={}", xml_pos, actual_prefix_len);
             }
+        } else {
+            LOG_ERROR("路径长度不足：路径长度={}, actual_prefix_len={}", path.length(), actual_prefix_len);
         }
         
         // 如果无法解析，尝试使用第一个工作表
@@ -812,20 +846,26 @@ bool PackageEditor::isValidCellRef(int row, int col) {
 // ========== 工作表映射管理 ==========
 
 void PackageEditor::rebuildSheetMapping() const {
+    LOG_DEBUG("开始重建工作表映射...");
     sheet_name_to_id_.clear();
     sheet_id_to_name_.clear();
     
     if (!workbook_) {
+        LOG_ERROR("rebuildSheetMapping: workbook_ 为空，无法重建映射");
         return;
     }
     
     auto sheet_names = workbook_->getWorksheetNames();
+    LOG_DEBUG("从 Workbook 获取到 {} 个工作表", sheet_names.size());
+    
     for (size_t i = 0; i < sheet_names.size(); ++i) {
         int sheet_id = static_cast<int>(i + 1);
         const auto& name = sheet_names[i];
         
         sheet_name_to_id_[name] = sheet_id;
         sheet_id_to_name_[sheet_id] = name;
+        
+        LOG_DEBUG("建立映射：'{}' <-> ID {}", name, sheet_id);
     }
     
     LOG_DEBUG("重建了工作表映射：{} 个工作表", sheet_names.size());
@@ -850,12 +890,18 @@ std::string PackageEditor::getSheetName(int sheet_id) const {
         rebuildSheetMapping();
     }
     
+    LOG_DEBUG("查找工作表ID：{}，当前映射中有 {} 个条目", sheet_id, sheet_id_to_name_.size());
+    for (const auto& [id, name] : sheet_id_to_name_) {
+        LOG_DEBUG("  映射：ID {} -> '{}'", id, name);
+    }
+    
     auto it = sheet_id_to_name_.find(sheet_id);
     if (it != sheet_id_to_name_.end()) {
+        LOG_DEBUG("找到工作表ID {} 对应的名称：'{}'", sheet_id, it->second);
         return it->second;
     }
     
-    LOG_ERROR("找不到工作表ID：{}", sheet_id);
+    LOG_ERROR("找不到工作表ID：{}，可能映射未正确建立", sheet_id);
     return "";
 }
 

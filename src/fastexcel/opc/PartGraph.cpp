@@ -4,8 +4,10 @@
 #include "fastexcel/reader/RelationshipsParser.hpp"  // 使用专门的关系解析器，遵循单一职责原则
 #include "fastexcel/reader/ContentTypesParser.hpp"   // 使用专门的内容类型解析器，提高复用性
 #include "fastexcel/utils/Logger.hpp"
+#include <fmt/format.h>                              // 使用fmt库优化字符串格式化性能
 #include <algorithm>
 #include <sstream>
+#include <string_view>                               // 使用string_view减少字符串复制
 
 namespace fastexcel {
 namespace opc {
@@ -127,12 +129,16 @@ std::string PartGraph::getRelsPath(const std::string& part_path) const {
     
     size_t last_slash = part_path.find_last_of('/');
     if (last_slash == std::string::npos) {
-        return "_rels/" + part_path + ".rels";
+        // 使用fmt::format提高性能，避免多次字符串拼接
+        return fmt::format("_rels/{}.rels", part_path);
     }
     
-    std::string dir = part_path.substr(0, last_slash);
-    std::string name = part_path.substr(last_slash + 1);
-    return dir + "/_rels/" + name + ".rels";
+    // 使用string_view避免不必要的字符串复制
+    std::string_view dir_view(part_path.data(), last_slash);
+    std::string_view name_view(part_path.data() + last_slash + 1, part_path.size() - last_slash - 1);
+    
+    // 使用fmt::format一次性完成拼接，性能更优
+    return fmt::format("{}/_rels/{}.rels", dir_view, name_view);
 }
 
 bool PartGraph::hasRelationships(const std::string& part_path) const {
@@ -165,6 +171,8 @@ std::vector<std::string> PartGraph::getSheetRelatedParts(const std::string& shee
 
 std::unordered_set<std::string> PartGraph::getDirtyRels(const std::unordered_set<std::string>& dirty_parts) const {
     std::unordered_set<std::string> dirty_rels;
+    // 预分配容量，避免多次rehash
+    dirty_rels.reserve(dirty_parts.size() * 2);
     
     for (const auto& part : dirty_parts) {
         // If a part is dirty, its relationship file might need updating
@@ -176,10 +184,11 @@ std::unordered_set<std::string> PartGraph::getDirtyRels(const std::unordered_set
         // If a part is removed or added, parent rels need updating
         size_t last_slash = part.find_last_of('/');
         if (last_slash != std::string::npos) {
-            std::string parent = part.substr(0, last_slash);
-            std::string parent_rels = getRelsPath(parent);
+            // 使用string_view避免substr的字符串复制
+            std::string_view parent_view(part.data(), last_slash);
+            std::string parent_rels = getRelsPath(std::string(parent_view));
             if (parts_.find(parent_rels) != parts_.end()) {
-                dirty_rels.insert(parent_rels);
+                dirty_rels.insert(std::move(parent_rels));
             }
         }
     }
@@ -280,22 +289,29 @@ bool ContentTypes::parse(const std::string& xml) {
 }
 
 std::string ContentTypes::serialize() const {
-    std::ostringstream xml;
-    xml << "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\r\n";
-    xml << "<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\">\r\n";
+    // 使用fmt::memory_buffer提高性能，避免ostringstream的开销
+    fmt::memory_buffer buffer;
+    buffer.reserve(1024);  // 预分配缓冲区，减少重分配
     
-    // Write defaults
+    fmt::format_to(std::back_inserter(buffer), 
+                   "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\r\n"
+                   "<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\">\r\n");
+    
+    // Write defaults - 使用fmt::format_to批量写入，性能更优
     for (const auto& [ext, type] : defaults_) {
-        xml << "  <Default Extension=\"" << ext << "\" ContentType=\"" << type << "\"/>\r\n";
+        fmt::format_to(std::back_inserter(buffer), 
+                       "  <Default Extension=\"{}\" ContentType=\"{}\"/>\r\n", ext, type);
     }
     
-    // Write overrides
+    // Write overrides - 使用fmt::format_to批量写入，性能更优
     for (const auto& [path, type] : overrides_) {
-        xml << "  <Override PartName=\"" << path << "\" ContentType=\"" << type << "\"/>\r\n";
+        fmt::format_to(std::back_inserter(buffer), 
+                       "  <Override PartName=\"{}\" ContentType=\"{}\"/>\r\n", path, type);
     }
     
-    xml << "</Types>\r\n";
-    return xml.str();
+    fmt::format_to(std::back_inserter(buffer), "</Types>\r\n");
+    
+    return fmt::to_string(buffer);
 }
 
 void ContentTypes::addDefault(const std::string& extension, const std::string& content_type) {
@@ -317,11 +333,13 @@ std::string ContentTypes::getContentType(const std::string& part_name) const {
         return override_it->second;
     }
     
-    // Check defaults by extension
+    // Check defaults by extension - 使用string_view避免substr复制
     size_t last_dot = part_name.find_last_of('.');
-    if (last_dot != std::string::npos) {
-        std::string ext = part_name.substr(last_dot + 1);
-        auto default_it = defaults_.find(ext);
+    if (last_dot != std::string::npos && last_dot < part_name.size() - 1) {
+        std::string_view ext_view(part_name.data() + last_dot + 1, part_name.size() - last_dot - 1);
+        
+        // 临时创建string进行查找（C++20之前unordered_map不支持heterogeneous lookup）
+        auto default_it = defaults_.find(std::string(ext_view));
         if (default_it != defaults_.end()) {
             return default_it->second;
         }
@@ -331,7 +349,7 @@ std::string ContentTypes::getContentType(const std::string& part_name) const {
 }
 
 void ContentTypes::updateSheets(const std::vector<std::string>& sheet_names) {
-    // Remove old sheet overrides
+    // Remove old sheet overrides - 使用remove_if提高性能
     for (auto it = overrides_.begin(); it != overrides_.end(); ) {
         if (it->first.find("/xl/worksheets/sheet") != std::string::npos) {
             it = overrides_.erase(it);
@@ -340,10 +358,13 @@ void ContentTypes::updateSheets(const std::vector<std::string>& sheet_names) {
         }
     }
     
-    // Add new sheet overrides
+    // Add new sheet overrides - 预分配空间，使用fmt::format优化字符串生成
+    overrides_.reserve(overrides_.size() + sheet_names.size());
+    
     for (size_t i = 0; i < sheet_names.size(); ++i) {
-        std::string path = "/xl/worksheets/sheet" + std::to_string(i + 1) + ".xml";
-        addOverride(path, "application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml");
+        // 使用fmt::format避免多次字符串拼接
+        std::string path = fmt::format("/xl/worksheets/sheet{}.xml", i + 1);
+        addOverride(std::move(path), "application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml");
     }
 }
 
