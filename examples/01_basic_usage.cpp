@@ -20,39 +20,39 @@
 // 这里展示的是预期的API使用方式
 
 int main() {
-    std::cout << "FastExcel V3.0 基本用法示例\n";
-    std::cout << "===========================\n\n";
+    LOG_INFO("FastExcel V3.0 基本用法示例");
+    LOG_INFO("===========================");
     
     try {
         // 1. 创建内存池（可选，用于优化性能）
         fx::MemoryPool_v3 pool(1024 * 1024); // 1MB初始大小
-        std::cout << "1. 创建了1MB的内存池\n";
+        LOG_INFO("1. 创建了1MB的内存池");
         
         // 2. 创建一些Cell对象进行测试
-        std::cout << "\n2. 创建Cell对象：\n";
+        LOG_INFO("2. 创建Cell对象：");
         
         // 创建数字单元格
         fx::Cell cell1;
         cell1 = 42.5;
-        std::cout << "   - 数字单元格: 42.5\n";
+        LOG_INFO("   - 数字单元格: 42.5");
         
         // 创建字符串单元格
         fx::Cell cell2;
         cell2 = std::string("Hello, FastExcel!");
-        std::cout << "   - 字符串单元格: \"Hello, FastExcel!\"\n";
+        LOG_INFO("   - 字符串单元格: \"Hello, FastExcel!\"");
         
         // 创建布尔单元格
         fx::Cell cell3;
         cell3 = true;
-        std::cout << "   - 布尔单元格: true\n";
+        LOG_INFO("   - 布尔单元格: true");
         
         // 3. 测试Cell的内存占用
-        std::cout << "\n3. Cell内存占用：\n";
-        std::cout << "   - sizeof(Cell) = " << sizeof(fx::Cell) << " 字节\n";
-        std::cout << "   - 目标: 24字节 ✓\n";
+        LOG_INFO("3. Cell内存占用：");
+        LOG_INFO("   - sizeof(Cell) = {} 字节", sizeof(fx::Cell));
+        LOG_INFO("   - 目标: 24字节 ✓");
         
         // 4. 批量创建Cell测试内存池性能
-        std::cout << "\n4. 批量创建测试：\n";
+        LOG_INFO("4. 批量创建测试：");
         const int cell_count = 10000;
         std::vector<fx::Cell> cells;
         cells.reserve(cell_count);
@@ -72,28 +72,27 @@ int main() {
         auto end = std::chrono::high_resolution_clock::now();
         
         auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
-        std::cout << "   - 创建 " << cell_count << " 个单元格\n";
-        std::cout << "   - 耗时: " << duration.count() << " 微秒\n";
-        std::cout << "   - 平均: " << (duration.count() / static_cast<double>(cell_count)) 
-                  << " 微秒/单元格\n";
+        LOG_INFO("   - 创建 {} 个单元格", cell_count);
+        LOG_INFO("   - 耗时: {} 微秒", duration.count());
+        LOG_INFO("   - 平均: {:.2f} 微秒/单元格", (duration.count() / static_cast<double>(cell_count)));
         
         // 5. 内存池统计
-        std::cout << "\n5. 内存池统计：\n";
+        LOG_INFO("5. 内存池统计：");
         auto stats = pool.getStats();
-        std::cout << "   - 总分配次数: " << stats.total_allocations << "\n";
-        std::cout << "   - 总释放次数: " << stats.total_deallocations << "\n";
-        std::cout << "   - 当前使用: " << stats.current_usage << " 字节\n";
-        std::cout << "   - 峰值使用: " << stats.peak_usage << " 字节\n";
+        LOG_INFO("   - 总分配次数: {}", stats.total_allocations);
+        LOG_INFO("   - 总释放次数: {}", stats.total_deallocations);
+        LOG_INFO("   - 当前使用: {} 字节", stats.current_usage);
+        LOG_INFO("   - 峰值使用: {} 字节", stats.peak_usage);
         
         // 6. 未来功能预览
-        std::cout << "\n6. 未来功能预览：\n";
-        std::cout << "   以下功能将在后续版本实现：\n";
-        std::cout << "   - Worksheet工作表管理\n";
-        std::cout << "   - Workbook工作簿操作\n";
-        std::cout << "   - 样式和主题系统\n";
-        std::cout << "   - Excel文件读写\n";
-        std::cout << "   - 流式处理\n";
-        std::cout << "   - 并行处理\n";
+        LOG_INFO("6. 未来功能预览：");
+        LOG_INFO("   以下功能将在后续版本实现：");
+        LOG_INFO("   - Worksheet工作表管理");
+        LOG_INFO("   - Workbook工作簿操作");
+        LOG_INFO("   - 样式和主题系统");
+        LOG_INFO("   - Excel文件读写");
+        LOG_INFO("   - 流式处理");
+        LOG_INFO("   - 并行处理");
         
         /* 未来的API使用示例（伪代码）：
         
@@ -125,10 +124,10 @@ int main() {
         
         */
         
-        std::cout << "\n示例运行成功！\n";
+        LOG_INFO("示例运行成功！");
         
     } catch (const std::exception& e) {
-        std::cerr << "错误: " << e.what() << std::endl;
+        LOG_ERROR("错误: {}", e.what());
         return 1;
     }
     

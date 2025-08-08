@@ -20,7 +20,7 @@ void demonstrateBasicReadWrite() {
         // 1. 创建新工作簿并写入数据
         auto workbook = core::Workbook::create("sample_data.xlsx");
         if (!workbook) {
-            std::cerr << "无法创建工作簿" << std::endl;
+            LOG_ERROR << "无法创建工作簿" << std::endl;
             return;
         }
         

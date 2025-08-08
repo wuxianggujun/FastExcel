@@ -17,7 +17,7 @@ int main() {
         // 创建工作簿
         auto workbook = fastexcel::core::Workbook::create("formatting_example.xlsx");
         if (!workbook) {
-            std::cerr << "无法创建工作簿" << std::endl;
+            LOG_ERROR("无法创建工作簿");
             return -1;
         }
         
@@ -161,17 +161,17 @@ int main() {
         
         // 保存文件
         if (!workbook->save()) {
-            std::cerr << "保存文件失败" << std::endl;
+            LOG_ERROR("保存文件失败");
             return -1;
         }
         
-        std::cout << "格式化Excel文件创建成功: formatting_example.xlsx" << std::endl;
+        LOG_INFO("格式化Excel文件创建成功: formatting_example.xlsx");
         
         // 清理资源
         fastexcel::cleanup();
         
     } catch (const std::exception& e) {
-        std::cerr << "发生错误: " << e.what() << std::endl;
+        LOG_ERROR("发生错误: {}", e.what());
         return -1;
     }
     

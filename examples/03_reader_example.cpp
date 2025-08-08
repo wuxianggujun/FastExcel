@@ -18,33 +18,33 @@ int main() {
         
         // 打开文件
         if (!reader.open()) {
-            std::cerr << "无法打开Excel文件" << std::endl;
+            LOG_ERROR("无法打开Excel文件");
             return -1;
         }
         
-        std::cout << "=== FastExcel读取功能演示 ===" << std::endl;
+        LOG_INFO("=== FastExcel读取功能演示 ===");
         
         // 获取工作表名称列表
         auto worksheet_names = reader.getWorksheetNames();
-        std::cout << "\n发现 " << worksheet_names.size() << " 个工作表:" << std::endl;
+        LOG_INFO("发现 {} 个工作表:", worksheet_names.size());
         for (size_t i = 0; i < worksheet_names.size(); ++i) {
-            std::cout << "  " << (i + 1) << ". " << worksheet_names[i] << std::endl;
+            LOG_INFO("  {}. {}", (i + 1), worksheet_names[i]);
         }
         
         // 获取文档元数据
         auto metadata = reader.getMetadata();
-        std::cout << "\n=== 文档元数据 ===" << std::endl;
+        LOG_INFO("=== 文档元数据 ===");
         if (!metadata.title.empty()) {
-            std::cout << "标题: " << metadata.title << std::endl;
+            LOG_INFO("标题: {}", metadata.title);
         }
         if (!metadata.author.empty()) {
-            std::cout << "作者: " << metadata.author << std::endl;
+            LOG_INFO("作者: {}", metadata.author);
         }
         if (!metadata.subject.empty()) {
-            std::cout << "主题: " << metadata.subject << std::endl;
+            LOG_INFO("主题: {}", metadata.subject);
         }
         if (!metadata.company.empty()) {
-            std::cout << "公司: " << metadata.company << std::endl;
+            LOG_INFO("公司: {}", metadata.company);
         }
         
         // 获取定义名称
