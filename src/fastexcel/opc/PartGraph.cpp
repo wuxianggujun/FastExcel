@@ -1,6 +1,8 @@
 #include "fastexcel/opc/PartGraph.hpp"
 #include "fastexcel/archive/ZipReader.hpp"
 #include "fastexcel/archive/ZipArchive.hpp"  // For ZipError enum
+#include "fastexcel/reader/RelationshipsParser.hpp"  // 使用专门的关系解析器，遵循单一职责原则
+#include "fastexcel/reader/ContentTypesParser.hpp"   // 使用专门的内容类型解析器，提高复用性
 #include "fastexcel/utils/Logger.hpp"
 #include <algorithm>
 #include <sstream>
@@ -186,14 +188,32 @@ std::unordered_set<std::string> PartGraph::getDirtyRels(const std::unordered_set
 }
 
 bool PartGraph::parseRels(const std::string& rels_content, const std::string& base_path) {
-    // This is a simplified XML parsing - in production, use proper XML parser
-    // For now, just return true to indicate success
-    (void)rels_content;
-    (void)base_path;
+    if (rels_content.empty()) {
+        LOG_DEBUG("Empty rels content for base_path: {}", base_path);
+        return true;
+    }
+
+    // 使用专门的RelationshipsParser，遵循单一职责原则和DRY原则
+    reader::RelationshipsParser parser;
+    if (!parser.parse(rels_content)) {
+        LOG_ERROR("Failed to parse relationships for base_path: {}", base_path);
+        return false;
+    }
     
-    // TODO: Implement proper relationship XML parsing
-    // Parse <Relationship> elements and call addRelationship()
+    // 将解析到的关系添加到PartGraph
+    const auto& relationships = parser.getRelationships();
+    for (const auto& parsed_rel : relationships) {
+        // 转换为PartGraph的Relationship结构
+        Relationship rel;
+        rel.id = parsed_rel.id;
+        rel.type = parsed_rel.type;
+        rel.target = parsed_rel.target;
+        rel.target_mode = parsed_rel.target_mode;
+        
+        addRelationship(base_path, rel);
+    }
     
+    LOG_DEBUG("Successfully parsed {} relationships for base_path: {}", relationships.size(), base_path);
     return true;
 }
 
@@ -228,75 +248,34 @@ ContentTypes::ContentTypes() {
 ContentTypes::~ContentTypes() = default;
 
 bool ContentTypes::parse(const std::string& xml) {
-    // 简化的XML解析 - 在生产环境中应使用适当的XML解析器
+    if (xml.empty()) {
+        LOG_DEBUG("Empty ContentTypes XML content");
+        return true;
+    }
+
+    // 清理之前的数据
     defaults_.clear();
     overrides_.clear();
     
-    // 解析 <Default> 元素
-    size_t pos = 0;
-    while ((pos = xml.find("<Default", pos)) != std::string::npos) {
-        size_t end = xml.find("/>", pos);
-        if (end == std::string::npos) break;
-        
-        std::string element = xml.substr(pos, end - pos + 2);
-        
-        // 提取 Extension
-        size_t ext_start = element.find("Extension=\"");
-        if (ext_start != std::string::npos) {
-            ext_start += 11;  // strlen("Extension=\"")
-            size_t ext_end = element.find("\"", ext_start);
-            if (ext_end != std::string::npos) {
-                std::string extension = element.substr(ext_start, ext_end - ext_start);
-                
-                // 提取 ContentType
-                size_t type_start = element.find("ContentType=\"");
-                if (type_start != std::string::npos) {
-                    type_start += 13;  // strlen("ContentType=\"")
-                    size_t type_end = element.find("\"", type_start);
-                    if (type_end != std::string::npos) {
-                        std::string content_type = element.substr(type_start, type_end - type_start);
-                        addDefault(extension, content_type);
-                    }
-                }
-            }
-        }
-        
-        pos = end + 2;
+    // 使用专门的ContentTypesParser，遵循单一职责原则和DRY原则
+    reader::ContentTypesParser parser;
+    if (!parser.parse(xml)) {
+        LOG_ERROR("Failed to parse content types XML");
+        return false;
     }
     
-    // 解析 <Override> 元素
-    pos = 0;
-    while ((pos = xml.find("<Override", pos)) != std::string::npos) {
-        size_t end = xml.find("/>", pos);
-        if (end == std::string::npos) break;
-        
-        std::string element = xml.substr(pos, end - pos + 2);
-        
-        // 提取 PartName
-        size_t name_start = element.find("PartName=\"");
-        if (name_start != std::string::npos) {
-            name_start += 10;  // strlen("PartName=\"")
-            size_t name_end = element.find("\"", name_start);
-            if (name_end != std::string::npos) {
-                std::string part_name = element.substr(name_start, name_end - name_start);
-                
-                // 提取 ContentType
-                size_t type_start = element.find("ContentType=\"");
-                if (type_start != std::string::npos) {
-                    type_start += 13;  // strlen("ContentType=\"")
-                    size_t type_end = element.find("\"", type_start);
-                    if (type_end != std::string::npos) {
-                        std::string content_type = element.substr(type_start, type_end - type_start);
-                        addOverride(part_name, content_type);
-                    }
-                }
-            }
-        }
-        
-        pos = end + 2;
+    // 将解析结果转换为ContentTypes内部结构
+    const auto& defaults = parser.getDefaults();
+    for (const auto& defaultType : defaults) {
+        addDefault(defaultType.extension, defaultType.content_type);
     }
     
-    LOG_DEBUG("ContentTypes parsed: {} defaults, {} overrides", defaults_.size(), overrides_.size());
+    const auto& overrides = parser.getOverrides();
+    for (const auto& overrideType : overrides) {
+        addOverride(overrideType.part_name, overrideType.content_type);
+    }
+    
+    LOG_DEBUG("ContentTypes parsed via specialized parser: {} defaults, {} overrides", defaults_.size(), overrides_.size());
     return true;
 }
 

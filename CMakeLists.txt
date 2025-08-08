@@ -75,6 +75,8 @@ set(FASTEXCEL_SOURCES
         src/fastexcel/reader/StylesParser.cpp
         src/fastexcel/reader/SharedStringsParser.cpp
         src/fastexcel/reader/WorksheetParser.cpp
+        src/fastexcel/reader/RelationshipsParser.cpp  # 新增：专门的关系解析器，遵循单一职责原则
+        src/fastexcel/reader/ContentTypesParser.cpp   # 新增：专门的内容类型解析器，提高复用性
         src/fastexcel/utils/Logger.cpp
         src/fastexcel/xml/ContentTypes.cpp
         src/fastexcel/xml/Relationships.cpp
