@@ -166,6 +166,24 @@ private:
      * @return 是否有效
      */
     bool validateXML(const std::string& xml_content, const std::string& file_path) const;
+    
+    /**
+     * @brief 统一的文件生成方法，支持真正的流式写入
+     * @param path 文件路径
+     * @param generator XML生成器函数
+     * @return 是否成功
+     */
+    bool generateFileWithCallback(const std::string& path,
+        std::function<void(const std::function<void(const char*, size_t)>&)> generator);
+    
+    /**
+     * @brief 生成文件（仅当内容不为空时）
+     * @param path 文件路径
+     * @param generator XML生成器函数
+     * @return 是否成功
+     */
+    bool generateFileWithCallbackIfNotEmpty(const std::string& path,
+        std::function<void(const std::function<void(const char*, size_t)>&)> generator);
 };
 
 }} // namespace fastexcel::core

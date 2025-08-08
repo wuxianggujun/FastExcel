@@ -123,89 +123,71 @@ bool ExcelStructureGenerator::generateBasicFiles() {
     
     LOG_DEBUG("Generating {} basic Excel files", estimated_files);
     
-    // 生成 [Content_Types].xml
-    std::string content_types_xml;
-    workbook_->generateContentTypesXML([&content_types_xml](const char* data, size_t size) {
-        content_types_xml.append(data, size);
-    });
-    if (!writer_->writeFile("[Content_Types].xml", content_types_xml)) {
+    // 使用统一的文件生成方法，支持真正的流式写入
+    if (!generateFileWithCallback("[Content_Types].xml",
+        [this](const std::function<void(const char*, size_t)>& callback) {
+            workbook_->generateContentTypesXML(callback);
+        })) {
         return false;
     }
     
-    // 生成 _rels/.rels
-    std::string rels_xml;
-    workbook_->generateRelsXML([&rels_xml](const char* data, size_t size) {
-        rels_xml.append(data, size);
-    });
-    if (!writer_->writeFile("_rels/.rels", rels_xml)) {
+    if (!generateFileWithCallback("_rels/.rels",
+        [this](const std::function<void(const char*, size_t)>& callback) {
+            workbook_->generateRelsXML(callback);
+        })) {
         return false;
     }
     
-    // 生成 docProps/app.xml
-    std::string app_xml;
-    workbook_->generateDocPropsAppXML([&app_xml](const char* data, size_t size) {
-        app_xml.append(data, size);
-    });
-    if (!writer_->writeFile("docProps/app.xml", app_xml)) {
+    if (!generateFileWithCallback("docProps/app.xml",
+        [this](const std::function<void(const char*, size_t)>& callback) {
+            workbook_->generateDocPropsAppXML(callback);
+        })) {
         return false;
     }
     
-    // 生成 docProps/core.xml
-    std::string core_xml;
-    workbook_->generateDocPropsCoreXML([&core_xml](const char* data, size_t size) {
-        core_xml.append(data, size);
-    });
-    if (!writer_->writeFile("docProps/core.xml", core_xml)) {
+    if (!generateFileWithCallback("docProps/core.xml",
+        [this](const std::function<void(const char*, size_t)>& callback) {
+            workbook_->generateDocPropsCoreXML(callback);
+        })) {
         return false;
     }
     
     // 生成自定义属性（如果有）
-    std::string custom_xml;
-    workbook_->generateDocPropsCustomXML([&custom_xml](const char* data, size_t size) {
-        custom_xml.append(data, size);
-    });
-    if (!custom_xml.empty()) {
-        if (!writer_->writeFile("docProps/custom.xml", custom_xml)) {
-            return false;
-        }
-    }
-    
-    // 生成 xl/_rels/workbook.xml.rels
-    std::string workbook_rels_xml;
-    workbook_->generateWorkbookRelsXML([&workbook_rels_xml](const char* data, size_t size) {
-        workbook_rels_xml.append(data, size);
-    });
-    if (!writer_->writeFile("xl/_rels/workbook.xml.rels", workbook_rels_xml)) {
+    if (!generateFileWithCallbackIfNotEmpty("docProps/custom.xml",
+        [this](const std::function<void(const char*, size_t)>& callback) {
+            workbook_->generateDocPropsCustomXML(callback);
+        })) {
         return false;
     }
     
-    // 生成 xl/workbook.xml
-    std::string workbook_xml;
-    workbook_->generateWorkbookXML([&workbook_xml](const char* data, size_t size) {
-        workbook_xml.append(data, size);
-    });
-    if (!writer_->writeFile("xl/workbook.xml", workbook_xml)) {
+    if (!generateFileWithCallback("xl/_rels/workbook.xml.rels",
+        [this](const std::function<void(const char*, size_t)>& callback) {
+            workbook_->generateWorkbookRelsXML(callback);
+        })) {
         return false;
     }
     
-    // 生成 xl/styles.xml
-    std::string styles_xml;
-    workbook_->generateStylesXML([&styles_xml](const char* data, size_t size) {
-        styles_xml.append(data, size);
-    });
-    if (!writer_->writeFile("xl/styles.xml", styles_xml)) {
+    if (!generateFileWithCallback("xl/workbook.xml",
+        [this](const std::function<void(const char*, size_t)>& callback) {
+            workbook_->generateWorkbookXML(callback);
+        })) {
+        return false;
+    }
+    
+    if (!generateFileWithCallback("xl/styles.xml",
+        [this](const std::function<void(const char*, size_t)>& callback) {
+            workbook_->generateStylesXML(callback);
+        })) {
         return false;
     }
     
     // 注意：sharedStrings.xml 将在所有工作表生成后，在 finalize() 中生成
     // 这样可以确保共享字符串表已经被填充
     
-    // 生成 xl/theme/theme1.xml
-    std::string theme_xml;
-    workbook_->generateThemeXML([&theme_xml](const char* data, size_t size) {
-        theme_xml.append(data, size);
-    });
-    if (!writer_->writeFile("xl/theme/theme1.xml", theme_xml)) {
+    if (!generateFileWithCallback("xl/theme/theme1.xml",
+        [this](const std::function<void(const char*, size_t)>& callback) {
+            workbook_->generateThemeXML(callback);
+        })) {
         return false;
     }
     
@@ -273,13 +255,11 @@ bool ExcelStructureGenerator::finalize() {
     // 这必须在所有工作表生成之后进行，因为工作表生成时会填充共享字符串表
     if (workbook_->getOptions().use_shared_strings) {
         LOG_DEBUG("Generating shared strings XML");
-        std::string shared_strings_xml;
-        workbook_->generateSharedStringsXML([&shared_strings_xml](const char* data, size_t size) {
-            shared_strings_xml.append(data, size);
-        });
         
-        // 即使是空的共享字符串表也要生成文件，因为Content_Types.xml和workbook.xml.rels已经引用了它
-        if (!writer_->writeFile("xl/sharedStrings.xml", shared_strings_xml)) {
+        if (!generateFileWithCallback("xl/sharedStrings.xml",
+            [this](const std::function<void(const char*, size_t)>& callback) {
+                workbook_->generateSharedStringsXML(callback);
+            })) {
             LOG_ERROR("Failed to write shared strings file");
             return false;
         }
@@ -425,6 +405,49 @@ bool ExcelStructureGenerator::validateXML(const std::string& xml_content, const 
     }
     
     return true;
+}
+
+bool ExcelStructureGenerator::generateFileWithCallback(const std::string& path,
+    std::function<void(const std::function<void(const char*, size_t)>&)> generator) {
+    
+    // 检查是否可以使用流式写入
+    if (auto streaming_writer = dynamic_cast<StreamingFileWriter*>(writer_.get())) {
+        // 流式模式：直接流式写入，不缓存
+        if (!writer_->openStreamingFile(path)) {
+            return false;
+        }
+        
+        generator([this](const char* data, size_t size) {
+            writer_->writeStreamingChunk(data, size);
+        });
+        
+        return writer_->closeStreamingFile();
+    } else {
+        // 批量模式：仍需要缓存到字符串
+        std::string content;
+        generator([&content](const char* data, size_t size) {
+            content.append(data, size);
+        });
+        
+        return writer_->writeFile(path, content);
+    }
+}
+
+bool ExcelStructureGenerator::generateFileWithCallbackIfNotEmpty(const std::string& path,
+    std::function<void(const std::function<void(const char*, size_t)>&)> generator) {
+    
+    // 先检查内容是否为空
+    std::string test_content;
+    generator([&test_content](const char* data, size_t size) {
+        test_content.append(data, size);
+    });
+    
+    if (test_content.empty()) {
+        return true; // 内容为空，跳过生成
+    }
+    
+    // 内容不为空，使用正常的生成流程
+    return generateFileWithCallback(path, generator);
 }
 
 }} // namespace fastexcel::core
