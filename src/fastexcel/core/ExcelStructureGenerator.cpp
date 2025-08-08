@@ -4,6 +4,7 @@
 #include "fastexcel/utils/Logger.hpp"
 #include "fastexcel/core/Exception.hpp"
 #include <sstream>
+#include <chrono>
 
 namespace fastexcel {
 namespace core {
@@ -26,36 +27,70 @@ bool ExcelStructureGenerator::generate() {
         return false;
     }
     
+    auto start_time = std::chrono::high_resolution_clock::now();
     LOG_INFO("Starting Excel structure generation using {}", writer_->getTypeName());
     reportProgress("Initializing", 0, 100);
     
     try {
+        // 检查内存限制
+        if (options_.max_memory_limit > 0) {
+            size_t estimated_memory = estimateWorksheetSize(nullptr) * workbook_->getWorksheetCount();
+            if (estimated_memory > options_.max_memory_limit) {
+                LOG_WARN("Estimated memory {} exceeds limit {}, forcing streaming mode",
+                        estimated_memory, options_.max_memory_limit);
+                // 强制使用流式模式
+                options_.streaming_threshold = 0;
+            }
+        }
+        
         // 1. 生成基础文件
         reportProgress("Generating basic files", 10, 100);
+        auto basic_start = std::chrono::high_resolution_clock::now();
         if (!generateBasicFiles()) {
             LOG_ERROR("Failed to generate basic Excel files");
             return false;
         }
+        perf_stats_.basic_files_time = std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::high_resolution_clock::now() - basic_start);
         
         // 2. 生成工作表文件
         reportProgress("Generating worksheets", 50, 100);
+        auto worksheets_start = std::chrono::high_resolution_clock::now();
         if (!generateWorksheets()) {
             LOG_ERROR("Failed to generate worksheet files");
             return false;
         }
+        perf_stats_.worksheets_time = std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::high_resolution_clock::now() - worksheets_start);
         
         // 3. 最终化
         reportProgress("Finalizing", 90, 100);
+        auto finalize_start = std::chrono::high_resolution_clock::now();
         if (!finalize()) {
             LOG_ERROR("Failed to finalize Excel structure generation");
             return false;
         }
+        perf_stats_.finalize_time = std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::high_resolution_clock::now() - finalize_start);
         
         reportProgress("Completed", 100, 100);
+        
+        // 记录总时间和峰值内存
+        perf_stats_.total_time = std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::high_resolution_clock::now() - start_time);
+        
+        // 估算峰值内存使用
+        if (auto batch_writer = dynamic_cast<BatchFileWriter*>(writer_.get())) {
+            perf_stats_.peak_memory_usage = batch_writer->getEstimatedMemoryUsage();
+        }
         
         auto stats = writer_->getStats();
         LOG_INFO("Excel structure generation completed successfully: {} files ({} batch, {} streaming), {} total bytes",
                 stats.files_written, stats.batch_files, stats.streaming_files, stats.total_bytes);
+        LOG_INFO("Performance: Total time {}ms (basic: {}ms, worksheets: {}ms, finalize: {}ms), Peak memory: {} bytes",
+                perf_stats_.total_time.count(), perf_stats_.basic_files_time.count(),
+                perf_stats_.worksheets_time.count(), perf_stats_.finalize_time.count(),
+                perf_stats_.peak_memory_usage);
         
         return true;
         

@@ -125,49 +125,6 @@ void SharedStringTable::generateXML(const std::function<void(const char*, size_t
     writer.endDocument();
 }
 
-void SharedStringTable::generateXMLToFile(const std::string& filename) const {
-    if (id_to_string_.empty()) {
-        return;  // 没有字符串时不生成XML
-    }
-    
-    xml::XMLStreamWriter writer(filename);
-    writer.startDocument();
-    writer.startElement("sst");
-    writer.writeAttribute("xmlns", "http://schemas.openxmlformats.org/spreadsheetml/2006/main");
-    writer.writeAttribute("count", std::to_string(id_to_string_.size()).c_str());
-    writer.writeAttribute("uniqueCount", std::to_string(string_to_id_.size()).c_str());
-    
-    for (const auto& str : id_to_string_) {
-        writer.startElement("si");
-        writer.startElement("t");
-        
-        // 处理特殊字符转义
-        std::string escaped_str = str;
-        // 简单的XML转义处理
-        size_t pos = 0;
-        while ((pos = escaped_str.find('&', pos)) != std::string::npos) {
-            escaped_str.replace(pos, 1, "&amp;");
-            pos += 5;
-        }
-        pos = 0;
-        while ((pos = escaped_str.find('<', pos)) != std::string::npos) {
-            escaped_str.replace(pos, 1, "&lt;");
-            pos += 4;
-        }
-        pos = 0;
-        while ((pos = escaped_str.find('>', pos)) != std::string::npos) {
-            escaped_str.replace(pos, 1, "&gt;");
-            pos += 4;
-        }
-        
-        writer.writeText(escaped_str.c_str());
-        writer.endElement(); // t
-        writer.endElement(); // si
-    }
-    
-    writer.endElement(); // sst
-    writer.endDocument();
-}
 
 size_t SharedStringTable::getMemoryUsage() const {
     size_t usage = sizeof(SharedStringTable);

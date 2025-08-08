@@ -31,7 +31,18 @@ private:
         bool optimize_for_size = false;
         bool validate_xml = false;
         size_t streaming_threshold = 10000; // 单元格数量阈值
+        bool parallel_worksheet_generation = false; // 并行生成工作表
+        size_t max_memory_limit = 0; // 最大内存限制（0表示不限制）
     } options_;
+    
+    // 性能统计
+    struct PerformanceStats {
+        std::chrono::milliseconds total_time;
+        std::chrono::milliseconds basic_files_time;
+        std::chrono::milliseconds worksheets_time;
+        std::chrono::milliseconds finalize_time;
+        size_t peak_memory_usage = 0;
+    } perf_stats_;
     
     // 进度回调
     std::function<void(const std::string&, int, int)> progress_callback_;
@@ -78,6 +89,12 @@ public:
      * @return 类型名称
      */
     std::string getGeneratorType() const;
+    
+    /**
+     * @brief 获取性能统计信息
+     * @return 性能统计
+     */
+    PerformanceStats getPerformanceStats() const { return perf_stats_; }
 
 private:
     // ========== 核心生成方法 ==========

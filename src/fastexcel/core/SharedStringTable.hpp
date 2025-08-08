@@ -90,12 +90,6 @@ public:
     void generateXML(const std::function<void(const char*, size_t)>& callback) const;
     
     /**
-     * @brief 生成SharedStrings.xml到文件（流式写入）
-     * @param filename 输出文件名
-     */
-    void generateXMLToFile(const std::string& filename) const;
-    
-    /**
      * @brief 获取内存使用统计
      * @return 内存使用字节数
      */
