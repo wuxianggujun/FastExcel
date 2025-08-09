@@ -22,150 +22,95 @@ namespace archive {
 namespace opc {
 
 // 前向声明
-class ZipRepackWriter;  // 保留用于兼容性
+class ZipRepackWriter;
 class PartGraph;
 class ContentTypes;
 
 /**
- * @brief OPC包编辑器 - 主流成熟架构实现
+ * @brief Excel包文件编辑器 - 专注于高效文件保存
  * 
- * 实现策略：
- * 1. 读入阶段：索引所有条目，解析关系图，只对编辑部件建模
- * 2. 编辑阶段：Copy-On-Write，标记dirty
- * 3. 提交阶段：Repack到新ZIP，智能复制
+ * 设计原则：
+ * 1. 单一职责：只负责文件级别的增量保存和ZIP重新打包
+ * 2. 简洁接口：不重新定义业务对象，直接使用现有的Workbook API
+ * 3. 高效实现：Copy-On-Write策略，只重新生成修改的部分
+ * 
+ * 使用方式：
+ * ```cpp
+ * auto workbook = core::Workbook::open("file.xlsx");
+ * auto worksheet = workbook->getWorksheet("Sheet1");
+ * worksheet->setCell(1, 1, "Hello");  // 使用现有Cell API
+ * 
+ * auto editor = PackageEditor::fromWorkbook(workbook.get());
+ * editor->save();  // 高效保存修改
+ * ```
  */
 class PackageEditor {
 public:
-    // ========== 类型定义 ==========
-    
-    // 单元格引用
-    struct CellRef {
-        int row;
-        int col;
-        
-        CellRef(int r, int c) : row(r), col(c) {}
-        std::string toString() const; // 返回 "A1" 格式
-    };
-    
-    // 单元格值
-    struct CellValue {
-        enum Type { Empty, String, Number, Formula, Boolean };
-        Type type = Empty;
-        std::string str_value;
-        double num_value = 0.0;
-        bool bool_value = false;
-        
-        static CellValue string(const std::string& s) {
-            CellValue v;
-            v.type = String;
-            v.str_value = s;
-            return v;
-        }
-        
-        static CellValue number(double n) {
-            CellValue v;
-            v.type = Number;
-            v.num_value = n;
-            return v;
-        }
-        
-        static CellValue formula(const std::string& f) {
-            CellValue v;
-            v.type = Formula;
-            v.str_value = f;
-            return v;
-        }
-    };
-    
-    using SheetId = std::string;  // 工作表名称作为ID
-    
     // ========== 工厂方法 ==========
     
     /**
      * 打开现有Excel文件进行编辑
+     * @param xlsx_path Excel文件路径
+     * @return PackageEditor实例，失败返回nullptr
      */
     static std::unique_ptr<PackageEditor> open(const core::Path& xlsx_path);
     
     /**
-     * 从现有Workbook创建编辑器
+     * 从现有Workbook创建文件编辑器
+     * @param workbook 现有的Workbook对象（不会获取所有权）
+     * @return PackageEditor实例，失败返回nullptr
      */
     static std::unique_ptr<PackageEditor> fromWorkbook(core::Workbook* workbook);
     
     /**
-     * 创建新的Excel文件
+     * 创建新的Excel文件编辑器
+     * @return PackageEditor实例，包含默认工作表，失败返回nullptr
      */
     static std::unique_ptr<PackageEditor> create();
     
     ~PackageEditor();
-    
-    // ========== 核心编辑API ==========
+
+    // ========== 核心文件操作 ==========
     
     /**
-     * 设置单元格值
+     * 保存所有修改到原文件
+     * @return 成功返回true
      */
-    void setCell(const SheetId& sheet, const CellRef& ref, const CellValue& value);
+    bool save();
     
     /**
-     * 获取单元格值
-     */
-    CellValue getCell(const SheetId& sheet, const CellRef& ref) const;
-    
-    /**
-     * 添加工作表
-     */
-    void addSheet(const std::string& name);
-    
-    /**
-     * 重命名工作表
-     */
-    void renameSheet(const SheetId& old_name, const std::string& new_name);
-    
-    /**
-     * 删除工作表（第一期可以不支持）
-     */
-    void removeSheet(const SheetId& sheet);
-    
-    /**
-     * 设置样式（只追加）
-     */
-    int appendStyle(const class StyleDescriptor& style);
-    
-    /**
-     * 添加图片
-     */
-    void addImage(const SheetId& sheet, const CellRef& anchor, 
-                  const std::vector<uint8_t>& image_data, const std::string& mime_type);
-    
-    // ========== 提交操作 ==========
-    
-    /**
-     * 提交到文件（repack）
+     * 将所有修改保存到指定文件
      * @param dst 目标文件路径
-     * @return 是否成功
+     * @return 成功返回true
      */
     bool commit(const core::Path& dst);
     
+    // ========== 工作簿访问 ==========
+    
     /**
-     * 覆盖原文件
+     * 获取关联的Workbook对象
+     * @return Workbook指针，用于进行业务操作
      */
-    bool save();
+    core::Workbook* getWorkbook() const { return workbook_; }
     
     // ========== 状态查询 ==========
     
     /**
-     * 获取所有工作表名称
+     * 检查是否有未保存的修改
+     */
+    bool isDirty() const;
+    
+    /**
+     * 获取工作表名称列表
      */
     std::vector<std::string> getSheetNames() const;
     
     /**
-     * 检查是否有修改
-     */
-    bool isDirty() const { return !edit_plan_.dirty_parts.empty(); }
-    
-    /**
-     * 获取脏部件列表
+     * 获取需要重新生成的部件列表（调试用）
      */
     std::vector<std::string> getDirtyParts() const;
+    
+    // ========== 验证方法 ==========
     
     /**
      * 验证工作表名称是否合法
@@ -176,10 +121,6 @@ public:
      * 验证单元格引用是否合法
      */
     static bool isValidCellRef(int row, int col);
-    
-    // 最大行数和列数常量
-    static constexpr int MAX_ROWS = 1048576;    // Excel 2007+ 最大行数
-    static constexpr int MAX_COLS = 16384;      // Excel 2007+ 最大列数 (XFD)
     
 private:
     PackageEditor();
@@ -224,7 +165,7 @@ private:
     /**
      * 生成worksheet XML
      */
-    std::string generateWorksheet(const SheetId& sheet) const;
+    std::string generateWorksheet(const std::string& sheet_name) const;
     
     /**
      * 生成styles.xml
@@ -272,7 +213,7 @@ private:
     
     // 懒加载的模型（只加载需要编辑的）
     mutable std::unique_ptr<WorkbookModel> workbook_model_;
-    mutable std::unordered_map<SheetId, std::unique_ptr<WorksheetModel>> sheet_models_;
+    mutable std::unordered_map<std::string, std::unique_ptr<WorksheetModel>> sheet_models_;
     mutable std::unique_ptr<StylesModel> styles_model_;
     mutable std::unique_ptr<SharedStringsModel> sst_model_;
     
@@ -291,9 +232,12 @@ private:
     
     // 确保模型已加载
     void ensureWorkbookModel() const;
-    void ensureSheetModel(const SheetId& sheet) const;
+    void ensureSheetModel(const std::string& sheet) const;
     void ensureStylesModel() const;
     void ensureSharedStringsModel() const;
+    
+    // 自动检测Workbook修改
+    void detectAndMarkDirtyParts();
     
     // 工作表映射管理
     void rebuildSheetMapping() const;
@@ -301,6 +245,10 @@ private:
     std::string getSheetName(int sheet_id) const;
     std::string getSheetPath(const std::string& sheet_name) const;
     std::string getSheetPath(int sheet_id) const;
+    
+    // 常量
+    static constexpr int MAX_ROWS = 1048576;    // Excel 2007+ 最大行数
+    static constexpr int MAX_COLS = 16384;      // Excel 2007+ 最大列数 (XFD)
 };
 
 }} // namespace fastexcel::opc

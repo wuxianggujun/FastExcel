@@ -52,15 +52,20 @@ void testPackageEditorFromWorkbook() {
         }
         std::cout << std::endl;
         
-        // 6. 添加新工作表
-        editor->addSheet("库存管理");
-        std::cout << "  ✓ 添加新工作表 '库存管理'" << std::endl;
+        // 6. 通过 Workbook 添加新工作表
+        auto wb = editor->getWorkbook();
+        if (wb) {
+            wb->addWorksheet("库存管理");
+            std::cout << "  ✓ 添加新工作表 '库存管理'" << std::endl;
+        }
         
-        // 7. 设置单元格
-        opc::PackageEditor::CellRef cell_ref(1, 1);
-        auto cell_value = opc::PackageEditor::CellValue::string("测试数据");
-        editor->setCell("库存管理", cell_ref, cell_value);
-        std::cout << "  ✓ 在 '库存管理' 工作表设置单元格 A1" << std::endl;
+        // 7. 通过 Worksheet 设置单元格
+        auto inventory_sheet = wb->getWorksheet("库存管理");
+        if (inventory_sheet) {
+            // 使用 Worksheet API 设置单元格
+            inventory_sheet->writeString(1, 1, "测试数据");
+            std::cout << "  ✓ 在 '库存管理' 工作表设置单元格 A1" << std::endl;
+        }
         
         // 8. 检查是否有更改
         if (editor->isDirty()) {
@@ -157,10 +162,12 @@ void testPackageEditorCreate() {
         
         // 3. 添加数据
         if (!sheet_names.empty()) {
-            opc::PackageEditor::CellRef cell_ref(1, 1);
-            auto cell_value = opc::PackageEditor::CellValue::string("Hello World");
-            editor->setCell(sheet_names[0], cell_ref, cell_value);
-            std::cout << "  ✓ 在默认工作表设置了数据" << std::endl;
+            auto wb = editor->getWorkbook();
+            auto first_sheet = wb->getWorksheet(sheet_names[0]);
+            if (first_sheet) {
+                first_sheet->writeString(1, 1, "Hello World");
+                std::cout << "  ✓ 在默认工作表设置了数据" << std::endl;
+            }
         }
         
         // 4. 保存
