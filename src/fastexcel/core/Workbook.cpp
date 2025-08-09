@@ -1,22 +1,24 @@
 #include "fastexcel/core/Workbook.hpp"
-#include "fastexcel/core/Path.hpp"
+#include "fastexcel/core/BatchFileWriter.hpp"
 #include "fastexcel/core/CustomPropertyManager.hpp"
 #include "fastexcel/core/DefinedNameManager.hpp"
+#include "fastexcel/core/ExcelStructureGenerator.hpp"
+#include "fastexcel/core/Exception.hpp"
+#include "fastexcel/core/Path.hpp"
+#include "fastexcel/core/StreamingFileWriter.hpp"
 #include "fastexcel/core/StyleTransferContext.hpp"
 #include "fastexcel/reader/XLSXReader.hpp"
+#include "fastexcel/theme/Theme.hpp"
+#include "fastexcel/theme/ThemeParser.hpp"
 #include "fastexcel/utils/LogConfig.hpp"
 #include "fastexcel/utils/Logger.hpp"
 #include "fastexcel/utils/TimeUtils.hpp"
 #include "fastexcel/xml/Relationships.hpp"
 #include "fastexcel/xml/SharedStrings.hpp"
-#include "fastexcel/xml/XMLStreamWriter.hpp"
 #include "fastexcel/xml/StyleSerializer.hpp"
-#include "fastexcel/theme/Theme.hpp"
-#include "fastexcel/theme/ThemeParser.hpp"
-#include "fastexcel/core/Exception.hpp"
-#include "fastexcel/core/ExcelStructureGenerator.hpp"
-#include "fastexcel/core/BatchFileWriter.hpp"
-#include "fastexcel/core/StreamingFileWriter.hpp"
+#include "fastexcel/xml/UnifiedXMLGenerator.hpp"
+#include "fastexcel/xml/XMLStreamWriter.hpp"
+
 #include <algorithm>
 #include <ctime>
 #include <fstream>
@@ -793,91 +795,32 @@ bool Workbook::generateExcelStructure() {
 
 
 void Workbook::generateWorkbookXML(const std::function<void(const char*, size_t)>& callback) const {
-    xml::XMLStreamWriter writer(callback);
-    writer.startDocument();
-    writer.startElement("workbook");
-    writer.writeAttribute("xmlns", "http://schemas.openxmlformats.org/spreadsheetml/2006/main");
-    writer.writeAttribute("xmlns:r", "http://schemas.openxmlformats.org/officeDocument/2006/relationships");
-    
-    // 严格按照libxlsxwriter的fileVersion属性
-    writer.startElement("fileVersion");
-    writer.writeAttribute("appName", "xl");
-    writer.writeAttribute("lastEdited", "4");
-    writer.writeAttribute("lowestEdited", "4");
-    writer.writeAttribute("rupBuild", "4505");
-    writer.endElement(); // fileVersion
-    
-    // 严格按照libxlsxwriter的workbookPr属性
-    writer.startElement("workbookPr");
-    writer.writeAttribute("defaultThemeVersion", "124226");
-    writer.endElement(); // workbookPr
-    
-    // 严格按照libxlsxwriter的bookViews属性
-    writer.startElement("bookViews");
-    writer.startElement("workbookView");
-    writer.writeAttribute("xWindow", "240");
-    writer.writeAttribute("yWindow", "15");
-    writer.writeAttribute("windowWidth", "16095");
-    writer.writeAttribute("windowHeight", "9660");
-    // 🔧 修复Sheet激活状态问题：设置activeTab为0，只激活第一个工作表
-    if (!worksheets_.empty()) {
-        writer.writeAttribute("activeTab", "0");
+    // 重构：委托给UnifiedXMLGenerator，消除重复代码
+    auto generator = xml::UnifiedXMLGenerator::fromWorkbook(this);
+    if (generator) {
+        generator->generateWorkbookXML(callback);
+    } else {
+        LOG_ERROR("Failed to create UnifiedXMLGenerator for workbook XML generation");
     }
-    writer.endElement(); // workbookView
-    writer.endElement(); // bookViews
-    
-    // 工作表
-    writer.startElement("sheets");
-    for (size_t i = 0; i < worksheets_.size(); ++i) {
-        writer.startElement("sheet");
-        writer.writeAttribute("name", worksheets_[i]->getName().c_str());
-        writer.writeAttribute("sheetId", std::to_string(worksheets_[i]->getSheetId()).c_str());
-        // 修复：每个工作表使用正确的rId
-        writer.writeAttribute("r:id", ("rId" + std::to_string(i + 1)).c_str());
-        writer.endElement(); // sheet
-    }
-    writer.endElement(); // sheets
-    
-    // 严格按照libxlsxwriter的calcPr属性
-    writer.startElement("calcPr");
-    writer.writeAttribute("calcId", "124519");
-    writer.writeAttribute("fullCalcOnLoad", "1");
-    writer.endElement(); // calcPr
-    
-    writer.endElement(); // workbook
-    writer.endDocument();
 }
 
 void Workbook::generateStylesXML(const std::function<void(const char*, size_t)>& callback) const {
-    // 使用StyleSerializer生成样式XML
-    xml::StyleSerializer::serialize(*format_repo_, callback);
+    // 重构：委托给UnifiedXMLGenerator
+    auto generator = xml::UnifiedXMLGenerator::fromWorkbook(this);
+    if (generator) {
+        generator->generateStylesXML(callback);
+    } else {
+        LOG_ERROR("Failed to create UnifiedXMLGenerator for styles XML generation");
+    }
 }
 
 void Workbook::generateSharedStringsXML(const std::function<void(const char*, size_t)>& callback) const {
-    if (!options_.use_shared_strings) {
-        // 输出空的SST文件
-        xml::XMLStreamWriter writer(callback);
-        writer.startDocument();
-        writer.startElement("sst");
-        writer.writeAttribute("xmlns", "http://schemas.openxmlformats.org/spreadsheetml/2006/main");
-        writer.writeAttribute("count", "0");
-        writer.writeAttribute("uniqueCount", "0");
-        writer.endElement();
-        writer.endDocument();
-        return;
-    }
-    if (shared_string_table_) {
-        shared_string_table_->generateXML(callback);
+    // 重构：委托给UnifiedXMLGenerator
+    auto generator = xml::UnifiedXMLGenerator::fromWorkbook(this);
+    if (generator) {
+        generator->generateSharedStringsXML(callback);
     } else {
-        // 仍然生成空SST
-        xml::XMLStreamWriter writer(callback);
-        writer.startDocument();
-        writer.startElement("sst");
-        writer.writeAttribute("xmlns", "http://schemas.openxmlformats.org/spreadsheetml/2006/main");
-        writer.writeAttribute("count", "0");
-        writer.writeAttribute("uniqueCount", "0");
-        writer.endElement();
-        writer.endDocument();
+        LOG_ERROR("Failed to create UnifiedXMLGenerator for shared strings XML generation");
     }
 }
 
@@ -1059,157 +1002,33 @@ void Workbook::generateDocPropsCustomXML(const std::function<void(const char*, s
 }
 
 void Workbook::generateContentTypesXML(const std::function<void(const char*, size_t)>& callback) const {
-    xml::XMLStreamWriter writer(callback);
-    writer.startDocument();
-    writer.startElement("Types");
-    writer.writeAttribute("xmlns", "http://schemas.openxmlformats.org/package/2006/content-types");
-    
-    // 默认类型 - 严格按照libxlsxwriter顺序
-    writer.startElement("Default");
-    writer.writeAttribute("Extension", "rels");
-    writer.writeAttribute("ContentType", "application/vnd.openxmlformats-package.relationships+xml");
-    writer.endElement(); // Default
-    
-    writer.startElement("Default");
-    writer.writeAttribute("Extension", "xml");
-    writer.writeAttribute("ContentType", "application/xml");
-    writer.endElement(); // Default
-    
-    // 覆盖类型 - 严格按照libxlsxwriter的顺序：docProps/app.xml, docProps/core.xml, xl/styles.xml, xl/theme/theme1.xml, xl/workbook.xml, xl/worksheets/sheet1.xml
-    writer.startElement("Override");
-    writer.writeAttribute("PartName", "/docProps/app.xml");
-    writer.writeAttribute("ContentType", "application/vnd.openxmlformats-officedocument.extended-properties+xml");
-    writer.endElement(); // Override
-    
-    writer.startElement("Override");
-    writer.writeAttribute("PartName", "/docProps/core.xml");
-    writer.writeAttribute("ContentType", "application/vnd.openxmlformats-package.core-properties+xml");
-    writer.endElement(); // Override
-    
-    writer.startElement("Override");
-    writer.writeAttribute("PartName", "/xl/styles.xml");
-    writer.writeAttribute("ContentType", "application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml");
-    writer.endElement(); // Override
-    
-    writer.startElement("Override");
-    writer.writeAttribute("PartName", "/xl/theme/theme1.xml");
-    writer.writeAttribute("ContentType", "application/vnd.openxmlformats-officedocument.theme+xml");
-    writer.endElement(); // Override
-    
-    writer.startElement("Override");
-    writer.writeAttribute("PartName", "/xl/workbook.xml");
-    writer.writeAttribute("ContentType", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml");
-    writer.endElement(); // Override
-    
-    // 工作表 - 按顺序添加
-    for (size_t i = 0; i < worksheets_.size(); ++i) {
-        writer.startElement("Override");
-        writer.writeAttribute("PartName", ("/xl/worksheets/sheet" + std::to_string(i + 1) + ".xml").c_str());
-        writer.writeAttribute("ContentType", "application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml");
-        writer.endElement(); // Override
+    // 重构：委托给UnifiedXMLGenerator
+    auto generator = xml::UnifiedXMLGenerator::fromWorkbook(this);
+    if (generator) {
+        generator->generateContentTypesXML(callback);
+    } else {
+        LOG_ERROR("Failed to create UnifiedXMLGenerator for content types XML generation");
     }
-    
-    // 🔧 关键修复：如果启用共享字符串，总是包含sharedStrings.xml引用，无论当前是否有内容
-    // Excel需要这些引用才能正确处理共享字符串
-    if (options_.use_shared_strings) {
-        writer.startElement("Override");
-        writer.writeAttribute("PartName", "/xl/sharedStrings.xml");
-        writer.writeAttribute("ContentType", "application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml");
-        writer.endElement(); // Override
-    }
-    
-    // 自定义属性（如果有）
-    if (!custom_property_manager_->empty()) {
-        writer.startElement("Override");
-        writer.writeAttribute("PartName", "/docProps/custom.xml");
-        writer.writeAttribute("ContentType", "application/vnd.openxmlformats-officedocument.custom-properties+xml");
-        writer.endElement(); // Override
-    }
-    
-    writer.endElement(); // Types
-    writer.endDocument();
 }
 
 void Workbook::generateRelsXML(const std::function<void(const char*, size_t)>& callback) const {
-    xml::XMLStreamWriter writer(callback);
-    writer.startDocument();
-    writer.startElement("Relationships");
-    writer.writeAttribute("xmlns", "http://schemas.openxmlformats.org/package/2006/relationships");
-    
-    // 严格按照libxlsxwriter的顺序：rId1(workbook), rId2(core), rId3(app)
-    writer.startElement("Relationship");
-    writer.writeAttribute("Id", "rId1");
-    writer.writeAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument");
-    writer.writeAttribute("Target", "xl/workbook.xml");
-    writer.endElement(); // Relationship
-    
-    writer.startElement("Relationship");
-    writer.writeAttribute("Id", "rId2");
-    writer.writeAttribute("Type", "http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties");
-    writer.writeAttribute("Target", "docProps/core.xml");
-    writer.endElement(); // Relationship
-    
-    writer.startElement("Relationship");
-    writer.writeAttribute("Id", "rId3");
-    writer.writeAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties");
-    writer.writeAttribute("Target", "docProps/app.xml");
-    writer.endElement(); // Relationship
-    
-    if (!custom_property_manager_->empty()) {
-        writer.startElement("Relationship");
-        writer.writeAttribute("Id", "rId4");
-        writer.writeAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/custom-properties");
-        writer.writeAttribute("Target", "docProps/custom.xml");
-        writer.endElement(); // Relationship
+    // 重构：委托给UnifiedXMLGenerator
+    auto generator = xml::UnifiedXMLGenerator::fromWorkbook(this);
+    if (generator) {
+        generator->generateRelationshipsXML("root", callback);
+    } else {
+        LOG_ERROR("Failed to create UnifiedXMLGenerator for root relationships XML generation");
     }
-    
-    writer.endElement(); // Relationships
-    writer.endDocument();
 }
 
 void Workbook::generateWorkbookRelsXML(const std::function<void(const char*, size_t)>& callback) const {
-    xml::XMLStreamWriter writer(callback);
-    writer.startDocument();
-    writer.startElement("Relationships");
-    writer.writeAttribute("xmlns", "http://schemas.openxmlformats.org/package/2006/relationships");
-    
-    int rId = 1;
-    
-    // 工作表关系 - 为每个工作表分配正确的rId
-    for (size_t i = 0; i < worksheets_.size(); ++i) {
-        writer.startElement("Relationship");
-        writer.writeAttribute("Id", ("rId" + std::to_string(rId++)).c_str());
-        writer.writeAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet");
-        writer.writeAttribute("Target", ("worksheets/sheet" + std::to_string(i + 1) + ".xml").c_str());
-        writer.endElement(); // Relationship
+    // 重构：委托给UnifiedXMLGenerator
+    auto generator = xml::UnifiedXMLGenerator::fromWorkbook(this);
+    if (generator) {
+        generator->generateRelationshipsXML("workbook", callback);
+    } else {
+        LOG_ERROR("Failed to create UnifiedXMLGenerator for workbook relationships XML generation");
     }
-    
-    // 主题关系
-    writer.startElement("Relationship");
-    writer.writeAttribute("Id", ("rId" + std::to_string(rId++)).c_str());
-    writer.writeAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme");
-    writer.writeAttribute("Target", "theme/theme1.xml");
-    writer.endElement(); // Relationship
-    
-    // 样式关系
-    writer.startElement("Relationship");
-    writer.writeAttribute("Id", ("rId" + std::to_string(rId++)).c_str());
-    writer.writeAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles");
-    writer.writeAttribute("Target", "styles.xml");
-    writer.endElement(); // Relationship
-    
-    // 🔧 关键修复：如果启用共享字符串，总是包含sharedStrings关系，无论当前是否有内容
-    // Excel需要这个关系才能正确处理共享字符串
-    if (options_.use_shared_strings) {
-        writer.startElement("Relationship");
-        writer.writeAttribute("Id", ("rId" + std::to_string(rId++)).c_str());
-        writer.writeAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings");
-        writer.writeAttribute("Target", "sharedStrings.xml");
-        writer.endElement(); // Relationship
-    }
-    
-    writer.endElement(); // Relationships
-    writer.endDocument();
 }
 
 void Workbook::generateThemeXML(const std::function<void(const char*, size_t)>& callback) const {

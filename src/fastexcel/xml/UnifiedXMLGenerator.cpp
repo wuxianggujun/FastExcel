@@ -39,16 +39,48 @@ void UnifiedXMLGenerator::generateWorkbookXML(const std::function<void(const cha
     }
 
     XMLStreamWriter writer(callback);
-    writeXMLHeader(writer);
+    writer.startDocument();
     
     writer.startElement("workbook");
-    writeExcelNamespaces(writer, "workbook");
+    writer.writeAttribute("xmlns", "http://schemas.openxmlformats.org/spreadsheetml/2006/main");
+    writer.writeAttribute("xmlns:r", "http://schemas.openxmlformats.org/officeDocument/2006/relationships");
     
-    // 生成workbook属性
-    generateWorkbookPropertiesSection(writer);
+    // 严格按照libxlsxwriter的fileVersion属性
+    writer.startElement("fileVersion");
+    writer.writeAttribute("appName", "xl");
+    writer.writeAttribute("lastEdited", "4");
+    writer.writeAttribute("lowestEdited", "4");
+    writer.writeAttribute("rupBuild", "4505");
+    writer.endElement(); // fileVersion
     
-    // 生成sheets部分
+    // 严格按照libxlsxwriter的workbookPr属性  
+    writer.startElement("workbookPr");
+    writer.writeAttribute("defaultThemeVersion", "124226");
+    writer.endElement(); // workbookPr
+    
+    // 严格按照libxlsxwriter的bookViews属性
+    writer.startElement("bookViews");
+    writer.startElement("workbookView");
+    writer.writeAttribute("xWindow", "240");
+    writer.writeAttribute("yWindow", "15");
+    writer.writeAttribute("windowWidth", "16095");
+    writer.writeAttribute("windowHeight", "9660");
+    // 设置activeTab为0，只激活第一个工作表
+    auto sheet_names = context_.workbook->getWorksheetNames();
+    if (!sheet_names.empty()) {
+        writer.writeAttribute("activeTab", "0");
+    }
+    writer.endElement(); // workbookView
+    writer.endElement(); // bookViews
+    
+    // 生成sheets部分 - 使用经过测试的结构
     generateWorkbookSheetsSection(writer);
+    
+    // 严格按照libxlsxwriter的calcPr属性
+    writer.startElement("calcPr");
+    writer.writeAttribute("calcId", "124519");
+    writer.writeAttribute("fullCalcOnLoad", "1");
+    writer.endElement(); // calcPr
     
     writer.endElement(); // workbook
     writer.flushBuffer();
@@ -357,11 +389,20 @@ void UnifiedXMLGenerator::generateWorkbookSheetsSection(XMLStreamWriter& writer)
     
     writer.startElement("sheets");
     
+    // 使用与Workbook::generateWorkbookXML相同的逻辑
     auto sheet_names = context_.workbook->getWorksheetNames();
     for (size_t i = 0; i < sheet_names.size(); ++i) {
+        // 通过名称获取worksheet对象以获取正确的sheetId
+        auto worksheet = context_.workbook->getWorksheet(sheet_names[i]);
+        
         writer.startElement("sheet");
         writer.writeAttribute("name", sheet_names[i]);
-        writer.writeAttribute("sheetId", static_cast<int>(i + 1));
+        if (worksheet) {
+            writer.writeAttribute("sheetId", std::to_string(worksheet->getSheetId()));
+        } else {
+            // 备用方案：使用索引+1作为sheetId
+            writer.writeAttribute("sheetId", std::to_string(i + 1));
+        }
         writer.writeAttribute("r:id", "rId" + std::to_string(i + 1));
         writer.endElement(); // sheet
     }
