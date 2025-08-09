@@ -1,5 +1,5 @@
 #include "fastexcel/read/ReadWorkbook.hpp"
-#include "fastexcel/core/Logger.hpp"
+#include "fastexcel/utils/Logger.hpp"
 #include <algorithm>
 #include <chrono>
 

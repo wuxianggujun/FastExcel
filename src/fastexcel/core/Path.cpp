@@ -85,6 +85,57 @@ bool Path::isDirectory() const {
 #endif
 }
 
+bool Path::isWritable() const {
+    if (utf8_path_.empty()) return false;
+    
+#ifdef _WIN32
+    std::wstring wide_path = getWidePath();
+    DWORD attributes = GetFileAttributesW(wide_path.c_str());
+    if (attributes == INVALID_FILE_ATTRIBUTES) {
+        // 文件不存在，检查父目录是否可写
+        Path parent_dir = getParent();
+        if (!parent_dir.exists()) return false;
+        return parent_dir.isWritable();
+    }
+    // 检查是否有只读属性
+    return !(attributes & FILE_ATTRIBUTE_READONLY);
+#else
+    try {
+        auto perms = std::filesystem::status(utf8_path_).permissions();
+        // 检查用户写权限
+        return (perms & std::filesystem::perms::owner_write) != std::filesystem::perms::none;
+    } catch (...) {
+        return false;
+    }
+#endif
+}
+
+Path Path::getParent() const {
+    if (utf8_path_.empty()) return Path();
+    
+#ifdef _WIN32
+    // 使用Windows路径处理
+    size_t pos = utf8_path_.find_last_of("/\\");
+    if (pos == std::string::npos) {
+        // 没有找到路径分隔符，返回当前目录
+        return Path(".");
+    }
+    if (pos == 0) {
+        // 根目录情况
+        return Path(utf8_path_.substr(0, 1));
+    }
+    return Path(utf8_path_.substr(0, pos));
+#else
+    try {
+        std::filesystem::path fs_path(utf8_path_);
+        auto parent = fs_path.parent_path();
+        return Path(parent.string());
+    } catch (...) {
+        return Path();
+    }
+#endif
+}
+
 uintmax_t Path::fileSize() const {
     if (utf8_path_.empty()) return 0;
     

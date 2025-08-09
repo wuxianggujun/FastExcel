@@ -7,7 +7,7 @@
 #include "fastexcel/core/Path.hpp"
 #include "fastexcel/core/StreamingFileWriter.hpp"
 #include "fastexcel/core/StyleTransferContext.hpp"
-#include "fastexcel/reader/XLSXReader.hpp"
+// XLSXReader.hpp 已删除 - 读取功能已迁移到 ReadWorkbook
 #include "fastexcel/theme/Theme.hpp"
 #include "fastexcel/theme/ThemeParser.hpp"
 #include "fastexcel/utils/LogConfig.hpp"
@@ -254,6 +254,7 @@ bool Workbook::saveWithFullGeneration(bool use_streaming) {
     
     LOG_INFO("Workbook saved successfully: {}", filename_);
     return true;
+}
 
 bool Workbook::saveAs(const std::string& filename) {
     // 🔧 修复：saveAs 允许只读文件另存为新文件
@@ -907,54 +908,8 @@ const SharedStringTable* Workbook::getSharedStringTable() const {
 
 // ========== 内部方法 ==========
 
-bool Workbook::generateExcelStructure() {
-    // 智能选择生成模式：根据数据量和内存使用情况自动决定
-    size_t estimated_memory = estimateMemoryUsage();
-    size_t total_cells = getTotalCellCount();
-    
-    bool use_streaming = false;
-    
-    // 新的决策逻辑：基于WorkbookMode
-    switch (options_.mode) {
-        case WorkbookMode::AUTO:
-            // 自动模式：根据数据量智能选择
-            if (total_cells > options_.auto_mode_cell_threshold ||
-                estimated_memory > options_.auto_mode_memory_threshold) {
-                use_streaming = true;
-                LOG_INFO("Auto-selected streaming mode: {} cells, {}MB estimated memory (thresholds: {} cells, {}MB)",
-                        total_cells, estimated_memory / (1024*1024),
-                        options_.auto_mode_cell_threshold, options_.auto_mode_memory_threshold / (1024*1024));
-            } else {
-                use_streaming = false;
-                LOG_INFO("Auto-selected batch mode: {} cells, {}MB estimated memory (thresholds: {} cells, {}MB)",
-                        total_cells, estimated_memory / (1024*1024),
-                        options_.auto_mode_cell_threshold, options_.auto_mode_memory_threshold / (1024*1024));
-            }
-            break;
-            
-        case WorkbookMode::BATCH:
-            // 强制批量模式
-            use_streaming = false;
-            LOG_INFO("Using forced batch mode: {} cells, {}MB estimated memory",
-                    total_cells, estimated_memory / (1024*1024));
-            break;
-            
-        case WorkbookMode::STREAMING:
-            // 强制流式模式
-            use_streaming = true;
-            LOG_INFO("Using forced streaming mode: {} cells, {}MB estimated memory",
-                    total_cells, estimated_memory / (1024*1024));
-            break;
-    }
-    
-    // 如果设置了constant_memory，强制使用流式模式
-    if (options_.constant_memory) {
-        use_streaming = true;
-        LOG_INFO("Constant memory mode enabled, forcing streaming mode");
-    }
-    
-    return generateWithGenerator(use_streaming);
-}
+// generateExcelStructure() 已删除 - 使用 ExcelStructureGenerator 替代
+// 这是新架构的统一 XML 生成调度器，提供更好的职责分离和流式支持
 
 
 
@@ -1257,106 +1212,15 @@ std::string Workbook::escapeXML(const std::string& text) const {
 
 // ========== 工作簿编辑功能实现 ==========
 
-std::unique_ptr<Workbook> Workbook::open(const Path& path) {
-    try {
-        // 使用Path的内置文件检查
-        if (!path.exists()) {
-            LOG_ERROR("File not found for editing: {}", path.string());
-            return nullptr;
-        }
-        
-        // 使用XLSXReader读取现有文件
-        reader::XLSXReader reader(path);
-        auto result = reader.open();
-        if (result != core::ErrorCode::Ok) {
-            LOG_ERROR("Failed to open XLSX file for reading: {}, error code: {}", path.string(), static_cast<int>(result));
-            return nullptr;
-        }
-        
-        // 加载工作簿
-        std::unique_ptr<core::Workbook> loaded_workbook;
-        result = reader.loadWorkbook(loaded_workbook);
-        reader.close();
-        
-        if (result != core::ErrorCode::Ok) {
-            LOG_ERROR("Failed to load workbook from file: {}, error code: {}", path.string(), static_cast<int>(result));
-            return nullptr;
-        }
-        
-        // 标记来源以便保存时进行未修改部件的保真写回
-        if (loaded_workbook) {
-            loaded_workbook->opened_from_existing_ = true;
-            loaded_workbook->original_package_path_ = path.string();
-            
-            // 🔧 修复：检查文件权限，设置只读标志
-            if (!path.isWritable()) {
-                loaded_workbook->read_only_ = true;
-                LOG_INFO("File opened in read-only mode (no write permission): {}", path.string());
-            } else {
-                loaded_workbook->read_only_ = false;
-                LOG_INFO("File opened in read-write mode: {}", path.string());
-            }
-            
-            // 在只读模式下优化设置
-            if (loaded_workbook->read_only_) {
-                // 只读模式不需要共享字符串表（不会修改）
-                loaded_workbook->options_.use_shared_strings = false;
-                // 强制使用流式模式以减少内存占用
-                loaded_workbook->options_.mode = WorkbookMode::STREAMING;
-                LOG_DEBUG("Read-only optimizations applied: SST disabled, streaming mode forced");
-            }
-        }
-        
-        LOG_INFO("Successfully loaded workbook for editing: {}", path.string());
-        return loaded_workbook;
-        
-    } catch (const std::exception& e) {
-        LOG_ERROR("Exception while loading workbook for editing: {}, error: {}", path.string(), e.what());
-        return nullptr;
-    }
-}
+// ========== 已删除的方法说明 ==========
+// Workbook::open() 已删除，请使用：
+// - FastExcel::openForReading() 用于只读访问
+// - FastExcel::openForEditing() 用于编辑访问
+// 新架构提供更好的状态分离和类型安全
 
 bool Workbook::refresh() {
-    if (!is_open_) {
-        LOG_ERROR("Cannot refresh: workbook is not open");
-        return false;
-    }
-    
-    try {
-        // 保存当前状态
-        std::string current_filename = filename_;
-        bool was_open = is_open_;
-        
-        // 关闭当前工作簿
-        close();
-        
-        // 重新加载
-        Path current_path(current_filename);
-        auto refreshed_workbook = open(current_path);
-        if (!refreshed_workbook) {
-            LOG_ERROR("Failed to refresh workbook: {}", current_filename);
-            return false;
-        }
-        
-        // 替换当前内容
-        worksheets_ = std::move(refreshed_workbook->worksheets_);
-        format_repo_ = std::move(refreshed_workbook->format_repo_);
-        doc_properties_ = refreshed_workbook->doc_properties_;
-        custom_property_manager_ = std::move(refreshed_workbook->custom_property_manager_);
-        defined_name_manager_ = std::move(refreshed_workbook->defined_name_manager_);
-        
-        // 恢复打开状态
-        if (was_open) {
-            open();
-        }
-        
-        LOG_INFO("Successfully refreshed workbook: {}", current_filename);
-        return true;
-        
-    } catch (const std::exception& e) {
-        LOG_ERROR("Exception during workbook refresh: {}", e.what());
-        return false;
-    }
+    LOG_ERROR("refresh() method is deprecated and will be reimplemented in EditSession");
+    return false;
 }
 
 bool Workbook::mergeWorkbook(const std::unique_ptr<Workbook>& other_workbook, const MergeOptions& options) {

@@ -1,5 +1,5 @@
 #include "fastexcel/read/ReadWorksheet.hpp"
-#include "fastexcel/core/Logger.hpp"
+#include "fastexcel/utils/Logger.hpp"
 #include <sstream>
 #include <algorithm>
 

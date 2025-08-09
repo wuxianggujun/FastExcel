@@ -145,8 +145,8 @@ void demonstrateEditingFeatures() {
     std::cout << "\n=== 编辑功能演示 ===" << std::endl;
     
     try {
-        // 加载现有文件进行编辑
-        auto workbook = core::Workbook::open("sample_data.xlsx");
+        // 使用新架构的编辑接口
+        auto workbook = FastExcel::openForEditing("sample_data.xlsx");
         if (!workbook) {
             std::cerr << "无法加载文件进行编辑" << std::endl;
             return;

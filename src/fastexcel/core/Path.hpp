@@ -108,6 +108,18 @@ public:
     bool isDirectory() const;
     
     /**
+     * @brief 检查文件是否可写
+     * @return 是否可写
+     */
+    bool isWritable() const;
+    
+    /**
+     * @brief 获取父目录路径
+     * @return 父目录路径
+     */
+    Path getParent() const;
+    
+    /**
      * @brief 获取文件大小
      * @return 文件大小（字节），失败返回0
      */

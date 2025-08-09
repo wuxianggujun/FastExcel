@@ -210,11 +210,8 @@ private:
      */
     bool loadFromFile(const core::Path& path);
     
-    /**
-     * @brief 生成Excel结构
-     * @return 是否成功
-     */
-    bool generateExcelStructure();
+    // 注意：Excel 结构生成已统一到 ExcelStructureGenerator
+    // 原 generateExcelStructure() 方法已删除，使用工作簿的保存接口替代
     
     /**
      * @brief 验证工作表名称

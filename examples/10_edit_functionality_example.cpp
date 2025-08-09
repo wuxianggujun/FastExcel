@@ -56,7 +56,7 @@ int main() {
         
         // 步骤3: 打开拷贝的文件进行编辑
         LOG_INFO("2. 打开文件进行编辑...");
-        auto workbook = Workbook::open(target_path);
+        auto workbook = FastExcel::openForEditing(target_path);
         if (!workbook) {
             LOG_ERROR("无法打开工作簿进行编辑");
             return -1;
@@ -129,7 +129,7 @@ int main() {
         LOG_INFO("6. 验证编辑结果...");
         
         // 重新打开文件验证
-        auto verify_workbook = Workbook::open(target_path);
+        auto verify_workbook = FastExcel::openForReading(target_path);
         if (verify_workbook) {
             auto verify_worksheet = verify_workbook->getWorksheet(0);
             if (verify_worksheet) {

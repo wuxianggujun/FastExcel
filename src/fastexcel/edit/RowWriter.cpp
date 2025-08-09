@@ -1,5 +1,5 @@
 #include "fastexcel/edit/RowWriter.hpp"
-#include "fastexcel/core/Logger.hpp"
+#include "fastexcel/utils/Logger.hpp"
 #include <sstream>
 #include <iomanip>
 

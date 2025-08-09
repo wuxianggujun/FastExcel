@@ -176,7 +176,7 @@ void demonstrateMemoryOptimizedEditing() {
     std::cout << "\n=== 示例3：内存优化编辑 ===" << std::endl;
     
     // 加载现有文件进行编辑
-    auto workbook = Workbook::open("test_data.xlsx");
+    auto workbook = FastExcel::openForEditing("test_data.xlsx");
     if (!workbook) {
         std::cout << "✗ 无法加载文件，创建新文件" << std::endl;
         workbook = Workbook::create("test_data.xlsx");

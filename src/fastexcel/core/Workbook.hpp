@@ -856,16 +856,13 @@ public:
     
     // ========== 工作簿编辑功能 ==========
     
-    /**
-     * @brief 打开现有文件进行编辑（直接可用，无需再调用open）
-     * @param path 文件路径
-     * @return 工作簿智能指针，失败返回nullptr
-     */
-    static std::unique_ptr<Workbook> open(const Path& path);
+    // 注意：Workbook 不再提供直接的文件读取接口
+    // 请使用 FastExcel::openForReading() 或 FastExcel::openForEditing()
     
     /**
      * @brief 刷新工作簿（重新读取文件内容）
      * @return 是否成功
+     * @note 此方法将通过 EditSession 重新实现
      */
     bool refresh();
     
@@ -970,8 +967,8 @@ public:
 private:
     // ========== 内部方法 ==========
     
-    // 生成Excel文件结构
-    bool generateExcelStructure();
+    // 注意：XML 生成已迁移到 ExcelStructureGenerator
+    // generateExcelStructure() 方法已删除，请使用统一的生成器
     bool generateWithGenerator(bool use_streaming_writer);
     
     // 新增：优化的保存方法
