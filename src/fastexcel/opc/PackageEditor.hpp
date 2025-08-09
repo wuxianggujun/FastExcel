@@ -1,51 +1,132 @@
 #pragma once
 
 #include "fastexcel/core/Path.hpp"
+#include "fastexcel/utils/Logger.hpp"
+#include "fastexcel/archive/ZipReader.hpp"
 #include <memory>
+#include <string>
+#include <vector>
 #include <unordered_map>
 #include <unordered_set>
-#include <vector>
-#include <string>
+#include <functional>
 
 namespace fastexcel {
 
 // 前向声明
 namespace core {
     class Workbook;
+    class Worksheet;
 }
 
 namespace archive {
     class ZipReader;
-    class ZipWriter;
 }
 
 namespace opc {
 
 // 前向声明
 class ZipRepackWriter;
-class PartGraph;
-class ContentTypes;
+
+// ===== 服务接口定义 =====
 
 /**
- * @brief Excel包文件编辑器 - 专注于高效文件保存
+ * 包管理器接口 - 负责ZIP文件的读写操作
+ */
+class IPackageManager {
+public:
+    virtual ~IPackageManager() = default;
+    virtual bool readPart(const std::string& path, std::string& content) = 0;
+    virtual bool writePart(const std::string& path, const std::string& content) = 0;
+    virtual bool removePart(const std::string& path) = 0;
+    virtual std::vector<std::string> listParts() const = 0;
+    virtual bool commitChanges(const core::Path& target_path) = 0;
+};
+
+}
+
+namespace xml {
+/**
+ * XML生成器接口 - 负责各种XML文件的生成
+ */
+class IXMLGenerator {
+public:
+    virtual ~IXMLGenerator() = default;
+    virtual std::string generateWorkbookXML() = 0;
+    virtual std::string generateWorksheetXML(const std::string& sheet_name) = 0;
+    virtual std::string generateStylesXML() = 0;
+    virtual std::string generateSharedStringsXML() = 0;
+};
+}
+
+namespace tracking {
+/**
+ * 变更跟踪器接口 - 负责跟踪和管理变更状态
+ */
+class IChangeTracker {
+public:
+    virtual ~IChangeTracker() = default;
+    virtual void markPartDirty(const std::string& part) = 0;
+    virtual void markPartClean(const std::string& part) = 0;
+    virtual bool isPartDirty(const std::string& part) const = 0;
+    virtual std::vector<std::string> getDirtyParts() const = 0;
+    virtual void clearAll() = 0;
+    virtual bool hasChanges() const = 0;
+};
+}
+
+namespace opc {
+
+/**
+ * @brief Excel包文件编辑器 - 重构版
  * 
- * 设计原则：
- * 1. 单一职责：只负责文件级别的增量保存和ZIP重新打包
- * 2. 简洁接口：不重新定义业务对象，直接使用现有的Workbook API
- * 3. 高效实现：Copy-On-Write策略，只重新生成修改的部分
+ * 新架构设计原则：
+ * 1. 单一职责：PackageEditor专注于协调各个服务
+ * 2. 依赖注入：通过接口依赖抽象实现
+ * 3. 服务分离：XML生成、包管理、变更跟踪分别由专门服务处理
  * 
  * 使用方式：
  * ```cpp
- * auto workbook = core::Workbook::open("file.xlsx");
- * auto worksheet = workbook->getWorksheet("Sheet1");
- * worksheet->setCell(1, 1, "Hello");  // 使用现有Cell API
- * 
  * auto editor = PackageEditor::fromWorkbook(workbook.get());
- * editor->save();  // 高效保存修改
+ * editor->detectChanges();  // 新功能：智能变更检测
+ * editor->commit("output.xlsx");  // 保存修改
  * ```
  */
 class PackageEditor {
+    // 前向声明友元类
+    friend class WorkbookXMLGenerator;
+    
+private:
+    // 核心服务组件（依赖注入）
+    std::unique_ptr<IPackageManager> package_manager_;
+    std::unique_ptr<xml::IXMLGenerator> xml_generator_;
+    std::unique_ptr<tracking::IChangeTracker> change_tracker_;
+    
+    // 关联的Workbook对象（不拥有所有权）
+    core::Workbook* workbook_ = nullptr;
+    
+    // 内部状态
+    core::Path source_path_;
+    bool initialized_ = false;
+    
+    // 配置选项
+    struct Options {
+        bool preserve_unknown_parts = true;   // 保留未知部件
+        bool remove_calc_chain = true;        // 删除calcChain
+        bool auto_detect_changes = true;      // 自动检测变更
+        bool use_shared_strings = true;       // 使用共享字符串
+        bool validate_xml = false;            // XML验证
+    } options_;
+    
 public:
+    PackageEditor();
+    ~PackageEditor();
+    
+    // 禁用拷贝，支持移动
+    PackageEditor(const PackageEditor&) = delete;
+    PackageEditor& operator=(const PackageEditor&) = delete;
+    PackageEditor(PackageEditor&&) = default;
+    PackageEditor& operator=(PackageEditor&&) = default;
+    
     // ========== 工厂方法 ==========
     
     /**
@@ -68,8 +149,6 @@ public:
      */
     static std::unique_ptr<PackageEditor> create();
     
-    ~PackageEditor();
-
     // ========== 核心文件操作 ==========
     
     /**
@@ -93,6 +172,57 @@ public:
      */
     core::Workbook* getWorkbook() const { return workbook_; }
     
+    // ========== 新功能：智能变更管理 ==========
+    
+    /**
+     * 智能检测并标记变更的部件
+     * 这是新架构的核心功能，自动分析Workbook变更
+     */
+    void detectChanges();
+    
+    /**
+     * 手动标记部件为需要重新生成
+     * @param part_name 部件名称，如 "xl/workbook.xml"
+     */
+    void markPartDirty(const std::string& part_name);
+    
+    /**
+     * 获取变更统计信息
+     */
+    struct ChangeStats {
+        size_t modified_parts = 0;
+        size_t created_parts = 0;
+        size_t deleted_parts = 0;
+        size_t total_size_bytes = 0;
+    };
+    
+    ChangeStats getChangeStats() const;
+    
+    // ========== 配置管理 ==========
+    
+    /**
+     * 设置是否保留未知部件
+     */
+    void setPreserveUnknownParts(bool preserve) {
+        options_.preserve_unknown_parts = preserve;
+    }
+    
+    /**
+     * 设置是否删除计算链
+     */
+    void setRemoveCalcChain(bool remove) {
+        options_.remove_calc_chain = remove;
+    }
+    
+    /**
+     * 设置是否自动检测变更
+     */
+    void setAutoDetectChanges(bool auto_detect) {
+        options_.auto_detect_changes = auto_detect;
+    }
+    
+    const Options& getOptions() const { return options_; }
+    
     // ========== 状态查询 ==========
     
     /**
@@ -106,9 +236,14 @@ public:
     std::vector<std::string> getSheetNames() const;
     
     /**
-     * 获取需要重新生成的部件列表（调试用）
+     * 获取需要重新生成的部件列表
      */
     std::vector<std::string> getDirtyParts() const;
+    
+    /**
+     * 获取包中所有部件列表
+     */
+    std::vector<std::string> getAllParts() const;
     
     // ========== 验证方法 ==========
     
@@ -122,133 +257,48 @@ public:
      */
     static bool isValidCellRef(int row, int col);
     
-private:
-    PackageEditor();
+    // ========== 高级功能 ==========
     
-    // ========== 初始化 ==========
+    /**
+     * 生成指定部件的内容（用于调试和自定义）
+     * @param part_path 部件路径
+     * @return 生成的XML内容
+     */
+    std::string generatePart(const std::string& part_path) const;
+    
+    /**
+     * 验证生成的XML内容（可选功能）
+     * @param xml_content XML内容
+     * @return 验证结果
+     */
+    bool validateXML(const std::string& xml_content) const;
+    
+    // ========== 内部XML生成方法（供服务组件使用） ==========
+    
+    std::string generateWorkbookXMLInternal();
+    std::string generateWorksheetXMLInternal(const std::string& sheet_name);
+    std::string generateStylesXMLInternal();
+    std::string generateSharedStringsXMLInternal();
+    
+private:
+    // ========== 初始化方法 ==========
     
     bool initialize(const core::Path& xlsx_path);
     bool initializeFromWorkbook();
+    bool initializeServices(std::unique_ptr<archive::ZipReader> zip_reader, core::Workbook* workbook);
     
-    // ========== 编辑计划 ==========
+    // ========== 私有辅助方法 ==========
     
-    struct EditPlan {
-        std::unordered_set<std::string> dirty_parts;      // 修改的部件
-        std::unordered_set<std::string> removed_parts;    // 删除的部件
-        std::unordered_map<std::string, std::string> new_parts; // 新增的部件及内容
-        
-        // 标记部件为dirty
-        void markDirty(const std::string& part);
-        
-        // 标记关联部件
-        void markRelatedDirty(const std::string& part);
-        
-        // 添加新部件
-        void addNewPart(const std::string& path, const std::string& content);
-        
-        // 删除部件
-        void removePart(const std::string& path);
-    };
-    
-    // ========== 部件生成 ==========
-    
-    /**
-     * 为dirty部件生成内容
-     */
-    std::string generatePart(const std::string& path) const;
-    
-    /**
-     * 生成workbook.xml
-     */
-    std::string generateWorkbook() const;
-    
-    /**
-     * 生成worksheet XML
-     */
-    std::string generateWorksheet(const std::string& sheet_name) const;
-    
-    /**
-     * 生成styles.xml
-     */
-    std::string generateStyles() const;
-    
-    /**
-     * 生成sharedStrings.xml
-     */
-    std::string generateSharedStrings() const;
-    
-    /**
-     * 生成Content_Types.xml
-     */
+    std::string extractSheetNameFromPath(const std::string& part_path) const;
     std::string generateContentTypes() const;
-    
-    /**
-     * 生成关系文件
-     */
     std::string generateRels(const std::string& rels_path) const;
-    
-    // ========== 数据模型前向声明 ==========
-    
-    struct WorkbookModel;
-    struct WorksheetModel;
-    struct StylesModel;
-    struct SharedStringsModel;
-    
-    // ========== 成员变量 ==========
-    
-    // 源包信息
-    core::Path source_path_;
-    std::unique_ptr<archive::ZipReader> source_reader_;
-    
-    // 部件图和类型
-    std::unique_ptr<PartGraph> part_graph_;
-    std::unique_ptr<ContentTypes> content_types_;
-    
-    // 编辑计划
-    EditPlan edit_plan_;
-    
-    // Workbook对象（用于XML生成）
-    core::Workbook* workbook_ = nullptr;
-    bool owns_workbook_ = false;  // 是否拥有workbook_的所有权
-    
-    // 懒加载的模型（只加载需要编辑的）
-    mutable std::unique_ptr<WorkbookModel> workbook_model_;
-    mutable std::unordered_map<std::string, std::unique_ptr<WorksheetModel>> sheet_models_;
-    mutable std::unique_ptr<StylesModel> styles_model_;
-    mutable std::unique_ptr<SharedStringsModel> sst_model_;
-    
-    // 工作表名称到ID的映射
-    mutable std::unordered_map<std::string, int> sheet_name_to_id_;
-    mutable std::unordered_map<int, std::string> sheet_id_to_name_;
-    
-    // 配置选项
-    struct Options {
-        bool preserve_unknown = true;       // 保留未知部件
-        bool remove_calc_chain = true;      // 删除calcChain
-        bool full_calc_on_load = true;      // 设置重新计算
-        bool use_shared_strings = true;     // 使用共享字符串
-        bool maintain_compat = true;        // 保持兼容性
-    } options_;
-    
-    // 确保模型已加载
-    void ensureWorkbookModel() const;
-    void ensureSheetModel(const std::string& sheet) const;
-    void ensureStylesModel() const;
-    void ensureSharedStringsModel() const;
-    
-    // 自动检测Workbook修改
-    void detectAndMarkDirtyParts();
-    
-    // 工作表映射管理
-    void rebuildSheetMapping() const;
-    int getSheetId(const std::string& sheet_name) const;
-    std::string getSheetName(int sheet_id) const;
-    std::string getSheetPath(const std::string& sheet_name) const;
-    std::string getSheetPath(int sheet_id) const;
+    bool isRequiredPart(const std::string& part) const;
+    void logOperationStats() const;
     
     // 常量
     static constexpr int MAX_ROWS = 1048576;    // Excel 2007+ 最大行数
     static constexpr int MAX_COLS = 16384;      // Excel 2007+ 最大列数 (XFD)
 };
 
-}} // namespace fastexcel::opc
+} // namespace opc
+} // namespace fastexcel
