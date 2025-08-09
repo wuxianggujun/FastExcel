@@ -119,36 +119,42 @@ void UnifiedXMLGenerator::generateContentTypesXML(const std::function<void(const
     writer.writeAttribute("xmlns", "http://schemas.openxmlformats.org/package/2006/content-types");
     
     // 默认扩展名类型
-    writer.writeEmptyElement("Default");
+    writer.startElement("Default");
     writer.writeAttribute("Extension", "rels");
     writer.writeAttribute("ContentType", "application/vnd.openxmlformats-package.relationships+xml");
+    writer.endElement(); // Default
     
-    writer.writeEmptyElement("Default");
+    writer.startElement("Default");
     writer.writeAttribute("Extension", "xml");
     writer.writeAttribute("ContentType", "application/xml");
+    writer.endElement(); // Default
     
     // 覆盖类型
-    writer.writeEmptyElement("Override");
+    writer.startElement("Override");
     writer.writeAttribute("PartName", "/xl/workbook.xml");
     writer.writeAttribute("ContentType", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml");
+    writer.endElement(); // Override
     
-    writer.writeEmptyElement("Override");
+    writer.startElement("Override");
     writer.writeAttribute("PartName", "/xl/styles.xml");
     writer.writeAttribute("ContentType", "application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml");
+    writer.endElement(); // Override
     
     // 工作表内容类型
     auto sheet_names = context_.workbook->getWorksheetNames();
     for (size_t i = 0; i < sheet_names.size(); ++i) {
-        writer.writeEmptyElement("Override");
+        writer.startElement("Override");
         writer.writeAttribute("PartName", "/xl/worksheets/sheet" + std::to_string(i + 1) + ".xml");
         writer.writeAttribute("ContentType", "application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml");
+        writer.endElement(); // Override
     }
     
     // 共享字符串（如果启用）
     if (context_.workbook->getOptions().use_shared_strings) {
-        writer.writeEmptyElement("Override");
+        writer.startElement("Override");
         writer.writeAttribute("PartName", "/xl/sharedStrings.xml");
         writer.writeAttribute("ContentType", "application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml");
+        writer.endElement(); // Override
     }
     
     writer.endElement(); // Types
@@ -165,20 +171,23 @@ void UnifiedXMLGenerator::generateRelationshipsXML(const std::string& rel_type,
     
     if (rel_type == "root") {
         // 根关系文件
-        writer.writeEmptyElement("Relationship");
+        writer.startElement("Relationship");
         writer.writeAttribute("Id", "rId1");
         writer.writeAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument");
         writer.writeAttribute("Target", "xl/workbook.xml");
+        writer.endElement(); // Relationship
         
-        writer.writeEmptyElement("Relationship");
+        writer.startElement("Relationship");
         writer.writeAttribute("Id", "rId2");
         writer.writeAttribute("Type", "http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties");
         writer.writeAttribute("Target", "docProps/core.xml");
+        writer.endElement(); // Relationship
         
-        writer.writeEmptyElement("Relationship");
+        writer.startElement("Relationship");
         writer.writeAttribute("Id", "rId3");
         writer.writeAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties");
         writer.writeAttribute("Target", "docProps/app.xml");
+        writer.endElement(); // Relationship
         
     } else if (rel_type == "workbook" && context_.workbook) {
         // 工作簿关系文件
@@ -187,24 +196,27 @@ void UnifiedXMLGenerator::generateRelationshipsXML(const std::string& rel_type,
         // 工作表关系
         auto sheet_names = context_.workbook->getWorksheetNames();
         for (size_t i = 0; i < sheet_names.size(); ++i) {
-            writer.writeEmptyElement("Relationship");
+            writer.startElement("Relationship");
             writer.writeAttribute("Id", "rId" + std::to_string(rId++));
             writer.writeAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet");
             writer.writeAttribute("Target", "worksheets/sheet" + std::to_string(i + 1) + ".xml");
+            writer.endElement(); // Relationship
         }
         
         // 样式关系
-        writer.writeEmptyElement("Relationship");
+        writer.startElement("Relationship");
         writer.writeAttribute("Id", "rId" + std::to_string(rId++));
         writer.writeAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles");
         writer.writeAttribute("Target", "styles.xml");
+        writer.endElement(); // Relationship
         
         // 共享字符串关系（如果启用）
         if (context_.workbook->getOptions().use_shared_strings) {
-            writer.writeEmptyElement("Relationship");
+            writer.startElement("Relationship");
             writer.writeAttribute("Id", "rId" + std::to_string(rId++));
             writer.writeAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings");
             writer.writeAttribute("Target", "sharedStrings.xml");
+            writer.endElement(); // Relationship
         }
     }
     
@@ -347,10 +359,11 @@ void UnifiedXMLGenerator::generateWorkbookSheetsSection(XMLStreamWriter& writer)
     
     auto sheet_names = context_.workbook->getWorksheetNames();
     for (size_t i = 0; i < sheet_names.size(); ++i) {
-        writer.writeEmptyElement("sheet");
+        writer.startElement("sheet");
         writer.writeAttribute("name", sheet_names[i]);
         writer.writeAttribute("sheetId", static_cast<int>(i + 1));
         writer.writeAttribute("r:id", "rId" + std::to_string(i + 1));
+        writer.endElement(); // sheet
     }
     
     writer.endElement(); // sheets
