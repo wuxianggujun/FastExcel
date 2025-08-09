@@ -96,6 +96,11 @@ set(FASTEXCEL_SOURCES
         src/fastexcel/opc/PartGraph.cpp
         # Tracking services
         src/fastexcel/tracking/StandardChangeTracker.cpp
+        # New Clean Architecture Components (v3.0)
+        src/fastexcel/read/ReadWorkbook.cpp
+        src/fastexcel/read/ReadWorksheet.cpp
+        src/fastexcel/edit/EditSession.cpp
+        src/fastexcel/edit/RowWriter.cpp
         
 )
 

@@ -103,58 +103,180 @@ bool Workbook::save() {
         FASTEXCEL_THROW_OP("Workbook is not open");
     }
     
+    // 🔧 修复：检查只读标志
+    if (read_only_) {
+        LOG_ERROR("Cannot save: workbook is opened in read-only mode");
+        return false;
+    }
+    
     try {
-        // 使用 TimeUtils 更新修改时间
-        doc_properties_.modified_time = utils::TimeUtils::getCurrentTime();
-        
-        // 设置ZIP压缩级别
-        if (file_manager_->isOpen()) {
-            if (!file_manager_->setCompressionLevel(options_.compression_level)) {
-                LOG_WARN("Failed to set compression level to {}", options_.compression_level);
-            } else {
-                LOG_ZIP_DEBUG("Set ZIP compression level to {}", options_.compression_level);
-            }
-        }
-        
-        // 🔧 修复SharedStrings生成逻辑：移除手动收集，依赖工作表XML生成时自动添加
-        // 清空共享字符串列表，让工作表XML生成时自动填充
-        if (options_.use_shared_strings) {
-            LOG_DEBUG("SharedStrings enabled - SST will be populated during worksheet XML generation");
-            if (shared_string_table_) shared_string_table_->clear();
-        } else {
-            LOG_DEBUG("SharedStrings disabled for performance");
-            if (shared_string_table_) shared_string_table_->clear();
-        }
-        
-        // 编辑模式下，先将原包中未被我们生成的条目拷贝过来（绘图、图片、打印设置等）
-        if (opened_from_existing_ && preserve_unknown_parts_ && !original_package_path_.empty() && file_manager_ && file_manager_->isOpen()) {
-            // 我们将跳过这些前缀（由生成逻辑负责写入/覆盖）
-            // 透传阶段：不跳过任何前缀，先复制全部条目；后续生成阶段会覆盖我们需要更新的部件
-            std::vector<std::string> skip_prefixes = { };
-            file_manager_->copyFromExistingPackage(core::Path(original_package_path_), skip_prefixes);
-        }
-
-        // 生成Excel文件结构（会覆盖我们管理的核心部件）
-        if (!generateExcelStructure()) {
-            LOG_ERROR("Failed to generate Excel structure");
+        // 🔧 优化：使用 DirtyManager 获取最优保存策略
+        if (!dirty_manager_) {
+            LOG_ERROR("DirtyManager not initialized");
             return false;
         }
         
-        LOG_INFO("Workbook saved successfully: {}", filename_);
-        return true;
+        auto strategy = dirty_manager_->getOptimalStrategy();
+        LOG_INFO("Using save strategy: {} ({})",
+                 static_cast<int>(strategy),
+                 strategy == SaveStrategy::NONE ? "No changes" :
+                 strategy == SaveStrategy::PURE_CREATE ? "Pure create" :
+                 strategy == SaveStrategy::MINIMAL_UPDATE ? "Minimal update" :
+                 strategy == SaveStrategy::SMART_EDIT ? "Smart edit" :
+                 strategy == SaveStrategy::FULL_REBUILD ? "Full rebuild" : "Unknown");
+        
+        // 根据策略决定保存方式
+        switch(strategy) {
+            case SaveStrategy::NONE:
+                LOG_INFO("No changes detected, skipping save");
+                return true;
+                
+            case SaveStrategy::MINIMAL_UPDATE:
+                // 仅更新修改的部分
+                return saveIncremental();
+                
+            case SaveStrategy::SMART_EDIT:
+                // 智能选择批量或流式
+                {
+                    size_t estimated_memory = estimateMemoryUsage();
+                    bool use_streaming = estimated_memory > options_.auto_mode_memory_threshold;
+                    LOG_INFO("Smart edit mode: using {} mode (estimated memory: {}MB, threshold: {}MB)",
+                            use_streaming ? "streaming" : "batch",
+                            estimated_memory / (1024*1024),
+                            options_.auto_mode_memory_threshold / (1024*1024));
+                    return saveWithFullGeneration(use_streaming);
+                }
+                
+            case SaveStrategy::PURE_CREATE:
+            case SaveStrategy::FULL_REBUILD:
+            default:
+                // 完全重建
+                return saveWithFullGeneration(options_.mode == WorkbookMode::STREAMING);
+        }
+        
     } catch (const std::exception& e) {
         LOG_ERROR("Failed to save workbook: {}", e.what());
         return false;
     }
 }
 
+// 新增：增量保存方法
+bool Workbook::saveIncremental() {
+    LOG_INFO("Performing incremental save");
+    
+    // 使用 TimeUtils 更新修改时间
+    doc_properties_.modified_time = utils::TimeUtils::getCurrentTime();
+    
+    auto changes = dirty_manager_->getChanges();
+    if (changes.isEmpty()) {
+        LOG_INFO("No changes to save");
+        return true;
+    }
+    
+    // 设置ZIP压缩级别
+    if (file_manager_ && file_manager_->isOpen()) {
+        file_manager_->setCompressionLevel(options_.compression_level);
+    }
+    
+    // 仅重新生成修改的部分
+    for (const auto& change : changes.getChanges()) {
+        LOG_DEBUG("Processing change: part={}, level={}",
+                 change.part, static_cast<int>(change.level));
+        
+        if (change.part.find("worksheet") != std::string::npos) {
+            // 提取工作表索引
+            size_t index = 0;
+            if (sscanf(change.part.c_str(), "xl/worksheets/sheet%zu.xml", &index) == 1) {
+                if (index > 0 && index <= worksheets_.size()) {
+                    LOG_DEBUG("Regenerating worksheet {}", index);
+                    // 这里应该只重新生成特定的工作表
+                    // 暂时使用完整生成，后续优化
+                    return saveWithFullGeneration(false);
+                }
+            }
+        } else if (change.part == "xl/styles.xml") {
+            // 仅重新生成样式文件
+            LOG_DEBUG("Regenerating styles");
+            return saveWithFullGeneration(false);
+        }
+    }
+    
+    // 清除脏标记
+    dirty_manager_->clear();
+    LOG_INFO("Incremental save completed");
+    return true;
+}
+
+// 新增：完整生成保存方法
+bool Workbook::saveWithFullGeneration(bool use_streaming) {
+    LOG_INFO("Performing full generation save (streaming: {})", use_streaming);
+    
+    // 使用 TimeUtils 更新修改时间
+    doc_properties_.modified_time = utils::TimeUtils::getCurrentTime();
+    
+    // 设置ZIP压缩级别
+    if (file_manager_ && file_manager_->isOpen()) {
+        if (!file_manager_->setCompressionLevel(options_.compression_level)) {
+            LOG_WARN("Failed to set compression level to {}", options_.compression_level);
+        } else {
+            LOG_ZIP_DEBUG("Set ZIP compression level to {}", options_.compression_level);
+        }
+    }
+    
+    // 🔧 修复SharedStrings生成逻辑：移除手动收集，依赖工作表XML生成时自动添加
+    // 清空共享字符串列表，让工作表XML生成时自动填充
+    if (options_.use_shared_strings) {
+        LOG_DEBUG("SharedStrings enabled - SST will be populated during worksheet XML generation");
+        if (shared_string_table_) shared_string_table_->clear();
+    } else {
+        LOG_DEBUG("SharedStrings disabled for performance");
+        if (shared_string_table_) shared_string_table_->clear();
+    }
+    
+    // 编辑模式下，先将原包中未被我们生成的条目拷贝过来（绘图、图片、打印设置等）
+    if (opened_from_existing_ && preserve_unknown_parts_ && !original_package_path_.empty() && file_manager_ && file_manager_->isOpen()) {
+        // 我们将跳过这些前缀（由生成逻辑负责写入/覆盖）
+        // 透传阶段：不跳过任何前缀，先复制全部条目；后续生成阶段会覆盖我们需要更新的部件
+        std::vector<std::string> skip_prefixes = { };
+        file_manager_->copyFromExistingPackage(core::Path(original_package_path_), skip_prefixes);
+    }
+
+    // 生成Excel文件结构（会覆盖我们管理的核心部件）
+    if (!generateWithGenerator(use_streaming)) {
+        LOG_ERROR("Failed to generate Excel structure");
+        return false;
+    }
+    
+    // 清除脏标记
+    if (dirty_manager_) {
+        dirty_manager_->clear();
+    }
+    
+    LOG_INFO("Workbook saved successfully: {}", filename_);
+    return true;
+
 bool Workbook::saveAs(const std::string& filename) {
+    // 🔧 修复：saveAs 允许只读文件另存为新文件
+    // 但需要检查目标文件的写权限
+    Path target_path(filename);
+    if (target_path.exists() && !target_path.isWritable()) {
+        LOG_ERROR("Cannot save as: target file is not writable: {}", filename);
+        return false;
+    }
+    
     std::string old_filename = filename_;
     std::string original_source = original_package_path_;
     bool was_from_existing = opened_from_existing_;
+    bool was_read_only = read_only_;
 
     // 检查是否保存到同一个文件
     bool is_same_file = (filename == old_filename) || (filename == original_source);
+    
+    // 如果保存到不同文件，解除只读限制
+    if (!is_same_file && read_only_) {
+        read_only_ = false;
+        LOG_INFO("Read-only restriction removed for save as operation");
+    }
     
     if (is_same_file && was_from_existing && !original_source.empty()) {
         // 如果保存到同一个文件，需要先复制原文件到临时位置
@@ -205,6 +327,11 @@ bool Workbook::saveAs(const std::string& filename) {
     // original_package_path_ 已经在上面设置好了（可能是临时文件或原始文件）
     
     bool save_result = save();
+    
+    // 如果保存失败，恢复只读状态
+    if (!save_result && was_read_only) {
+        read_only_ = was_read_only;
+    }
     
     // 清理临时文件（如果有）
     if (is_same_file && original_package_path_.find(".tmp_backup") != std::string::npos) {
@@ -1160,6 +1287,24 @@ std::unique_ptr<Workbook> Workbook::open(const Path& path) {
         if (loaded_workbook) {
             loaded_workbook->opened_from_existing_ = true;
             loaded_workbook->original_package_path_ = path.string();
+            
+            // 🔧 修复：检查文件权限，设置只读标志
+            if (!path.isWritable()) {
+                loaded_workbook->read_only_ = true;
+                LOG_INFO("File opened in read-only mode (no write permission): {}", path.string());
+            } else {
+                loaded_workbook->read_only_ = false;
+                LOG_INFO("File opened in read-write mode: {}", path.string());
+            }
+            
+            // 在只读模式下优化设置
+            if (loaded_workbook->read_only_) {
+                // 只读模式不需要共享字符串表（不会修改）
+                loaded_workbook->options_.use_shared_strings = false;
+                // 强制使用流式模式以减少内存占用
+                loaded_workbook->options_.mode = WorkbookMode::STREAMING;
+                LOG_DEBUG("Read-only optimizations applied: SST disabled, streaming mode forced");
+            }
         }
         
         LOG_INFO("Successfully loaded workbook for editing: {}", path.string());

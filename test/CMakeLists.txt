@@ -29,6 +29,7 @@ set(UNIT_TEST_SOURCES
     unit/test_xml_writer.cpp
     unit/test_xml_streaming.cpp
     unit/test_excel_zip_compatibility.cpp
+        unit/test_new_architecture.cpp  # 新架构测试
 )
 
 # 集成测试源文件

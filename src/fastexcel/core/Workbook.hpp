@@ -974,6 +974,10 @@ private:
     bool generateExcelStructure();
     bool generateWithGenerator(bool use_streaming_writer);
     
+    // 新增：优化的保存方法
+    bool saveIncremental();
+    bool saveWithFullGeneration(bool use_streaming);
+    
     // 生成各种XML文件（流式写入）
     void generateWorkbookXML(const std::function<void(const char*, size_t)>& callback) const;
     void generateStylesXML(const std::function<void(const char*, size_t)>& callback) const;

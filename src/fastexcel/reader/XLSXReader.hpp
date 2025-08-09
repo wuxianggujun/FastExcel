@@ -56,14 +56,21 @@ public:
   bool isOpen() const { return is_open_; }
   const std::string& getFilename() const { return filename_; }
   
-  // 样式访问
-  const std::unordered_map<int, std::shared_ptr<core::FormatDescriptor>>& getStyles() const { return styles_; }
+  // 样式访问（延迟加载）
+  const std::unordered_map<int, std::shared_ptr<core::FormatDescriptor>>& getStylesLazy() const;
   const std::unordered_map<int, int>& getStyleIdMapping() const { return style_id_mapping_; }
   
   // 主题访问
   const std::string& getThemeXML() const { return theme_xml_; }
-   // 解析后的主题对象（可能为nullptr，表示未解析或无主题文件）
-   const theme::Theme* getParsedTheme() const { return parsed_theme_.get(); }
+  // 解析后的主题对象（可能为nullptr，表示未解析或无主题文件）
+  const theme::Theme* getParsedTheme() const { return parsed_theme_.get(); }
+  
+  // 新增：延迟加载共享字符串
+  std::string getSharedString(int index) const;
+  
+  // 新增：流式读取工作表
+  core::ErrorCode streamWorksheet(const std::string& name,
+                                 std::function<void(int row, int col, const core::Cell&)> callback);
 
 private:
     // 成员变量
@@ -78,10 +85,19 @@ private:
     std::vector<std::string> defined_names_;
     std::unordered_map<std::string, std::string> worksheet_paths_;  // name -> path
     std::unordered_map<int, std::string> shared_strings_;           // index -> string
-    std::unordered_map<int, std::shared_ptr<core::FormatDescriptor>> styles_; // index -> format descriptor
+    mutable std::unordered_map<int, std::shared_ptr<core::FormatDescriptor>> styles_; // index -> format descriptor
     std::unordered_map<int, int> style_id_mapping_; // 原始样式ID -> FormatRepository中的ID
     std::string theme_xml_; // 原始主题文件内容
     std::unique_ptr<theme::Theme> parsed_theme_; // 解析后的主题对象
+    
+    // 延迟加载标志
+    mutable bool styles_loaded_ = false;
+    mutable bool sst_loaded_ = false;
+    mutable bool theme_loaded_ = false;
+    
+    // 缓存（用于优化性能）
+    mutable std::unordered_map<int, std::string> sst_cache_;
+    static constexpr size_t SST_CACHE_SIZE = 1000;
     
     // 内部解析方法 - 系统层，使用ErrorCode
     core::ErrorCode parseWorkbookXML();
