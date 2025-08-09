@@ -105,6 +105,7 @@ void WorksheetXMLGenerator::generateRelationships(const std::function<void(const
 // ========== 批量模式生成方法 ==========
 
 void WorksheetXMLGenerator::generateBatch(const std::function<void(const char*, size_t)>& callback) {
+    // 使用XMLStreamWriter来正确生成XML
     XMLStreamWriter writer(callback);
     
     writer.startDocument();
@@ -113,18 +114,18 @@ void WorksheetXMLGenerator::generateBatch(const std::function<void(const char*, 
     writer.writeAttribute("xmlns:r", "http://schemas.openxmlformats.org/officeDocument/2006/relationships");
     
     // 尺寸信息
-    writer.startElement("dimension");
     auto [max_row, max_col] = worksheet_->getUsedRange();
+    writer.startElement("dimension");
     if (max_row >= 0 && max_col >= 0) {
-        std::string range_ref = utils::CommonUtils::cellReference(0, 0) + ":" + 
-                               utils::CommonUtils::cellReference(max_row, max_col);
-        writer.writeAttribute("ref", range_ref.c_str());
+        std::string ref = utils::CommonUtils::cellReference(0, 0) + ":" +
+                         utils::CommonUtils::cellReference(max_row, max_col);
+        writer.writeAttribute("ref", ref.c_str());
     } else {
         writer.writeAttribute("ref", "A1");
     }
     writer.endElement(); // dimension
     
-    // 工作表视图
+    // 生成工作表视图
     generateSheetViews(writer);
     
     // 工作表格式信息
@@ -132,29 +133,29 @@ void WorksheetXMLGenerator::generateBatch(const std::function<void(const char*, 
     writer.writeAttribute("defaultRowHeight", "15");
     writer.endElement(); // sheetFormatPr
     
-    // 列信息
+    // 生成列信息
     generateColumns(writer);
     
-    // 单元格数据
+    // 生成单元格数据
     generateSheetData(writer);
     
-    // 工作表保护
-    generateSheetProtection(writer);
-    
-    // 自动筛选
-    generateAutoFilter(writer);
-    
-    // 合并单元格
+    // 生成合并单元格
     generateMergeCells(writer);
     
-    // 打印选项
+    // 生成自动筛选
+    generateAutoFilter(writer);
+    
+    // 生成工作表保护
+    generateSheetProtection(writer);
+    
+    // 生成打印选项
     generatePrintOptions(writer);
     
-    // 页面边距
-    generatePageMargins(writer);
-    
-    // 页面设置
+    // 生成页面设置
     generatePageSetup(writer);
+    
+    // 生成页面边距
+    generatePageMargins(writer);
     
     writer.endElement(); // worksheet
     writer.endDocument();

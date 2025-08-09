@@ -86,16 +86,19 @@ void XMLStreamWriter::flushBuffer() {
 
     if (direct_file_mode_ && output_file_) {
         fwrite(buffer_, 1, buffer_pos_, output_file_);
+        buffer_pos_ = 0;
     } else if (callback_mode_ && write_callback_) {
         // 回调模式：调用回调函数
+        // 确保正确地创建字符串并清空缓冲区
         std::string chunk(buffer_, buffer_pos_);
+        buffer_pos_ = 0;  // 先清空缓冲区位置
         write_callback_(chunk);
     } else {
         // 兼容性模式：如果没有设置输出目标，静默丢弃数据
         // 这主要是为了支持toString()方法的兼容性
         // 在实际使用中应该设置适当的输出目标
+        buffer_pos_ = 0;
     }
-    buffer_pos_ = 0;
 }
 
 void XMLStreamWriter::startDocument() {
@@ -350,8 +353,9 @@ void XMLStreamWriter::writeRawToBuffer(const char* data, size_t length) {
             flushBuffer();
             available_space = BUFFER_SIZE - buffer_pos_;
             
-            // 如果刷新后仍然没有可用空间，直接返回
+            // 如果刷新后仍然没有可用空间，说明有问题
             if (available_space == 0) {
+                LOG_ERROR("Buffer flush failed, cannot write more data");
                 return;
             }
         }
@@ -361,11 +365,6 @@ void XMLStreamWriter::writeRawToBuffer(const char* data, size_t length) {
         buffer_pos_ += chunk_size;
         data += chunk_size;
         length -= chunk_size;
-        
-        // 在回调模式下，如果启用了自动刷新，检查是否需要刷新
-        if (callback_mode_ && auto_flush_ && buffer_pos_ >= BUFFER_SIZE * 0.8) {
-            flushBuffer();
-        }
     }
 }
 
@@ -379,15 +378,11 @@ void XMLStreamWriter::writeRawDirect(const char* data, size_t length) {
     if (direct_file_mode_ && output_file_) {
         writeRawToFile(data, length);
     } else if (callback_mode_ && write_callback_) {
-        // 在回调模式下，如果数据很大，直接调用回调而不缓冲
-        if (length > BUFFER_SIZE / 2) {
-            // 先刷新现有缓冲区
+        // 在回调模式下，总是使用缓冲区以确保数据的完整性
+        writeRawToBuffer(data, length);
+        // 如果缓冲区接近满了，自动刷新
+        if (auto_flush_ && buffer_pos_ >= BUFFER_SIZE * 0.9) {
             flushBuffer();
-            // 直接调用回调
-            std::string chunk(data, length);
-            write_callback_(chunk);
-        } else {
-            writeRawToBuffer(data, length);
         }
     } else {
         writeRawToBuffer(data, length);
