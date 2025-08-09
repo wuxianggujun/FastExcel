@@ -678,8 +678,11 @@ bool Workbook::shouldGenerateWorkbookCore() const {
 }
 
 bool Workbook::shouldGenerateStyles() const {
-    if (!dirty_manager_) return true;
-    return dirty_manager_->shouldUpdate("xl/styles.xml");
+    // 始终生成样式文件，保证包内引用一致性：
+    // - workbook.xml 和 [Content_Types].xml 总是包含对 xl/styles.xml 的引用
+    // - 如不生成，将导致包缺少被引用的部件，Excel 打开会提示修复
+    // 样式文件很小，生成最小可用样式的成本可以忽略
+    return true;
 }
 
 bool Workbook::shouldGenerateTheme() const {

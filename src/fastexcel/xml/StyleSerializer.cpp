@@ -39,7 +39,28 @@ void StyleSerializer::writeStyleSheet(const core::FormatRepository& repository,
     writeFonts(repository, writer);
     writeFills(repository, writer);
     writeBorders(repository, writer);
+
+    // 关键关联部分：确保最小合法的 cellStyleXfs 和 cellStyles
+    writer.startElement("cellStyleXfs");
+    writer.writeAttribute("count", "1");
+    writer.startElement("xf");
+    writer.writeAttribute("numFmtId", "0");
+    writer.writeAttribute("fontId", "0");
+    writer.writeAttribute("fillId", "0");
+    writer.writeAttribute("borderId", "0");
+    writer.endElement(); // xf
+    writer.endElement(); // cellStyleXfs
+
     writeCellXfs(repository, writer);
+
+    writer.startElement("cellStyles");
+    writer.writeAttribute("count", "1");
+    writer.startElement("cellStyle");
+    writer.writeAttribute("name", "Normal");
+    writer.writeAttribute("xfId", "0");
+    writer.writeAttribute("builtinId", "0");
+    writer.endElement(); // cellStyle
+    writer.endElement(); // cellStyles
     
     writer.endElement(); // styleSheet
     writer.endDocument();
@@ -127,6 +148,22 @@ void StyleSerializer::writeBorders(const core::FormatRepository& repository,
     std::vector<std::shared_ptr<const core::FormatDescriptor>> unique_borders;
     std::vector<int> format_to_border_id;
     collectUniqueBorders(repository, unique_borders, format_to_border_id);
+    
+    // 确保至少一个边框组（Excel 最低要求）
+    if (unique_borders.empty()) {
+        writer.startElement("borders");
+        writer.writeAttribute("count", "1");
+        // 缺省空 border
+        writer.startElement("border");
+        writer.writeEmptyElement("left");
+        writer.writeEmptyElement("right");
+        writer.writeEmptyElement("top");
+        writer.writeEmptyElement("bottom");
+        writer.writeEmptyElement("diagonal");
+        writer.endElement(); // border
+        writer.endElement(); // borders
+        return;
+    }
     
     writer.startElement("borders");
     writer.writeAttribute("count", std::to_string(unique_borders.size()));
@@ -309,6 +346,8 @@ void StyleSerializer::writeCellXf(const core::FormatDescriptor& format,
     writer.writeAttribute("fontId", std::to_string(font_id));
     writer.writeAttribute("fillId", std::to_string(fill_id));
     writer.writeAttribute("borderId", std::to_string(border_id));
+    // 关联到缺省的 cellStyleXfs[0]
+    writer.writeAttribute("xfId", "0");
     
     // 应用标志
     if (num_fmt_id > 0) {
