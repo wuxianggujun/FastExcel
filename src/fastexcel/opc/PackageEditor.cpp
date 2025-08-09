@@ -1,4 +1,7 @@
 #include "fastexcel/opc/PackageEditor.hpp"
+#include "fastexcel/opc/PackageEditorManager.hpp"
+#include "fastexcel/xml/WorkbookXMLGenerator.hpp"
+#include "fastexcel/tracking/StandardChangeTracker.hpp"
 #include "fastexcel/opc/ZipRepackWriter.hpp"
 #include "fastexcel/archive/ZipReader.hpp"
 #include "fastexcel/archive/ZipArchive.hpp"
@@ -6,153 +9,10 @@
 #include "fastexcel/core/Workbook.hpp"
 #include <sstream>
 #include <unordered_set>
+#include <algorithm>
 
 namespace fastexcel {
 namespace opc {
-
-// ===== 服务接口实现 =====
-
-// 标准包管理器实现
-class StandardPackageManager : public IPackageManager {
-public:
-    explicit StandardPackageManager(std::unique_ptr<archive::ZipReader> reader) 
-        : zip_reader_(std::move(reader)) {
-    }
-
-    bool readPart(const std::string& path, std::string& content) override {
-        if (!zip_reader_) return false;
-        return zip_reader_->extractFile(path, content) == archive::ZipError::Ok;
-    }
-
-    bool writePart(const std::string& path, const std::string& content) override {
-        // 写入操作在commit阶段处理
-        pending_writes_[path] = content;
-        return true;
-    }
-
-    bool removePart(const std::string& path) override {
-        removed_parts_.insert(path);
-        return true;
-    }
-
-    std::vector<std::string> listParts() const override {
-        if (!zip_reader_) return {};
-        return zip_reader_->listFiles();
-    }
-
-    bool commitChanges(const core::Path& target_path) override {
-        // 使用ZipRepackWriter实现实际的写入
-        ZipRepackWriter writer(target_path);
-        
-        // 写入所有待写入的部件
-        for (const auto& [path, content] : pending_writes_) {
-            if (removed_parts_.count(path)) continue;
-            if (!writer.add(path, content)) {
-                return false;
-            }
-        }
-        
-        // 复制未修改的部件
-        if (zip_reader_) {
-            auto all_files = zip_reader_->listFiles();
-            std::vector<std::string> to_copy;
-            
-            for (const auto& file : all_files) {
-                if (pending_writes_.count(file) || removed_parts_.count(file)) {
-                    continue;
-                }
-                to_copy.push_back(file);
-            }
-            
-            if (!to_copy.empty()) {
-                writer.copyBatch(zip_reader_.get(), to_copy);
-            }
-        }
-        
-        return writer.finish();
-    }
-
-private:
-    std::unique_ptr<archive::ZipReader> zip_reader_;
-    std::unordered_map<std::string, std::string> pending_writes_;
-    std::unordered_set<std::string> removed_parts_;
-};
-
-// 工作簿XML生成器实现 - 使用PackageEditor作为代理
-class WorkbookXMLGenerator : public xml::IXMLGenerator {
-public:
-    explicit WorkbookXMLGenerator(PackageEditor* editor) : editor_(editor) {}
-
-    std::string generateWorkbookXML() override {
-        return editor_->generateWorkbookXMLInternal();
-    }
-
-    std::string generateWorksheetXML(const std::string& sheet_name) override {
-        return editor_->generateWorksheetXMLInternal(sheet_name);
-    }
-
-    std::string generateStylesXML() override {
-        return editor_->generateStylesXMLInternal();
-    }
-
-    std::string generateSharedStringsXML() override {
-        return editor_->generateSharedStringsXMLInternal();
-    }
-
-private:
-    PackageEditor* editor_;
-};
-
-// 标准变更跟踪器实现
-class StandardChangeTracker : public tracking::IChangeTracker {
-public:
-    void markPartDirty(const std::string& part) override {
-        dirty_parts_.insert(part);
-        markRelatedDirty(part);
-    }
-
-    void markPartClean(const std::string& part) override {
-        dirty_parts_.erase(part);
-    }
-
-    bool isPartDirty(const std::string& part) const override {
-        return dirty_parts_.count(part) > 0;
-    }
-
-    std::vector<std::string> getDirtyParts() const override {
-        return std::vector<std::string>(dirty_parts_.begin(), dirty_parts_.end());
-    }
-
-    void clearAll() override {
-        dirty_parts_.clear();
-    }
-
-    bool hasChanges() const override {
-        return !dirty_parts_.empty();
-    }
-
-private:
-    void markRelatedDirty(const std::string& part) {
-        // 智能标记关联部件
-        if (part.find("xl/worksheets/sheet") == 0) {
-            // 工作表修改可能影响 calcChain
-            dirty_parts_.insert("xl/calcChain.xml");
-        }
-        
-        if (part == "xl/sharedStrings.xml") {
-            dirty_parts_.insert("xl/_rels/workbook.xml.rels");
-        }
-        
-        // 新增工作表影响多个文件
-        if (part.find("xl/worksheets/sheet") == 0) {
-            dirty_parts_.insert("xl/workbook.xml");
-            dirty_parts_.insert("[Content_Types].xml");
-            dirty_parts_.insert("xl/_rels/workbook.xml.rels");
-        }
-    }
-
-    std::unordered_set<std::string> dirty_parts_;
-};
 
 // ===== PackageEditor 实现 =====
 
@@ -210,18 +70,14 @@ std::unique_ptr<PackageEditor> PackageEditor::create() {
 bool PackageEditor::initializeServices(std::unique_ptr<archive::ZipReader> zip_reader, core::Workbook* workbook) {
     workbook_ = workbook;
     
-    // 初始化包管理器
-    if (zip_reader) {
-        package_manager_ = std::make_unique<StandardPackageManager>(std::move(zip_reader));
-    } else {
-        package_manager_ = std::make_unique<StandardPackageManager>(nullptr);
-    }
+    // 初始化包管理器 - 使用独立的PackageEditorManager类
+    package_manager_ = std::make_unique<PackageEditorManager>(std::move(zip_reader));
     
-    // 初始化XML生成器（使用PackageEditor作为代理）
-    xml_generator_ = std::make_unique<WorkbookXMLGenerator>(this);
+    // 初始化XML生成器 - 使用独立的WorkbookXMLGenerator类
+    xml_generator_ = std::make_unique<xml::WorkbookXMLGenerator>(this);
     
-    // 初始化变更跟踪器
-    change_tracker_ = std::make_unique<StandardChangeTracker>();
+    // 初始化变更跟踪器 - 使用独立的StandardChangeTracker类
+    change_tracker_ = std::make_unique<tracking::StandardChangeTracker>();
     
     // 如果是从工作簿创建，标记初始dirty状态
     if (workbook_) {
@@ -243,6 +99,7 @@ bool PackageEditor::initializeServices(std::unique_ptr<archive::ZipReader> zip_r
         }
     }
     
+    initialized_ = true;
     return true;
 }
 
@@ -295,7 +152,13 @@ bool PackageEditor::commit(const core::Path& target_path) {
     LOG_INFO("Committing {} dirty parts to: {}", 
              change_tracker_->getDirtyParts().size(), target_path.string());
     
-    // 为所有dirty部件生成内容
+    // 设置写入路径
+    if (!package_manager_->openForWriting(target_path)) {
+        LOG_ERROR("Failed to open package for writing: {}", target_path.string());
+        return false;
+    }
+    
+    // 为所有dirty部件生成内容并写入
     auto dirty_parts = change_tracker_->getDirtyParts();
     for (const auto& part : dirty_parts) {
         std::string content = generatePart(part);
@@ -305,12 +168,15 @@ bool PackageEditor::commit(const core::Path& target_path) {
         }
         
         if (!content.empty()) {
-            package_manager_->writePart(part, content);
+            if (!package_manager_->writePart(part, content)) {
+                LOG_ERROR("Failed to write part: {}", part);
+                return false;
+            }
         }
     }
     
     // 提交所有更改
-    bool success = package_manager_->commitChanges(target_path);
+    bool success = package_manager_->commit();
     
     if (success) {
         change_tracker_->clearAll();
@@ -388,27 +254,27 @@ std::string PackageEditor::extractSheetNameFromPath(const std::string& path) con
 
 std::string PackageEditor::generateContentTypes() const {
     std::ostringstream xml;
-    xml << "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\r\n";
-    xml << "<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\">\r\n";
+    xml << "<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\r\n";
+    xml << "<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">\r\n";
     
     // 默认类型
-    xml << "  <Default Extension=\"rels\" ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/>\r\n";
-    xml << "  <Default Extension=\"xml\" ContentType=\"application/xml\"/>\r\n";
+    xml << "  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>\r\n";
+    xml << "  <Default Extension="xml" ContentType="application/xml"/>\r\n";
     
     // 覆盖类型
-    xml << "  <Override PartName=\"/xl/workbook.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml\"/>\r\n";
-    xml << "  <Override PartName=\"/xl/styles.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml\"/>\r\n";
+    xml << "  <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>\r\n";
+    xml << "  <Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>\r\n";
     
     // 工作表
     if (workbook_) {
         auto sheet_names = workbook_->getWorksheetNames();
         for (size_t i = 0; i < sheet_names.size(); ++i) {
-            xml << "  <Override PartName=\"/xl/worksheets/sheet" << (i + 1) 
-                << ".xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml\"/>\r\n";
+            xml << "  <Override PartName="/xl/worksheets/sheet" << (i + 1) 
+                << ".xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>\r\n";
         }
         
         if (workbook_->getOptions().use_shared_strings) {
-            xml << "  <Override PartName=\"/xl/sharedStrings.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml\"/>\r\n";
+            xml << "  <Override PartName="/xl/sharedStrings.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml"/>\r\n";
         }
     }
     
@@ -418,13 +284,13 @@ std::string PackageEditor::generateContentTypes() const {
 
 std::string PackageEditor::generateRels(const std::string& rels_path) const {
     std::ostringstream xml;
-    xml << "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\r\n";
-    xml << "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">\r\n";
+    xml << "<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\r\n";
+    xml << "<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">\r\n";
     
     if (rels_path == "_rels/.rels") {
-        xml << "  <Relationship Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument\" Target=\"xl/workbook.xml\"/>\r\n";
-        xml << "  <Relationship Id=\"rId2\" Type=\"http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties\" Target=\"docProps/core.xml\"/>\r\n";
-        xml << "  <Relationship Id=\"rId3\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties\" Target=\"docProps/app.xml\"/>\r\n";
+        xml << "  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>\r\n";
+        xml << "  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/>\r\n";
+        xml << "  <Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/>\r\n";
     } else if (rels_path == "xl/_rels/workbook.xml.rels") {
         int rId = 1;
         
@@ -432,22 +298,22 @@ std::string PackageEditor::generateRels(const std::string& rels_path) const {
         if (workbook_) {
             auto sheet_names = workbook_->getWorksheetNames();
             for (size_t i = 0; i < sheet_names.size(); ++i) {
-                xml << "  <Relationship Id=\"rId" << rId++
-                    << "\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet\" "
-                    << "Target=\"worksheets/sheet" << (i + 1) << ".xml\"/>\r\n";
+                xml << "  <Relationship Id="rId" << rId++
+                    << "" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" "
+                    << "Target="worksheets/sheet" << (i + 1) << ".xml"/>\r\n";
             }
         }
         
         // 样式关系
-        xml << "  <Relationship Id=\"rId" << rId++ 
-            << "\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles\" "
-            << "Target=\"styles.xml\"/>\r\n";
+        xml << "  <Relationship Id="rId" << rId++ 
+            << "" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" "
+            << "Target="styles.xml"/>\r\n";
         
         // 共享字符串关系
         if (workbook_ && workbook_->getOptions().use_shared_strings) {
-            xml << "  <Relationship Id=\"rId" << rId++
-                << "\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings\" "
-                << "Target=\"sharedStrings.xml\"/>\r\n";
+            xml << "  <Relationship Id="rId" << rId++
+                << "" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings" "
+                << "Target="sharedStrings.xml"/>\r\n";
         }
     }
     

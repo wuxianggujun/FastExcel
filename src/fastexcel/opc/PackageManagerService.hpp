@@ -1,10 +1,10 @@
 #pragma once
 
-#include \"fastexcel/archive/ZipReader.hpp\"
-#include \"fastexcel/archive/ZipWriter.hpp\"
-#include \"fastexcel/archive/ZipArchive.hpp\"
-#include \"fastexcel/core/Path.hpp\"
-#include \"fastexcel/utils/Logger.hpp\"
+#include "fastexcel/archive/ZipReader.hpp"
+#include "fastexcel/archive/ZipWriter.hpp"
+#include "fastexcel/archive/ZipArchive.hpp"
+#include "fastexcel/core/Path.hpp"
+#include "fastexcel/utils/Logger.hpp"
 #include <memory>
 #include <string>
 #include <vector>
@@ -80,23 +80,23 @@ public:
         package_path_ = path;
         
         if (!path.exists()) {
-            LOG_ERROR(\"Package file does not exist: {}\", path.string());
+            LOG_ERROR("Package file does not exist: {}", path.string());
             return false;
         }
         
         try {
-            reader_ = std::make_unique<archive::ZipReader>(path.string());
+            reader_ = std::make_unique<archive::ZipReader>(path);
             if (!reader_->isOpen()) {
-                LOG_ERROR(\"Failed to open package for reading: {}\", path.string());
+                LOG_ERROR("Failed to open package for reading: {}", path.string());
                 reader_.reset();
                 return false;
             }
             
-            LOG_INFO(\"Opened package for reading: {}\", path.string());
+            LOG_INFO("Opened package for reading: {}", path.string());
             return true;
         }
         catch (const std::exception& e) {
-            LOG_ERROR(\"Exception opening package for reading: {} - {}\", path.string(), e.what());
+            LOG_ERROR("Exception opening package for reading: {} - {}", path.string(), e.what());
             reader_.reset();
             return false;
         }
@@ -104,19 +104,19 @@ public:
     
     std::string readPart(const std::string& part_name) override {
         if (!reader_) {
-            LOG_ERROR(\"Package not open for reading\");
-            return \"\";
+            LOG_ERROR("Package not open for reading");
+            return "";
         }
         
         std::string content;
         auto result = reader_->extractFile(part_name, content);
         
         if (result != archive::ZipError::Ok) {
-            LOG_WARN(\"Failed to read part '{}': error code {}\", part_name, static_cast<int>(result));
-            return \"\";
+            LOG_WARN("Failed to read part '{}': error code {}", part_name, static_cast<int>(result));
+            return "";
         }
         
-        LOG_DEBUG(\"Read part '{}': {} bytes\", part_name, content.size());
+        LOG_DEBUG("Read part '{}': {} bytes", part_name, content.size());
         return content;
     }
     
@@ -149,18 +149,18 @@ public:
         package_path_ = path;
         
         try {
-            writer_ = std::make_unique<archive::ZipWriter>(path.string());
+            writer_ = std::make_unique<archive::ZipWriter>(path);
             if (!writer_->isOpen()) {
-                LOG_ERROR(\"Failed to open package for writing: {}\", path.string());
+                LOG_ERROR("Failed to open package for writing: {}", path.string());
                 writer_.reset();
                 return false;
             }
             
-            LOG_INFO(\"Opened package for writing: {}\", path.string());
+            LOG_INFO("Opened package for writing: {}", path.string());
             return true;
         }
         catch (const std::exception& e) {
-            LOG_ERROR(\"Exception opening package for writing: {} - {}\", path.string(), e.what());
+            LOG_ERROR("Exception opening package for writing: {} - {}", path.string(), e.what());
             writer_.reset();
             return false;
         }
@@ -168,7 +168,7 @@ public:
     
     bool writePart(const std::string& part_name, const std::string& content) override {
         if (!writer_) {
-            LOG_ERROR(\"Package not open for writing\");
+            LOG_ERROR("Package not open for writing");
             return false;
         }
         
@@ -177,13 +177,13 @@ public:
         modified_parts_.insert(part_name);
         removed_parts_.erase(part_name);  // 如果之前标记删除，现在取消
         
-        LOG_DEBUG(\"Staged part '{}' for writing: {} bytes\", part_name, content.size());
+        LOG_DEBUG("Staged part '{}' for writing: {} bytes", part_name, content.size());
         return true;
     }
     
     bool removePart(const std::string& part_name) override {
         if (!writer_) {
-            LOG_ERROR(\"Package not open for writing\");
+            LOG_ERROR("Package not open for writing");
             return false;
         }
         
@@ -191,13 +191,13 @@ public:
         new_content_.erase(part_name);
         modified_parts_.erase(part_name);
         
-        LOG_DEBUG(\"Staged part '{}' for removal\", part_name);
+        LOG_DEBUG("Staged part '{}' for removal", part_name);
         return true;
     }
     
     bool commit() override {
         if (!writer_) {
-            LOG_ERROR(\"Package not open for writing\");
+            LOG_ERROR("Package not open for writing");
             return false;
         }
         
@@ -206,10 +206,10 @@ public:
             for (const auto& [part_name, content] : new_content_) {
                 auto result = writer_->addFile(part_name, content);
                 if (result != archive::ZipError::Ok) {
-                    LOG_ERROR(\"Failed to write part '{}': error code {}\", part_name, static_cast<int>(result));
+                    LOG_ERROR("Failed to write part '{}': error code {}", part_name, static_cast<int>(result));
                     return false;
                 }
-                LOG_DEBUG(\"Written part '{}': {} bytes\", part_name, content.size());
+                LOG_DEBUG("Written part '{}': {} bytes", part_name, content.size());
             }
             
             // 阶段2：如果需要从原包复制未修改的部件
@@ -225,10 +225,10 @@ public:
                     if (!content.empty() || partExists(part)) {  // 空内容也是有效的
                         auto result = writer_->addFile(part, content);
                         if (result != archive::ZipError::Ok) {
-                            LOG_WARN(\"Failed to copy unchanged part '{}'\", part);
+                            LOG_WARN("Failed to copy unchanged part '{}'", part);
                             // 继续处理其他部件，不要因为一个部件失败就全部失败
                         } else {
-                            LOG_DEBUG(\"Copied unchanged part '{}': {} bytes\", part, content.size());
+                            LOG_DEBUG("Copied unchanged part '{}': {} bytes", part, content.size());
                         }
                     }
                 }
@@ -243,11 +243,11 @@ public:
             removed_parts_.clear();
             invalidateCache();
             
-            LOG_INFO(\"Successfully committed changes to package: {}\", package_path_.string());
+            LOG_INFO("Successfully committed changes to package: {}", package_path_.string());
             return true;
         }
         catch (const std::exception& e) {
-            LOG_ERROR(\"Exception committing package changes: {}\", e.what());
+            LOG_ERROR("Exception committing package changes: {}", e.what());
             return false;
         }
     }
@@ -309,13 +309,14 @@ private:
     
 public:
     bool openForReading(const core::Path& path) override {
+        (void)path;
         readable_ = true;
         return true;
     }
     
     std::string readPart(const std::string& part_name) override {
         auto it = parts_.find(part_name);
-        return it != parts_.end() ? it->second : \"\";
+        return it != parts_.end() ? it->second : "";
     }
     
     bool partExists(const std::string& part_name) const override {
@@ -331,6 +332,7 @@ public:
     }
     
     bool openForWriting(const core::Path& path) override {
+        (void)path;
         writable_ = true;
         return true;
     }

@@ -3,6 +3,7 @@
 #include "fastexcel/core/Path.hpp"
 #include "fastexcel/utils/Logger.hpp"
 #include "fastexcel/archive/ZipReader.hpp"
+#include "fastexcel/opc/PackageManagerService.hpp"
 #include <memory>
 #include <string>
 #include <vector>
@@ -26,23 +27,6 @@ namespace opc {
 
 // 前向声明
 class ZipRepackWriter;
-
-// ===== 服务接口定义 =====
-
-/**
- * 包管理器接口 - 负责ZIP文件的读写操作
- */
-class IPackageManager {
-public:
-    virtual ~IPackageManager() = default;
-    virtual bool readPart(const std::string& path, std::string& content) = 0;
-    virtual bool writePart(const std::string& path, const std::string& content) = 0;
-    virtual bool removePart(const std::string& path) = 0;
-    virtual std::vector<std::string> listParts() const = 0;
-    virtual bool commitChanges(const core::Path& target_path) = 0;
-};
-
-}
 
 namespace xml {
 /**
