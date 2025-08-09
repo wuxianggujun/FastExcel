@@ -1,8 +1,10 @@
 #pragma once
 
-#include "fastexcel/tracking/ChangeTrackerService.hpp"
-#include <unordered_set>
+#include "fastexcel/tracking/IChangeTracker.hpp"
+#include <optional>
 #include <string>
+#include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace fastexcel {
@@ -34,12 +36,28 @@ public:
 
     // ========== IChangeTracker 接口实现 ==========
     
+    // 简化接口（用于PackageEditor）
     void markPartDirty(const std::string& part) override;
     void markPartClean(const std::string& part) override;
     bool isPartDirty(const std::string& part) const override;
     std::vector<std::string> getDirtyParts() const override;
     void clearAll() override;
     bool hasChanges() const override;
+    
+    // 扩展接口（用于ChangeTrackerService）
+    void markCreated(const std::string& resource_name) override;
+    void markModified(const std::string& resource_name) override;
+    void markDeleted(const std::string& resource_name) override;
+    void markMoved(const std::string& old_name, const std::string& new_name) override;
+    
+    bool isModified(const std::string& resource_name) const override;
+    size_t getChangeCount() const override;
+    std::vector<std::string> getModifiedResources() const override;
+    std::vector<std::string> getDeletedResources() const override;
+    std::vector<std::string> getCreatedResources() const override;
+    std::vector<ChangeRecord> getAllChanges() const override;
+    
+    void clearChanges(const std::string& resource_name) override;
 
 private:
     /**
@@ -52,7 +70,23 @@ private:
      */
     void markRelatedDirty(const std::string& part);
 
-    std::unordered_set<std::string> dirty_parts_;
+    /**
+     * @brief 添加变更记录到历史
+     */
+    void addToHistory(const std::string& resource_name, ChangeType type);
+
+    // 状态集合
+    std::unordered_set<std::string> modified_resources_;
+    std::unordered_set<std::string> deleted_resources_;  
+    std::unordered_set<std::string> created_resources_;
+    std::unordered_map<std::string, std::string> moved_resources_;  // old_name -> new_name
+    
+    // 变更历史
+    std::vector<ChangeRecord> change_history_;
+    
+    // 配置选项
+    bool enable_history_ = true;
+    size_t max_history_size_ = 1000;
 };
 
 }} // namespace fastexcel::tracking

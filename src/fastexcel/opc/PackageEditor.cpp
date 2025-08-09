@@ -1,6 +1,5 @@
 #include "fastexcel/opc/PackageEditor.hpp"
 #include "fastexcel/opc/PackageEditorManager.hpp"
-#include "fastexcel/xml/WorkbookXMLGenerator.hpp"
 #include "fastexcel/tracking/StandardChangeTracker.hpp"
 #include "fastexcel/opc/ZipRepackWriter.hpp"
 #include "fastexcel/archive/ZipReader.hpp"
@@ -73,8 +72,12 @@ bool PackageEditor::initializeServices(std::unique_ptr<archive::ZipReader> zip_r
     // 初始化包管理器 - 使用独立的PackageEditorManager类
     package_manager_ = std::make_unique<PackageEditorManager>(std::move(zip_reader));
     
-    // 初始化XML生成器 - 使用独立的WorkbookXMLGenerator类
-    xml_generator_ = std::make_unique<xml::WorkbookXMLGenerator>(this);
+    // 初始化统一XML生成器
+    if (workbook_) {
+        xml_generator_ = xml::UnifiedXMLGenerator::fromWorkbook(workbook_);
+    } else {
+        xml_generator_ = xml::XMLGeneratorFactory::createLightweightGenerator();
+    }
     
     // 初始化变更跟踪器 - 使用独立的StandardChangeTracker类
     change_tracker_ = std::make_unique<tracking::StandardChangeTracker>();
@@ -195,31 +198,38 @@ std::string PackageEditor::generatePart(const std::string& path) const {
     LOG_DEBUG("Generating part: {}", path);
     
     if (path == "xl/workbook.xml") {
-        return xml_generator_->generateWorkbookXML();
+        return xml_generator_->generateWorkbookXMLString();
     }
     
     if (path.find("xl/worksheets/sheet") == 0) {
-        // 提取工作表名称
-        std::string sheet_name = extractSheetNameFromPath(path);
-        if (!sheet_name.empty()) {
-            return xml_generator_->generateWorksheetXML(sheet_name);
+        // 提取工作表引用
+        if (workbook_) {
+            std::string sheet_name = extractSheetNameFromPath(path);
+            if (!sheet_name.empty()) {
+                auto worksheet = workbook_->getWorksheet(sheet_name);
+                return xml_generator_->generateWorksheetXMLString(worksheet.get());
+            }
         }
     }
     
     if (path == "xl/styles.xml") {
-        return xml_generator_->generateStylesXML();
+        return xml_generator_->generateStylesXMLString();
     }
     
     if (path == "xl/sharedStrings.xml") {
-        return xml_generator_->generateSharedStringsXML();
+        return xml_generator_->generateSharedStringsXMLString();
     }
     
     if (path == "[Content_Types].xml") {
-        return generateContentTypes();
+        return xml_generator_->generateContentTypesXMLString();
     }
     
-    if (path.find(".rels") != std::string::npos) {
-        return generateRels(path);
+    if (path == "_rels/.rels") {
+        return xml_generator_->generateRelationshipsXMLString("root");
+    }
+    
+    if (path == "xl/_rels/workbook.xml.rels") {
+        return xml_generator_->generateRelationshipsXMLString("workbook");
     }
     
     LOG_WARN("No generator for part: {}", path);
@@ -252,74 +262,7 @@ std::string PackageEditor::extractSheetNameFromPath(const std::string& path) con
     return "";
 }
 
-std::string PackageEditor::generateContentTypes() const {
-    std::ostringstream xml;
-    xml << "<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\r\n";
-    xml << "<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">\r\n";
-    
-    // 默认类型
-    xml << "  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>\r\n";
-    xml << "  <Default Extension="xml" ContentType="application/xml"/>\r\n";
-    
-    // 覆盖类型
-    xml << "  <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>\r\n";
-    xml << "  <Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>\r\n";
-    
-    // 工作表
-    if (workbook_) {
-        auto sheet_names = workbook_->getWorksheetNames();
-        for (size_t i = 0; i < sheet_names.size(); ++i) {
-            xml << "  <Override PartName="/xl/worksheets/sheet" << (i + 1) 
-                << ".xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>\r\n";
-        }
-        
-        if (workbook_->getOptions().use_shared_strings) {
-            xml << "  <Override PartName="/xl/sharedStrings.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml"/>\r\n";
-        }
-    }
-    
-    xml << "</Types>\r\n";
-    return xml.str();
-}
 
-std::string PackageEditor::generateRels(const std::string& rels_path) const {
-    std::ostringstream xml;
-    xml << "<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\r\n";
-    xml << "<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">\r\n";
-    
-    if (rels_path == "_rels/.rels") {
-        xml << "  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>\r\n";
-        xml << "  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/>\r\n";
-        xml << "  <Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/>\r\n";
-    } else if (rels_path == "xl/_rels/workbook.xml.rels") {
-        int rId = 1;
-        
-        // 工作表关系
-        if (workbook_) {
-            auto sheet_names = workbook_->getWorksheetNames();
-            for (size_t i = 0; i < sheet_names.size(); ++i) {
-                xml << "  <Relationship Id="rId" << rId++
-                    << "" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" "
-                    << "Target="worksheets/sheet" << (i + 1) << ".xml"/>\r\n";
-            }
-        }
-        
-        // 样式关系
-        xml << "  <Relationship Id="rId" << rId++ 
-            << "" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" "
-            << "Target="styles.xml"/>\r\n";
-        
-        // 共享字符串关系
-        if (workbook_ && workbook_->getOptions().use_shared_strings) {
-            xml << "  <Relationship Id="rId" << rId++
-                << "" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings" "
-                << "Target="sharedStrings.xml"/>\r\n";
-        }
-    }
-    
-    xml << "</Relationships>\r\n";
-    return xml.str();
-}
 
 bool PackageEditor::isRequiredPart(const std::string& part) const {
     // 定义必需的部件
@@ -440,59 +383,6 @@ bool PackageEditor::isValidSheetName(const std::string& name) {
 
 bool PackageEditor::isValidCellRef(int row, int col) {
     return row >= 1 && row <= MAX_ROWS && col >= 1 && col <= MAX_COLS;
-}
-
-// ========== 内部XML生成方法实现 ==========
-
-std::string PackageEditor::generateWorkbookXMLInternal() {
-    if (!workbook_) return "";
-    
-    std::ostringstream buffer;
-    auto callback = [&buffer](const char* data, size_t size) {
-        buffer.write(data, static_cast<std::streamsize>(size));
-    };
-    
-    workbook_->generateWorkbookXML(callback);
-    return buffer.str();
-}
-
-std::string PackageEditor::generateWorksheetXMLInternal(const std::string& sheet_name) {
-    if (!workbook_) return "";
-    
-    auto worksheet = workbook_->getWorksheet(sheet_name);
-    if (!worksheet) return "";
-    
-    std::ostringstream buffer;
-    auto callback = [&buffer](const char* data, size_t size) {
-        buffer.write(data, static_cast<std::streamsize>(size));
-    };
-    
-    worksheet->generateXML(callback);
-    return buffer.str();
-}
-
-std::string PackageEditor::generateStylesXMLInternal() {
-    if (!workbook_) return "";
-    
-    std::ostringstream buffer;
-    auto callback = [&buffer](const char* data, size_t size) {
-        buffer.write(data, static_cast<std::streamsize>(size));
-    };
-    
-    workbook_->generateStylesXML(callback);
-    return buffer.str();
-}
-
-std::string PackageEditor::generateSharedStringsXMLInternal() {
-    if (!workbook_ || !workbook_->getOptions().use_shared_strings) return "";
-    
-    std::ostringstream buffer;
-    auto callback = [&buffer](const char* data, size_t size) {
-        buffer.write(data, static_cast<std::streamsize>(size));
-    };
-    
-    workbook_->generateSharedStringsXML(callback);
-    return buffer.str();
 }
 
 }} // namespace fastexcel::opc

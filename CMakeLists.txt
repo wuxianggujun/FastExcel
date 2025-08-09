@@ -84,12 +84,16 @@ set(FASTEXCEL_SOURCES
         src/fastexcel/xml/XMLStreamWriter.cpp
         src/fastexcel/xml/XMLStreamReader.cpp
         src/fastexcel/xml/StyleSerializer.cpp
+        src/fastexcel/xml/UnifiedXMLGenerator.cpp
          src/fastexcel/theme/Theme.cpp
          src/fastexcel/theme/ThemeParser.cpp
         # OPC Repack Architecture (New)
         src/fastexcel/opc/PackageEditor.cpp
+        src/fastexcel/opc/PackageEditorManager.cpp
         src/fastexcel/opc/ZipRepackWriter.cpp
         src/fastexcel/opc/PartGraph.cpp
+        # Tracking services
+        src/fastexcel/tracking/StandardChangeTracker.cpp
         
 )
 

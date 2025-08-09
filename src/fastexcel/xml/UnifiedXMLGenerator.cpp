@@ -2,9 +2,7 @@
 #include "fastexcel/core/Workbook.hpp"
 #include "fastexcel/core/Worksheet.hpp"
 #include "StyleSerializer.hpp"
-#include "ContentTypes.hpp"
-#include "Relationships.hpp"
-#include "SharedStrings.hpp"
+#include "fastexcel/utils/Logger.hpp"
 
 namespace fastexcel {
 namespace xml {
@@ -23,9 +21,11 @@ std::unique_ptr<UnifiedXMLGenerator> UnifiedXMLGenerator::fromWorkbook(const cor
 std::unique_ptr<UnifiedXMLGenerator> UnifiedXMLGenerator::fromWorksheet(const core::Worksheet* worksheet) {
     GenerationContext context;
     context.worksheet = worksheet;
-    context.workbook = worksheet->getParentWorkbook().get();
-    if (context.workbook) {
-        context.format_repo = &context.workbook->getStyleRepository();
+    if (worksheet) {
+        context.workbook = worksheet->getParentWorkbook().get();
+        if (context.workbook) {
+            context.format_repo = &context.workbook->getStyleRepository();
+        }
     }
     
     return std::make_unique<UnifiedXMLGenerator>(context);

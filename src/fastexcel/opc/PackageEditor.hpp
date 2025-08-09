@@ -4,6 +4,9 @@
 #include "fastexcel/utils/Logger.hpp"
 #include "fastexcel/archive/ZipReader.hpp"
 #include "fastexcel/opc/PackageManagerService.hpp"
+#include "fastexcel/opc/IPackageManager.hpp"
+#include "fastexcel/tracking/IChangeTracker.hpp"
+#include "fastexcel/xml/UnifiedXMLGenerator.hpp"
 #include <memory>
 #include <string>
 #include <vector>
@@ -24,38 +27,8 @@ namespace archive {
 }
 
 namespace opc {
-
 // 前向声明
 class ZipRepackWriter;
-
-namespace xml {
-/**
- * XML生成器接口 - 负责各种XML文件的生成
- */
-class IXMLGenerator {
-public:
-    virtual ~IXMLGenerator() = default;
-    virtual std::string generateWorkbookXML() = 0;
-    virtual std::string generateWorksheetXML(const std::string& sheet_name) = 0;
-    virtual std::string generateStylesXML() = 0;
-    virtual std::string generateSharedStringsXML() = 0;
-};
-}
-
-namespace tracking {
-/**
- * 变更跟踪器接口 - 负责跟踪和管理变更状态
- */
-class IChangeTracker {
-public:
-    virtual ~IChangeTracker() = default;
-    virtual void markPartDirty(const std::string& part) = 0;
-    virtual void markPartClean(const std::string& part) = 0;
-    virtual bool isPartDirty(const std::string& part) const = 0;
-    virtual std::vector<std::string> getDirtyParts() const = 0;
-    virtual void clearAll() = 0;
-    virtual bool hasChanges() const = 0;
-};
 }
 
 namespace opc {
@@ -82,7 +55,7 @@ class PackageEditor {
 private:
     // 核心服务组件（依赖注入）
     std::unique_ptr<IPackageManager> package_manager_;
-    std::unique_ptr<xml::IXMLGenerator> xml_generator_;
+    std::unique_ptr<xml::UnifiedXMLGenerator> xml_generator_;
     std::unique_ptr<tracking::IChangeTracker> change_tracker_;
     
     // 关联的Workbook对象（不拥有所有权）
@@ -257,13 +230,6 @@ public:
      */
     bool validateXML(const std::string& xml_content) const;
     
-    // ========== 内部XML生成方法（供服务组件使用） ==========
-    
-    std::string generateWorkbookXMLInternal();
-    std::string generateWorksheetXMLInternal(const std::string& sheet_name);
-    std::string generateStylesXMLInternal();
-    std::string generateSharedStringsXMLInternal();
-    
 private:
     // ========== 初始化方法 ==========
     
@@ -274,8 +240,6 @@ private:
     // ========== 私有辅助方法 ==========
     
     std::string extractSheetNameFromPath(const std::string& part_path) const;
-    std::string generateContentTypes() const;
-    std::string generateRels(const std::string& rels_path) const;
     bool isRequiredPart(const std::string& part) const;
     void logOperationStats() const;
     
