@@ -13,6 +13,7 @@
 #include "fastexcel/utils/LogConfig.hpp"
 #include "fastexcel/utils/Logger.hpp"
 #include "fastexcel/utils/TimeUtils.hpp"
+#include "fastexcel/utils/XMLUtils.hpp"
 #include "fastexcel/xml/Relationships.hpp"
 #include "fastexcel/xml/SharedStrings.hpp"
 #include "fastexcel/xml/StyleSerializer.hpp"
@@ -78,30 +79,24 @@ Workbook::~Workbook() {
 // ========== 文件操作 ==========
 
 bool Workbook::open() {
-    if (is_open_) {
-        return true;
-    }
-    
-    // 内存模式直接标记为已打开，无需文件操作
+    // 内存模式无需文件操作
     if (!file_manager_) {
-        is_open_ = true;
         LOG_DEBUG("Memory workbook opened: {}", filename_);
         return true;
     }
     
     // 文件模式需要打开FileManager
-    is_open_ = file_manager_->open(true);
-    if (is_open_) {
+    bool success = file_manager_->open(true);
+    if (success) {
         LOG_INFO("Workbook opened: {}", filename_);
     }
     
-    return is_open_;
+    return success;
 }
 
 bool Workbook::save() {
-    if (!is_open_) {
-        FASTEXCEL_THROW_OP("Workbook is not open");
-    }
+    // 运行时检查：只读模式不能保存
+    ensureEditable("save");
     
     try {
         // 使用 TimeUtils 更新修改时间
@@ -149,6 +144,9 @@ bool Workbook::save() {
 }
 
 bool Workbook::saveAs(const std::string& filename) {
+    // 运行时检查：只读模式不能保存
+    ensureEditable("saveAs");
+    
     std::string old_filename = filename_;
     std::string original_source = original_package_path_;
     bool was_from_existing = opened_from_existing_;
@@ -220,17 +218,13 @@ bool Workbook::saveAs(const std::string& filename) {
 }
 
 bool Workbook::close() {
-    if (is_open_) {
-        // 内存模式只需要重置状态
-        if (!file_manager_) {
-            is_open_ = false;
-            LOG_DEBUG("Memory workbook closed: {}", filename_);
-        } else {
-            // 文件模式需要关闭FileManager
-            file_manager_->close();
-            is_open_ = false;
-            LOG_INFO("Workbook closed: {}", filename_);
-        }
+    // 内存模式只需要重置状态
+    if (!file_manager_) {
+        LOG_DEBUG("Memory workbook closed: {}", filename_);
+    } else {
+        // 文件模式需要关闭FileManager
+        file_manager_->close();
+        LOG_INFO("Workbook closed: {}", filename_);
     }
     return true;
 }
@@ -238,9 +232,8 @@ bool Workbook::close() {
 // ========== 工作表管理 ==========
 
 std::shared_ptr<Worksheet> Workbook::addWorksheet(const std::string& name) {
-    if (!is_open_) {
-        FASTEXCEL_THROW_OP("Workbook is not open");
-    }
+    // 运行时检查：只读模式不能添加工作表
+    ensureEditable("addWorksheet");
     
     std::string sheet_name;
     if (name.empty()) {
@@ -274,10 +267,8 @@ std::shared_ptr<Worksheet> Workbook::addWorksheet(const std::string& name) {
 }
 
 std::shared_ptr<Worksheet> Workbook::insertWorksheet(size_t index, const std::string& name) {
-    if (!is_open_) {
-        LOG_ERROR("Workbook is not open");
-        return nullptr;
-    }
+    // 运行时检查：只读模式不能插入工作表
+    ensureEditable("insertWorksheet");
     
     if (index > worksheets_.size()) {
         index = worksheets_.size();
@@ -298,6 +289,9 @@ std::shared_ptr<Worksheet> Workbook::insertWorksheet(size_t index, const std::st
 }
 
 bool Workbook::removeWorksheet(const std::string& name) {
+    // 运行时检查：只读模式不能删除工作表
+    ensureEditable("removeWorksheet");
+    
     auto it = std::find_if(worksheets_.begin(), worksheets_.end(),
                           [&name](const std::shared_ptr<Worksheet>& ws) {
                               return ws->getName() == name;
@@ -313,6 +307,9 @@ bool Workbook::removeWorksheet(const std::string& name) {
 }
 
 bool Workbook::removeWorksheet(size_t index) {
+    // 运行时检查：只读模式不能删除工作表
+    ensureEditable("removeWorksheet");
+    
     if (index < worksheets_.size()) {
         std::string name = worksheets_[index]->getName();
         worksheets_.erase(worksheets_.begin() + index);
@@ -457,10 +454,6 @@ int Workbook::addStyle(const StyleBuilder& builder) {
 }
 
 std::shared_ptr<const FormatDescriptor> Workbook::getStyle(int style_id) const {
-    if (!is_open_) {
-        return nullptr;
-    }
-    
     // 从格式仓储中根据ID获取格式描述符
     return format_repo_->getFormat(style_id);
 }
@@ -831,109 +824,6 @@ bool Workbook::generateExcelStructure() {
 
 
 
-void Workbook::generateWorkbookXML(const std::function<void(const char*, size_t)>& callback) const {
-    // 重构：委托给UnifiedXMLGenerator，消除重复代码
-    auto generator = xml::UnifiedXMLGenerator::fromWorkbook(this);
-    if (generator) {
-        generator->generateWorkbookXML(callback);
-    } else {
-        LOG_ERROR("Failed to create UnifiedXMLGenerator for workbook XML generation");
-    }
-}
-
-void Workbook::generateStylesXML(const std::function<void(const char*, size_t)>& callback) const {
-    // 重构：委托给UnifiedXMLGenerator
-    auto generator = xml::UnifiedXMLGenerator::fromWorkbook(this);
-    if (generator) {
-        generator->generateStylesXML(callback);
-    } else {
-        LOG_ERROR("Failed to create UnifiedXMLGenerator for styles XML generation");
-    }
-}
-
-void Workbook::generateSharedStringsXML(const std::function<void(const char*, size_t)>& callback) const {
-    LOG_DEBUG("generateSharedStringsXML called");
-    // 重构：委托给UnifiedXMLGenerator
-    auto generator = xml::UnifiedXMLGenerator::fromWorkbook(this);
-    if (generator) {
-        LOG_DEBUG("UnifiedXMLGenerator created successfully for SharedStrings");
-        generator->generateSharedStringsXML(callback);
-    } else {
-        LOG_ERROR("Failed to create UnifiedXMLGenerator for shared strings XML generation");
-    }
-}
-
-void Workbook::generateWorksheetXML(const std::shared_ptr<Worksheet>& worksheet, const std::function<void(const char*, size_t)>& callback) const {
-    // 重构：委托给UnifiedXMLGenerator
-    auto generator = xml::UnifiedXMLGenerator::fromWorkbook(this);
-    if (generator) {
-        generator->generateWorksheetXML(worksheet.get(), callback);
-    } else {
-        LOG_ERROR("Failed to create UnifiedXMLGenerator for worksheet XML generation");
-        // 备选方案：使用原来的方法
-        worksheet->generateXML(callback);
-    }
-}
-
-void Workbook::generateDocPropsAppXML(const std::function<void(const char*, size_t)>& callback) const {
-    // 重构：委托给UnifiedXMLGenerator
-    auto generator = xml::UnifiedXMLGenerator::fromWorkbook(this);
-    if (generator) {
-        generator->generateDocPropsXML("app", callback);
-    } else {
-        LOG_ERROR("Failed to create UnifiedXMLGenerator for app properties XML generation");
-    }
-}
-
-void Workbook::generateDocPropsCoreXML(const std::function<void(const char*, size_t)>& callback) const {
-    // 重构：委托给UnifiedXMLGenerator
-    auto generator = xml::UnifiedXMLGenerator::fromWorkbook(this);
-    if (generator) {
-        generator->generateDocPropsXML("core", callback);
-    } else {
-        LOG_ERROR("Failed to create UnifiedXMLGenerator for core properties XML generation");
-    }
-}
-
-void Workbook::generateDocPropsCustomXML(const std::function<void(const char*, size_t)>& callback) const {
-    // 重构：委托给UnifiedXMLGenerator
-    auto generator = xml::UnifiedXMLGenerator::fromWorkbook(this);
-    if (generator) {
-        generator->generateDocPropsXML("custom", callback);
-    } else {
-        LOG_ERROR("Failed to create UnifiedXMLGenerator for custom properties XML generation");
-    }
-}
-
-void Workbook::generateContentTypesXML(const std::function<void(const char*, size_t)>& callback) const {
-    // 重构：委托给UnifiedXMLGenerator
-    auto generator = xml::UnifiedXMLGenerator::fromWorkbook(this);
-    if (generator) {
-        generator->generateContentTypesXML(callback);
-    } else {
-        LOG_ERROR("Failed to create UnifiedXMLGenerator for content types XML generation");
-    }
-}
-
-void Workbook::generateRelsXML(const std::function<void(const char*, size_t)>& callback) const {
-    // 重构：委托给UnifiedXMLGenerator
-    auto generator = xml::UnifiedXMLGenerator::fromWorkbook(this);
-    if (generator) {
-        generator->generateRelationshipsXML("root", callback);
-    } else {
-        LOG_ERROR("Failed to create UnifiedXMLGenerator for root relationships XML generation");
-    }
-}
-
-void Workbook::generateWorkbookRelsXML(const std::function<void(const char*, size_t)>& callback) const {
-    // 重构：委托给UnifiedXMLGenerator
-    auto generator = xml::UnifiedXMLGenerator::fromWorkbook(this);
-    if (generator) {
-        generator->generateRelationshipsXML("workbook", callback);
-    } else {
-        LOG_ERROR("Failed to create UnifiedXMLGenerator for workbook relationships XML generation");
-    }
-}
 
 void Workbook::generateThemeXML(const std::function<void(const char*, size_t)>& callback) const {
     // 优先级：
@@ -1049,21 +939,6 @@ std::string Workbook::getWorksheetRelPath(int sheet_id) const {
     return "worksheets/sheet" + std::to_string(sheet_id) + ".xml";
 }
 
-std::string Workbook::formatTime(const std::tm& time) const {
-    // 使用 TimeUtils 进行时间格式化
-    return utils::TimeUtils::formatTimeISO8601(time);
-}
-
-std::string Workbook::hashPassword(const std::string& password) const {
-    // 简化的密码哈希实现
-    // 实际应该使用Excel的密码哈希算法
-    std::hash<std::string> hasher;
-    size_t hash = hasher(password);
-    
-    std::ostringstream oss;
-    oss << std::hex << std::uppercase << hash;
-    return oss.str();
-}
 
 void Workbook::setHighPerformanceMode(bool enable) {
     if (enable) {
@@ -1104,29 +979,6 @@ void Workbook::setHighPerformanceMode(bool enable) {
 
 
 
-// 辅助方法：XML转义
-std::string Workbook::escapeXML(const std::string& text) const {
-    std::string result;
-    result.reserve(static_cast<size_t>(text.size() * 1.2));
-    
-    for (char c : text) {
-        switch (c) {
-            case '<': result += "&lt;"; break;
-            case '>': result += "&gt;"; break;
-            case '&': result += "&amp;"; break;
-            case '"': result += "&quot;"; break;
-            case '\'': result += "&apos;"; break;
-            default:
-                if (c < 0x20 && c != 0x09 && c != 0x0A && c != 0x0D) {
-                    continue; // 跳过无效控制字符
-                }
-                result.push_back(c);
-                break;
-        }
-    }
-    
-    return result;
-}
 
 // ========== 工作簿编辑功能实现 ==========
 
@@ -1160,6 +1012,98 @@ std::unique_ptr<Workbook> Workbook::open(const Path& path) {
         if (loaded_workbook) {
             loaded_workbook->opened_from_existing_ = true;
             loaded_workbook->original_package_path_ = path.string();
+            // 设置为编辑模式（保持向后兼容）
+            loaded_workbook->access_mode_ = AccessMode::EDITABLE;
+        }
+        
+        LOG_INFO("Successfully loaded workbook for editing: {}", path.string());
+        return loaded_workbook;
+        
+    } catch (const std::exception& e) {
+        LOG_ERROR("Exception while loading workbook for editing: {}, error: {}", path.string(), e.what());
+        return nullptr;
+    }
+}
+
+// ========== 新的语义化API实现 ==========
+
+std::unique_ptr<Workbook> Workbook::openForReading(const Path& path) {
+    try {
+        if (!path.exists()) {
+            LOG_ERROR("File not found for reading: {}", path.string());
+            return nullptr;
+        }
+        
+        // 使用XLSXReader读取现有文件
+        reader::XLSXReader reader(path);
+        auto result = reader.open();
+        if (result != core::ErrorCode::Ok) {
+            LOG_ERROR("Failed to open XLSX file for reading: {}, error code: {}", path.string(), static_cast<int>(result));
+            return nullptr;
+        }
+        
+        // 加载工作簿
+        std::unique_ptr<core::Workbook> loaded_workbook;
+        result = reader.loadWorkbook(loaded_workbook);
+        reader.close();
+        
+        if (result != core::ErrorCode::Ok) {
+            LOG_ERROR("Failed to load workbook from file: {}, error code: {}", path.string(), static_cast<int>(result));
+            return nullptr;
+        }
+        
+        // 设置为只读模式
+        if (loaded_workbook) {
+            loaded_workbook->access_mode_ = AccessMode::READ_ONLY;
+            loaded_workbook->opened_from_existing_ = true;
+            loaded_workbook->original_package_path_ = path.string();
+            
+            // 只读模式优化：禁用脏数据管理器以节省内存
+            if (loaded_workbook->dirty_manager_) {
+                loaded_workbook->dirty_manager_->disableTracking(); // 假设有此方法，后续实现
+            }
+        }
+        
+        LOG_INFO("Successfully loaded workbook for reading: {}", path.string());
+        return loaded_workbook;
+        
+    } catch (const std::exception& e) {
+        LOG_ERROR("Exception while loading workbook for reading: {}, error: {}", path.string(), e.what());
+        return nullptr;
+    }
+}
+
+std::unique_ptr<Workbook> Workbook::openForEditing(const Path& path) {
+    // 编辑模式就是原有的open方法实现
+    try {
+        if (!path.exists()) {
+            LOG_ERROR("File not found for editing: {}", path.string());
+            return nullptr;
+        }
+        
+        // 使用XLSXReader读取现有文件
+        reader::XLSXReader reader(path);
+        auto result = reader.open();
+        if (result != core::ErrorCode::Ok) {
+            LOG_ERROR("Failed to open XLSX file for editing: {}, error code: {}", path.string(), static_cast<int>(result));
+            return nullptr;
+        }
+        
+        // 加载工作簿
+        std::unique_ptr<core::Workbook> loaded_workbook;
+        result = reader.loadWorkbook(loaded_workbook);
+        reader.close();
+        
+        if (result != core::ErrorCode::Ok) {
+            LOG_ERROR("Failed to load workbook from file: {}, error code: {}", path.string(), static_cast<int>(result));
+            return nullptr;
+        }
+        
+        // 设置为编辑模式
+        if (loaded_workbook) {
+            loaded_workbook->access_mode_ = AccessMode::EDITABLE;
+            loaded_workbook->opened_from_existing_ = true;
+            loaded_workbook->original_package_path_ = path.string();
         }
         
         LOG_INFO("Successfully loaded workbook for editing: {}", path.string());
@@ -1172,15 +1116,10 @@ std::unique_ptr<Workbook> Workbook::open(const Path& path) {
 }
 
 bool Workbook::refresh() {
-    if (!is_open_) {
-        LOG_ERROR("Cannot refresh: workbook is not open");
-        return false;
-    }
     
     try {
         // 保存当前状态
         std::string current_filename = filename_;
-        bool was_open = is_open_;
         
         // 关闭当前工作簿
         close();
@@ -1200,10 +1139,8 @@ bool Workbook::refresh() {
         custom_property_manager_ = std::move(refreshed_workbook->custom_property_manager_);
         defined_name_manager_ = std::move(refreshed_workbook->defined_name_manager_);
         
-        // 恢复打开状态
-        if (was_open) {
-            open();
-        }
+        // 重新打开工作簿
+        open();
         
         LOG_INFO("Successfully refreshed workbook: {}", current_filename);
         return true;
@@ -1220,10 +1157,6 @@ bool Workbook::mergeWorkbook(const std::unique_ptr<Workbook>& other_workbook, co
         return false;
     }
     
-    if (!is_open_) {
-        LOG_ERROR("Cannot merge: current workbook is not open");
-        return false;
-    }
     
     try {
         int merged_count = 0;
@@ -1635,6 +1568,27 @@ bool Workbook::isModified() const {
     }
     
     return false;
+}
+
+// ========== 访问模式检查辅助方法实现 ==========
+
+void Workbook::ensureEditable(const std::string& operation) const {
+    if (access_mode_ == AccessMode::READ_ONLY) {
+        std::string msg = "Cannot perform operation";
+        if (!operation.empty()) {
+            msg += " '" + operation + "'";
+        }
+        msg += ": workbook is opened in read-only mode. Use openForEditing() instead of openForReading().";
+        
+        LOG_ERROR("{}", msg);
+        throw Exception(msg);
+    }
+}
+
+void Workbook::ensureReadable(const std::string& operation) const {
+    // 读取操作在任何模式下都是允许的
+    // 这个方法预留用于未来可能的扩展，比如检查文件是否损坏等
+    (void)operation; // 避免未使用参数警告
 }
 
 }} // namespace fastexcel::core

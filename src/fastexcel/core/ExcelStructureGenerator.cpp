@@ -3,6 +3,8 @@
 #include "fastexcel/core/StreamingFileWriter.hpp"
 #include "fastexcel/utils/Logger.hpp"
 #include "fastexcel/core/Exception.hpp"
+#include "fastexcel/xml/UnifiedXMLGenerator.hpp"
+#include "fastexcel/xml/DocPropsXMLGenerator.hpp"
 #include <sstream>
 #include <chrono>
 
@@ -123,11 +125,21 @@ bool ExcelStructureGenerator::generateBasicFiles() {
     
     LOG_DEBUG("Generating {} basic Excel files", estimated_files);
     
+    // 创建UnifiedXMLGenerator实例
+    auto xml_generator = xml::UnifiedXMLGenerator::fromWorkbook(workbook_);
+    if (!xml_generator) {
+        LOG_ERROR("Failed to create UnifiedXMLGenerator from workbook");
+        return false;
+    }
+    
+    // 创建DocPropsXMLGenerator实例用于文档属性
+    xml::DocPropsXMLGenerator doc_props_generator(workbook_);
+    
     // 使用统一的文件生成方法，支持真正的流式写入
     if (workbook_->shouldGenerateContentTypes()) {
         if (!generateFileWithCallback("[Content_Types].xml",
-            [this](const std::function<void(const char*, size_t)>& callback) {
-                workbook_->generateContentTypesXML(callback);
+            [&xml_generator](const std::function<void(const char*, size_t)>& callback) {
+                xml_generator->generateContentTypesXML(callback);
             })) {
             return false;
         }
@@ -135,8 +147,8 @@ bool ExcelStructureGenerator::generateBasicFiles() {
     
     if (workbook_->shouldGenerateRootRels()) {
         if (!generateFileWithCallback("_rels/.rels",
-            [this](const std::function<void(const char*, size_t)>& callback) {
-                workbook_->generateRelsXML(callback);
+            [&xml_generator](const std::function<void(const char*, size_t)>& callback) {
+                xml_generator->generateRelationshipsXML("root", callback);
             })) {
             return false;
         }
@@ -144,8 +156,8 @@ bool ExcelStructureGenerator::generateBasicFiles() {
     
     if (workbook_->shouldGenerateDocPropsApp()) {
         if (!generateFileWithCallback("docProps/app.xml",
-            [this](const std::function<void(const char*, size_t)>& callback) {
-                workbook_->generateDocPropsAppXML(callback);
+            [&doc_props_generator](const std::function<void(const char*, size_t)>& callback) {
+                doc_props_generator.generateAppXML(callback);
             })) {
             return false;
         }
@@ -153,8 +165,8 @@ bool ExcelStructureGenerator::generateBasicFiles() {
     
     if (workbook_->shouldGenerateDocPropsCore()) {
         if (!generateFileWithCallback("docProps/core.xml",
-            [this](const std::function<void(const char*, size_t)>& callback) {
-                workbook_->generateDocPropsCoreXML(callback);
+            [&doc_props_generator](const std::function<void(const char*, size_t)>& callback) {
+                doc_props_generator.generateCoreXML(callback);
             })) {
             return false;
         }
@@ -163,8 +175,8 @@ bool ExcelStructureGenerator::generateBasicFiles() {
     // 生成自定义属性（如果有）
     if (workbook_->shouldGenerateDocPropsCustom()) {
         if (!generateFileWithCallbackIfNotEmpty("docProps/custom.xml",
-            [this](const std::function<void(const char*, size_t)>& callback) {
-                workbook_->generateDocPropsCustomXML(callback);
+            [&doc_props_generator](const std::function<void(const char*, size_t)>& callback) {
+                doc_props_generator.generateCustomXML(callback);
             })) {
             return false;
         }
@@ -172,8 +184,8 @@ bool ExcelStructureGenerator::generateBasicFiles() {
     
     if (workbook_->shouldGenerateWorkbookCore()) {
         if (!generateFileWithCallback("xl/_rels/workbook.xml.rels",
-            [this](const std::function<void(const char*, size_t)>& callback) {
-                workbook_->generateWorkbookRelsXML(callback);
+            [&xml_generator](const std::function<void(const char*, size_t)>& callback) {
+                xml_generator->generateRelationshipsXML("workbook", callback);
             })) {
             return false;
         }
@@ -181,8 +193,8 @@ bool ExcelStructureGenerator::generateBasicFiles() {
     
     if (workbook_->shouldGenerateWorkbookCore()) {
         if (!generateFileWithCallback("xl/workbook.xml",
-            [this](const std::function<void(const char*, size_t)>& callback) {
-                workbook_->generateWorkbookXML(callback);
+            [&xml_generator](const std::function<void(const char*, size_t)>& callback) {
+                xml_generator->generateWorkbookXML(callback);
             })) {
             return false;
         }
@@ -190,8 +202,8 @@ bool ExcelStructureGenerator::generateBasicFiles() {
     
     if (workbook_->shouldGenerateStyles()) {
         if (!generateFileWithCallback("xl/styles.xml",
-            [this](const std::function<void(const char*, size_t)>& callback) {
-                workbook_->generateStylesXML(callback);
+            [&xml_generator](const std::function<void(const char*, size_t)>& callback) {
+                xml_generator->generateStylesXML(callback);
             })) {
             return false;
         }
@@ -203,6 +215,7 @@ bool ExcelStructureGenerator::generateBasicFiles() {
     if (workbook_->shouldGenerateTheme()) {
         if (!generateFileWithCallback("xl/theme/theme1.xml",
             [this](const std::function<void(const char*, size_t)>& callback) {
+                // 主题生成仍使用Workbook的方法，因为它有特殊的逻辑
                 workbook_->generateThemeXML(callback);
             })) {
             return false;
@@ -285,9 +298,16 @@ bool ExcelStructureGenerator::finalize() {
     if (should_generate) {
         LOG_DEBUG("Generating shared strings XML");
         
+        // 创建UnifiedXMLGenerator实例
+        auto xml_generator = xml::UnifiedXMLGenerator::fromWorkbook(workbook_);
+        if (!xml_generator) {
+            LOG_ERROR("Failed to create UnifiedXMLGenerator for shared strings");
+            return false;
+        }
+        
         if (!generateFileWithCallback("xl/sharedStrings.xml",
-            [this](const std::function<void(const char*, size_t)>& callback) {
-                workbook_->generateSharedStringsXML(callback);
+            [&xml_generator](const std::function<void(const char*, size_t)>& callback) {
+                xml_generator->generateSharedStringsXML(callback);
             })) {
             LOG_ERROR("Failed to write shared strings file");
             return false;

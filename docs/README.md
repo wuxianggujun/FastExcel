@@ -26,8 +26,7 @@ int main() {
     fastexcel::initialize();
     
     // 创建工作簿
-    auto workbook = fastexcel::core::Workbook::create("example.xlsx");
-    workbook->open();
+    auto workbook = fastexcel::core::Workbook::create(fastexcel::core::Path("example.xlsx"));
     
     // 添加工作表
     auto worksheet = workbook->addWorksheet("数据表");

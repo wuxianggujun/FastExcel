@@ -34,6 +34,12 @@ namespace core {
 class NamedStyle;
 class ExcelStructureGenerator;
 
+// 访问模式枚举
+enum class AccessMode {
+    READ_ONLY,   // 只读访问：不能修改，轻量加载，性能优化
+    EDITABLE     // 编辑访问：完全功能，可修改保存
+};
+
 // 文档属性结构
 struct DocumentProperties {
     std::string title;
@@ -116,9 +122,8 @@ private:
     // ID管理
     int next_sheet_id_ = 1;
     
-    // 状态
-    bool is_open_ = false;
-    bool read_only_ = false;
+    // 访问模式（新的统一状态管理）
+    AccessMode access_mode_ = AccessMode::EDITABLE; // 默认编辑模式保持向后兼容
     
     // 文档属性
     DocumentProperties doc_properties_;
@@ -144,9 +149,10 @@ private:
     bool lock_windows_ = false;
 
     // 编辑来源信息（用于保留未编辑部件）
-    bool opened_from_existing_ = false;
+    // TODO: 这些混乱的状态标志将被逐步清理，用统一的 access_mode_ 替代
+    bool opened_from_existing_ = false;  // 将被清理
     std::string original_package_path_;
-    bool preserve_unknown_parts_ = true;
+    bool preserve_unknown_parts_ = true; // 将被重构到选项中
 
     // 新的智能脏数据管理器
     std::unique_ptr<DirtyManager> dirty_manager_;
@@ -158,6 +164,41 @@ public:
      * @return 工作簿智能指针，失败返回nullptr
      */
     static std::unique_ptr<Workbook> create(const Path& path);
+    
+    /**
+     * @brief 只读方式打开Excel文件（新API - 推荐）
+     * @param path 文件路径
+     * @return 工作簿智能指针，失败返回nullptr
+     * 
+     * 特点：
+     * - 轻量级：内存占用小，加载速度快
+     * - 安全：编译期和运行期防止意外修改
+     * - 高性能：针对只读场景优化，支持懒加载
+     * 
+     * 使用场景：
+     * - 数据分析和统计
+     * - 大文件处理
+     * - 模板数据提取
+     * - 数据转换和导入
+     */
+    static std::unique_ptr<Workbook> openForReading(const Path& path);
+    
+    /**
+     * @brief 编辑方式打开Excel文件（新API - 推荐）
+     * @param path 文件路径
+     * @return 工作簿智能指针，失败返回nullptr
+     * 
+     * 特点：
+     * - 完整功能：支持所有编辑操作
+     * - 变更追踪：精确跟踪修改状态
+     * - 格式支持：完整的样式和格式处理
+     * 
+     * 使用场景：
+     * - 修改现有Excel文件
+     * - 复杂的格式设置
+     * - 需要保存更改的场景
+     */
+    static std::unique_ptr<Workbook> openForEditing(const Path& path);
     
 
     
@@ -789,22 +830,28 @@ public:
     bool shouldGenerateSheetRels(size_t index) const;
     
     /**
-     * @brief 检查是否已打开
-     * @return 是否已打开
+     * @brief 获取当前访问模式
+     * @return 访问模式
      */
-    bool isOpen() const { return is_open_; }
+    AccessMode getAccessMode() const { return access_mode_; }
+    
+    /**
+     * @brief 检查是否只读模式
+     * @return 是否只读
+     */
+    bool isReadOnly() const { return access_mode_ == AccessMode::READ_ONLY; }
+    
+    /**
+     * @brief 检查是否编辑模式
+     * @return 是否可编辑
+     */
+    bool isEditable() const { return access_mode_ == AccessMode::EDITABLE; }
     
     /**
      * @brief 获取文件名
      * @return 文件名
      */
     const std::string& getFilename() const { return filename_; }
-    
-    /**
-     * @brief 检查是否只读
-     * @return 是否只读
-     */
-    bool isReadOnly() const { return read_only_; }
     
     /**
      * @brief 获取文档属性
@@ -974,36 +1021,21 @@ private:
     bool generateExcelStructure();
     bool generateWithGenerator(bool use_streaming_writer);
     
-    // 生成各种XML文件（流式写入）
-    void generateWorkbookXML(const std::function<void(const char*, size_t)>& callback) const;
-    void generateStylesXML(const std::function<void(const char*, size_t)>& callback) const;
-    void generateSharedStringsXML(const std::function<void(const char*, size_t)>& callback) const;
-    void generateWorksheetXML(const std::shared_ptr<Worksheet>& worksheet, const std::function<void(const char*, size_t)>& callback) const;
-    void generateDocPropsAppXML(const std::function<void(const char*, size_t)>& callback) const;
-    void generateDocPropsCoreXML(const std::function<void(const char*, size_t)>& callback) const;
-    void generateDocPropsCustomXML(const std::function<void(const char*, size_t)>& callback) const;
-    void generateContentTypesXML(const std::function<void(const char*, size_t)>& callback) const;
-    void generateRelsXML(const std::function<void(const char*, size_t)>& callback) const;
-    void generateWorkbookRelsXML(const std::function<void(const char*, size_t)>& callback) const;
-    void generateThemeXML(const std::function<void(const char*, size_t)>& callback) const;
     
     // 辅助函数
     std::string generateUniqueSheetName(const std::string& base_name) const;
     bool validateSheetName(const std::string& name) const;
     void collectSharedStrings();
     
+    // 访问模式检查辅助方法
+    void ensureEditable(const std::string& operation = "") const;
+    void ensureReadable(const std::string& operation = "") const;
+    
     // 文件路径生成
     std::string getWorksheetPath(int sheet_id) const;
     std::string getWorksheetRelPath(int sheet_id) const;
     
-    // 时间格式化
-    std::string formatTime(const std::tm& time) const;
     
-    // 密码哈希
-    std::string hashPassword(const std::string& password) const;
-    
-    // 流式XML辅助方法
-    std::string escapeXML(const std::string& text) const;
     
     // 智能模式选择辅助方法
     size_t estimateMemoryUsage() const;

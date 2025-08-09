@@ -82,45 +82,37 @@ cmake --build build -j 4
 ```cpp
 #include "fastexcel/FastExcel.hpp"
 
+using namespace fastexcel;
 using namespace fastexcel::core;
 
 int main() {
-    // 创建工作簿（使用默认选项）
-    Workbook workbook;
-    
+    // 可选：初始化库（日志等）
+    fastexcel::initialize();
+
+    // 创建工作簿（使用 Path 显式构造）
+    auto workbook = Workbook::create(Path("output.xlsx"));
+
     // 添加工作表
-    auto worksheet = workbook.addWorksheet("数据表");
-    
-    // 写入数据（基于实际Cell API）
-    Cell headerCell;
-    headerCell.setString("产品名称");
-    worksheet->setCell(0, 0, headerCell);  // 行列从0开始
-    
-    headerCell.setString("数量");
-    worksheet->setCell(0, 1, headerCell);
-    
-    headerCell.setString("单价");
-    worksheet->setCell(0, 2, headerCell);
-    
-    // 写入数据行
-    Cell dataCell;
-    dataCell.setString("笔记本电脑");
-    worksheet->setCell(1, 0, dataCell);
-    
-    dataCell.setNumber(10);
-    worksheet->setCell(1, 1, dataCell);
-    
-    dataCell.setNumber(5999.99);
-    worksheet->setCell(1, 2, dataCell);
-    
+    auto worksheet = workbook->addWorksheet("数据表");
+
+    // 使用高层 API 写入数据（0 基）
+    worksheet->writeString(0, 0, "产品名称");
+    worksheet->writeString(0, 1, "数量");
+    worksheet->writeString(0, 2, "单价");
+
+    worksheet->writeString(1, 0, "笔记本电脑");
+    worksheet->writeNumber(1, 1, 10);
+    worksheet->writeNumber(1, 2, 5999.99);
+
     // 保存文件
-    workbook.save("output.xlsx");
-    
+    workbook->save();
+
+    fastexcel::cleanup();
     return 0;
 }
 ```
 
-### 使用StyleBuilder设置样式
+### 使用 StyleBuilder 设置样式
 
 ```cpp
 #include "fastexcel/FastExcel.hpp"
@@ -128,8 +120,8 @@ int main() {
 using namespace fastexcel::core;
 
 int main() {
-    Workbook workbook;
-    auto worksheet = workbook.addWorksheet("样式示例");
+    auto workbook = Workbook::create(Path("styled_output.xlsx"));
+    auto worksheet = workbook->addWorksheet("样式示例");
     
     // 使用StyleBuilder创建样式（基于实际API）
     StyleBuilder builder;
@@ -140,28 +132,21 @@ int main() {
         .alignment().horizontal(HorizontalAlign::Center)
         .build();
     
-    // 应用样式
-    Cell titleCell;
-    titleCell.setString("标题");
-    titleCell.setFormat(titleFormat);
-    worksheet->setCell(0, 0, titleCell);
+    // 应用样式（示例：直接写入 + 后续可通过 getCell 设置格式）
+    worksheet->writeString(0, 0, "标题");
     
     // 数字格式
     auto numberFormat = builder
         .numberFormat("#,##0.00")
         .build();
     
-    Cell numberCell;
-    numberCell.setNumber(12345.67);
-    numberCell.setFormat(numberFormat);
-    worksheet->setCell(1, 0, numberCell);
-    
-    workbook.save("styled_output.xlsx");
+    worksheet->writeNumber(1, 0, 12345.67);
+    workbook->save();
     return 0;
 }
 ```
 
-### 读取现有Excel文件
+### 读取现有 Excel 文件
 
 ```cpp
 #include "fastexcel/FastExcel.hpp"
@@ -171,46 +156,23 @@ using namespace fastexcel::core;
 using namespace fastexcel::reader;
 
 int main() {
-    // 打开现有文件
     XLSXReader reader("input.xlsx");
-    
+
     if (reader.open() == ErrorCode::Ok) {
-        // 获取工作表信息
-        auto sheetNames = reader.getSheetNames();
-        std::cout << "工作表数量: " << sheetNames.size() << std::endl;
-        
-        // 读取第一个工作表
-        auto workbook = reader.readWorkbook();
-        if (workbook && !sheetNames.empty()) {
-            auto worksheet = workbook->getWorksheet(sheetNames[0]);
-            
-            if (worksheet) {
-                // 获取工作表维度
-                auto dimensions = worksheet->getDimensions();
-                std::cout << "数据范围: " << dimensions.first_row 
-                         << "," << dimensions.first_col 
-                         << " 到 " << dimensions.last_row 
-                         << "," << dimensions.last_col << std::endl;
-                
-                // 遍历单元格（使用实际API）
-                for (int row = dimensions.first_row; row <= dimensions.last_row; ++row) {
-                    for (int col = dimensions.first_col; col <= dimensions.last_col; ++col) {
-                        const Cell* cell = worksheet->getCell(row, col);
-                        if (cell && cell->getType() != CellType::Empty) {
-                            std::cout << "单元格(" << row << "," << col << "): ";
-                            
-                            switch (cell->getType()) {
-                                case CellType::String:
-                                    std::cout << cell->getString() << std::endl;
-                                    break;
-                                case CellType::Number:
-                                    std::cout << cell->getNumber() << std::endl;
-                                    break;
-                                case CellType::Boolean:
-                                    std::cout << (cell->getBoolean() ? "true" : "false") << std::endl;
-                                    break;
-                                default:
-                                    std::cout << "[其他类型]" << std::endl;
+        // 读取工作簿
+        std::unique_ptr<Workbook> workbook;
+        if (reader.loadWorkbook(workbook) == ErrorCode::Ok && workbook) {
+            std::vector<std::string> names;
+            reader.getWorksheetNames(names);
+            if (!names.empty()) {
+                auto ws = workbook->getWorksheet(names[0]);
+                if (ws) {
+                    auto [max_row, max_col] = ws->getUsedRange();
+                    for (int r = 0; r <= max_row; ++r) {
+                        for (int c = 0; c <= max_col; ++c) {
+                            if (ws->hasCellAt(r, c)) {
+                                const auto& cell = ws->getCell(r, c);
+                                // 根据 Cell API 读取并处理内容...
                             }
                         }
                     }
@@ -218,13 +180,13 @@ int main() {
             }
         }
     }
-    
+
     reader.close();
     return 0;
 }
 ```
 
-### 高性能OPC包编辑
+### 高性能 OPC 包编辑
 
 ```cpp
 #include "fastexcel/FastExcel.hpp"
@@ -234,31 +196,21 @@ using namespace fastexcel::core;
 using namespace fastexcel::opc;
 
 int main() {
-    // 打开现有Excel文件进行编辑
-    auto editor = PackageEditor::open("existing_file.xlsx");
-    
-    if (editor) {
-        // 修改特定单元格（使用实际的CellValue结构）
-        PackageEditor::CellValue newValue;
-        newValue.type = PackageEditor::CellValue::Number;
-        newValue.number_value = 999.99;
-        
-        // 修改单元格（行列从1开始）
-        editor->setCell("Sheet1", PackageEditor::CellRef(2, 3), newValue);
-        
-        // 添加新工作表
-        editor->addSheet("新数据");
-        
-        // 保存更改（增量更新，高效）
-        if (editor->save()) {
-            std::cout << "文件更新完成" << std::endl;
-        } else {
-            std::cout << "文件更新失败" << std::endl;
-        }
-    } else {
-        std::cout << "无法打开文件进行编辑" << std::endl;
+    // 打开现有 Excel 文件进行编辑
+    auto editor = PackageEditor::open(Path("existing_file.xlsx"));
+    if (!editor) return 1;
+
+    // 通过获取 Workbook 来进行业务修改
+    auto* wb = editor->getWorkbook();
+    auto ws = wb->getWorksheet("Sheet1");
+    if (ws) {
+        ws->writeNumber(1, 2, 999.99); // (行,列) = (1,2)
     }
-    
+
+    // 增量提交
+    if (editor->save()) {
+        std::cout << "文件更新完成" << std::endl;
+    }
     return 0;
 }
 ```
@@ -397,9 +349,10 @@ LOG_ERROR("文件读取失败: {}", filename);
 
 ## 📚 文档
 
-- [架构设计文档](ARCHITECTURE.md) - 深入了解内部设计
-- [API参考手册](API_REFERENCE.md) - 完整API文档
-- [性能优化指南](PERFORMANCE_GUIDE.md) - 性能调优建议
+- [文档索引](docs/INDEX.md) - 完整文档导航
+- [架构设计文档](docs/architecture-design.md) - 深入了解内部设计
+- [性能优化指南](docs/performance-optimization-guide.md) - 性能调优建议
+- [批量与流式架构详解](docs/streaming-vs-batch-architecture-explained.md)
 
 ## 🤝 贡献
 
