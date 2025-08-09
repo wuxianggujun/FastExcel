@@ -848,6 +848,12 @@ public:
      */
     int getSharedStringIndex(const std::string& str) const;
     
+    /**
+     * @brief 获取共享字符串表
+     * @return 共享字符串表指针（可能为nullptr）
+     */
+    const SharedStringTable* getSharedStringTable() const;
+    
     // ========== 工作簿编辑功能 ==========
     
     /**

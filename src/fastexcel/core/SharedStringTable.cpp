@@ -118,6 +118,13 @@ void SharedStringTable::generateXML(const std::function<void(const char*, size_t
         
         writer.writeText(escaped_str.c_str());
         writer.endElement(); // t
+        
+        // 添加phoneticPr标签以提高Excel兼容性
+        writer.startElement("phoneticPr");
+        writer.writeAttribute("fontId", "1");
+        writer.writeAttribute("type", "noConversion");
+        writer.endElement(); // phoneticPr
+        
         writer.endElement(); // si
     }
     

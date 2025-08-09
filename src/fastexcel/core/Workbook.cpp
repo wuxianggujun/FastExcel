@@ -692,9 +692,39 @@ bool Workbook::shouldGenerateTheme() const {
 }
 
 bool Workbook::shouldGenerateSharedStrings() const {
-    if (!options_.use_shared_strings) return false; // 未启用SST
-    if (!dirty_manager_) return true;
-    return dirty_manager_->shouldUpdate("xl/sharedStrings.xml");
+    LOG_DEBUG("shouldGenerateSharedStrings() called - analyzing conditions");
+    
+    if (!options_.use_shared_strings) {
+        LOG_DEBUG("SharedStrings generation disabled by options_.use_shared_strings = false");
+        return false; // 未启用SST
+    }
+    LOG_DEBUG("options_.use_shared_strings = true, SharedStrings enabled");
+    
+    if (!dirty_manager_) {
+        LOG_DEBUG("No dirty manager, SharedStrings generation enabled (default true)");
+        return true;
+    }
+    LOG_DEBUG("DirtyManager exists, checking shouldUpdate for xl/sharedStrings.xml");
+    
+    bool should_update = dirty_manager_->shouldUpdate("xl/sharedStrings.xml");
+    LOG_DEBUG("DirtyManager shouldUpdate for SharedStrings: {}", should_update);
+    
+    // 🔧 关键修复：如果SharedStringTable有内容但DirtyManager说不需要更新，强制生成
+    if (shared_string_table_) {
+        size_t string_count = shared_string_table_->getStringCount();
+        LOG_DEBUG("SharedStringTable contains {} strings", string_count);
+        
+        if (string_count > 0 && !should_update) {
+            LOG_DEBUG("🔧 FORCE GENERATION: SharedStringTable has {} strings but DirtyManager says no update needed", string_count);
+            LOG_DEBUG("🔧 This happens when target file exists but we're creating new content with strings");
+            LOG_DEBUG("🔧 Forcing SharedStrings generation to avoid missing sharedStrings.xml");
+            return true; // 强制生成
+        }
+    } else {
+        LOG_DEBUG("SharedStringTable is null");
+    }
+    
+    return should_update;
 }
 
 bool Workbook::shouldGenerateDocPropsCore() const {
@@ -739,6 +769,10 @@ int Workbook::addSharedStringWithIndex(const std::string& str, int original_inde
 int Workbook::getSharedStringIndex(const std::string& str) const {
     if (!shared_string_table_) return -1;
     return static_cast<int>(shared_string_table_->getStringId(str));
+}
+
+const SharedStringTable* Workbook::getSharedStringTable() const {
+    return shared_string_table_.get();
 }
 
 // ========== 内部方法 ==========
@@ -815,9 +849,11 @@ void Workbook::generateStylesXML(const std::function<void(const char*, size_t)>&
 }
 
 void Workbook::generateSharedStringsXML(const std::function<void(const char*, size_t)>& callback) const {
+    LOG_DEBUG("generateSharedStringsXML called");
     // 重构：委托给UnifiedXMLGenerator
     auto generator = xml::UnifiedXMLGenerator::fromWorkbook(this);
     if (generator) {
+        LOG_DEBUG("UnifiedXMLGenerator created successfully for SharedStrings");
         generator->generateSharedStringsXML(callback);
     } else {
         LOG_ERROR("Failed to create UnifiedXMLGenerator for shared strings XML generation");
@@ -825,7 +861,15 @@ void Workbook::generateSharedStringsXML(const std::function<void(const char*, si
 }
 
 void Workbook::generateWorksheetXML(const std::shared_ptr<Worksheet>& worksheet, const std::function<void(const char*, size_t)>& callback) const {
-    worksheet->generateXML(callback);
+    // 重构：委托给UnifiedXMLGenerator
+    auto generator = xml::UnifiedXMLGenerator::fromWorkbook(this);
+    if (generator) {
+        generator->generateWorksheetXML(worksheet.get(), callback);
+    } else {
+        LOG_ERROR("Failed to create UnifiedXMLGenerator for worksheet XML generation");
+        // 备选方案：使用原来的方法
+        worksheet->generateXML(callback);
+    }
 }
 
 void Workbook::generateDocPropsAppXML(const std::function<void(const char*, size_t)>& callback) const {

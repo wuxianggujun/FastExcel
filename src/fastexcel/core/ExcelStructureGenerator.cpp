@@ -275,9 +275,14 @@ bool ExcelStructureGenerator::generateWorksheets() {
 }
 
 bool ExcelStructureGenerator::finalize() {
+    LOG_DEBUG("ExcelStructureGenerator::finalize() called");
+    
     // 生成共享字符串文件（如果启用）
     // 这必须在所有工作表生成之后进行，因为工作表生成时会填充共享字符串表
-    if (workbook_->shouldGenerateSharedStrings()) {
+    bool should_generate = workbook_->shouldGenerateSharedStrings();
+    LOG_DEBUG("workbook_->shouldGenerateSharedStrings() = {}", should_generate);
+    
+    if (should_generate) {
         LOG_DEBUG("Generating shared strings XML");
         
         if (!generateFileWithCallback("xl/sharedStrings.xml",
@@ -288,6 +293,8 @@ bool ExcelStructureGenerator::finalize() {
             return false;
         }
         LOG_DEBUG("Shared strings XML generated successfully");
+    } else {
+        LOG_DEBUG("Skipping SharedStrings generation");
     }
     
     // 对于批量模式，需要调用flush

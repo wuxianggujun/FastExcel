@@ -75,8 +75,12 @@ public:
                 return false;
             }
             
-            // 目标工作簿已经在create时自动打开，无需再次调用open
-            std::cout << "OK: Target workbook created" << std::endl;
+            // 🔧 关键修复：必须打开目标工作簿
+            if (!target_workbook->open()) {
+                std::cerr << "Error: Failed to open target workbook" << std::endl;
+                return false;
+            }
+            std::cout << "OK: Target workbook created and opened" << std::endl;
             
             // 复制样式数据和主题
             std::cout << "\\nStep 3: Copying styles and theme..." << std::endl;
@@ -243,6 +247,9 @@ public:
 
 int main() {
     try {
+        // 初始化Logger并启用DEBUG级别
+        fastexcel::Logger::getInstance().initialize("logs/fastexcel.log", fastexcel::Logger::Level::DEBUG, true);
+        
         std::cout << "FastExcel Sheet Copy with Format Example" << std::endl;
         std::cout << "Testing format writing functionality" << std::endl;
         std::cout << "Version: 2.0.0 - Modern C++ Architecture" << std::endl;

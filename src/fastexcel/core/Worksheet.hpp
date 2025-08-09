@@ -925,12 +925,10 @@ public:
     // ========== XML生成 ==========
     
     /**
-     * @brief 生成工作表XML到回调函数（流式写入）
+     * @brief 生成工作表XML到回调函数（使用UnifiedXMLGenerator）
      * @param callback 数据写入回调函数
      */
     void generateXML(const std::function<void(const char*, size_t)>& callback) const;
-    void generateXMLBatch(const std::function<void(const char*, size_t)>& callback) const;
-    void generateXMLStreaming(const std::function<void(const char*, size_t)>& callback) const;
     
     /**
      * @brief 生成工作表关系XML到回调函数（流式写入）
@@ -1103,23 +1101,10 @@ private:
     void writeOptimizedCell(int row, int col, Cell&& cell);
     void updateUsedRangeOptimized(int row, int col);
     
-    // XML生成辅助方法（流式写入）
-    void generateSheetDataXML(const std::function<void(const char*, size_t)>& callback) const;
-    void generateSheetDataStreaming(const std::function<void(const char*, size_t)>& callback) const;
-    void generateColumnsXML(const std::function<void(const char*, size_t)>& callback) const;
-    void generateRowsXML(const std::function<void(const char*, size_t)>& callback) const;
-    void generateMergeCellsXML(const std::function<void(const char*, size_t)>& callback) const;
-    void generateAutoFilterXML(const std::function<void(const char*, size_t)>& callback) const;
-    void generateSheetViewsXML(const std::function<void(const char*, size_t)>& callback) const;
-    void generatePageSetupXML(const std::function<void(const char*, size_t)>& callback) const;
-    void generatePrintOptionsXML(const std::function<void(const char*, size_t)>& callback) const;
-    void generatePageMarginsXML(const std::function<void(const char*, size_t)>& callback) const;
-    void generateSheetProtectionXML(const std::function<void(const char*, size_t)>& callback) const;
-    
-    // 🔧 新增的统一XML生成辅助方法
-    std::string escapeXmlText(const std::string& text) const;
-    void generateOtherXMLSections(std::ostringstream& xml_stream) const;
-    void generateOtherXMLWithWriter(xml::XMLStreamWriter& writer) const;
+    // XML生成辅助方法 - 已移至UnifiedXMLGenerator
+    // 保留这些方法声明用于向后兼容，但实际实现已委托给UnifiedXMLGenerator
+    void generateXMLBatch(const std::function<void(const char*, size_t)>& callback) const;
+    void generateXMLStreaming(const std::function<void(const char*, size_t)>& callback) const;
     
     // 内部状态管理
     void updateUsedRange(int row, int col);

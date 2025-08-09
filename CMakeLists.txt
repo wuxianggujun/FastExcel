@@ -85,6 +85,7 @@ set(FASTEXCEL_SOURCES
         src/fastexcel/xml/XMLStreamReader.cpp
         src/fastexcel/xml/StyleSerializer.cpp
         src/fastexcel/xml/UnifiedXMLGenerator.cpp
+        src/fastexcel/xml/WorksheetXMLGenerator.cpp
         src/fastexcel/xml/DocPropsXMLGenerator.cpp
          src/fastexcel/theme/Theme.cpp
          src/fastexcel/theme/ThemeParser.cpp

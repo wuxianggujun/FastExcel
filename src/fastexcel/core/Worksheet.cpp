@@ -5,6 +5,7 @@
 #include "fastexcel/core/FormatRepository.hpp"
 #include "fastexcel/core/CellRangeManager.hpp"
 #include "fastexcel/xml/XMLStreamWriter.hpp"
+#include "fastexcel/xml/WorksheetXMLGenerator.hpp"
 #include "fastexcel/xml/SharedStrings.hpp"
 #include "fastexcel/utils/Logger.hpp"
 #include "fastexcel/utils/LogConfig.hpp"
@@ -571,24 +572,18 @@ std::pair<int, int> Worksheet::getFitToPages() const {
 // ========== XML生成 ==========
 
 void Worksheet::generateXML(const std::function<void(const char*, size_t)>& callback) const {
-    // 检查是否为流式模式：通过检查parent_workbook的模式
-    bool is_streaming_mode = false;
-    if (parent_workbook_) {
-        auto mode = parent_workbook_->getOptions().mode;
-        is_streaming_mode = (mode == WorkbookMode::STREAMING);
-    }
-    
-    if (is_streaming_mode) {
-        // 流式模式：直接字符串拼接，真正的流式处理
-        generateXMLStreaming(callback);
-    } else {
-        // 批量模式：使用XMLStreamWriter生成标准XML
-        generateXMLBatch(callback);
-    }
+    // 使用独立的WorksheetXMLGenerator生成XML
+    auto generator = xml::WorksheetXMLGeneratorFactory::create(this);
+    generator->generate(callback);
 }
 
 void Worksheet::generateXMLBatch(const std::function<void(const char*, size_t)>& callback) const {
-    // 🔧 根本性修复：使用统一的 XMLStreamWriter 实例，确保正确的 flush 机制
+    // 委托给WorksheetXMLGenerator
+    auto generator = xml::WorksheetXMLGeneratorFactory::createBatch(this);
+    generator->generate(callback);
+    return;
+    
+    // 以下是旧的实现，保留作为备份
     xml::XMLStreamWriter writer(callback);
     
     writer.startDocument();
@@ -782,8 +777,8 @@ void Worksheet::generateXMLBatch(const std::function<void(const char*, size_t)>&
     
     writer.endElement(); // sheetData
     
-    // 🔧 继续使用同一个 writer 生成其他部分
-    generateOtherXMLWithWriter(writer);
+    // 生成其他XML部分（合并单元格、自动筛选等）
+    // 这些已经在 WorksheetXMLGenerator 中处理
     
     writer.endElement(); // worksheet
     writer.endDocument();
@@ -792,6 +787,12 @@ void Worksheet::generateXMLBatch(const std::function<void(const char*, size_t)>&
 }
 
 void Worksheet::generateXMLStreaming(const std::function<void(const char*, size_t)>& callback) const {
+    // 委托给WorksheetXMLGenerator
+    auto generator = xml::WorksheetXMLGeneratorFactory::createStreaming(this);
+    generator->generate(callback);
+    return;
+    
+    // 以下是旧的实现，保留作为备份
     // 真正的流式XML生成：直接写入，不缓存完整XML
     
     // XML头部 - 关键修复：添加换行符以匹配libxlsxwriter格式
@@ -865,8 +866,7 @@ void Worksheet::generateXMLStreaming(const std::function<void(const char*, size_
     auto [max_row, max_col] = getUsedRange();
     if (max_row >= 0 && max_col >= 0) {
         callback(">", 1);
-        // 真正的流式处理：按行处理，不在内存中缓存所有数据
-        generateSheetDataStreaming(callback);
+        // 流式处理已经在 WorksheetXMLGenerator 中实现
         callback("</sheetData>", 12);
     } else {
         // 空的sheetData元素
@@ -1062,323 +1062,6 @@ void Worksheet::validateCellPosition(int row, int col) const {
 void Worksheet::validateRange(int first_row, int first_col, int last_row, int last_col) const {
     FASTEXCEL_VALIDATE_RANGE(first_row, first_col, last_row, last_col);
 }
-
-// ========== XML生成辅助方法 ==========
-
-void Worksheet::generateSheetDataXML(const std::function<void(const char*, size_t)>& callback) const {
-    LOG_WORKSHEET_DEBUG("=== WORKSHEET XML GENERATION DEBUG START ===");
-    LOG_WORKSHEET_DEBUG("Worksheet name: {}", name_);
-    LOG_WORKSHEET_DEBUG("Total cells in worksheet: {}", cells_.size());
-    
-    // 直接使用字符串拼接，避免XMLStreamWriter的问题
-    std::string xml_content = "<sheetData>";
-    
-    // 按行排序输出单元格数据
-    std::map<int, std::map<int, const Cell*>> sorted_cells;
-    for (const auto& [pos, cell] : cells_) {
-        LOG_WORKSHEET_DEBUG("Processing cell at ({}, {}): isEmpty={}, hasFormat={}",
-                           pos.first, pos.second, cell.isEmpty(), cell.hasFormat());
-        if (!cell.isEmpty() || cell.hasFormat()) {
-            sorted_cells[pos.first][pos.second] = &cell;
-            LOG_WORKSHEET_DEBUG("Added cell ({}, {}) to sorted_cells", pos.first, pos.second);
-        }
-    }
-    
-    LOG_WORKSHEET_DEBUG("Grouped cells into {} rows", sorted_cells.size());
-    
-    for (const auto& [row_num, row_cells] : sorted_cells) {
-        LOG_WORKSHEET_DEBUG("Generating row {}: {} cells", row_num, row_cells.size());
-        xml_content += "<row r=\"" + std::to_string(row_num + 1) + "\"";
-        
-        // 检查行信息
-        auto row_it = row_info_.find(row_num);
-        if (row_it != row_info_.end()) {
-            if (row_it->second.height > 0) {
-                xml_content += " ht=\"" + std::to_string(row_it->second.height) + "\" customHeight=\"1\"";
-            }
-            if (row_it->second.hidden) {
-                xml_content += " hidden=\"1\"";
-            }
-        }
-        xml_content += ">";
-        
-        for (const auto& [col_num, cell] : row_cells) {
-            LOG_WORKSHEET_DEBUG("Generating cell ({}, {}): isEmpty={}, isString={}, isNumber={}",
-                               row_num, col_num, cell->isEmpty(), cell->isString(), cell->isNumber());
-            
-            xml_content += "<c r=\"" + utils::CommonUtils::cellReference(row_num, col_num) + "\"";
-            
-            // 应用单元格格式 - 已移除，现在使用FormatDescriptor架构
-            // 这个旧方法已经不再使用
-            
-            // 输出单元格（包括有格式的空单元格）
-            bool has_format = cell->hasFormat();
-            bool has_value = !cell->isEmpty();
-            
-            if (has_value) {
-                if (cell->isFormula()) {
-                    xml_content += " t=\"str\"><f>" + cell->getFormula() + "</f></c>";
-                    LOG_WORKSHEET_DEBUG("Added formula cell: ({}, {})", row_num, col_num);
-                } else if (cell->isString()) {
-                    // 根据工作簿设置决定使用共享字符串还是内联字符串
-                    if (parent_workbook_ && parent_workbook_->getOptions().use_shared_strings) {
-                        // 使用共享字符串表
-                        xml_content += " t=\"s\"><v>";
-                        int sst_index = parent_workbook_->getSharedStringIndex(cell->getStringValue());
-                        if (sst_index >= 0) {
-                            xml_content += std::to_string(sst_index);
-                        } else {
-                            // 如果字符串不在SST中，添加它
-                            sst_index = parent_workbook_->addSharedString(cell->getStringValue());
-                            xml_content += std::to_string(sst_index);
-                        }
-                        xml_content += "</v></c>";
-                        LOG_WORKSHEET_DEBUG("Added shared string cell: ({}, {}) with SST index {}", row_num, col_num, sst_index);
-                    } else {
-                        xml_content += " t=\"inlineStr\"><is><t>" + cell->getStringValue() + "</t></is></c>";
-                        LOG_WORKSHEET_DEBUG("Added inline string cell: ({}, {}) with value '{}'", row_num, col_num, cell->getStringValue());
-                    }
-                } else if (cell->isNumber()) {
-                    xml_content += "><v>" + std::to_string(cell->getNumberValue()) + "</v></c>";
-                    LOG_WORKSHEET_DEBUG("Added number cell: ({}, {}) with value {}", row_num, col_num, cell->getNumberValue());
-                } else if (cell->isBoolean()) {
-                    xml_content += " t=\"b\"><v>" + std::string(cell->getBooleanValue() ? "1" : "0") + "</v></c>";
-                    LOG_WORKSHEET_DEBUG("Added boolean cell: ({}, {}) with value {}", row_num, col_num, cell->getBooleanValue());
-                } else {
-                    xml_content += "/>";
-                    LOG_WORKSHEET_DEBUG("Added empty cell with format: ({}, {})", row_num, col_num);
-                }
-            } else if (has_format) {
-                // 空单元格但有格式，仍需输出
-                xml_content += "/>";
-                LOG_WORKSHEET_DEBUG("Added empty cell with format: ({}, {})", row_num, col_num);
-            } else {
-                // 既没值也没格式，跳过
-                continue;
-            }
-        }
-        
-        xml_content += "</row>";
-        LOG_WORKSHEET_DEBUG("Completed row {}", row_num);
-    }
-    
-    xml_content += "</sheetData>";
-    
-    LOG_WORKSHEET_DEBUG("Generated XML length: {} characters", xml_content.length());
-    LOG_WORKSHEET_DEBUG("XML preview (first 500 chars): {}",
-                       xml_content.length() > 500 ? xml_content.substr(0, 500) + "..." : xml_content);
-    LOG_WORKSHEET_DEBUG("=== WORKSHEET XML GENERATION DEBUG END ===");
-    
-    callback(xml_content.c_str(), xml_content.length());
-}
-
-void Worksheet::generateColumnsXML(const std::function<void(const char*, size_t)>& callback) const {
-    LOG_INFO("🔧 CRITICAL DEBUG: generateColumnsXML被调用，column_info_大小: {}", column_info_.size());
-    
-    if (column_info_.empty()) {
-        LOG_INFO("🔧 CRITICAL DEBUG: column_info_为空，不生成<cols>标签");
-        return;
-    }
-    
-    LOG_INFO("🔧 CRITICAL DEBUG: 开始生成<cols>XML");
-    
-    xml::XMLStreamWriter writer(callback);
-    LOG_INFO("🔧 CRITICAL DEBUG: XMLStreamWriter创建完成");
-    writer.startElement("cols");
-    LOG_INFO("🔧 CRITICAL DEBUG: <cols>元素开始");
-    
-    int processed_cols = 0;
-    for (const auto& [col_num, col_info] : column_info_) {
-        LOG_INFO("🔧 CRITICAL DEBUG: 处理列 {} width={} format_id={}", col_num, col_info.width, col_info.format_id);
-        
-        writer.startElement("col");
-        writer.writeAttribute("min", std::to_string(col_num + 1).c_str());
-        writer.writeAttribute("max", std::to_string(col_num + 1).c_str());
-        
-        if (col_info.width > 0) {
-            writer.writeAttribute("width", std::to_string(col_info.width).c_str());
-            writer.writeAttribute("customWidth", "1");
-        }
-        
-        // 🔧 关键修复：添加样式属性
-        if (col_info.format_id >= 0) {
-            writer.writeAttribute("style", std::to_string(col_info.format_id).c_str());
-        }
-        
-        if (col_info.hidden) {
-            writer.writeAttribute("hidden", "1");
-        }
-        
-        writer.endElement(); // col
-        processed_cols++;
-    }
-    
-    LOG_INFO("🔧 CRITICAL DEBUG: 处理了 {} 列，结束<cols>元素", processed_cols);
-    writer.endElement(); // cols
-    LOG_INFO("🔧 CRITICAL DEBUG: generateColumnsXML完成");
-}
-
-void Worksheet::generateMergeCellsXML(const std::function<void(const char*, size_t)>& callback) const {
-    if (merge_ranges_.empty()) {
-        return;
-    }
-    
-    xml::XMLStreamWriter writer(callback);
-    writer.startElement("mergeCells");
-    writer.writeAttribute("count", std::to_string(merge_ranges_.size()).c_str());
-    
-    for (const auto& range : merge_ranges_) {
-        writer.startElement("mergeCell");
-        std::string ref = utils::CommonUtils::rangeReference(range.first_row, range.first_col, range.last_row, range.last_col);
-        writer.writeAttribute("ref", ref.c_str());
-        writer.endElement(); // mergeCell
-    }
-    
-    writer.endElement(); // mergeCells
-}
-
-void Worksheet::generateAutoFilterXML(const std::function<void(const char*, size_t)>& callback) const {
-    if (!autofilter_) {
-        return;
-    }
-    
-    xml::XMLStreamWriter writer(callback);
-    writer.startElement("autoFilter");
-    std::string ref = utils::CommonUtils::rangeReference(autofilter_->first_row, autofilter_->first_col,
-                                   autofilter_->last_row, autofilter_->last_col);
-    writer.writeAttribute("ref", ref.c_str());
-    writer.endElement(); // autoFilter
-}
-
-void Worksheet::generateSheetViewsXML(const std::function<void(const char*, size_t)>& callback) const {
-    xml::XMLStreamWriter writer(callback);
-    writer.startElement("sheetViews");
-    writer.startElement("sheetView");
-    
-    if (sheet_view_.tab_selected) {
-        writer.writeAttribute("tabSelected", "1");
-    }
-    
-    writer.writeAttribute("workbookViewId", "0");
-    
-    if (sheet_view_.zoom_scale != 100) {
-        writer.writeAttribute("zoomScale", std::to_string(sheet_view_.zoom_scale).c_str());
-    }
-    
-    if (!sheet_view_.show_gridlines) {
-        writer.writeAttribute("showGridLines", "0");
-    }
-    
-    if (!sheet_view_.show_row_col_headers) {
-        writer.writeAttribute("showRowColHeaders", "0");
-    }
-    
-    if (sheet_view_.right_to_left) {
-        writer.writeAttribute("rightToLeft", "1");
-    }
-    
-    // 选择区域 - 关键修复：不生成selection元素
-    // 根据修复后的文件，所有工作表都不应该有selection元素
-    
-    // 冻结窗格
-    if (freeze_panes_) {
-        writer.startElement("pane");
-        if (freeze_panes_->col > 0) {
-            writer.writeAttribute("xSplit", std::to_string(freeze_panes_->col).c_str());
-        }
-        if (freeze_panes_->row > 0) {
-            writer.writeAttribute("ySplit", std::to_string(freeze_panes_->row).c_str());
-        }
-        if (freeze_panes_->top_left_row >= 0 && freeze_panes_->top_left_col >= 0) {
-            std::string top_left = utils::CommonUtils::cellReference(freeze_panes_->top_left_row, freeze_panes_->top_left_col);
-            writer.writeAttribute("topLeftCell", top_left.c_str());
-        }
-        writer.writeAttribute("state", "frozen");
-        writer.endElement(); // pane
-    }
-    
-    writer.endElement(); // sheetView
-    writer.endElement(); // sheetViews
-}
-
-void Worksheet::generatePageSetupXML(const std::function<void(const char*, size_t)>& callback) const {
-    xml::XMLStreamWriter writer(callback);
-    writer.startElement("pageSetup");
-    
-    if (print_settings_.landscape) {
-        writer.writeAttribute("orientation", "landscape");
-    }
-    
-    if (print_settings_.scale != 100) {
-        writer.writeAttribute("scale", std::to_string(print_settings_.scale).c_str());
-    }
-    
-    if (print_settings_.fit_to_pages_wide > 0 || print_settings_.fit_to_pages_tall > 0) {
-        writer.writeAttribute("fitToWidth", std::to_string(print_settings_.fit_to_pages_wide).c_str());
-        writer.writeAttribute("fitToHeight", std::to_string(print_settings_.fit_to_pages_tall).c_str());
-    }
-    
-    writer.endElement(); // pageSetup
-}
-
-void Worksheet::generatePrintOptionsXML(const std::function<void(const char*, size_t)>& callback) const {
-    if (!print_settings_.print_gridlines && !print_settings_.print_headings) {
-        return;
-    }
-    
-    xml::XMLStreamWriter writer(callback);
-    writer.startElement("printOptions");
-    
-    if (print_settings_.print_gridlines) {
-        writer.writeAttribute("gridLines", "1");
-    }
-    
-    if (print_settings_.print_headings) {
-        writer.writeAttribute("headings", "1");
-    }
-    
-    if (print_settings_.center_horizontally) {
-        writer.writeAttribute("horizontalCentered", "1");
-    }
-    
-    if (print_settings_.center_vertically) {
-        writer.writeAttribute("verticalCentered", "1");
-    }
-    
-    writer.endElement(); // printOptions
-}
-
-void Worksheet::generatePageMarginsXML(const std::function<void(const char*, size_t)>& callback) const {
-    xml::XMLStreamWriter writer(callback);
-    writer.startElement("pageMargins");
-    
-    writer.writeAttribute("left", std::to_string(print_settings_.left_margin).c_str());
-    writer.writeAttribute("right", std::to_string(print_settings_.right_margin).c_str());
-    writer.writeAttribute("top", std::to_string(print_settings_.top_margin).c_str());
-    writer.writeAttribute("bottom", std::to_string(print_settings_.bottom_margin).c_str());
-    writer.writeAttribute("header", std::to_string(print_settings_.header_margin).c_str());
-    writer.writeAttribute("footer", std::to_string(print_settings_.footer_margin).c_str());
-    
-    writer.endElement(); // pageMargins
-}
-
-void Worksheet::generateSheetProtectionXML(const std::function<void(const char*, size_t)>& callback) const {
-    if (!protected_) {
-        return;
-    }
-    
-    xml::XMLStreamWriter writer(callback);
-    writer.startElement("sheetProtection");
-    writer.writeAttribute("sheet", "1");
-    
-    if (!protection_password_.empty()) {
-        // 这里应该实现密码哈希，简化处理
-        writer.writeAttribute("password", protection_password_.c_str());
-    }
-    
-    writer.endElement(); // sheetProtection
-}
-
 // ========== 内部状态管理 ==========
 
 void Worksheet::updateUsedRange(int row, int col) {
@@ -1970,242 +1653,5 @@ void Worksheet::sortRange(int first_row, int first_col, int last_row, int last_c
     }
 }
 
-void Worksheet::generateSheetDataStreaming(const std::function<void(const char*, size_t)>& callback) const {
-    // 真正的流式处理：分块处理数据，常量内存使用
-    
-    // 获取数据范围
-    auto [max_row, max_col] = getUsedRange();
-    if (max_row < 0 || max_col < 0) {
-        return; // 没有数据
-    }
-    
-    // 分块处理：每次处理一定数量的行，避免内存占用过大
-    const int CHUNK_SIZE = 1000; // 每次处理1000行
-    
-    for (int chunk_start = 0; chunk_start <= max_row; chunk_start += CHUNK_SIZE) {
-        int chunk_end = std::min(chunk_start + CHUNK_SIZE - 1, max_row);
-        
-        // 处理当前块的行
-        for (int row_num = chunk_start; row_num <= chunk_end; ++row_num) {
-            // 检查这一行是否有数据
-            bool has_data = false;
-            int min_col_in_row = INT_MAX;
-            int max_col_in_row = INT_MIN;
-            
-            // 快速扫描这一行的列范围
-            for (int col = 0; col <= max_col; ++col) {
-                auto it = cells_.find(std::make_pair(row_num, col));
-                if (it != cells_.end() && (!it->second.isEmpty() || it->second.hasFormat())) {
-                    has_data = true;
-                    min_col_in_row = std::min(min_col_in_row, col);
-                    max_col_in_row = std::max(max_col_in_row, col);
-                }
-            }
-            
-            if (!has_data) {
-                continue; // 跳过空行
-            }
-            
-            // 生成行开始标签
-            std::string row_start = "<row r=\"" + std::to_string(row_num + 1) + "\"";
-            
-            // 添加spans属性
-            std::string spans = " spans=\"" + std::to_string(min_col_in_row + 1) + ":" + std::to_string(max_col_in_row + 1) + "\"";
-            row_start += spans;
-            
-            // 检查行信息
-            auto row_it = row_info_.find(row_num);
-            if (row_it != row_info_.end()) {
-                if (row_it->second.height > 0) {
-                    row_start += " ht=\"" + std::to_string(row_it->second.height) + "\" customHeight=\"1\"";
-                }
-                if (row_it->second.hidden) {
-                    row_start += " hidden=\"1\"";
-                }
-            }
-            
-            row_start += ">";
-            callback(row_start.c_str(), row_start.length());
-            
-            // 生成单元格数据
-            for (int col = min_col_in_row; col <= max_col_in_row; ++col) {
-                auto it = cells_.find(std::make_pair(row_num, col));
-                if (it == cells_.end() || (it->second.isEmpty() && !it->second.hasFormat())) {
-                    continue; // 跳过空单元格
-                }
-                
-                const Cell& cell = it->second;
-                
-                // 生成单元格XML
-                std::string cell_xml = "<c r=\"" + utils::CommonUtils::cellReference(row_num, col) + "\"";
-                
-                // 应用单元格格式
-                if (cell.hasFormat()) {
-                    int xf_index = -1;
-                    
-                    // 获取FormatDescriptor并查找其在FormatRepository中的ID
-                    auto format_descriptor = cell.getFormatDescriptor();
-                    if (format_descriptor && parent_workbook_) {
-                        auto& format_repo = parent_workbook_->getStyleRepository();
-                        
-                        // 通过比较找到匹配的格式ID
-                        for (size_t i = 0; i < format_repo.getFormatCount(); ++i) {
-                            auto stored_format = format_repo.getFormat(static_cast<int>(i));
-                            if (stored_format && *stored_format == *format_descriptor) {
-                                xf_index = static_cast<int>(i);
-                                break;
-                            }
-                        }
-                    }
-                    
-                    // 如果找不到格式，使用默认样式ID 0
-                    if (xf_index < 0) {
-                        xf_index = 0;
-                    }
-                    
-                    cell_xml += " s=\"" + std::to_string(xf_index) + "\"";
-                }
-                
-                // 输出单元格（包括有格式的空单元格）
-                bool has_format = cell.hasFormat();
-                bool has_value = !cell.isEmpty();
-                
-                if (has_value) {
-                    if (cell.isFormula()) {
-                        cell_xml += " t=\"str\"><f>" + cell.getFormula() + "</f></c>";
-                    } else if (cell.isString()) {
-                        // 根据工作簿设置决定使用共享字符串还是内联字符串
-                        if (parent_workbook_ && parent_workbook_->getOptions().use_shared_strings) {
-                            // 使用共享字符串表
-                            cell_xml += " t=\"s\"><v>";
-                            int sst_index = parent_workbook_->getSharedStringIndex(cell.getStringValue());
-                            if (sst_index >= 0) {
-                                cell_xml += std::to_string(sst_index);
-                            } else {
-                                // 如果字符串不在SST中，添加它
-                            sst_index = parent_workbook_->addSharedString(cell.getStringValue());
-                                cell_xml += std::to_string(sst_index);
-                            }
-                            cell_xml += "</v></c>";
-                        } else {
-                            cell_xml += " t=\"inlineStr\"><is><t>" + cell.getStringValue() + "</t></is></c>";
-                        }
-                    } else if (cell.isNumber()) {
-                        cell_xml += "><v>" + std::to_string(cell.getNumberValue()) + "</v></c>";
-                    } else if (cell.isBoolean()) {
-                        cell_xml += " t=\"b\"><v>" + std::string(cell.getBooleanValue() ? "1" : "0") + "</v></c>";
-                    } else {
-                        cell_xml += "/>";
-                    }
-                } else if (has_format) {
-                    // 空单元格但有格式，仍需输出
-                    cell_xml += "/>";
-                } else {
-                    // 既没值也没格式，跳过
-                    continue;
-                }
-                
-                callback(cell_xml.c_str(), cell_xml.length());
-            }
-            
-            // 行结束标签
-            const char* row_end = "</row>";
-            callback(row_end, strlen(row_end));
-        }
-        
-        // 可选：在处理完每个块后，可以进行垃圾回收或内存清理
-        // 这里保持简单，让系统自动管理内存
-    }
-}
-
-// 🔧 新增的统一XML生成辅助方法
-std::string Worksheet::escapeXmlText(const std::string& text) const {
-    std::string result;
-    result.reserve(text.size() * 1.2); // 预估大小
-    
-    for (char c : text) {
-        switch (c) {
-            case '&': result += "&amp;"; break;
-            case '<': result += "&lt;"; break;
-            case '>': result += "&gt;"; break;
-            case '"': result += "&quot;"; break;
-            case '\'': result += "&apos;"; break;
-            default: result += c; break;
-        }
-    }
-    
-    return result;
-}
-
-void Worksheet::generateOtherXMLWithWriter(xml::XMLStreamWriter& writer) const {
-    // 工作表保护
-    if (!protection_password_.empty()) {
-        writer.startElement("sheetProtection");
-        writer.writeAttribute("sheet", "1");
-        writer.writeAttribute("objects", "1");
-        writer.writeAttribute("scenarios", "1");
-        writer.endElement(); // sheetProtection
-    }
-    
-    // 自动筛选
-    if (autofilter_) {
-        writer.startElement("autoFilter");
-        // 需要实际的 autofilter 范围信息，这里先使用简单版本
-        writer.writeAttribute("ref", "A1:Z1000");
-        writer.endElement(); // autoFilter
-    }
-    
-    // 合并单元格
-    if (!merge_ranges_.empty()) {
-        writer.startElement("mergeCells");
-        writer.writeAttribute("count", std::to_string(merge_ranges_.size()).c_str());
-        for (const auto& merge_range : merge_ranges_) {
-            writer.startElement("mergeCell");
-            // 需要将 MergeRange 转换为字符串，这里先使用简单版本
-            std::string ref_str = utils::CommonUtils::cellReference(merge_range.first_row, merge_range.first_col) + 
-                                 ":" + utils::CommonUtils::cellReference(merge_range.last_row, merge_range.last_col);
-            writer.writeAttribute("ref", ref_str.c_str());
-            writer.endElement(); // mergeCell
-        }
-        writer.endElement(); // mergeCells
-    }
-    
-    // 打印选项
-    writer.startElement("pageMargins");
-    writer.writeAttribute("left", "0.7");
-    writer.writeAttribute("right", "0.7");
-    writer.writeAttribute("top", "0.75");
-    writer.writeAttribute("bottom", "0.75");
-    writer.writeAttribute("header", "0.3");
-    writer.writeAttribute("footer", "0.3");
-    writer.endElement(); // pageMargins
-}
-
-void Worksheet::generateOtherXMLSections(std::ostringstream& xml_stream) const {
-    // 工作表保护
-    if (!protection_password_.empty()) {
-        xml_stream << "<sheetProtection sheet=\"1\" objects=\"1\" scenarios=\"1\"/>";
-    }
-    
-    // 自动筛选
-    if (autofilter_) {
-        xml_stream << "<autoFilter ref=\"A1:Z1000\"/>";
-    }
-    
-    // 合并单元格
-    if (!merge_ranges_.empty()) {
-        xml_stream << "<mergeCells count=\"" << merge_ranges_.size() << "\">";
-        for (const auto& merge_range : merge_ranges_) {
-            std::string ref_str = utils::CommonUtils::cellReference(merge_range.first_row, merge_range.first_col) + 
-                                 ":" + utils::CommonUtils::cellReference(merge_range.last_row, merge_range.last_col);
-            xml_stream << "<mergeCell ref=\"" << ref_str << "\"/>";
-        }
-        xml_stream << "</mergeCells>";
-    }
-    
-    // 打印选项
-    xml_stream << "<pageMargins left=\"0.7\" right=\"0.7\" top=\"0.75\" "
-               << "bottom=\"0.75\" header=\"0.3\" footer=\"0.3\"/>";
-}
-
-}} // namespace fastexcel::core
+} // namespace core
+} // namespace fastexcel

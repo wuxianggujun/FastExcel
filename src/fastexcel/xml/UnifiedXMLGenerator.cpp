@@ -1,6 +1,7 @@
 #include "UnifiedXMLGenerator.hpp"
 #include "fastexcel/core/Workbook.hpp"
 #include "fastexcel/core/Worksheet.hpp"
+#include "WorksheetXMLGenerator.hpp"
 #include "StyleSerializer.hpp"
 #include "DocPropsXMLGenerator.hpp"
 #include "fastexcel/utils/Logger.hpp"
@@ -14,7 +15,7 @@ std::unique_ptr<UnifiedXMLGenerator> UnifiedXMLGenerator::fromWorkbook(const cor
     GenerationContext context;
     context.workbook = workbook;
     context.format_repo = &workbook->getStyleRepository();
-    // context.sst = workbook->getSharedStringTable(); // 如果有的话
+    context.sst = workbook->getSharedStringTable(); // 获取SharedStringTable
     
     return std::make_unique<UnifiedXMLGenerator>(context);
 }
@@ -93,23 +94,9 @@ void UnifiedXMLGenerator::generateWorksheetXML(const core::Worksheet* worksheet,
         return;
     }
 
-    XMLStreamWriter writer(callback);
-    writeXMLHeader(writer);
-    
-    writer.startElement("worksheet");
-    writeExcelNamespaces(writer, "worksheet");
-    
-    // 生成列信息
-    generateWorksheetColumnsSection(writer, worksheet);
-    
-    // 生成数据部分
-    generateWorksheetDataSection(writer, worksheet);
-    
-    // 生成合并单元格
-    generateWorksheetMergeCellsSection(writer, worksheet);
-    
-    writer.endElement(); // worksheet
-    writer.flushBuffer();
+    // 委托给独立的WorksheetXMLGenerator
+    auto generator = std::make_unique<WorksheetXMLGenerator>(worksheet);
+    generator->generate(callback);
 }
 
 void UnifiedXMLGenerator::generateStylesXML(const std::function<void(const char*, size_t)>& callback) {
@@ -122,8 +109,12 @@ void UnifiedXMLGenerator::generateStylesXML(const std::function<void(const char*
 }
 
 void UnifiedXMLGenerator::generateSharedStringsXML(const std::function<void(const char*, size_t)>& callback) {
+    LOG_DEBUG("UnifiedXMLGenerator::generateSharedStringsXML called");
+    LOG_DEBUG("context_.sst = {}", context_.sst ? "not null" : "null");
+    
     if (!context_.sst) {
         // 生成空的SST
+        LOG_DEBUG("Generating empty SharedStrings XML");
         XMLStreamWriter writer(callback);
         writeXMLHeader(writer);
         
@@ -133,11 +124,14 @@ void UnifiedXMLGenerator::generateSharedStringsXML(const std::function<void(cons
         writer.writeAttribute("uniqueCount", 0);
         writer.endElement(); // sst
         writer.flushBuffer();
+        LOG_DEBUG("Empty SharedStrings XML generated");
         return;
     }
     
     // 使用SharedStringTable的现有方法
+    LOG_DEBUG("Delegating to SharedStringTable::generateXML");
     context_.sst->generateXML(callback);
+    LOG_DEBUG("SharedStringTable::generateXML completed");
 }
 
 void UnifiedXMLGenerator::generateContentTypesXML(const std::function<void(const char*, size_t)>& callback) {
@@ -316,6 +310,13 @@ void UnifiedXMLGenerator::writeExcelNamespaces(XMLStreamWriter& writer, const st
     } else if (ns_type == "worksheet") {
         writer.writeAttribute("xmlns", "http://schemas.openxmlformats.org/spreadsheetml/2006/main");
         writer.writeAttribute("xmlns:r", "http://schemas.openxmlformats.org/officeDocument/2006/relationships");
+        writer.writeAttribute("xmlns:mc", "http://schemas.openxmlformats.org/markup-compatibility/2006");
+        writer.writeAttribute("mc:Ignorable", "x14ac xr xr2 xr3");
+        writer.writeAttribute("xmlns:x14ac", "http://schemas.microsoft.com/office/spreadsheetml/2009/9/ac");
+        writer.writeAttribute("xmlns:xr", "http://schemas.microsoft.com/office/spreadsheetml/2014/revision");
+        writer.writeAttribute("xmlns:xr2", "http://schemas.microsoft.com/office/spreadsheetml/2015/revision2");
+        writer.writeAttribute("xmlns:xr3", "http://schemas.microsoft.com/office/spreadsheetml/2016/revision3");
+        writer.writeAttribute("xr:uid", "{2DF72439-4A71-4CEC-B11D-A1BD50977D01}");
     } else if (ns_type == "sst") {
         writer.writeAttribute("xmlns", "http://schemas.openxmlformats.org/spreadsheetml/2006/main");
     }
@@ -323,7 +324,7 @@ void UnifiedXMLGenerator::writeExcelNamespaces(XMLStreamWriter& writer, const st
 
 std::string UnifiedXMLGenerator::escapeXMLText(const std::string& text) {
     std::string result;
-    result.reserve(text.length() * 1.1); // 预分配稍多空间
+    result.reserve(static_cast<size_t>(text.length() * 1.1)); // 预分配稍多空间
     
     for (char c : text) {
         switch (c) {
@@ -372,6 +373,7 @@ void UnifiedXMLGenerator::generateWorkbookSheetsSection(XMLStreamWriter& writer)
 }
 
 void UnifiedXMLGenerator::generateWorkbookPropertiesSection(XMLStreamWriter& writer) {
+    (void)writer; // 避免未使用参数警告
     // 生成工作簿属性（如果需要）
     // 这里可以根据需要添加更多属性
 }
@@ -383,6 +385,10 @@ void UnifiedXMLGenerator::generateWorksheetDataSection(XMLStreamWriter& writer, 
     
     // 获取使用范围
     auto [max_row, max_col] = worksheet->getUsedRange();
+    if (max_row < 0 || max_col < 0) {
+        writer.endElement(); // sheetData (empty)
+        return;
+    }
     
     // 逐行生成数据
     for (int row = 0; row <= max_row; ++row) {
@@ -399,15 +405,80 @@ void UnifiedXMLGenerator::generateWorksheetDataSection(XMLStreamWriter& writer, 
         if (!row_has_data) continue;
         
         writer.startElement("row");
-        writer.writeAttribute("r", row + 1);
+        writer.writeAttribute("r", std::to_string(row + 1).c_str());
         
         for (int col = 0; col <= max_col; ++col) {
             if (worksheet->hasCellAt(row, col)) {
                 const auto& cell = worksheet->getCell(row, col);
                 
                 writer.startElement("c");
-                // 这里需要实现完整的单元格XML生成
-                // 包括单元格引用、类型、值等
+                // 单元格引用
+                std::string cell_ref = utils::CommonUtils::cellReference(row, col);
+                writer.writeAttribute("r", cell_ref.c_str());
+                
+                // 样式信息
+                if (cell.hasFormat()) {
+                    int xf_index = -1;
+                    auto format_descriptor = cell.getFormatDescriptor();
+                    if (format_descriptor && context_.workbook) {
+                        auto& format_repo = context_.workbook->getStyleRepository();
+                        for (size_t i = 0; i < format_repo.getFormatCount(); ++i) {
+                            auto stored_format = format_repo.getFormat(static_cast<int>(i));
+                            if (stored_format && *stored_format == *format_descriptor) {
+                                xf_index = static_cast<int>(i);
+                                break;
+                            }
+                        }
+                    }
+                    if (xf_index >= 0) {
+                        writer.writeAttribute("s", std::to_string(xf_index).c_str());
+                    }
+                }
+                
+                // 单元格值和类型
+                if (cell.isFormula()) {
+                    writer.writeAttribute("t", "str");
+                    writer.startElement("f");
+                    writer.writeText(cell.getFormula().c_str());
+                    writer.endElement(); // f
+                    // 公式结果是数值类型
+                    double result = cell.getFormulaResult();
+                    if (result != 0.0) {
+                        writer.startElement("v");
+                        writer.writeText(std::to_string(result).c_str());
+                        writer.endElement(); // v
+                    }
+                } else if (cell.isString()) {
+                    // 根据工作簿设置决定使用共享字符串还是内联字符串
+                    if (context_.workbook && context_.workbook->getOptions().use_shared_strings && context_.sst) {
+                        writer.writeAttribute("t", "s");
+                        writer.startElement("v");
+                        int sst_index = context_.sst->getStringId(cell.getStringValue());
+                        if (sst_index < 0) {
+                            // 如果字符串不在SST中，添加它
+                            sst_index = const_cast<core::SharedStringTable*>(context_.sst)->addString(cell.getStringValue());
+                        }
+                        writer.writeText(std::to_string(sst_index).c_str());
+                        writer.endElement(); // v
+                    } else {
+                        writer.writeAttribute("t", "inlineStr");
+                        writer.startElement("is");
+                        writer.startElement("t");
+                        writer.writeText(escapeXMLText(cell.getStringValue()).c_str());
+                        writer.endElement(); // t
+                        writer.endElement(); // is
+                    }
+                } else if (cell.isNumber()) {
+                    writer.startElement("v");
+                    writer.writeText(std::to_string(cell.getNumberValue()).c_str());
+                    writer.endElement(); // v
+                } else if (cell.isBoolean()) {
+                    writer.writeAttribute("t", "b");
+                    writer.startElement("v");
+                    writer.writeText(cell.getBooleanValue() ? "1" : "0");
+                    writer.endElement(); // v
+                }
+                
                 writer.endElement(); // c
             }
         }
@@ -448,13 +519,15 @@ void UnifiedXMLGenerator::generateWorksheetMergeCellsSection(XMLStreamWriter& wr
     if (merge_ranges.empty()) return;
     
     writer.startElement("mergeCells");
-    writer.writeAttribute("count", static_cast<int>(merge_ranges.size()));
+    writer.writeAttribute("count", std::to_string(merge_ranges.size()).c_str());
     
     for (const auto& range : merge_ranges) {
-        writer.writeEmptyElement("mergeCell");
-        // 需要将行列索引转换为Excel引用格式
-        // 例如：A1:B2
-        // writer.writeAttribute("ref", convertToExcelRange(range));
+        writer.startElement("mergeCell");
+        // 将合并范围转换为Excel引用格式 (例如：A1:B2)
+        std::string range_ref = utils::CommonUtils::cellReference(range.first_row, range.first_col) + ":" +
+                               utils::CommonUtils::cellReference(range.last_row, range.last_col);
+        writer.writeAttribute("ref", range_ref.c_str());
+        writer.endElement(); // mergeCell
     }
     
     writer.endElement(); // mergeCells
