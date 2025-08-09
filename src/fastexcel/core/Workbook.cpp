@@ -1890,4 +1890,28 @@ bool Workbook::generateWithGenerator(bool use_streaming_writer) {
     return generator.generate();
 }
 
+bool Workbook::isModified() const {
+    // 检查DirtyManager是否有修改标记
+    if (dirty_manager_ && dirty_manager_->hasDirtyData()) {
+        return true;
+    }
+    
+    // 检查主题是否被修改
+    if (theme_dirty_) {
+        return true;
+    }
+    
+    // 检查工作表是否有修改（如果有hasChanges方法）
+    for (const auto& worksheet : worksheets_) {
+        if (worksheet) {
+            // TODO: 检查Worksheet是否有hasChanges或类似方法
+            // if (worksheet->hasChanges()) {
+            //     return true;
+            // }
+        }
+    }
+    
+    return false;
+}
+
 }} // namespace fastexcel::core

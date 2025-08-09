@@ -254,11 +254,10 @@ void PackageEditor::detectAndMarkDirtyParts() {
     }
     
     // 快速路径：如果Workbook没有修改，直接返回
-    // TODO: 暂时注释掉，等待Workbook::isModified实现
-    // if (!workbook_->isModified()) {
-    //     LOG_DEBUG("Workbook未修改，无需标记任何部件为dirty");
-    //     return;
-    // }
+    if (!workbook_->isModified()) {
+        LOG_DEBUG("Workbook未修改，无需标记任何部件为dirty");
+        return;
+    }
     
     LOG_DEBUG("检测到Workbook有修改，开始精确分析...");
     
