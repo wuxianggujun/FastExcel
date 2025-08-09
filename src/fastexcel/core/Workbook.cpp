@@ -829,176 +829,33 @@ void Workbook::generateWorksheetXML(const std::shared_ptr<Worksheet>& worksheet,
 }
 
 void Workbook::generateDocPropsAppXML(const std::function<void(const char*, size_t)>& callback) const {
-    xml::XMLStreamWriter writer(callback);
-    writer.startDocument();
-    writer.startElement("Properties");
-    writer.writeAttribute("xmlns", "http://schemas.openxmlformats.org/officeDocument/2006/extended-properties");
-    writer.writeAttribute("xmlns:vt", "http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes");
-    
-    writer.startElement("Application");
-    writer.writeText("Microsoft Excel");
-    writer.endElement(); // Application
-    
-    writer.startElement("DocSecurity");
-    writer.writeText("0");
-    writer.endElement(); // DocSecurity
-    
-    writer.startElement("ScaleCrop");
-    writer.writeText("false");
-    writer.endElement(); // ScaleCrop
-    
-    // 添加 HeadingPairs 元素
-    writer.startElement("HeadingPairs");
-    writer.startElement("vt:vector");
-    writer.writeAttribute("size", "2");
-    writer.writeAttribute("baseType", "variant");
-    writer.startElement("vt:variant");
-    writer.startElement("vt:lpstr");
-    writer.writeText("工作表");
-    writer.endElement(); // vt:lpstr
-    writer.endElement(); // vt:variant
-    writer.startElement("vt:variant");
-    writer.startElement("vt:i4");
-    writer.writeText(std::to_string(worksheets_.size()).c_str());
-    writer.endElement(); // vt:i4
-    writer.endElement(); // vt:variant
-    writer.endElement(); // vt:vector
-    writer.endElement(); // HeadingPairs
-    
-    // 添加 TitlesOfParts 元素
-    writer.startElement("TitlesOfParts");
-    writer.startElement("vt:vector");
-    writer.writeAttribute("size", std::to_string(worksheets_.size()).c_str());
-    writer.writeAttribute("baseType", "lpstr");
-    for (const auto& worksheet : worksheets_) {
-        writer.startElement("vt:lpstr");
-        writer.writeText(worksheet->getName().c_str());
-        writer.endElement(); // vt:lpstr
+    // 重构：委托给UnifiedXMLGenerator
+    auto generator = xml::UnifiedXMLGenerator::fromWorkbook(this);
+    if (generator) {
+        generator->generateDocPropsXML("app", callback);
+    } else {
+        LOG_ERROR("Failed to create UnifiedXMLGenerator for app properties XML generation");
     }
-    writer.endElement(); // vt:vector
-    writer.endElement(); // TitlesOfParts
-    
-    writer.startElement("Company");
-    writer.writeText(doc_properties_.company.c_str());
-    writer.endElement(); // Company
-    
-    writer.startElement("LinksUpToDate");
-    writer.writeText("false");
-    writer.endElement(); // LinksUpToDate
-    
-    writer.startElement("SharedDoc");
-    writer.writeText("false");
-    writer.endElement(); // SharedDoc
-    
-    writer.startElement("HyperlinksChanged");
-    writer.writeText("false");
-    writer.endElement(); // HyperlinksChanged
-    
-    writer.startElement("AppVersion");
-    writer.writeText("16.0300");
-    writer.endElement(); // AppVersion
-    
-    writer.endElement(); // Properties
-    writer.endDocument();
 }
 
 void Workbook::generateDocPropsCoreXML(const std::function<void(const char*, size_t)>& callback) const {
-    xml::XMLStreamWriter writer(callback);
-    writer.startDocument();
-    writer.startElement("cp:coreProperties");
-    writer.writeAttribute("xmlns:cp", "http://schemas.openxmlformats.org/package/2006/metadata/core-properties");
-    writer.writeAttribute("xmlns:dc", "http://purl.org/dc/elements/1.1/");
-    writer.writeAttribute("xmlns:dcterms", "http://purl.org/dc/terms/");
-    writer.writeAttribute("xmlns:dcmitype", "http://purl.org/dc/dcmitype/");
-    writer.writeAttribute("xmlns:xsi", "http://www.w3.org/2001/XMLSchema-instance");
-    
-    if (!doc_properties_.title.empty()) {
-        writer.startElement("dc:title");
-        writer.writeText(doc_properties_.title.c_str());
-        writer.endElement(); // dc:title
+    // 重构：委托给UnifiedXMLGenerator
+    auto generator = xml::UnifiedXMLGenerator::fromWorkbook(this);
+    if (generator) {
+        generator->generateDocPropsXML("core", callback);
+    } else {
+        LOG_ERROR("Failed to create UnifiedXMLGenerator for core properties XML generation");
     }
-    
-    if (!doc_properties_.subject.empty()) {
-        writer.startElement("dc:subject");
-        writer.writeText(doc_properties_.subject.c_str());
-        writer.endElement(); // dc:subject
-    }
-    
-    if (!doc_properties_.author.empty()) {
-        writer.startElement("dc:creator");
-        writer.writeText(doc_properties_.author.c_str());
-        writer.endElement(); // dc:creator
-    }
-    
-    if (!doc_properties_.keywords.empty()) {
-        writer.startElement("cp:keywords");
-        writer.writeText(doc_properties_.keywords.c_str());
-        writer.endElement(); // cp:keywords
-    }
-    
-    if (!doc_properties_.comments.empty()) {
-        writer.startElement("dc:description");
-        writer.writeText(doc_properties_.comments.c_str());
-        writer.endElement(); // dc:description
-    }
-    
-    writer.startElement("cp:lastModifiedBy");
-    writer.writeText("孤君 无相");
-    writer.endElement(); // cp:lastModifiedBy
-    
-    writer.startElement("dcterms:created");
-    writer.writeAttribute("xsi:type", "dcterms:W3CDTF");
-    writer.writeText(formatTime(doc_properties_.created_time).c_str());
-    writer.endElement(); // dcterms:created
-    
-    writer.startElement("dcterms:modified");
-    writer.writeAttribute("xsi:type", "dcterms:W3CDTF");
-    writer.writeText(formatTime(doc_properties_.modified_time).c_str());
-    writer.endElement(); // dcterms:modified
-    
-    if (!doc_properties_.category.empty()) {
-        writer.startElement("cp:category");
-        writer.writeText(doc_properties_.category.c_str());
-        writer.endElement(); // cp:category
-    }
-    
-    if (!doc_properties_.status.empty()) {
-        writer.startElement("cp:contentStatus");
-        writer.writeText(doc_properties_.status.c_str());
-        writer.endElement(); // cp:contentStatus
-    }
-    
-    writer.endElement(); // cp:coreProperties
-    writer.endDocument();
 }
 
 void Workbook::generateDocPropsCustomXML(const std::function<void(const char*, size_t)>& callback) const {
-    if (custom_property_manager_->empty()) {
-        return;
+    // 重构：委托给UnifiedXMLGenerator
+    auto generator = xml::UnifiedXMLGenerator::fromWorkbook(this);
+    if (generator) {
+        generator->generateDocPropsXML("custom", callback);
+    } else {
+        LOG_ERROR("Failed to create UnifiedXMLGenerator for custom properties XML generation");
     }
-    
-    xml::XMLStreamWriter writer(callback);
-    writer.startDocument();
-    writer.startElement("Properties");
-    writer.writeAttribute("xmlns", "http://schemas.openxmlformats.org/officeDocument/2006/custom-properties");
-    writer.writeAttribute("xmlns:vt", "http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes");
-    
-    int pid = 2;
-    for (const auto& prop : custom_property_manager_->getAllDetailedProperties()) {
-        writer.startElement("property");
-        writer.writeAttribute("fmtid", "{D5CDD505-2E9C-101B-9397-08002B2CF9AE}");
-        writer.writeAttribute("pid", std::to_string(pid++).c_str());
-        writer.writeAttribute("name", prop.name.c_str());
-        
-        writer.startElement("vt:lpwstr");
-        writer.writeText(prop.value.c_str());
-        writer.endElement(); // vt:lpwstr
-        
-        writer.endElement(); // property
-    }
-    
-    writer.endElement(); // Properties
-    writer.endDocument();
 }
 
 void Workbook::generateContentTypesXML(const std::function<void(const char*, size_t)>& callback) const {

@@ -7,7 +7,7 @@
 #include <algorithm>
 #include <chrono>
 #include <limits>
-#include "../core/Exception.hpp"
+#include "fastexcel/core/Exception.hpp"
 
 namespace fastexcel {
 namespace utils {

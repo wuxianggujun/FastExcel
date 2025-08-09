@@ -2,6 +2,7 @@
 #include "fastexcel/core/Workbook.hpp"
 #include "fastexcel/core/Worksheet.hpp"
 #include "StyleSerializer.hpp"
+#include "DocPropsXMLGenerator.hpp"
 #include "fastexcel/utils/Logger.hpp"
 
 namespace fastexcel {
@@ -286,60 +287,20 @@ void UnifiedXMLGenerator::generateThemeXML(const std::function<void(const char*,
 void UnifiedXMLGenerator::generateDocPropsXML(const std::string& prop_type,
                                              const std::function<void(const char*, size_t)>& callback) {
     if (!context_.workbook) {
+        LOG_WARN("UnifiedXMLGenerator::generateDocPropsXML - workbook is null");
         return;
     }
     
-    XMLStreamWriter writer(callback);
-    writeXMLHeader(writer);
-    
+    // 使用专门的DocPropsXMLGenerator处理文档属性XML生成
     if (prop_type == "core") {
-        writer.startElement("cp:coreProperties");
-        writer.writeAttribute("xmlns:cp", "http://schemas.openxmlformats.org/package/2006/metadata/core-properties");
-        writer.writeAttribute("xmlns:dc", "http://purl.org/dc/elements/1.1/");
-        writer.writeAttribute("xmlns:dcterms", "http://purl.org/dc/terms/");
-        writer.writeAttribute("xmlns:dcmitype", "http://purl.org/dc/dcmitype/");
-        writer.writeAttribute("xmlns:xsi", "http://www.w3.org/2001/XMLSchema-instance");
-        
-        const auto& props = context_.workbook->getDocumentProperties();
-        
-        if (!props.title.empty()) {
-            writer.startElement("dc:title");
-            writer.writeText(props.title);
-            writer.endElement();
-        }
-        
-        if (!props.subject.empty()) {
-            writer.startElement("dc:subject");
-            writer.writeText(props.subject);
-            writer.endElement();
-        }
-        
-        if (!props.author.empty()) {
-            writer.startElement("dc:creator");
-            writer.writeText(props.author);
-            writer.endElement();
-        }
-        
-        writer.endElement(); // cp:coreProperties
-        
+        DocPropsXMLGenerator::generateCoreXML(context_.workbook, callback);
     } else if (prop_type == "app") {
-        writer.startElement("Properties");
-        writer.writeAttribute("xmlns", "http://schemas.openxmlformats.org/officeDocument/2006/extended-properties");
-        writer.writeAttribute("xmlns:vt", "http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes");
-        
-        writer.startElement("Application");
-        writer.writeText("FastExcel");
-        writer.endElement();
-        
-        writer.startElement("Company");
-        const auto& props = context_.workbook->getDocumentProperties();
-        writer.writeText(props.company.empty() ? "FastExcel Library" : props.company);
-        writer.endElement();
-        
-        writer.endElement(); // Properties
+        DocPropsXMLGenerator::generateAppXML(context_.workbook, callback);
+    } else if (prop_type == "custom") {
+        DocPropsXMLGenerator::generateCustomXML(context_.workbook, callback);
+    } else {
+        LOG_ERROR("UnifiedXMLGenerator: Unknown doc props type: {}", prop_type);
     }
-    
-    writer.flushBuffer();
 }
 
 // ========== 辅助方法实现 ==========
