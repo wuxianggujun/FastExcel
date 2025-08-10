@@ -1,7 +1,6 @@
 #pragma once
 
 #include "fastexcel/core/Cell.hpp"
-#include "fastexcel/core/Format.hpp"
 #include "fastexcel/core/SharedStringTable.hpp"
 #include "fastexcel/core/FormatRepository.hpp"
 #include "fastexcel/core/CellRangeManager.hpp"

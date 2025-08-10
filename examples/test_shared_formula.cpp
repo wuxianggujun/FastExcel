@@ -5,8 +5,8 @@ int main() {
     try {
         // 创建工作簿
         auto workbook = fastexcel::core::Workbook::create(fastexcel::core::Path("test_shared_formula.xlsx"));
-        if (!workbook->open()) {
-            std::cout << "Failed to open workbook" << std::endl;
+        if (!workbook) {
+            std::cout << "Failed to create workbook" << std::endl;
             return 1;
         }
         

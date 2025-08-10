@@ -76,7 +76,7 @@ public:
         // 解析列部分 (A-Z)
         int col = 0;
         while (i < reference.length() && std::isalpha(reference[i])) {
-            char c = std::toupper(reference[i]);
+            char c = static_cast<char>(std::toupper(reference[i]));
             if (c < 'A' || c > 'Z') {
                 throw std::invalid_argument("Invalid column letter in reference: " + reference);
             }

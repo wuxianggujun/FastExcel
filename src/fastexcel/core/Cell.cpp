@@ -1,5 +1,4 @@
 #include "fastexcel/core/Cell.hpp"
-#include "fastexcel/core/Format.hpp"
 #include "fastexcel/core/FormatDescriptor.hpp"
 #include <cstring>
 #include <stdexcept>
