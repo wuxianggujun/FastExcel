@@ -602,6 +602,9 @@ void WorksheetXMLGenerator::generateSheetDataStreaming(const std::function<void(
     auto [max_row, max_col] = worksheet_->getUsedRange();
     if (max_row < 0 || max_col < 0) return;
     
+    // 使用 XMLStreamWriter 替代字符串拼接
+    XMLStreamWriter writer(callback);
+    
     // 分块处理：每次处理一定数量的行
     const int CHUNK_SIZE = 1000;
     
@@ -621,8 +624,8 @@ void WorksheetXMLGenerator::generateSheetDataStreaming(const std::function<void(
             if (!has_data) continue;
             
             // 生成行开始标签
-            std::string row_start = "<row r=\"" + std::to_string(row_num + 1) + "\">";
-            callback(row_start.c_str(), row_start.length());
+            writer.startElement("row");
+            writer.writeAttribute("r", std::to_string(row_num + 1).c_str());
             
             // 生成单元格数据
             for (int col = 0; col <= max_col; ++col) {
@@ -631,13 +634,12 @@ void WorksheetXMLGenerator::generateSheetDataStreaming(const std::function<void(
                 const auto& cell = worksheet_->getCell(row_num, col);
                 if (cell.isEmpty() && !cell.hasFormat()) continue;
                 
-                std::string cell_xml = generateCellXML(row_num, col, cell);
-                callback(cell_xml.c_str(), cell_xml.length());
+                // 使用优化后的单元格生成方法
+                generateCellXMLStreaming(writer, row_num, col, cell);
             }
             
             // 行结束标签
-            const char* row_end = "</row>";
-            callback(row_end, strlen(row_end));
+            writer.endElement(); // row
         }
     }
 }
@@ -769,6 +771,105 @@ std::string WorksheetXMLGenerator::generateCellXML(int row, int col, const core:
     }
     
     return cell_xml;
+}
+
+void WorksheetXMLGenerator::generateCellXMLStreaming(XMLStreamWriter& writer, int row, int col, const core::Cell& cell) {
+    writer.startElement("c");
+    writer.writeAttribute("r", utils::CommonUtils::cellReference(row, col).c_str());
+    
+    // 应用单元格格式
+    int format_index = getCellFormatIndex(cell);
+    if (format_index >= 0) {
+        writer.writeAttribute("s", std::to_string(format_index).c_str());
+    }
+    
+    // 输出单元格值
+    if (!cell.isEmpty()) {
+        if (cell.isFormula()) {
+            // 检查是否为共享公式
+            if (cell.isSharedFormula()) {
+                int shared_index = cell.getSharedFormulaIndex();
+                auto* shared_formula_manager = worksheet_->getSharedFormulaManager();
+                
+                if (shared_formula_manager) {
+                    const core::SharedFormula* shared_formula = shared_formula_manager->getSharedFormula(shared_index);
+                    
+                    if (shared_formula) {
+                        // 检查是否为共享公式的主单元格
+                        int range_first_row = shared_formula->getRefFirstRow();
+                        int range_first_col = shared_formula->getRefFirstCol();
+                        int range_last_row = shared_formula->getRefLastRow();
+                        int range_last_col = shared_formula->getRefLastCol();
+                        bool is_master_cell = (row == range_first_row && col == range_first_col);
+                        
+                        writer.startElement("f");
+                        writer.writeAttribute("t", "shared");
+                        writer.writeAttribute("si", std::to_string(shared_index).c_str());
+                        
+                        if (is_master_cell) {
+                            // 主单元格：输出完整公式和范围
+                            std::string range_ref = utils::CommonUtils::cellReference(range_first_row, range_first_col) + ":" +
+                                                  utils::CommonUtils::cellReference(range_last_row, range_last_col);
+                            writer.writeAttribute("ref", range_ref.c_str());
+                            writer.writeText(cell.getFormula().c_str());
+                        }
+                        // 其他单元格：只输出 si 属性，无内容
+                        
+                        writer.endElement(); // f
+                        
+                        // 输出结果值
+                        double result = cell.getFormulaResult();
+                        if (result != 0.0) {
+                            writer.startElement("v");
+                            writer.writeText(std::to_string(result).c_str());
+                            writer.endElement(); // v
+                        }
+                    }
+                }
+            } else {
+                // 普通公式
+                writer.writeAttribute("t", "str");
+                writer.startElement("f");
+                writer.writeText(cell.getFormula().c_str());
+                writer.endElement(); // f
+                double result = cell.getFormulaResult();
+                if (result != 0.0) {
+                    writer.startElement("v");
+                    writer.writeText(std::to_string(result).c_str());
+                    writer.endElement(); // v
+                }
+            }
+        } else if (cell.isString()) {
+            if (workbook_ && workbook_->getOptions().use_shared_strings && sst_) {
+                writer.writeAttribute("t", "s");
+                writer.startElement("v");
+                int sst_index = sst_->getStringId(cell.getStringValue());
+                if (sst_index < 0) {
+                    sst_index = const_cast<core::SharedStringTable*>(sst_)->addString(cell.getStringValue());
+                }
+                writer.writeText(std::to_string(sst_index).c_str());
+                writer.endElement(); // v
+            } else {
+                writer.writeAttribute("t", "inlineStr");
+                writer.startElement("is");
+                writer.startElement("t");
+                writer.writeText(escapeXMLText(cell.getStringValue()).c_str());
+                writer.endElement(); // t
+                writer.endElement(); // is
+            }
+        } else if (cell.isNumber()) {
+            writer.startElement("v");
+            writer.writeText(std::to_string(cell.getNumberValue()).c_str());
+            writer.endElement(); // v
+        } else if (cell.isBoolean()) {
+            writer.writeAttribute("t", "b");
+            writer.startElement("v");
+            writer.writeText(cell.getBooleanValue() ? "1" : "0");
+            writer.endElement(); // v
+        }
+    }
+    
+    writer.endElement(); // c
 }
 
 }} // namespace fastexcel::xml
