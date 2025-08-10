@@ -72,11 +72,8 @@ std::shared_ptr<core::FormatDescriptor> StylesParser::getFormat(int xf_index) co
         // 获取填充模式
         core::PatternType pattern = getPatternType(fill.pattern_type);
         
-        std::cerr << "🔧 DEBUG: getFormat xf_index=" << xf_index << ", fill_id=" << xf.fill_id << ", pattern_type='" << fill.pattern_type << "', pattern=" << (int)pattern << std::endl;
-        
         if (pattern == core::PatternType::Gray125) {
             // gray125是特殊的无颜色填充模式，使用默认的黑色但不会在XML中输出颜色
-            std::cerr << "🔧 DEBUG: 发现gray125填充，fill_id=" << xf.fill_id << ", pattern_type='" << fill.pattern_type << "'" << std::endl;
             builder.fill(core::PatternType::Gray125, core::Color());
         } else if (pattern == core::PatternType::Solid && 
                   (fill.fg_color.getType() != core::Color::Type::RGB || fill.fg_color.getRGB() != 0x000000)) {
@@ -276,7 +273,6 @@ void StylesParser::parseFills(const std::string& xml_content) {
         size_t pattern_pos = fill_xml.find("<patternFill ");
         if (pattern_pos != std::string::npos) {
             fill.pattern_type = extractStringAttribute(fill_xml.substr(pattern_pos), "patternType");
-            std::cerr << "🔧 DEBUG: 解析fill，pattern_type='" << fill.pattern_type << "'" << std::endl;
             
             // 解析前景色
             size_t fgColor_pos = fill_xml.find("<fgColor ", pattern_pos);
