@@ -84,6 +84,11 @@ private:
     
     // 新增的工具方法
     std::string extractFormula(const std::string& cell_xml);
+    
+    // 解析共享公式
+    void parseSharedFormulas(const std::string& xml_content, core::Worksheet* worksheet);
+    bool extractSharedFormulaInfo(const std::string& f_tag, int& si, std::string& ref, std::string& formula);
+    
     bool isDateFormat(int style_index, const std::unordered_map<int, std::shared_ptr<core::FormatDescriptor>>& styles);
     std::string convertExcelDateToString(double excel_date);
 

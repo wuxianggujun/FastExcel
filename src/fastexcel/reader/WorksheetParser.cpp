@@ -6,6 +6,7 @@
 
 #include "fastexcel/utils/Logger.hpp"
 #include "fastexcel/core/Workbook.hpp"
+#include "fastexcel/core/SharedFormula.hpp"
 
 #include <algorithm>
 #include "fastexcel/utils/TimeUtils.hpp"
@@ -37,6 +38,11 @@ bool WorksheetParser::parse(const std::string& xml_content,
         LOG_DEBUG("开始解析合并单元格");
         parseMergeCells(xml_content, worksheet);
         LOG_DEBUG("合并单元格解析完成");
+        
+        // 解析共享公式（在解析单元格数据之前）
+        LOG_DEBUG("开始解析共享公式");
+        parseSharedFormulas(xml_content, worksheet);
+        LOG_DEBUG("共享公式解析完成");
         
         // 解析工作表数据（行/单元格），并在行级别读取行高
         return parseSheetData(xml_content, worksheet, shared_strings, styles, style_id_mapping);
@@ -727,6 +733,115 @@ bool WorksheetParser::parseRangeRef(const std::string& ref, int& first_row, int&
     auto [r2, c2] = parseCellReference(end_ref);
     if (r1 < 0 || c1 < 0 || r2 < 0 || c2 < 0) return false;
     first_row = r1; first_col = c1; last_row = r2; last_col = c2;
+    return true;
+}
+
+// 解析共享公式
+void WorksheetParser::parseSharedFormulas(const std::string& xml_content, core::Worksheet* worksheet) {
+    if (!worksheet) {
+        LOG_ERROR("Worksheet is null in parseSharedFormulas");
+        return;
+    }
+    
+    LOG_DEBUG("正在解析共享公式...");
+    
+    // 存储共享公式主定义（si -> {formula, range}）
+    std::unordered_map<int, std::pair<std::string, std::string>> shared_formulas;
+    
+    // 第一轮：查找所有共享公式主定义（包含 ref 属性的）
+    size_t pos = 0;
+    while ((pos = xml_content.find("<f t=\"shared\"", pos)) != std::string::npos) {
+        size_t f_end = xml_content.find("</f>", pos);
+        size_t f_self_close = xml_content.find("/>", pos);
+        
+        size_t actual_end = std::string::npos;
+        if (f_end != std::string::npos && (f_self_close == std::string::npos || f_end < f_self_close)) {
+            actual_end = f_end + 4; // 包含 </f>
+        } else if (f_self_close != std::string::npos) {
+            actual_end = f_self_close + 2; // 包含 />
+        }
+        
+        if (actual_end == std::string::npos) {
+            pos++;
+            continue;
+        }
+        
+        std::string f_tag = xml_content.substr(pos, actual_end - pos);
+        
+        int si;
+        std::string ref, formula;
+        if (extractSharedFormulaInfo(f_tag, si, ref, formula)) {
+            if (!ref.empty() && !formula.empty()) {
+                // 这是主公式定义
+                shared_formulas[si] = {formula, ref};
+                LOG_DEBUG("发现共享公式主定义: si={}, ref={}, formula={}", si, ref, formula);
+            }
+        }
+        
+        pos = actual_end;
+    }
+    
+    LOG_DEBUG("找到 {} 个共享公式主定义", shared_formulas.size());
+    
+    // 为每个共享公式创建 SharedFormulaManager 中的条目
+    for (const auto& [si, formula_info] : shared_formulas) {
+        const auto& [formula, ref] = formula_info;
+        
+        // 解析范围
+        int first_row, first_col, last_row, last_col;
+        if (parseRangeRef(ref, first_row, first_col, last_row, last_col)) {
+            // 使用 worksheet 的 createSharedFormula 方法
+            int created_si = worksheet->createSharedFormula(first_row, first_col, last_row, last_col, formula);
+            if (created_si >= 0) {
+                LOG_DEBUG("成功创建共享公式: si={}, 范围={}:{}-{}:{}", 
+                         created_si, first_row, first_col, last_row, last_col);
+            } else {
+                LOG_ERROR("创建共享公式失败: si={}, 范围={}", si, ref);
+            }
+        } else {
+            LOG_ERROR("无法解析共享公式范围: {}", ref);
+        }
+    }
+}
+
+bool WorksheetParser::extractSharedFormulaInfo(const std::string& f_tag, int& si, std::string& ref, std::string& formula) {
+    // 提取 si 属性
+    size_t si_pos = f_tag.find("si=\"");
+    if (si_pos == std::string::npos) return false;
+    
+    si_pos += 4; // 跳过 si="
+    size_t si_end = f_tag.find("\"", si_pos);
+    if (si_end == std::string::npos) return false;
+    
+    try {
+        si = std::stoi(f_tag.substr(si_pos, si_end - si_pos));
+    } catch (...) {
+        return false;
+    }
+    
+    // 提取 ref 属性（可选，只有主公式才有）
+    size_t ref_pos = f_tag.find("ref=\"");
+    if (ref_pos != std::string::npos) {
+        ref_pos += 5; // 跳过 ref="
+        size_t ref_end = f_tag.find("\"", ref_pos);
+        if (ref_end != std::string::npos) {
+            ref = f_tag.substr(ref_pos, ref_end - ref_pos);
+        }
+    }
+    
+    // 提取公式内容
+    size_t content_start = f_tag.find(">") + 1;
+    size_t content_end = f_tag.rfind("</f>");
+    
+    if (content_end == std::string::npos) {
+        // 自闭合标签，没有公式内容
+        formula = "";
+    } else if (content_start < content_end) {
+        formula = f_tag.substr(content_start, content_end - content_start);
+        // 解码 XML 实体
+        formula = decodeXMLEntities(formula);
+    }
+    
     return true;
 }
 
