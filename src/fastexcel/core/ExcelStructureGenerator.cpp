@@ -34,16 +34,7 @@ bool ExcelStructureGenerator::generate() {
     reportProgress("Initializing", 0, 100);
     
     try {
-        // 检查内存限制
-        if (options_.max_memory_limit > 0) {
-            size_t estimated_memory = estimateWorksheetSize(nullptr) * workbook_->getWorksheetCount();
-            if (estimated_memory > options_.max_memory_limit) {
-                LOG_WARN("Estimated memory {} exceeds limit {}, forcing streaming mode",
-                        estimated_memory, options_.max_memory_limit);
-                // 强制使用流式模式
-                options_.streaming_threshold = 0;
-            }
-        }
+        // 统一由上层模式选项控制批量/流式；不再基于粗略估算强制切换
         
     // 1. 生成基础文件
     reportProgress("Generating basic files", 10, 100);
@@ -248,55 +239,10 @@ bool ExcelStructureGenerator::finalize() {
     LOG_DEBUG("Finalization completed for streaming writer");
     return true;
 }
-
 void ExcelStructureGenerator::reportProgress(const std::string& stage, int current, int total) {
     if (options_.enable_progress_callback && progress_callback_) {
         progress_callback_(stage, current, total);
     }
-}
-
-
-bool ExcelStructureGenerator::generateFileWithCallback(const std::string& path,
-    std::function<void(const std::function<void(const char*, size_t)>&)> generator) {
-    
-    // 检查是否可以使用流式写入
-    if (auto streaming_writer = dynamic_cast<StreamingFileWriter*>(writer_.get())) {
-        // 流式模式：直接流式写入，不缓存
-        if (!writer_->openStreamingFile(path)) {
-            return false;
-        }
-        
-        generator([this](const char* data, size_t size) {
-            writer_->writeStreamingChunk(data, size);
-        });
-        
-        return writer_->closeStreamingFile();
-    } else {
-        // 批量模式：仍需要缓存到字符串
-        std::string content;
-        generator([&content](const char* data, size_t size) {
-            content.append(data, size);
-        });
-        
-        return writer_->writeFile(path, content);
-    }
-}
-
-bool ExcelStructureGenerator::generateFileWithCallbackIfNotEmpty(const std::string& path,
-    std::function<void(const std::function<void(const char*, size_t)>&)> generator) {
-    
-    // 先检查内容是否为空
-    std::string test_content;
-    generator([&test_content](const char* data, size_t size) {
-        test_content.append(data, size);
-    });
-    
-    if (test_content.empty()) {
-        return true; // 内容为空，跳过生成
-    }
-    
-    // 内容不为空，使用正常的生成流程
-    return generateFileWithCallback(path, generator);
 }
 
 }} // namespace fastexcel::core

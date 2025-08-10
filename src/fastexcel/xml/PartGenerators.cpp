@@ -268,24 +268,22 @@ public:
 };
 
 // 注册到 UnifiedXMLGenerator
-struct UnifiedXMLGenerator::Part {
-    std::unique_ptr<IXMLPartGenerator> impl;
-};
-
 UnifiedXMLGenerator::UnifiedXMLGenerator(const GenerationContext& context) : context_(context) {
     registerDefaultParts();
 }
 
+UnifiedXMLGenerator::~UnifiedXMLGenerator() = default;
+
 void UnifiedXMLGenerator::registerDefaultParts() {
-    parts_.push_back(std::make_unique<Part>(Part{std::make_unique<ContentTypesGenerator>()}));
-    parts_.push_back(std::make_unique<Part>(Part{std::make_unique<RootRelsGenerator>()}));
-    parts_.push_back(std::make_unique<Part>(Part{std::make_unique<DocPropsGenerator>()}));
-    parts_.push_back(std::make_unique<Part>(Part{std::make_unique<StylesGenerator>()}));
-    parts_.push_back(std::make_unique<Part>(Part{std::make_unique<SharedStringsGenerator>()}));
-    parts_.push_back(std::make_unique<Part>(Part{std::make_unique<ThemeGenerator>()}));
-    parts_.push_back(std::make_unique<Part>(Part{std::make_unique<WorkbookPartGenerator>()}));
-    parts_.push_back(std::make_unique<Part>(Part{std::make_unique<WorksheetsGenerator>()}));
-    parts_.push_back(std::make_unique<Part>(Part{std::make_unique<WorksheetRelsGenerator>()}));
+    parts_.push_back(std::make_unique<ContentTypesGenerator>());
+    parts_.push_back(std::make_unique<RootRelsGenerator>());
+    parts_.push_back(std::make_unique<DocPropsGenerator>());
+    parts_.push_back(std::make_unique<StylesGenerator>());
+    parts_.push_back(std::make_unique<SharedStringsGenerator>());
+    parts_.push_back(std::make_unique<ThemeGenerator>());
+    parts_.push_back(std::make_unique<WorkbookPartGenerator>());
+    parts_.push_back(std::make_unique<WorksheetsGenerator>());
+    parts_.push_back(std::make_unique<WorksheetRelsGenerator>());
 }
 
 bool UnifiedXMLGenerator::generateAll(IFileWriter& writer) {
@@ -296,9 +294,9 @@ bool UnifiedXMLGenerator::generateAll(IFileWriter& writer) {
     view.theme = context_.workbook ? context_.workbook->getTheme() : nullptr;
 
     for (auto& p : parts_) {
-        auto names = p->impl->partNames(view);
+        auto names = p->partNames(view);
         for (auto& name : names) {
-            if (!p->impl->generatePart(name, view, writer)) {
+            if (!p->generatePart(name, view, writer)) {
                 return false;
             }
         }
@@ -318,10 +316,10 @@ bool UnifiedXMLGenerator::generateParts(IFileWriter& writer,
         bool handled = false;
         for (auto& p : parts_) {
             // 查询该生成器可生成的部件集合
-            auto names = p->impl->partNames(view);
+            auto names = p->partNames(view);
             for (const auto& n : names) {
                 if (n == target) {
-                    if (!p->impl->generatePart(target, view, writer)) return false;
+                    if (!p->generatePart(target, view, writer)) return false;
                     handled = true;
                     break;
                 }

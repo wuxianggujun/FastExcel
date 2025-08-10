@@ -900,6 +900,7 @@ public:
      * @return 共享字符串表指针（可能为nullptr）
      */
     const SharedStringTable* getSharedStringTable() const;
+
     
     // ========== 工作簿编辑功能 ==========
     

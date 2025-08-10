@@ -4,6 +4,7 @@
 #include "fastexcel/opc/ZipRepackWriter.hpp"
 #include "fastexcel/archive/ZipReader.hpp"
 #include "fastexcel/archive/ZipArchive.hpp"
+#include "fastexcel/core/IFileWriter.hpp"
 #include "fastexcel/utils/Logger.hpp"
 #include "fastexcel/core/Workbook.hpp"
 #include <sstream>

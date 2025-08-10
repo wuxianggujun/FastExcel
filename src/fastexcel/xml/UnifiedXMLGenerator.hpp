@@ -14,9 +14,12 @@ namespace fastexcel {
 namespace core {
     class Workbook;
     class Worksheet;
+    class IFileWriter;
+    class DirtyManager;
 }
 
 namespace xml {
+class IXMLPartGenerator; // 前向声明部件生成器接口
 
 /**
  * @brief 统一XML生成器 - 消除重复，集中管理所有XML生成逻辑
@@ -43,6 +46,7 @@ private:
 
 public:
     explicit UnifiedXMLGenerator(const GenerationContext& context);
+    ~UnifiedXMLGenerator();
 
     // 新增：作为编排器的统一生成入口（批量/流式由 IFileWriter 决定）
     bool generateAll(class ::fastexcel::core::IFileWriter& writer);
@@ -78,8 +82,7 @@ private:
 
 private:
     // 作为 orchestrator 的部件注册与调度
-    struct Part;
-    std::vector<std::unique_ptr<Part>> parts_;
+    std::vector<std::unique_ptr<IXMLPartGenerator>> parts_;
     void registerDefaultParts();
 };
 

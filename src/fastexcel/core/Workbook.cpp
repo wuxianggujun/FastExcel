@@ -825,31 +825,7 @@ bool Workbook::generateExcelStructure() {
 
 
 
-void Workbook::generateThemeXML(const std::function<void(const char*, size_t)>& callback) const {
-    // 优先级：
-    // 1) 如果未脏且有原始XML，保真写回原始
-    if (!theme_dirty_ && !theme_xml_original_.empty()) {
-        LOG_DEBUG("使用原始主题XML保真写回 ({} 字节)", theme_xml_original_.size());
-        callback(theme_xml_original_.c_str(), theme_xml_original_.size());
-        return;
-    }
-    // 2) 有显式设置的自定义XML，直接写出
-    if (!theme_xml_.empty()) {
-        LOG_DEBUG("使用自定义主题XML ({} 字节)", theme_xml_.size());
-        callback(theme_xml_.c_str(), theme_xml_.size());
-        return;
-    }
-    // 3) 有结构化主题对象，则序列化
-    if (theme_) {
-        const std::string xml = theme_->toXML();
-        callback(xml.c_str(), xml.size());
-        return;
-    }
-    // 4) 回退：生成最小可用默认主题
-    theme::Theme default_theme("Office");
-    const std::string xml = default_theme.toXML();
-    callback(xml.c_str(), xml.size());
-}
+// 主题写出逻辑已迁移至 XML 层（ThemeGenerator），此处不再直接输出
 
 // ========== 格式管理内部方法 ==========
 
@@ -1058,10 +1034,7 @@ std::unique_ptr<Workbook> Workbook::openForReading(const Path& path) {
             loaded_workbook->opened_from_existing_ = true;
             loaded_workbook->original_package_path_ = path.string();
             
-            // 只读模式优化：禁用脏数据管理器以节省内存
-            if (loaded_workbook->dirty_manager_) {
-                loaded_workbook->dirty_manager_->disableTracking(); // 假设有此方法，后续实现
-            }
+            // 只读模式优化：后续可增加更细粒度的追踪开关，这里不额外操作
         }
         
         LOG_INFO("Successfully loaded workbook for reading: {}", path.string());
@@ -1581,7 +1554,7 @@ void Workbook::ensureEditable(const std::string& operation) const {
         msg += ": workbook is opened in read-only mode. Use openForEditing() instead of openForReading().";
         
         LOG_ERROR("{}", msg);
-        throw Exception(msg);
+        throw OperationException(msg, operation);
     }
 }
 
