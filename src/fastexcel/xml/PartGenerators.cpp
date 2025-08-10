@@ -9,6 +9,7 @@
 #include "fastexcel/core/Worksheet.hpp"
 #include "fastexcel/theme/Theme.hpp"
 #include "fastexcel/xml/XMLStreamWriter.hpp"
+#include "fastexcel/utils/Logger.hpp"
 
 using fastexcel::core::IFileWriter;
 
@@ -17,10 +18,20 @@ namespace fastexcel { namespace xml {
 static bool writeWithCallback(IFileWriter& writer,
                               const std::string& path,
                               const std::function<void(const std::function<void(const char*, size_t)>&)>& gen) {
-    if (!writer.openStreamingFile(path)) return false;
-    auto cb = [&writer](const char* data, size_t sz){ writer.writeStreamingChunk(data, sz); };
-    gen(cb);
-    return writer.closeStreamingFile();
+    if (!writer.openStreamingFile(path)) {
+        LOG_ERROR("Failed to open streaming file: {}", path);
+        return false;
+    }
+    
+    try {
+        auto cb = [&writer](const char* data, size_t sz){ writer.writeStreamingChunk(data, sz); };
+        gen(cb);
+        return writer.closeStreamingFile();
+    } catch (const std::exception& e) {
+        LOG_ERROR("Exception during streaming generation for {}: {}", path, e.what());
+        writer.closeStreamingFile(); // 确保清理状态
+        return false;
+    }
 }
 
 // ContentTypes
@@ -225,10 +236,24 @@ public:
         if (!ctx.workbook) return false;
         // 解析 sheet index
         // part format: xl/worksheets/sheet{N}.xml
-        auto pos1 = part.find("sheet");
+        auto pos1 = part.rfind("sheet");  // 🔧 使用 rfind 找最后一个 "sheet"
         auto pos2 = part.find(".xml");
-        if (pos1 == std::string::npos || pos2 == std::string::npos || pos2 <= pos1 + 5) return false;
-        int idx = std::stoi(part.substr(pos1 + 5, pos2 - (pos1 + 5))) - 1;
+        if (pos1 == std::string::npos || pos2 == std::string::npos) return false;
+        
+        // 🔧 关键修复：正确计算数字部分的起始位置
+        size_t number_start = pos1 + 5; // "sheet" 有5个字符
+        if (number_start >= pos2) return false; // 确保有数字部分
+        
+        std::string number_str = part.substr(number_start, pos2 - number_start);
+        if (number_str.empty()) return false;
+        
+        int idx;
+        try {
+            idx = std::stoi(number_str) - 1;
+        } catch (const std::exception&) {
+            LOG_ERROR("Failed to parse sheet index from path: {}, extracted: '{}'", part, number_str);
+            return false;
+        }
         auto names = ctx.workbook->getWorksheetNames();
         if (idx < 0 || static_cast<size_t>(idx) >= names.size()) return false;
         auto ws = ctx.workbook->getWorksheet(static_cast<size_t>(idx));
@@ -254,10 +279,24 @@ public:
     }
     bool generatePart(const std::string& part, const XMLContextView& ctx, IFileWriter& writer) override {
         if (!ctx.workbook) return false;
-        auto pos1 = part.find("sheet");
+        auto pos1 = part.rfind("sheet");  // 🔧 使用 rfind 找最后一个 "sheet"
         auto pos2 = part.find(".xml.rels");
-        if (pos1 == std::string::npos || pos2 == std::string::npos || pos2 <= pos1 + 5) return false;
-        int idx = std::stoi(part.substr(pos1 + 5, pos2 - (pos1 + 5))) - 1;
+        if (pos1 == std::string::npos || pos2 == std::string::npos) return false;
+        
+        // 🔧 关键修复：正确计算数字部分的起始位置
+        size_t number_start = pos1 + 5; // "sheet" 有5个字符
+        if (number_start >= pos2) return false; // 确保有数字部分
+        
+        std::string number_str = part.substr(number_start, pos2 - number_start);
+        if (number_str.empty()) return false;
+        
+        int idx;
+        try {
+            idx = std::stoi(number_str) - 1;
+        } catch (const std::exception&) {
+            LOG_ERROR("Failed to parse sheet index from rels path: {}, extracted: '{}'", part, number_str);
+            return false;
+        }
         auto ws = ctx.workbook->getWorksheet(static_cast<size_t>(idx));
         if (!ws) return true; // nothing to do
         std::string rels_xml;

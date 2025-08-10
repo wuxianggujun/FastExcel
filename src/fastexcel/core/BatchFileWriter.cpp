@@ -20,9 +20,13 @@ BatchFileWriter::~BatchFileWriter() {
 }
 
 bool BatchFileWriter::writeFile(const std::string& path, const std::string& content) {
+    // 🔧 关键修复：如果有流式文件打开，先关闭它
     if (streaming_file_open_) {
-        LOG_ERROR("Cannot write file while streaming file is open: {}", current_path_);
-        return false;
+        LOG_WARN("Auto-closing streaming file {} to write batch file {}", current_path_, path);
+        if (!closeStreamingFile()) {
+            LOG_ERROR("Failed to close streaming file before writing batch file");
+            return false;
+        }
     }
     
     files_.emplace_back(path, content);
@@ -67,21 +71,21 @@ bool BatchFileWriter::closeStreamingFile() {
         return false;
     }
     
-    // 将流式收集的内容添加到批量文件列表
-    bool success = writeFile(current_path_, current_content_);
+    // 🔧 关键修复：避免递归调用，直接添加到文件列表而不调用writeFile
+    files_.emplace_back(current_path_, current_content_);
+    stats_.streaming_files++;
+    stats_.batch_files++; // 统计中也算作批量文件
+    stats_.total_bytes += current_content_.size();
     
-    if (success) {
-        stats_.streaming_files++;
-        LOG_DEBUG("Closed streaming file and added to batch: {} ({} bytes)",
-                 current_path_, current_content_.size());
-    }
+    LOG_DEBUG("Closed streaming file and added to batch: {} ({} bytes)",
+             current_path_, current_content_.size());
     
     // 清理状态
     current_path_.clear();
     current_content_.clear();
     streaming_file_open_ = false;
     
-    return success;
+    return true;
 }
 
 bool BatchFileWriter::flush() {

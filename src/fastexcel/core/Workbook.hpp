@@ -77,7 +77,6 @@ struct WorkbookOptions {
     // 性能优化选项
     bool use_shared_strings = true;   // 使用共享字符串（默认启用以匹配Excel格式）
     WorkbookMode mode = WorkbookMode::AUTO;  // 工作簿模式（默认自动选择）
-    bool streaming_xml = true;        // 流式XML写入（已废弃，使用mode代替）
     size_t row_buffer_size = 5000;    // 行缓冲大小（默认较大缓冲）
     int compression_level = 6;        // ZIP压缩级别（默认平衡压缩）
     size_t xml_buffer_size = 4 * 1024 * 1024; // XML缓冲区大小（4MB）
@@ -751,8 +750,6 @@ public:
      */
     void setMode(WorkbookMode mode) {
         options_.mode = mode;
-        // 为了向后兼容，同步更新streaming_xml
-        options_.streaming_xml = (mode == WorkbookMode::STREAMING);
     }
     
     /**
@@ -760,21 +757,6 @@ public:
      * @return 当前模式
      */
     WorkbookMode getMode() const { return options_.mode; }
-    
-    /**
-     * @brief 启用/禁用流式XML写入（已废弃，请使用setMode）
-     * @param enable 是否启用流式XML写入
-     * @deprecated 使用 setMode() 代替
-     */
-    void setStreamingXML(bool enable) {
-        options_.streaming_xml = enable;
-        // 同步更新mode
-        if (enable) {
-            options_.mode = WorkbookMode::STREAMING;
-        } else {
-            options_.mode = WorkbookMode::BATCH;
-        }
-    }
     
     /**
      * @brief 设置自动模式阈值
