@@ -3,10 +3,6 @@
 #include <string>
 #include <filesystem>
 
-#ifdef _WIN32
-#include <utf8.h>
-#endif
-
 namespace fastexcel {
 namespace core {
 

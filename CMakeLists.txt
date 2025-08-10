@@ -140,6 +140,11 @@ target_include_directories(fastexcel PRIVATE
         ${FASTEXCEL_THIRD_PARTY_INCLUDE_DIRS}
 )
 
+# UTF8-CPP需要作为INTERFACE包含，因为Path.hpp是公共头文件并包含utf8.h
+target_include_directories(fastexcel INTERFACE
+        ${CMAKE_CURRENT_SOURCE_DIR}/third_party/utfcpp/source
+)
+
 # 确保第三方库的头文件能被找到
 target_include_directories(fastexcel PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/third_party/libexpat/expat/lib

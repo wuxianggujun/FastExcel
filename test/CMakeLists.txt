@@ -31,6 +31,15 @@ set(UNIT_TEST_SOURCES
     unit/test_excel_zip_compatibility.cpp
 )
 
+# 性能测试源文件
+set(PERFORMANCE_TEST_SOURCES
+    unit/PerformanceTestSuite.cpp
+    unit/test_performance_suite.cpp  # 性能测试主程序
+)
+
+# 添加性能测试子目录
+add_subdirectory(performance)
+
 # 集成测试源文件
 set(INTEGRATION_TEST_SOURCES
     integration/test_integration.cpp

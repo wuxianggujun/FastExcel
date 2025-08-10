@@ -157,9 +157,9 @@ private:
     
     /**
      * @brief 流式生成单元格数据
-     * @param callback 输出回调函数
+     * @param writer XML写入器
      */
-    void generateSheetDataStreaming(const std::function<void(const char*, size_t)>& callback);
+    void generateSheetDataStreaming(XMLStreamWriter& writer);
     
     // ========== 辅助方法 ==========
     

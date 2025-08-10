@@ -348,8 +348,7 @@ void WorksheetXMLGenerator::generateSheetData(XMLStreamWriter& writer) {
                             }
                         }
                     } else {
-                        // 普通公式
-                        writer.writeAttribute("t", "str");
+                        // 普通公式 - 不应该设置 t="str" 属性
                         writer.startElement("f");
                         writer.writeText(cell.getFormula().c_str());
                         writer.endElement(); // f
@@ -570,7 +569,7 @@ void WorksheetXMLGenerator::generateStreaming(const std::function<void(const cha
     // 单元格数据（流式处理）
     writer.startElement("sheetData");
     if (max_row >= 0 && max_col >= 0) {
-        generateSheetDataStreaming(callback);
+        generateSheetDataStreaming(writer);  // 传递writer引用
     }
     writer.endElement(); // sheetData
     
@@ -605,12 +604,11 @@ void WorksheetXMLGenerator::generateStreaming(const std::function<void(const cha
     writer.endDocument();
 }
 
-void WorksheetXMLGenerator::generateSheetDataStreaming(const std::function<void(const char*, size_t)>& callback) {
+void WorksheetXMLGenerator::generateSheetDataStreaming(XMLStreamWriter& writer) {
     auto [max_row, max_col] = worksheet_->getUsedRange();
     if (max_row < 0 || max_col < 0) return;
     
-    // 使用 XMLStreamWriter 替代字符串拼接
-    XMLStreamWriter writer(callback);
+    // 不需要创建新的XMLStreamWriter，使用传入的writer
     
     // 分块处理：每次处理一定数量的行
     const int CHUNK_SIZE = 1000;
@@ -752,8 +750,8 @@ std::string WorksheetXMLGenerator::generateCellXML(int row, int col, const core:
                     cell_xml += "/>";
                 }
             } else {
-                // 普通公式
-                cell_xml += " t=\"str\"><f>" + cell.getFormula() + "</f></c>";
+                // 普通公式 - 不应该设置 t="str" 属性
+                cell_xml += "><f>" + cell.getFormula() + "</f></c>";
             }
         } else if (cell.isString()) {
             if (workbook_ && workbook_->getOptions().use_shared_strings && sst_) {
@@ -834,8 +832,7 @@ void WorksheetXMLGenerator::generateCellXMLStreaming(XMLStreamWriter& writer, in
                     }
                 }
             } else {
-                // 普通公式
-                writer.writeAttribute("t", "str");
+                // 普通公式 - 不应该设置 t="str" 属性 
                 writer.startElement("f");
                 writer.writeText(cell.getFormula().c_str());
                 writer.endElement(); // f
