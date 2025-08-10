@@ -49,6 +49,9 @@ public:
             w.writeAttribute("xmlns", "http://schemas.openxmlformats.org/package/2006/content-types");
             w.startElement("Default"); w.writeAttribute("Extension", "rels"); w.writeAttribute("ContentType", "application/vnd.openxmlformats-package.relationships+xml"); w.endElement();
             w.startElement("Default"); w.writeAttribute("Extension", "xml"); w.writeAttribute("ContentType", "application/xml"); w.endElement();
+            // 🔧 关键修复：添加 docProps 的内容类型声明
+            w.startElement("Override"); w.writeAttribute("PartName", "/docProps/core.xml"); w.writeAttribute("ContentType", "application/vnd.openxmlformats-package.core-properties+xml"); w.endElement();
+            w.startElement("Override"); w.writeAttribute("PartName", "/docProps/app.xml"); w.writeAttribute("ContentType", "application/vnd.openxmlformats-officedocument.extended-properties+xml"); w.endElement();
             w.startElement("Override"); w.writeAttribute("PartName", "/xl/workbook.xml"); w.writeAttribute("ContentType", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"); w.endElement();
             w.startElement("Override"); w.writeAttribute("PartName", "/xl/styles.xml"); w.writeAttribute("ContentType", "application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"); w.endElement();
             if (ctx.workbook) {

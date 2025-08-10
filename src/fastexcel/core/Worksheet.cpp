@@ -482,7 +482,8 @@ std::pair<int, int> Worksheet::getUsedRange() const {
 
 bool Worksheet::hasCellAt(int row, int col) const {
     auto it = cells_.find(std::make_pair(row, col));
-    return it != cells_.end() && !it->second.isEmpty();
+    // 🔧 关键修复：有格式的空单元格也应该被认为是存在的，以便保持格式信息
+    return it != cells_.end() && (!it->second.isEmpty() || it->second.hasFormat());
 }
 
 // ========== 获取方法实现 ==========

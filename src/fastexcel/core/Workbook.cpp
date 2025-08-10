@@ -41,7 +41,13 @@ DocumentProperties::DocumentProperties() {
 // ========== Workbook 实现 ==========
 
 std::unique_ptr<Workbook> Workbook::create(const Path& path) {
-    return std::make_unique<Workbook>(path);
+    auto workbook = std::make_unique<Workbook>(path);
+    // 🔧 关键修复：对于 create() 创建的工作簿，强制设置为新文件
+    // 因为我们要完全重写目标文件，无论它是否已存在
+    if (workbook->dirty_manager_) {
+        workbook->dirty_manager_->setIsNewFile(true);
+    }
+    return workbook;
 }
 
 Workbook::Workbook(const Path& path) : filename_(path.string()) {
@@ -65,6 +71,8 @@ Workbook::Workbook(const Path& path) : filename_(path.string()) {
     
     // 初始化智能脏数据管理器
     dirty_manager_ = std::make_unique<DirtyManager>();
+    // 🔧 关键修复：对于 create() 创建的工作簿，无论目标文件是否存在都视为新文件
+    // 这里暂时保持原逻辑，在 create() 方法中会重新设置
     dirty_manager_->setIsNewFile(!path.exists()); // 如果文件不存在，则是新文件
     
     // 设置默认文档属性
@@ -679,12 +687,12 @@ bool Workbook::shouldGenerateStyles() const {
 }
 
 bool Workbook::shouldGenerateTheme() const {
-    if (!dirty_manager_) return true;
-    // 主题特殊处理：如果有主题内容则需要生成
+    // 🔧 关键修复：只有在确实有主题内容时才生成主题文件
+    // 避免请求生成主题但ThemeGenerator找不到内容的问题
     if (!theme_xml_.empty() || !theme_xml_original_.empty() || theme_) {
         return true;
     }
-    return dirty_manager_->shouldUpdate("xl/theme/theme1.xml");
+    return false; // 没有主题内容，不生成主题文件
 }
 
 bool Workbook::shouldGenerateSharedStrings() const {
