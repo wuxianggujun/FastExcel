@@ -117,31 +117,6 @@ private:
      */
     bool finalize();
     
-    // ========== 智能决策方法 ==========
-    
-    /**
-     * @brief 判断工作表是否应该使用流式写入
-     * @param worksheet 工作表
-     * @return 是否使用流式写入
-     */
-    bool shouldUseStreamingForWorksheet(const std::shared_ptr<const Worksheet>& worksheet) const;
-    
-    /**
-     * @brief 生成工作表（流式模式）
-     * @param worksheet 工作表
-     * @param path 文件路径
-     * @return 是否成功
-     */
-    bool generateWorksheetStreaming(const std::shared_ptr<const Worksheet>& worksheet, const std::string& path);
-    
-    /**
-     * @brief 生成工作表（批量模式）
-     * @param worksheet 工作表
-     * @param path 文件路径
-     * @return 是否成功
-     */
-    bool generateWorksheetBatch(const std::shared_ptr<const Worksheet>& worksheet, const std::string& path);
-    
     // ========== 辅助方法 ==========
     
     /**
@@ -152,38 +127,7 @@ private:
      */
     void reportProgress(const std::string& stage, int current, int total);
     
-    /**
-     * @brief 估算工作表大小
-     * @param worksheet 工作表
-     * @return 估算的单元格数量
-     */
-    size_t estimateWorksheetSize(const std::shared_ptr<const Worksheet>& worksheet) const;
-    
-    /**
-     * @brief 验证生成的XML（如果启用）
-     * @param xml_content XML内容
-     * @param file_path 文件路径
-     * @return 是否有效
-     */
-    bool validateXML(const std::string& xml_content, const std::string& file_path) const;
-    
-    /**
-     * @brief 统一的文件生成方法，支持真正的流式写入
-     * @param path 文件路径
-     * @param generator XML生成器函数
-     * @return 是否成功
-     */
-    bool generateFileWithCallback(const std::string& path,
-        std::function<void(const std::function<void(const char*, size_t)>&)> generator);
-    
-    /**
-     * @brief 生成文件（仅当内容不为空时）
-     * @param path 文件路径
-     * @param generator XML生成器函数
-     * @return 是否成功
-     */
-    bool generateFileWithCallbackIfNotEmpty(const std::string& path,
-        std::function<void(const std::function<void(const char*, size_t)>&)> generator);
+    // 仅保留进度上报等通用辅助
 };
 
 }} // namespace fastexcel::core

@@ -120,3 +120,17 @@
 - 将所有领域对象中的 `generateXMLToFile` 等直接写文件方法标记为 @deprecated，统一使用回调方式
 - 在单测中增加对“文件输出顺序”“rId 顺序”“sharedStrings 为空/非空”三类情况的断言。
 - 在性能文档中统一说明批量/流式的阈值与可调参数，并暴露到 WorkbookOptions。
+
+---
+
+附录：新架构（Orchestrator + Part Generators）补充
+
+- 内容协调层：`xml::UnifiedXMLGenerator`
+  - 注册 `IXMLPartGenerator` 实现，提供 `generateParts(writer, parts)` 与 `generateAll(writer)`。
+  - 支持与 DirtyManager 协作的过滤式生成：只写需要更新的部件（`generateParts(writer, parts, dirtyManager)`）。
+- 部件生成层：`IXMLPartGenerator` 实现类（位于 `src/fastexcel/xml/`）
+  - 代表类：ContentTypes/RootRels/WorkbookParts/Styles/SharedStrings/Theme/DocProps/Worksheets/WorksheetRels。
+  - 全部采用回调 + IFileWriter，真流式输出，避免大字符串中转。
+- 流程/策略层：`core::ExcelStructureGenerator`
+  - 通过 `generateParts` 精确调度：基础部件 → 工作表/表关系 → 共享字符串（最后）。
+  - 仍由 `Workbook::shouldGenerate*`/DirtyManager 负责增量判定。

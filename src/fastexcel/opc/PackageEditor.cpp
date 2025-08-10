@@ -196,44 +196,24 @@ std::string PackageEditor::generatePart(const std::string& path) const {
     }
     
     LOG_DEBUG("Generating part: {}", path);
-    
-    if (path == "xl/workbook.xml") {
-        return xml_generator_->generateWorkbookXMLString();
+
+    // 以 IFileWriter 方式生成到字符串
+    struct StringWriter : public core::IFileWriter {
+        std::string target;
+        std::string content;
+        bool writeFile(const std::string& path, const std::string& data) override { (void)path; content = data; return true; }
+        bool openStreamingFile(const std::string& path) override { (void)path; content.clear(); return true; }
+        bool writeStreamingChunk(const char* data, size_t size) override { content.append(data, size); return true; }
+        bool closeStreamingFile() override { return true; }
+        std::string getTypeName() const override { return "StringWriter"; }
+        WriteStats getStats() const override { return {}; }
+    } sw;
+
+    if (!xml_generator_->generateParts(sw, {path})) {
+        LOG_WARN("No generator for part: {}", path);
+        return "";
     }
-    
-    if (path.find("xl/worksheets/sheet") == 0) {
-        // 提取工作表引用
-        if (workbook_) {
-            std::string sheet_name = extractSheetNameFromPath(path);
-            if (!sheet_name.empty()) {
-                auto worksheet = workbook_->getWorksheet(sheet_name);
-                return xml_generator_->generateWorksheetXMLString(worksheet.get());
-            }
-        }
-    }
-    
-    if (path == "xl/styles.xml") {
-        return xml_generator_->generateStylesXMLString();
-    }
-    
-    if (path == "xl/sharedStrings.xml") {
-        return xml_generator_->generateSharedStringsXMLString();
-    }
-    
-    if (path == "[Content_Types].xml") {
-        return xml_generator_->generateContentTypesXMLString();
-    }
-    
-    if (path == "_rels/.rels") {
-        return xml_generator_->generateRelationshipsXMLString("root");
-    }
-    
-    if (path == "xl/_rels/workbook.xml.rels") {
-        return xml_generator_->generateRelationshipsXMLString("workbook");
-    }
-    
-    LOG_WARN("No generator for part: {}", path);
-    return "";
+    return sw.content;
 }
 
 std::string PackageEditor::extractSheetNameFromPath(const std::string& path) const {

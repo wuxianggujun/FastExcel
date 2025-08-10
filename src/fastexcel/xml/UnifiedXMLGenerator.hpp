@@ -38,117 +38,24 @@ public:
         std::unordered_map<std::string, std::string> custom_data;
     };
 
-    // 输出策略枚举
-    enum class OutputMode {
-        CALLBACK,    // 流式回调输出
-        STRING,      // 字符串缓冲输出
-        DIRECT_FILE  // 直接文件输出
-    };
-
 private:
     GenerationContext context_;
-    OutputMode output_mode_ = OutputMode::CALLBACK;
-    
-    // 回调转换器 - 统一实现，避免重复
-    static std::string callbackToString(
-        const std::function<void(const std::function<void(const char*, size_t)>&)>& generator) {
-        std::ostringstream buffer;
-        auto callback = [&buffer](const char* data, size_t size) {
-            buffer.write(data, static_cast<std::streamsize>(size));
-        };
-        generator(callback);
-        return buffer.str();
-    }
 
 public:
-    explicit UnifiedXMLGenerator(const GenerationContext& context) 
-        : context_(context) {}
+    explicit UnifiedXMLGenerator(const GenerationContext& context);
 
-    // ========== 主要XML生成方法 ==========
-    
-    /**
-     * @brief 生成Workbook XML
-     * @param callback 输出回调函数
-     */
-    void generateWorkbookXML(const std::function<void(const char*, size_t)>& callback);
-    
-    /**
-     * @brief 生成Worksheet XML
-     * @param worksheet 工作表对象
-     * @param callback 输出回调函数
-     */
-    void generateWorksheetXML(const core::Worksheet* worksheet, 
-                             const std::function<void(const char*, size_t)>& callback);
-    
-    /**
-     * @brief 生成样式 XML
-     * @param callback 输出回调函数
-     */
-    void generateStylesXML(const std::function<void(const char*, size_t)>& callback);
-    
-    /**
-     * @brief 生成共享字符串 XML
-     * @param callback 输出回调函数
-     */
-    void generateSharedStringsXML(const std::function<void(const char*, size_t)>& callback);
-    
-    /**
-     * @brief 生成内容类型 XML
-     * @param callback 输出回调函数
-     */
-    void generateContentTypesXML(const std::function<void(const char*, size_t)>& callback);
-    
-    /**
-     * @brief 生成关系 XML
-     * @param rel_type 关系类型 ("root" 或 "workbook")
-     * @param callback 输出回调函数
-     */
-    void generateRelationshipsXML(const std::string& rel_type,
-                                 const std::function<void(const char*, size_t)>& callback);
-    
-    /**
-     * @brief 生成主题 XML
-     * @param callback 输出回调函数
-     */
-    void generateThemeXML(const std::function<void(const char*, size_t)>& callback);
-    
-    /**
-     * @brief 生成文档属性 XML
-     * @param prop_type 属性类型 ("core" 或 "app")
-     * @param callback 输出回调函数
-     */
-    void generateDocPropsXML(const std::string& prop_type,
-                            const std::function<void(const char*, size_t)>& callback);
+    // 新增：作为编排器的统一生成入口（批量/流式由 IFileWriter 决定）
+    bool generateAll(class ::fastexcel::core::IFileWriter& writer);
+    bool generateAll(class ::fastexcel::core::IFileWriter& writer,
+                     const class ::fastexcel::core::DirtyManager* dirty_manager);
+    // 新增：生成指定部件集合（用于上层精简流程的选择性调度）
+    bool generateParts(class ::fastexcel::core::IFileWriter& writer,
+                       const std::vector<std::string>& parts_to_generate);
+    bool generateParts(class ::fastexcel::core::IFileWriter& writer,
+                       const std::vector<std::string>& parts_to_generate,
+                       const class ::fastexcel::core::DirtyManager* dirty_manager);
 
-    // ========== 便捷的字符串返回方法 ==========
-    
-    std::string generateWorkbookXMLString() {
-        return callbackToString([this](const auto& cb) { generateWorkbookXML(cb); });
-    }
-    
-    std::string generateWorksheetXMLString(const core::Worksheet* worksheet) {
-        return callbackToString([this, worksheet](const auto& cb) { 
-            generateWorksheetXML(worksheet, cb); 
-        });
-    }
-    
-    std::string generateStylesXMLString() {
-        return callbackToString([this](const auto& cb) { generateStylesXML(cb); });
-    }
-    
-    std::string generateSharedStringsXMLString() {
-        return callbackToString([this](const auto& cb) { generateSharedStringsXML(cb); });
-    }
-    
-    std::string generateContentTypesXMLString() {
-        return callbackToString([this](const auto& cb) { generateContentTypesXML(cb); });
-    }
-    
-    std::string generateRelationshipsXMLString(const std::string& rel_type) {
-        return callbackToString([this, &rel_type](const auto& cb) { 
-            generateRelationshipsXML(rel_type, cb); 
-        });
-    }
+    // 删除所有回调与 string 便捷API，统一使用 IFileWriter 接口
 
     // ========== 工厂方法 - 简化创建过程 ==========
     
@@ -167,42 +74,13 @@ public:
     static std::unique_ptr<UnifiedXMLGenerator> fromWorksheet(const core::Worksheet* worksheet);
 
 private:
-    // ========== 通用XML生成辅助方法 ==========
-    
-    /**
-     * @brief 写入标准XML头部
-     * @param writer XML写入器
-     */
-    void writeXMLHeader(XMLStreamWriter& writer);
-    
-    /**
-     * @brief 写入Excel命名空间声明
-     * @param writer XML写入器
-     * @param ns_type 命名空间类型
-     */
-    void writeExcelNamespaces(XMLStreamWriter& writer, const std::string& ns_type);
-    
-    /**
-     * @brief 转义XML文本
-     * @param text 原始文本
-     * @return 转义后的文本
-     */
-    std::string escapeXMLText(const std::string& text);
-    
-    /**
-     * @brief 验证生成的XML内容
-     * @param xml_content XML内容
-     * @return 是否有效
-     */
-    bool validateXMLContent(const std::string& xml_content);
-    
-    // ========== 专用生成方法 ==========
-    
-    void generateWorkbookSheetsSection(XMLStreamWriter& writer);
-    void generateWorkbookPropertiesSection(XMLStreamWriter& writer);
-    void generateWorksheetDataSection(XMLStreamWriter& writer, const core::Worksheet* worksheet);
-    void generateWorksheetColumnsSection(XMLStreamWriter& writer, const core::Worksheet* worksheet);
-    void generateWorksheetMergeCellsSection(XMLStreamWriter& writer, const core::Worksheet* worksheet);
+    // 无内部直接拼写XML的辅助，全部下沉到各部件生成器
+
+private:
+    // 作为 orchestrator 的部件注册与调度
+    struct Part;
+    std::vector<std::unique_ptr<Part>> parts_;
+    void registerDefaultParts();
 };
 
 /**
