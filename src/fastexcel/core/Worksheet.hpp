@@ -352,6 +352,34 @@ public:
     SharedFormulaManager* getSharedFormulaManager() const { return shared_formula_manager_.get(); }
     
     /**
+     * @brief 自动优化工作表中的公式为共享公式
+     * @param min_similar_count 最小相似公式数量（默认3个）
+     * @return 优化的公式数量
+     * 
+     * 该方法会自动检测工作表中的相似公式模式，并将其转换为共享公式以节省内存。
+     * 例如：多个单元格包含类似 =A1+B1, =A2+B2, =A3+B3 的公式会被优化为一个共享公式。
+     */
+    int optimizeFormulas(int min_similar_count = 3);
+    
+    /**
+     * @brief 分析公式优化潜力
+     * @return 优化报告结构
+     */
+    struct FormulaOptimizationReport {
+        size_t total_formulas = 0;           // 总公式数量
+        size_t optimizable_formulas = 0;     // 可优化的公式数量  
+        size_t estimated_memory_savings = 0; // 预估内存节省（字节）
+        double optimization_ratio = 0.0;     // 优化比率（百分比）
+        std::vector<std::string> pattern_examples; // 模式示例
+    };
+    
+    /**
+     * @brief 获取公式优化分析报告
+     * @return 优化报告
+     */
+    FormulaOptimizationReport analyzeFormulaOptimization() const;
+    
+    /**
      * @brief 写入日期时间
      * @param row 行号
      * @param col 列号

@@ -1397,5 +1397,133 @@ void Worksheet::sortRange(int first_row, int first_col, int last_row, int last_c
     }
 }
 
+// ========== 公式优化方法 ==========
+
+int Worksheet::optimizeFormulas(int min_similar_count) {
+    if (!shared_formula_manager_) {
+        shared_formula_manager_ = std::make_unique<SharedFormulaManager>();
+    }
+    
+    // 收集所有非共享公式
+    std::map<std::pair<int, int>, std::string> formulas;
+    auto [max_row, max_col] = getUsedRange();
+    
+    for (int row = 0; row <= max_row; ++row) {
+        for (int col = 0; col <= max_col; ++col) {
+            if (hasCellAt(row, col)) {
+                const auto& cell = getCell(row, col);
+                if (cell.isFormula() && !cell.isSharedFormula()) {
+                    formulas[{row, col}] = cell.getFormula();
+                }
+            }
+        }
+    }
+    
+    if (formulas.empty()) {
+        LOG_DEBUG("工作表中没有可优化的公式");
+        return 0;
+    }
+    
+    // 使用共享公式管理器进行优化
+    int optimized_count = shared_formula_manager_->optimizeFormulas(formulas, min_similar_count);
+    
+    if (optimized_count > 0) {
+        LOG_DEBUG("成功优化 {} 个公式为共享公式", optimized_count);
+        
+        // 🔧 关键修复：将对应的Cell对象标记为共享公式
+        // 获取所有共享公式索引，并更新对应的单元格
+        auto shared_indices = shared_formula_manager_->getAllSharedIndices();
+        for (int shared_index : shared_indices) {
+            const SharedFormula* shared_formula = shared_formula_manager_->getSharedFormula(shared_index);
+            if (shared_formula) {
+                const auto& affected_cells = shared_formula->getAffectedCells();
+                for (const auto& [row, col] : affected_cells) {
+                    if (hasCellAt(row, col)) {
+                        Cell& cell = getCell(row, col);
+                        if (cell.isFormula() && !cell.isSharedFormula()) {
+                            // 将普通公式转换为共享公式引用
+                            cell.setSharedFormula(shared_index);
+                        }
+                    }
+                }
+            }
+        }
+        
+        // 标记为修改状态
+        if (parent_workbook_ && parent_workbook_->getDirtyManager()) {
+            std::string sheet_path = "xl/worksheets/sheet" + std::to_string(sheet_id_) + ".xml";
+            parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::CONTENT);
+        }
+    }
+    
+    return optimized_count;
+}
+
+Worksheet::FormulaOptimizationReport Worksheet::analyzeFormulaOptimization() const {
+    FormulaOptimizationReport report;
+    
+    // 收集所有公式
+    std::map<std::pair<int, int>, std::string> formulas;
+    auto [max_row, max_col] = getUsedRange();
+    
+    for (int row = 0; row <= max_row; ++row) {
+        for (int col = 0; col <= max_col; ++col) {
+            if (hasCellAt(row, col)) {
+                const auto& cell = getCell(row, col);
+                if (cell.isFormula()) {
+                    formulas[{row, col}] = cell.getFormula();
+                }
+            }
+        }
+    }
+    
+    report.total_formulas = formulas.size();
+    
+    if (formulas.empty()) {
+        return report;
+    }
+    
+    // 使用临时的共享公式管理器进行分析
+    SharedFormulaManager temp_manager;
+    auto patterns = temp_manager.detectSharedFormulaPatterns(formulas);
+    
+    // 分析优化潜力
+    size_t optimizable_count = 0;
+    size_t estimated_savings = 0;
+    
+    for (const auto& pattern : patterns) {
+        if (pattern.matching_cells.size() >= 3) { // 至少3个相似公式
+            optimizable_count += pattern.matching_cells.size();
+            estimated_savings += pattern.estimated_savings;
+            
+            // 添加模式示例（限制最多5个）
+            if (report.pattern_examples.size() < 5) {
+                std::string example = "模式: " + std::to_string(pattern.matching_cells.size()) + 
+                    " 个相似公式，预估节省 " + std::to_string(pattern.estimated_savings) + " 字节";
+                
+                // 添加具体公式示例
+                if (!pattern.matching_cells.empty()) {
+                    auto first_pos = pattern.matching_cells[0];
+                    auto formula_it = formulas.find(first_pos);
+                    if (formula_it != formulas.end()) {
+                        std::string cell_ref = utils::CommonUtils::cellReference(first_pos.first, first_pos.second);
+                        example += " (示例: " + cell_ref + " = " + formula_it->second + ")";
+                    }
+                }
+                report.pattern_examples.push_back(example);
+            }
+        }
+    }
+    
+    report.optimizable_formulas = optimizable_count;
+    report.estimated_memory_savings = estimated_savings;
+    
+    if (report.total_formulas > 0) {
+        report.optimization_ratio = static_cast<double>(optimizable_count) / report.total_formulas * 100.0;
+    }
+    
+    return report;
+}
+
 } // namespace core
 } // namespace fastexcel
