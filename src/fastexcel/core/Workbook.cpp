@@ -1618,4 +1618,10 @@ void Workbook::transitionToState(WorkbookState new_state, const std::string& rea
               reason.empty() ? "no reason" : reason);
 }
 
+// ========== 样式构建器 ==========
+
+StyleBuilder Workbook::createStyleBuilder() const {
+    return StyleBuilder();
+}
+
 }} // namespace fastexcel::core

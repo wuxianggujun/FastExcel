@@ -41,18 +41,32 @@ public:
     Color() : type_(Type::RGB), value_(0x000000), tint_(0.0) {}
     
     /**
+     * @brief RGB三参数构造函数 - 更方便的颜色创建方式
+     * @param red 红色分量 (0-255)
+     * @param green 绿色分量 (0-255)  
+     * @param blue 蓝色分量 (0-255)
+     */
+    Color(uint8_t red, uint8_t green, uint8_t blue) 
+        : type_(Type::RGB), value_((static_cast<uint32_t>(red) << 16) | 
+                                  (static_cast<uint32_t>(green) << 8) | 
+                                  static_cast<uint32_t>(blue)), tint_(0.0) {}
+    
+    /**
      * @brief RGB颜色构造函数
      * @param rgb RGB值
      */
     explicit Color(uint32_t rgb) : type_(Type::RGB), value_(rgb & 0xFFFFFF), tint_(0.0) {}
     
     /**
-     * @brief 主题颜色构造函数
-     * @param theme_index 主题颜色索引
-     * @param tint 色调调整
+     * @brief 主题颜色构造函数 - 使用静态方法避免歧义
      */
-    Color(uint8_t theme_index, double tint = 0.0) 
-        : type_(Type::Theme), value_(theme_index), tint_(tint) {}
+    static Color fromTheme(uint8_t theme_index, double tint = 0.0) {
+        Color color;
+        color.type_ = Type::Theme;
+        color.value_ = theme_index;
+        color.tint_ = tint;
+        return color;
+    }
     
     /**
      * @brief 索引颜色构造函数

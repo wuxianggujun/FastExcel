@@ -36,8 +36,8 @@ bool StylesParser::parse(const std::string& xml_content) {
         
         return true;
         
-    } catch (const std::exception& e) {
-        std::cerr << "解析样式时发生错误: " << e.what() << std::endl;
+    } catch (const std::exception&) {
+        // 解析样式时发生错误，返回false
         return false;
     }
 }
@@ -448,7 +448,7 @@ core::Color StylesParser::parseColor(const std::string& color_xml) {
                 // tint解析失败，使用默认值0
             }
         }
-        return core::Color(static_cast<uint8_t>(theme), tint);
+        return core::Color::fromTheme(static_cast<uint8_t>(theme), tint);
     }
     
     // 解析indexed属性
