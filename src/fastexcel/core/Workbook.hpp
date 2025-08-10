@@ -34,10 +34,18 @@ namespace core {
 class NamedStyle;
 class ExcelStructureGenerator;
 
-// 访问模式枚举
-enum class AccessMode {
-    READ_ONLY,   // 只读访问：不能修改，轻量加载，性能优化
-    EDITABLE     // 编辑访问：完全功能，可修改保存
+// 工作簿状态枚举 - 统一的状态管理
+enum class WorkbookState {
+    CLOSED,      // 未打开状态
+    CREATING,    // 正在创建新文件
+    READING,     // 只读模式打开
+    EDITING      // 编辑模式打开
+};
+
+// 文件来源类型
+enum class FileSource {
+    NEW_FILE,        // 全新创建的文件
+    EXISTING_FILE    // 从现有文件加载
 };
 
 // 文档属性结构
@@ -121,8 +129,10 @@ private:
     // ID管理
     int next_sheet_id_ = 1;
     
-    // 访问模式（新的统一状态管理）
-    AccessMode access_mode_ = AccessMode::EDITABLE; // 默认编辑模式保持向后兼容
+    // 🔧 统一的状态管理系统（重构后）
+    WorkbookState state_ = WorkbookState::CLOSED;        // 当前工作簿状态
+    FileSource file_source_ = FileSource::NEW_FILE;     // 文件来源类型
+    std::string original_package_path_;                  // 原始文件路径（用于保留未修改部件）
     
     // 文档属性
     DocumentProperties doc_properties_;
@@ -147,14 +157,11 @@ private:
     bool lock_structure_ = false;
     bool lock_windows_ = false;
 
-    // 编辑来源信息（用于保留未编辑部件）
-    // TODO: 这些混乱的状态标志将被逐步清理，用统一的 access_mode_ 替代
-    bool opened_from_existing_ = false;  // 将被清理
-    std::string original_package_path_;
-    bool preserve_unknown_parts_ = true; // 将被重构到选项中
-
     // 新的智能脏数据管理器
     std::unique_ptr<DirtyManager> dirty_manager_;
+    
+    // 工作簿选项（包含保留未修改部件的设置）
+    bool preserve_unknown_parts_ = true; // 保留未修改的Excel部件（如绘图、打印设置等）
 
 public:
     /**
@@ -812,22 +819,16 @@ public:
     bool shouldGenerateSheetRels(size_t index) const;
     
     /**
-     * @brief 获取当前访问模式
-     * @return 访问模式
-     */
-    AccessMode getAccessMode() const { return access_mode_; }
-    
-    /**
      * @brief 检查是否只读模式
      * @return 是否只读
      */
-    bool isReadOnly() const { return access_mode_ == AccessMode::READ_ONLY; }
+    bool isReadOnly() const { return state_ == WorkbookState::READING; }
     
     /**
      * @brief 检查是否编辑模式
      * @return 是否可编辑
      */
-    bool isEditable() const { return access_mode_ == AccessMode::EDITABLE; }
+    bool isEditable() const { return state_ == WorkbookState::EDITING || state_ == WorkbookState::CREATING; }
     
     /**
      * @brief 获取文件名
@@ -1024,8 +1025,35 @@ private:
     size_t estimateMemoryUsage() const;
     size_t getTotalCellCount() const;
 
-    // 内部：根据编辑/透传状态返回“是否在编辑模式下且启用透传”
-    bool isPassThroughEditMode() const { return opened_from_existing_ && preserve_unknown_parts_; }
+    // 🔧 状态验证和转换辅助方法
+    /**
+     * @brief 检查当前状态是否允许指定操作
+     * @param required_state 要求的最低状态
+     * @return 是否允许操作
+     */
+    bool isStateValid(WorkbookState required_state) const;
+    
+    /**
+     * @brief 获取当前工作簿状态
+     * @return 当前状态
+     */
+    WorkbookState getCurrentState() const { return state_; }
+    
+    /**
+     * @brief 获取文件来源类型
+     * @return 文件来源
+     */
+    FileSource getFileSource() const { return file_source_; }
+    
+    /**
+     * @brief 状态转换方法
+     * @param new_state 新状态
+     * @param reason 转换原因（用于日志）
+     */
+    void transitionToState(WorkbookState new_state, const std::string& reason = "");
+    
+    // 内部：根据编辑/透传状态返回"是否在编辑模式下且启用透传"
+    bool isPassThroughEditMode() const { return file_source_ == FileSource::EXISTING_FILE && preserve_unknown_parts_; }
 };
 
 }} // namespace fastexcel::core

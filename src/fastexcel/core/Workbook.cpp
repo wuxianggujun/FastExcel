@@ -42,11 +42,17 @@ DocumentProperties::DocumentProperties() {
 
 std::unique_ptr<Workbook> Workbook::create(const Path& path) {
     auto workbook = std::make_unique<Workbook>(path);
+    
+    // 🔧 新状态管理系统：创建工作簿时设置正确的状态
+    workbook->file_source_ = FileSource::NEW_FILE;
+    workbook->transitionToState(WorkbookState::CREATING, "Workbook::create()");
+    
     // 🔧 关键修复：对于 create() 创建的工作簿，强制设置为新文件
     // 因为我们要完全重写目标文件，无论它是否已存在
     if (workbook->dirty_manager_) {
         workbook->dirty_manager_->setIsNewFile(true);
     }
+    
     return workbook;
 }
 
@@ -130,7 +136,7 @@ bool Workbook::save() {
         }
         
         // 编辑模式下，先将原包中未被我们生成的条目拷贝过来（绘图、图片、打印设置等）
-        if (opened_from_existing_ && preserve_unknown_parts_ && !original_package_path_.empty() && file_manager_ && file_manager_->isOpen()) {
+        if (isPassThroughEditMode() && !original_package_path_.empty() && file_manager_ && file_manager_->isOpen()) {
             // 我们将跳过这些前缀（由生成逻辑负责写入/覆盖）
             // 透传阶段：不跳过任何前缀，先复制全部条目；后续生成阶段会覆盖我们需要更新的部件
             std::vector<std::string> skip_prefixes = { };
@@ -157,7 +163,7 @@ bool Workbook::saveAs(const std::string& filename) {
     
     std::string old_filename = filename_;
     std::string original_source = original_package_path_;
-    bool was_from_existing = opened_from_existing_;
+    bool was_from_existing = (file_source_ == FileSource::EXISTING_FILE);
 
     // 检查是否保存到同一个文件
     bool is_same_file = (filename == old_filename) || (filename == original_source);
@@ -207,7 +213,7 @@ bool Workbook::saveAs(const std::string& filename) {
     }
 
     // 在另存为场景下，如果当前工作簿是从现有包打开的，那么保留 original_package_path_ 用于拷贝未修改部件
-    opened_from_existing_ = was_from_existing;
+    // file_source_ 状态保持不变，已经在之前设置好了
     // original_package_path_ 已经在上面设置好了（可能是临时文件或原始文件）
     
     bool save_result = save();
@@ -994,10 +1000,10 @@ std::unique_ptr<Workbook> Workbook::open(const Path& path) {
         
         // 标记来源以便保存时进行未修改部件的保真写回
         if (loaded_workbook) {
-            loaded_workbook->opened_from_existing_ = true;
+            loaded_workbook->transitionToState(WorkbookState::EDITING, "openForEditing()");
             loaded_workbook->original_package_path_ = path.string();
             // 设置为编辑模式（保持向后兼容）
-            loaded_workbook->access_mode_ = AccessMode::EDITABLE;
+            loaded_workbook->file_source_ = FileSource::EXISTING_FILE;
         }
         
         LOG_INFO("Successfully loaded workbook for editing: {}", path.string());
@@ -1038,8 +1044,8 @@ std::unique_ptr<Workbook> Workbook::openForReading(const Path& path) {
         
         // 设置为只读模式
         if (loaded_workbook) {
-            loaded_workbook->access_mode_ = AccessMode::READ_ONLY;
-            loaded_workbook->opened_from_existing_ = true;
+            loaded_workbook->file_source_ = FileSource::EXISTING_FILE;
+            loaded_workbook->transitionToState(WorkbookState::READING, "openForReading()");
             loaded_workbook->original_package_path_ = path.string();
             
             // 只读模式优化：后续可增加更细粒度的追踪开关，这里不额外操作
@@ -1082,8 +1088,8 @@ std::unique_ptr<Workbook> Workbook::openForEditing(const Path& path) {
         
         // 设置为编辑模式
         if (loaded_workbook) {
-            loaded_workbook->access_mode_ = AccessMode::EDITABLE;
-            loaded_workbook->opened_from_existing_ = true;
+            loaded_workbook->file_source_ = FileSource::EXISTING_FILE;
+            loaded_workbook->transitionToState(WorkbookState::EDITING, "openForEditing()");
             loaded_workbook->original_package_path_ = path.string();
         }
         
@@ -1554,7 +1560,7 @@ bool Workbook::isModified() const {
 // ========== 访问模式检查辅助方法实现 ==========
 
 void Workbook::ensureEditable(const std::string& operation) const {
-    if (access_mode_ == AccessMode::READ_ONLY) {
+    if (state_ == WorkbookState::READING) {
         std::string msg = "Cannot perform operation";
         if (!operation.empty()) {
             msg += " '" + operation + "'";
@@ -1570,6 +1576,46 @@ void Workbook::ensureReadable(const std::string& operation) const {
     // 读取操作在任何模式下都是允许的
     // 这个方法预留用于未来可能的扩展，比如检查文件是否损坏等
     (void)operation; // 避免未使用参数警告
+}
+
+// ========== 🔧 新状态管理系统实现 ==========
+
+bool Workbook::isStateValid(WorkbookState required_state) const {
+    // 状态层级：CLOSED < CREATING/READING/EDITING
+    // CREATING/READING/EDITING 是平级的，但有不同的权限
+    
+    switch (required_state) {
+        case WorkbookState::CLOSED:
+            return true; // 任何状态都可以关闭
+            
+        case WorkbookState::CREATING:
+            return state_ == WorkbookState::CREATING;
+            
+        case WorkbookState::READING:
+            // 读取操作在 READING 和 EDITING 状态都允许
+            return state_ == WorkbookState::READING || state_ == WorkbookState::EDITING;
+            
+        case WorkbookState::EDITING:
+            // 编辑操作只在 EDITING 和 CREATING 状态允许
+            return state_ == WorkbookState::EDITING || state_ == WorkbookState::CREATING;
+            
+        default:
+            return false;
+    }
+}
+
+void Workbook::transitionToState(WorkbookState new_state, const std::string& reason) {
+    if (state_ == new_state) {
+        return; // 状态未改变
+    }
+    
+    WorkbookState old_state = state_;
+    state_ = new_state;
+    
+    LOG_DEBUG("Workbook state transition: {} -> {} ({})", 
+              static_cast<int>(old_state), 
+              static_cast<int>(new_state), 
+              reason.empty() ? "no reason" : reason);
 }
 
 }} // namespace fastexcel::core
