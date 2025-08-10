@@ -512,90 +512,97 @@ void WorksheetXMLGenerator::generatePageMargins(XMLStreamWriter& writer) {
 // ========== 流式模式生成方法 ==========
 
 void WorksheetXMLGenerator::generateStreaming(const std::function<void(const char*, size_t)>& callback) {
-    // XML头部
-    const char* xml_header = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n";
-    callback(xml_header, strlen(xml_header));
+    // 使用XMLStreamWriter替代字符串拼接，提高性能
+    XMLStreamWriter writer(callback);
     
-    // 工作表开始标签
-    const char* worksheet_start = "<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\">";
-    callback(worksheet_start, strlen(worksheet_start));
+    writer.startDocument();
+    writer.startElement("worksheet");
+    writer.writeAttribute("xmlns", "http://schemas.openxmlformats.org/spreadsheetml/2006/main");
+    writer.writeAttribute("xmlns:r", "http://schemas.openxmlformats.org/officeDocument/2006/relationships");
     
     // 尺寸信息
     auto [max_row, max_col] = worksheet_->getUsedRange();
-    std::string dimension_str = "<dimension ref=\"";
+    writer.startElement("dimension");
     if (max_row >= 0 && max_col >= 0) {
-        dimension_str += utils::CommonUtils::cellReference(0, 0) + ":" + 
-                        utils::CommonUtils::cellReference(max_row, max_col);
+        std::string ref = utils::CommonUtils::cellReference(0, 0) + ":" +
+                         utils::CommonUtils::cellReference(max_row, max_col);
+        writer.writeAttribute("ref", ref.c_str());
     } else {
-        dimension_str += "A1";
+        writer.writeAttribute("ref", "A1");
     }
-    dimension_str += "\"/>";
-    callback(dimension_str.c_str(), dimension_str.length());
+    writer.endElement(); // dimension
     
     // 简化的工作表视图
-    std::string sheet_views = "<sheetViews><sheetView workbookViewId=\"0\"";
+    writer.startElement("sheetViews");
+    writer.startElement("sheetView");
+    writer.writeAttribute("workbookViewId", "0");
     if (worksheet_->isTabSelected()) {
-        sheet_views += " tabSelected=\"1\"";
+        writer.writeAttribute("tabSelected", "1");
     }
-    sheet_views += "/></sheetViews>";
-    callback(sheet_views.c_str(), sheet_views.length());
+    writer.endElement(); // sheetView
+    writer.endElement(); // sheetViews
     
     // 工作表格式信息
-    const char* sheet_format = "<sheetFormatPr defaultRowHeight=\"15\"/>";
-    callback(sheet_format, strlen(sheet_format));
+    writer.startElement("sheetFormatPr");
+    writer.writeAttribute("defaultRowHeight", "15");
+    writer.endElement(); // sheetFormatPr
     
-    // 列信息（流式）
+    // 列信息（使用XMLStreamWriter优化）
     const auto& col_info = worksheet_->getColumnInfo();
     if (!col_info.empty()) {
-        callback("<cols>", 6);
+        writer.startElement("cols");
         for (const auto& [col_num, info] : col_info) {
-            std::string col_xml = "<col min=\"" + std::to_string(col_num + 1) + 
-                                 "\" max=\"" + std::to_string(col_num + 1) + "\"";
+            writer.startElement("col");
+            writer.writeAttribute("min", std::to_string(col_num + 1).c_str());
+            writer.writeAttribute("max", std::to_string(col_num + 1).c_str());
             if (info.width > 0) {
-                col_xml += " width=\"" + std::to_string(info.width) + "\" customWidth=\"1\"";
+                writer.writeAttribute("width", std::to_string(info.width).c_str());
+                writer.writeAttribute("customWidth", "1");
             }
             if (info.hidden) {
-                col_xml += " hidden=\"1\"";
+                writer.writeAttribute("hidden", "1");
             }
-            col_xml += "/>";
-            callback(col_xml.c_str(), col_xml.length());
+            writer.endElement(); // col
         }
-        callback("</cols>", 7);
+        writer.endElement(); // cols
     }
     
     // 单元格数据（流式处理）
-    callback("<sheetData", 10);
+    writer.startElement("sheetData");
     if (max_row >= 0 && max_col >= 0) {
-        callback(">", 1);
         generateSheetDataStreaming(callback);
-        callback("</sheetData>", 12);
-    } else {
-        callback("/>", 2);
     }
+    writer.endElement(); // sheetData
     
-    // 合并单元格
+    // 合并单元格（使用XMLStreamWriter优化）
     const auto& merge_ranges = worksheet_->getMergeRanges();
     if (!merge_ranges.empty()) {
-        std::string merge_start = "<mergeCells count=\"" + std::to_string(merge_ranges.size()) + "\">";
-        callback(merge_start.c_str(), merge_start.length());
+        writer.startElement("mergeCells");
+        writer.writeAttribute("count", std::to_string(merge_ranges.size()).c_str());
         
         for (const auto& range : merge_ranges) {
-            std::string merge_cell = "<mergeCell ref=\"" +
-                utils::CommonUtils::cellReference(range.first_row, range.first_col) + ":" +
-                utils::CommonUtils::cellReference(range.last_row, range.last_col) + "\"/>";
-            callback(merge_cell.c_str(), merge_cell.length());
+            writer.startElement("mergeCell");
+            std::string range_ref = utils::CommonUtils::cellReference(range.first_row, range.first_col) + ":" +
+                                   utils::CommonUtils::cellReference(range.last_row, range.last_col);
+            writer.writeAttribute("ref", range_ref.c_str());
+            writer.endElement(); // mergeCell
         }
         
-        callback("</mergeCells>", 13);
+        writer.endElement(); // mergeCells
     }
     
     // 页面边距
-    const char* margins = "<pageMargins left=\"0.7\" right=\"0.7\" top=\"0.75\" bottom=\"0.75\" header=\"0.3\" footer=\"0.3\"/>";
-    callback(margins, strlen(margins));
+    writer.startElement("pageMargins");
+    writer.writeAttribute("left", "0.7");
+    writer.writeAttribute("right", "0.7");
+    writer.writeAttribute("top", "0.75");
+    writer.writeAttribute("bottom", "0.75");
+    writer.writeAttribute("header", "0.3");
+    writer.writeAttribute("footer", "0.3");
+    writer.endElement(); // pageMargins
     
-    // 工作表结束标签
-    const char* worksheet_end = "</worksheet>";
-    callback(worksheet_end, strlen(worksheet_end));
+    writer.endElement(); // worksheet
+    writer.endDocument();
 }
 
 void WorksheetXMLGenerator::generateSheetDataStreaming(const std::function<void(const char*, size_t)>& callback) {
