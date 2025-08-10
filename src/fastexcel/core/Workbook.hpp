@@ -230,12 +230,6 @@ public:
     // ========== 文件操作 ==========
     
     /**
-     * @brief 打开工作簿进行编辑
-     * @return 是否成功
-     */
-    bool open();
-    
-    /**
      * @brief 保存工作簿
      * @return 是否成功
      */
@@ -247,6 +241,12 @@ public:
      * @return 是否成功
      */
     bool saveAs(const std::string& filename);
+    
+    /**
+     * @brief 检查工作簿是否已打开
+     * @return 是否已打开（处于可用状态）
+     */
+    bool isOpen() const;
     
     /**
      * @brief 关闭工作簿
@@ -1000,6 +1000,12 @@ public:
 
 private:
     // ========== 内部方法 ==========
+    
+    /**
+     * @brief 内部方法：打开工作簿文件管理器
+     * @return 是否成功
+     */
+    bool open();
     
     // 生成Excel文件结构
     bool generateExcelStructure();

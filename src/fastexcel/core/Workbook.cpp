@@ -53,6 +53,12 @@ std::unique_ptr<Workbook> Workbook::create(const Path& path) {
         workbook->dirty_manager_->setIsNewFile(true);
     }
     
+    // 🎯 API修复：自动打开工作簿，返回可直接使用的对象
+    if (!workbook->open()) {
+        LOG_ERROR("Failed to open workbook after creation: {}", path.string());
+        return nullptr;
+    }
+    
     return workbook;
 }
 
@@ -229,6 +235,13 @@ bool Workbook::saveAs(const std::string& filename) {
     }
     
     return save_result;
+}
+
+bool Workbook::isOpen() const {
+    // 检查工作簿是否处于可用状态（EDITING、READING或CREATING模式）
+    return state_ == WorkbookState::EDITING || 
+           state_ == WorkbookState::READING || 
+           state_ == WorkbookState::CREATING;
 }
 
 bool Workbook::close() {
@@ -1004,6 +1017,12 @@ std::unique_ptr<Workbook> Workbook::open(const Path& path) {
             loaded_workbook->original_package_path_ = path.string();
             // 设置为编辑模式（保持向后兼容）
             loaded_workbook->file_source_ = FileSource::EXISTING_FILE;
+            
+            // 🎯 API修复：为保存功能准备FileManager
+            if (!loaded_workbook->open()) {
+                LOG_ERROR("Failed to prepare FileManager for workbook: {}", path.string());
+                return nullptr;
+            }
         }
         
         LOG_INFO("Successfully loaded workbook for editing: {}", path.string());
@@ -1048,6 +1067,12 @@ std::unique_ptr<Workbook> Workbook::openForReading(const Path& path) {
             loaded_workbook->transitionToState(WorkbookState::READING, "openForReading()");
             loaded_workbook->original_package_path_ = path.string();
             
+            // 🎯 API修复：为保存功能准备FileManager（即使是只读模式，也可能需要另存为）
+            if (!loaded_workbook->open()) {
+                LOG_ERROR("Failed to prepare FileManager for workbook: {}", path.string());
+                return nullptr;
+            }
+            
             // 只读模式优化：后续可增加更细粒度的追踪开关，这里不额外操作
         }
         
@@ -1091,6 +1116,12 @@ std::unique_ptr<Workbook> Workbook::openForEditing(const Path& path) {
             loaded_workbook->file_source_ = FileSource::EXISTING_FILE;
             loaded_workbook->transitionToState(WorkbookState::EDITING, "openForEditing()");
             loaded_workbook->original_package_path_ = path.string();
+            
+            // 🎯 API修复：为保存功能准备FileManager
+            if (!loaded_workbook->open()) {
+                LOG_ERROR("Failed to prepare FileManager for workbook: {}", path.string());
+                return nullptr;
+            }
         }
         
         LOG_INFO("Successfully loaded workbook for editing: {}", path.string());
