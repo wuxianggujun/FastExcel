@@ -61,6 +61,7 @@ set(FASTEXCEL_SOURCES
         src/fastexcel/core/Workbook.cpp
         src/fastexcel/core/Worksheet.cpp
         src/fastexcel/core/SharedStringTable.cpp
+        src/fastexcel/core/SharedFormula.cpp
         src/fastexcel/core/FormatRepository.cpp
         src/fastexcel/core/MemoryPool.cpp
         src/fastexcel/core/ErrorCode.cpp

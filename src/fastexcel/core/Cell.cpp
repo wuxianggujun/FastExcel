@@ -13,7 +13,7 @@ void Cell::initializeFlags() {
     flags_.has_format = false;
     flags_.has_hyperlink = false;
     flags_.has_formula_result = false;
-    flags_.reserved = 0;
+    flags_.is_shared_formula = false;
 }
 
 Cell::Cell() : extended_(nullptr) {
@@ -130,7 +130,8 @@ double Cell::getNumberValue() const {
     if (flags_.type == CellType::Number) {
         return value_.number;
     }
-    if (flags_.type == CellType::Formula && flags_.has_formula_result && extended_) {
+    if ((flags_.type == CellType::Formula || flags_.type == CellType::SharedFormula) && 
+        flags_.has_formula_result && extended_) {
         return extended_->formula_result;
     }
     return 0.0;
@@ -157,17 +158,59 @@ std::string Cell::getStringValue() const {
 }
 
 std::string Cell::getFormula() const {
-    if (flags_.type == CellType::Formula && extended_ && extended_->formula) {
+    if ((flags_.type == CellType::Formula || flags_.type == CellType::SharedFormula) && 
+        extended_ && extended_->formula) {
         return *extended_->formula;
     }
     return "";
 }
 
 double Cell::getFormulaResult() const {
-    if (flags_.type == CellType::Formula && flags_.has_formula_result && extended_) {
+    if ((flags_.type == CellType::Formula || flags_.type == CellType::SharedFormula) && 
+        flags_.has_formula_result && extended_) {
         return extended_->formula_result;
     }
     return 0.0;
+}
+
+// ========== 共享公式支持方法 ==========
+
+void Cell::setSharedFormula(int shared_index, double result) {
+    // 如果当前不是公式类型，则清除并设置为共享公式
+    if (flags_.type != CellType::Formula) {
+        clear();
+        flags_.type = CellType::SharedFormula;
+    } else {
+        // 如果已经是公式，转换为共享公式但保留公式文本
+        flags_.type = CellType::SharedFormula;
+    }
+    
+    flags_.is_shared_formula = true;
+    
+    ensureExtended();
+    extended_->shared_formula_index = shared_index;
+    extended_->formula_result = result;
+    flags_.has_formula_result = true;
+}
+
+void Cell::setSharedFormulaReference(int shared_index) {
+    clear();
+    flags_.type = CellType::SharedFormula;
+    flags_.is_shared_formula = true;
+    
+    ensureExtended();
+    extended_->shared_formula_index = shared_index;
+}
+
+int Cell::getSharedFormulaIndex() const {
+    if (flags_.type == CellType::SharedFormula && extended_) {
+        return extended_->shared_formula_index;
+    }
+    return -1;
+}
+
+bool Cell::isSharedFormula() const {
+    return flags_.type == CellType::SharedFormula && flags_.is_shared_formula;
 }
 
 // FormatDescriptor架构格式操作

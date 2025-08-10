@@ -22,7 +22,8 @@ enum class CellType : uint8_t {
     Date = 5,
     Error = 6,
     Hyperlink = 7,
-    InlineString = 8    // 短字符串内联存储（内部使用）
+    InlineString = 8,   // 短字符串内联存储（内部使用）
+    SharedFormula = 9   // 共享公式类型
 };
 
 class Cell {
@@ -33,7 +34,7 @@ private:
         bool has_format : 1;         // 是否有格式
         bool has_hyperlink : 1;      // 是否有超链接
         bool has_formula_result : 1; // 公式是否有缓存结果
-        uint8_t reserved : 1;        // 保留位
+        bool is_shared_formula : 1;  // 是否为共享公式
     } flags_;
     
     // 使用union节省内存 - 核心优化点
@@ -56,9 +57,11 @@ private:
         std::string* comment;        // 批注
         // 格式相关字段已移除，现在使用FormatDescriptor
         double formula_result;       // 公式计算结果
+        int shared_formula_index;    // 共享公式索引（-1表示不是共享公式）
         
         ExtendedData() : long_string(nullptr), formula(nullptr),
-                        hyperlink(nullptr), comment(nullptr), formula_result(0.0) {}
+                        hyperlink(nullptr), comment(nullptr), formula_result(0.0),
+                        shared_formula_index(-1) {}
     };
     
     ExtendedData* extended_;  // 只在需要时分配
@@ -100,10 +103,16 @@ public:
     // 公式设置
     void setFormula(const std::string& formula, double result = 0.0);
     
+    // 共享公式设置
+    void setSharedFormula(int shared_index, double result = 0.0);
+    void setSharedFormulaReference(int shared_index);
+    
     // 获取值
     CellType getType() const {
-        // 对外API统一：InlineString也显示为String
-        return (flags_.type == CellType::InlineString) ? CellType::String : flags_.type;
+        // 对外API统一：InlineString也显示为String, SharedFormula显示为Formula
+        if (flags_.type == CellType::InlineString) return CellType::String;
+        if (flags_.type == CellType::SharedFormula) return CellType::Formula;
+        return flags_.type;
     }
     
     // 内部方法：获取真实的类型（用于测试和内部逻辑）
@@ -113,6 +122,10 @@ public:
     std::string getStringValue() const;
     std::string getFormula() const;
     double getFormulaResult() const;
+    
+    // 共享公式获取
+    int getSharedFormulaIndex() const;
+    bool isSharedFormula() const;
     
     // 格式操作 - FormatDescriptor架构
     void setFormat(std::shared_ptr<const FormatDescriptor> format);
@@ -135,7 +148,7 @@ public:
     bool isNumber() const { return flags_.type == CellType::Number; }
     bool isString() const { return flags_.type == CellType::String || flags_.type == CellType::InlineString; }
     bool isBoolean() const { return flags_.type == CellType::Boolean; }
-    bool isFormula() const { return flags_.type == CellType::Formula; }
+    bool isFormula() const { return flags_.type == CellType::Formula || flags_.type == CellType::SharedFormula; }
     bool isDate() const { return flags_.type == CellType::Date; }
     
     // 清空

@@ -5,6 +5,7 @@
 #include "fastexcel/core/SharedStringTable.hpp"
 #include "fastexcel/core/FormatRepository.hpp"
 #include "fastexcel/core/CellRangeManager.hpp"
+#include "fastexcel/core/SharedFormula.hpp"
 #include "fastexcel/utils/CommonUtils.hpp"
 #include "fastexcel/xml/XMLStreamWriter.hpp"
 #include <string>
@@ -25,6 +26,7 @@ namespace core {
 class Workbook;
 class SharedStringTable;
 class FormatRepository;
+class SharedFormulaManager;
 
 // 列信息结构
 struct ColumnInfo {
@@ -173,6 +175,9 @@ private:
     SharedStringTable* sst_ = nullptr;
     FormatRepository* format_repo_ = nullptr;
     bool optimize_mode_ = false;
+    
+    // 共享公式管理器
+    std::unique_ptr<SharedFormulaManager> shared_formula_manager_;
     
     // 优化模式下的行缓存
     struct WorksheetRow {
@@ -328,6 +333,23 @@ public:
      * @param formula 公式（不包含=号）
      */
     void writeFormula(int row, int col, const std::string& formula);
+    
+    /**
+     * @brief 创建共享公式
+     * @param first_row 起始行
+     * @param first_col 起始列
+     * @param last_row 结束行
+     * @param last_col 结束列
+     * @param formula 基础公式（不包含=号）
+     * @return 共享公式索引，-1表示创建失败
+     */
+    int createSharedFormula(int first_row, int first_col, int last_row, int last_col, const std::string& formula);
+    
+    /**
+     * @brief 获取共享公式管理器
+     * @return 共享公式管理器指针
+     */
+    SharedFormulaManager* getSharedFormulaManager() const { return shared_formula_manager_.get(); }
     
     /**
      * @brief 写入日期时间
@@ -1014,8 +1036,9 @@ public:
      * @param dst_row 目标行号
      * @param dst_col 目标列号
      * @param copy_format 是否复制格式
+     * @param copy_row_height 是否复制行高
      */
-    void copyCell(int src_row, int src_col, int dst_row, int dst_col, bool copy_format = true);
+    void copyCell(int src_row, int src_col, int dst_row, int dst_col, bool copy_format = true, bool copy_row_height = false);
     
     /**
      * @brief 移动单元格

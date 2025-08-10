@@ -82,10 +82,6 @@ void SharedStringTable::clear() {
 }
 
 void SharedStringTable::generateXML(const std::function<void(const char*, size_t)>& callback) const {
-    if (id_to_string_.empty()) {
-        return;  // 没有字符串时不生成XML
-    }
-    
     xml::XMLStreamWriter writer(callback);
     writer.startDocument();
     writer.startElement("sst");
@@ -93,6 +89,7 @@ void SharedStringTable::generateXML(const std::function<void(const char*, size_t
     writer.writeAttribute("count", std::to_string(id_to_string_.size()).c_str());
     writer.writeAttribute("uniqueCount", std::to_string(string_to_id_.size()).c_str());
     
+    // 即使没有字符串，也要生成完整的XML结构
     for (const auto& str : id_to_string_) {
         writer.startElement("si");
         writer.startElement("t");

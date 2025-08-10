@@ -4,6 +4,7 @@
 #include "fastexcel/core/Cell.hpp"
 #include "fastexcel/core/SharedStringTable.hpp"
 #include "fastexcel/core/FormatRepository.hpp"
+#include "fastexcel/core/SharedFormula.hpp"
 #include "fastexcel/utils/CommonUtils.hpp"
 #include "fastexcel/utils/Logger.hpp"
 #include <cstring>
@@ -306,15 +307,58 @@ void WorksheetXMLGenerator::generateSheetData(XMLStreamWriter& writer) {
             // 输出单元格值
             if (!cell.isEmpty()) {
                 if (cell.isFormula()) {
-                    writer.writeAttribute("t", "str");
-                    writer.startElement("f");
-                    writer.writeText(cell.getFormula().c_str());
-                    writer.endElement(); // f
-                    double result = cell.getFormulaResult();
-                    if (result != 0.0) {
-                        writer.startElement("v");
-                        writer.writeText(std::to_string(result).c_str());
-                        writer.endElement(); // v
+                    // 检查是否为共享公式
+                    if (cell.isSharedFormula()) {
+                        int shared_index = cell.getSharedFormulaIndex();
+                        auto* shared_formula_manager = worksheet_->getSharedFormulaManager();
+                        
+                        if (shared_formula_manager) {
+                            const core::SharedFormula* shared_formula = shared_formula_manager->getSharedFormula(shared_index);
+                            
+                            if (shared_formula) {
+                                // 检查是否为共享公式的主单元格（第一个单元格）
+                                int range_first_row = shared_formula->getRefFirstRow();
+                                int range_first_col = shared_formula->getRefFirstCol();
+                                int range_last_row = shared_formula->getRefLastRow();
+                                int range_last_col = shared_formula->getRefLastCol();
+                                bool is_master_cell = (row == range_first_row && col == range_first_col);
+                                
+                                writer.startElement("f");
+                                writer.writeAttribute("t", "shared");
+                                writer.writeAttribute("si", std::to_string(shared_index).c_str());
+                                
+                                if (is_master_cell) {
+                                    // 主单元格：输出完整公式和范围
+                                    std::string range_ref = utils::CommonUtils::cellReference(range_first_row, range_first_col) + ":" +
+                                                          utils::CommonUtils::cellReference(range_last_row, range_last_col);
+                                    writer.writeAttribute("ref", range_ref.c_str());
+                                    writer.writeText(cell.getFormula().c_str());
+                                }
+                                // 其他单元格：只输出 si 属性，无内容
+                                
+                                writer.endElement(); // f
+                                
+                                // 输出结果值
+                                double result = cell.getFormulaResult();
+                                if (result != 0.0) {
+                                    writer.startElement("v");
+                                    writer.writeText(std::to_string(result).c_str());
+                                    writer.endElement(); // v
+                                }
+                            }
+                        }
+                    } else {
+                        // 普通公式
+                        writer.writeAttribute("t", "str");
+                        writer.startElement("f");
+                        writer.writeText(cell.getFormula().c_str());
+                        writer.endElement(); // f
+                        double result = cell.getFormulaResult();
+                        if (result != 0.0) {
+                            writer.startElement("v");
+                            writer.writeText(std::to_string(result).c_str());
+                            writer.endElement(); // v
+                        }
                     }
                 } else if (cell.isString()) {
                     if (workbook_ && workbook_->getOptions().use_shared_strings && sst_) {
@@ -640,6 +684,8 @@ int WorksheetXMLGenerator::getCellFormatIndex(const core::Cell& cell) {
 }
 
 std::string WorksheetXMLGenerator::generateCellXML(int row, int col, const core::Cell& cell) {
+    // 对于流式输出，我们暂时保留字符串拼接的方式
+    // TODO: 将来可以重构为使用 XMLStreamWriter 以提高效率
     std::string cell_xml = "<c r=\"" + utils::CommonUtils::cellReference(row, col) + "\"";
     
     // 应用单元格格式
@@ -651,7 +697,55 @@ std::string WorksheetXMLGenerator::generateCellXML(int row, int col, const core:
     // 输出单元格值
     if (!cell.isEmpty()) {
         if (cell.isFormula()) {
-            cell_xml += " t=\"str\"><f>" + cell.getFormula() + "</f></c>";
+            // 检查是否为共享公式
+            if (cell.isSharedFormula()) {
+                int shared_index = cell.getSharedFormulaIndex();
+                auto* shared_formula_manager = worksheet_->getSharedFormulaManager();
+                
+                if (shared_formula_manager) {
+                    const core::SharedFormula* shared_formula = shared_formula_manager->getSharedFormula(shared_index);
+                    
+                    if (shared_formula) {
+                        // 检查是否为共享公式的主单元格（第一个单元格）
+                        int range_first_row = shared_formula->getRefFirstRow();
+                        int range_first_col = shared_formula->getRefFirstCol();
+                        int range_last_row = shared_formula->getRefLastRow();
+                        int range_last_col = shared_formula->getRefLastCol();
+                        bool is_master_cell = (row == range_first_row && col == range_first_col);
+                        
+                        if (is_master_cell) {
+                            // 主单元格：输出完整公式和范围
+                            std::string range_ref = utils::CommonUtils::cellReference(range_first_row, range_first_col) + ":" +
+                                                  utils::CommonUtils::cellReference(range_last_row, range_last_col);
+                            cell_xml += "><f t=\"shared\" si=\"" + std::to_string(shared_index) + "\" ref=\"" + range_ref + "\">" + cell.getFormula() + "</f>";
+                            
+                            // 输出结果值（如果有）
+                            double result = cell.getFormulaResult();
+                            if (result != 0.0) {
+                                cell_xml += "<v>" + std::to_string(result) + "</v>";
+                            }
+                            cell_xml += "</c>";
+                        } else {
+                            // 其他单元格：只输出 si 属性
+                            cell_xml += "><f t=\"shared\" si=\"" + std::to_string(shared_index) + "\"/>";
+                            
+                            // 输出结果值（如果有）
+                            double result = cell.getFormulaResult();
+                            if (result != 0.0) {
+                                cell_xml += "<v>" + std::to_string(result) + "</v>";
+                            }
+                            cell_xml += "</c>";
+                        }
+                    } else {
+                        cell_xml += "/>";
+                    }
+                } else {
+                    cell_xml += "/>";
+                }
+            } else {
+                // 普通公式
+                cell_xml += " t=\"str\"><f>" + cell.getFormula() + "</f></c>";
+            }
         } else if (cell.isString()) {
             if (workbook_ && workbook_->getOptions().use_shared_strings && sst_) {
                 cell_xml += " t=\"s\"><v>";

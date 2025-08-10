@@ -7,6 +7,8 @@
 #include <algorithm>
 #include <chrono>
 #include <limits>
+#include <cctype>
+#include <stdexcept>
 #include "fastexcel/core/Exception.hpp"
 
 namespace fastexcel {
@@ -56,6 +58,59 @@ public:
      */
     static std::string rangeReference(int first_row, int first_col, int last_row, int last_col) {
         return cellReference(first_row, first_col) + ":" + cellReference(last_row, last_col);
+    }
+    
+    /**
+     * @brief 解析单元格引用（如A1 -> (0, 0)）
+     * @param reference 单元格引用字符串
+     * @return std::pair<int, int> 行列坐标（0开始）
+     * @throws std::invalid_argument 如果引用格式不正确
+     */
+    static std::pair<int, int> parseReference(const std::string& reference) {
+        if (reference.empty()) {
+            throw std::invalid_argument("Empty cell reference");
+        }
+        
+        size_t i = 0;
+        
+        // 解析列部分 (A-Z)
+        int col = 0;
+        while (i < reference.length() && std::isalpha(reference[i])) {
+            char c = std::toupper(reference[i]);
+            if (c < 'A' || c > 'Z') {
+                throw std::invalid_argument("Invalid column letter in reference: " + reference);
+            }
+            col = col * 26 + (c - 'A' + 1);
+            ++i;
+        }
+        
+        if (col == 0) {
+            throw std::invalid_argument("No column part in reference: " + reference);
+        }
+        col -= 1; // 转换为0开始的索引
+        
+        // 解析行部分 (1-9)
+        if (i >= reference.length() || !std::isdigit(reference[i])) {
+            throw std::invalid_argument("No row part in reference: " + reference);
+        }
+        
+        int row = 0;
+        while (i < reference.length() && std::isdigit(reference[i])) {
+            row = row * 10 + (reference[i] - '0');
+            ++i;
+        }
+        
+        if (row == 0) {
+            throw std::invalid_argument("Invalid row number in reference: " + reference);
+        }
+        row -= 1; // 转换为0开始的索引
+        
+        // 检查是否有剩余字符
+        if (i < reference.length()) {
+            throw std::invalid_argument("Invalid characters at end of reference: " + reference);
+        }
+        
+        return std::make_pair(row, col);
     }
     
     // ========== 验证工具 ==========

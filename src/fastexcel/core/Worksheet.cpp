@@ -4,12 +4,14 @@
 #include "fastexcel/core/SharedStringTable.hpp"
 #include "fastexcel/core/FormatRepository.hpp"
 #include "fastexcel/core/CellRangeManager.hpp"
+#include "fastexcel/core/SharedFormula.hpp"
 #include "fastexcel/xml/XMLStreamWriter.hpp"
 #include "fastexcel/xml/WorksheetXMLGenerator.hpp"
 #include "fastexcel/xml/SharedStrings.hpp"
 #include "fastexcel/utils/Logger.hpp"
 #include "fastexcel/utils/LogConfig.hpp"
 #include "fastexcel/utils/TimeUtils.hpp"
+#include "fastexcel/utils/CommonUtils.hpp"
 #include "fastexcel/core/Exception.hpp"
 #include <sstream>
 #include <stdexcept>
@@ -22,6 +24,8 @@ namespace core {
 
 Worksheet::Worksheet(const std::string& name, std::shared_ptr<Workbook> workbook, int sheet_id)
     : name_(name), parent_workbook_(workbook), sheet_id_(sheet_id) {
+    // 初始化共享公式管理器
+    shared_formula_manager_ = std::make_unique<SharedFormulaManager>();
 }
 
 // ========== 基本单元格操作 ==========
@@ -124,6 +128,72 @@ void Worksheet::writeFormula(int row, int col, const std::string& formula) {
         target_cell = std::move(cell);
         this->updateUsedRange(row, col);
     }
+}
+
+int Worksheet::createSharedFormula(int first_row, int first_col, int last_row, int last_col, const std::string& formula) {
+    if (parent_workbook_ && parent_workbook_->getDirtyManager()) {
+        std::string sheet_path = "xl/worksheets/sheet" + std::to_string(sheet_id_) + ".xml";
+        parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::CONTENT);
+    }
+    
+    // 验证范围
+    validateRange(first_row, first_col, last_row, last_col);
+    
+    if (!shared_formula_manager_) {
+        shared_formula_manager_ = std::make_unique<SharedFormulaManager>();
+    }
+    
+    // 创建共享公式范围字符串
+    std::string range = utils::CommonUtils::cellReference(first_row, first_col) + ":" +
+                       utils::CommonUtils::cellReference(last_row, last_col);
+    
+    // 注册共享公式
+    int shared_index = shared_formula_manager_->registerSharedFormula(formula, range);
+    if (shared_index < 0) {
+        LOG_ERROR("Failed to register shared formula in range {}", range);
+        return -1;
+    }
+    
+    // 获取注册的共享公式对象并更新受影响的单元格列表
+    const SharedFormula* shared_formula = shared_formula_manager_->getSharedFormula(shared_index);
+    if (shared_formula) {
+        // 手动添加受影响的单元格到统计中
+        for (int row = first_row; row <= last_row; ++row) {
+            for (int col = first_col; col <= last_col; ++col) {
+                // 这里需要调用非const版本来更新affected_cells_
+                auto* mutable_formula = const_cast<SharedFormula*>(shared_formula);
+                mutable_formula->addAffectedCell(row, col);
+            }
+        }
+    }
+    
+    // 为范围内的每个单元格设置共享公式引用
+    for (int row = first_row; row <= last_row; ++row) {
+        for (int col = first_col; col <= last_col; ++col) {
+            Cell cell;
+            if (row == first_row && col == first_col) {
+                // 主单元格存储完整的基础公式和共享公式索引
+                cell.setFormula(formula);  // 先设置常规公式
+                cell.setSharedFormula(shared_index);  // 然后转换为共享公式
+            } else {
+                // 其他单元格只存储共享公式引用
+                cell.setSharedFormulaReference(shared_index);
+            }
+            
+            if (optimize_mode_) {
+                this->writeOptimizedCell(row, col, std::move(cell));
+            } else {
+                auto& target_cell = cells_[std::make_pair(row, col)];
+                target_cell = std::move(cell);
+                this->updateUsedRange(row, col);
+            }
+        }
+    }
+    
+    LOG_DEBUG("Created shared formula: index={}, range={}, formula='{}'", 
+             shared_index, range, formula);
+    
+    return shared_index;
 }
 
 void Worksheet::writeDateTime(int row, int col, const std::tm& datetime) {
@@ -1011,7 +1081,7 @@ void Worksheet::editCellValue(int row, int col, bool value, bool preserve_format
 
 // editCellFormat方法已移除，请使用FormatDescriptor架构
 
-void Worksheet::copyCell(int src_row, int src_col, int dst_row, int dst_col, bool copy_format) {
+void Worksheet::copyCell(int src_row, int src_col, int dst_row, int dst_col, bool copy_format, bool copy_row_height) {
     validateCellPosition(src_row, src_col);
     validateCellPosition(dst_row, dst_col);
     
@@ -1043,6 +1113,14 @@ void Worksheet::copyCell(int src_row, int src_col, int dst_row, int dst_col, boo
         dst_cell.setHyperlink(src_cell.getHyperlink());
     }
     
+    // 🔧 新增功能：复制行高
+    if (copy_row_height && src_row != dst_row) {
+        double src_row_height = getRowHeight(src_row);
+        if (src_row_height != getRowHeight(dst_row)) {
+            setRowHeight(dst_row, src_row_height);
+        }
+    }
+    
     updateUsedRange(dst_row, dst_col);
 }
 
@@ -1054,8 +1132,8 @@ void Worksheet::moveCell(int src_row, int src_col, int dst_row, int dst_col) {
         return; // 源和目标相同，无需移动
     }
     
-    // 复制单元格
-    copyCell(src_row, src_col, dst_row, dst_col, true);
+    // 复制单元格（包括行高）
+    copyCell(src_row, src_col, dst_row, dst_col, true, true);
     
     // 清空源单元格
     auto it = cells_.find(std::make_pair(src_row, src_col));
@@ -1076,8 +1154,10 @@ void Worksheet::copyRange(int src_first_row, int src_first_col, int src_last_row
     
     for (int r = 0; r < rows; ++r) {
         for (int c = 0; c < cols; ++c) {
+            // 🔧 优化：对于范围复制，默认复制行高（智能判断）
+            bool copy_row_height = (c == 0); // 只在每行的第一列复制行高
             copyCell(src_first_row + r, src_first_col + c,
-                    dst_row + r, dst_col + c, copy_format);
+                    dst_row + r, dst_col + c, copy_format, copy_row_height);
         }
     }
 }
