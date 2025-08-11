@@ -131,6 +131,50 @@ add_subdirectory(path/to/FastExcel)
 target_link_libraries(your_target PRIVATE fastexcel)
 ```
 
+## 代码质量和安全性 🆕
+
+### 内存安全特性
+
+FastExcel 采用现代C++最佳实践，确保内存安全：
+
+- **智能指针架构**: 全面使用 `std::unique_ptr` 替代 raw pointers
+- **RAII 资源管理**: 自动内存管理，消除内存泄漏风险
+- **异常安全**: 强异常安全保证，确保资源正确释放
+- **线程安全**: 智能指针提供更好的多线程安全性
+
+### 性能优化
+
+- **XML流式生成**: 使用 `XMLStreamWriter` 替代字符串拼接，减少内存分配
+- **统一文本转义**: `XMLUtils::escapeXML()` 提供优化的XML转义处理
+- **零拷贝设计**: 尽可能避免不必要的数据复制
+
+### 构建配置建议
+
+对于不同使用场景的推荐构建配置：
+
+#### 开发调试版本
+```bash
+cmake -B build -S . \
+    -DCMAKE_BUILD_TYPE=Debug \
+    -DFASTEXCEL_BUILD_EXAMPLES=ON \
+    -DFASTEXCEL_BUILD_TESTS=ON
+```
+
+#### 性能测试版本  
+```bash
+cmake -B build -S . \
+    -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+    -DFASTEXCEL_BUILD_EXAMPLES=ON
+```
+
+#### 生产发布版本
+```bash
+cmake -B build -S . \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DFASTEXCEL_BUILD_SHARED_LIBS=ON \
+    -DFASTEXCEL_BUILD_TESTS=OFF
+```
+
 ## 故障排除
 
 ### 常见问题

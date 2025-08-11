@@ -68,15 +68,19 @@ auto style = workbook->createStyleBuilder()
 
 ### 📈 高性能优化
 
-#### 内存优化
+#### 内存优化 🆕
+- **智能指针架构**：全面使用 `std::unique_ptr` 替代 raw pointers，消除内存泄漏
+- **RAII内存管理**：ExtendedData 结构采用 RAII 原则，自动资源管理
 - **紧凑Cell结构**：24字节/Cell（vs 传统64字节+）
 - **内联字符串**：16字节以下字符串直接内联存储
 - **位域压缩**：使用位域减少标志位空间占用
 - **常量内存模式**：处理超大文件时保持恒定内存使用
 
-#### 处理速度优化
+#### 处理速度优化 🆕  
+- **高性能XML流写**：完全基于 `XMLStreamWriter`，消除字符串拼接开销
+- **统一XML转义**：`XMLUtils::escapeXML()` 提供优化的文本转义处理
 - **批量操作**：`writeRange` 支持批量数据写入
-- **并行处理**：`ThreadPool` 支持多线程加速
+- **并行处理**：`ThreadPool` 支持多线程加速  
 - **流式XML生成**：`UnifiedXMLGenerator` 统一批量和流式XML生成
 - **智能压缩**：多种压缩引擎支持（zlib-ng, libdeflate）
 

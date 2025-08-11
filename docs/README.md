@@ -110,15 +110,16 @@ FastExcel 采用现代 C++17 设计，具有双架构并存的创新设计：
 #### 核心模块 (Core)
 - **Workbook** - 工作簿管理，文档属性，VBA项目支持
 - **Worksheet** - 工作表功能，1100+行完整API
-- **Cell** - 优化的24字节单元格结构，支持7种数据类型
+- **Cell** 🆕 - 智能指针优化的24字节单元格结构，RAII内存管理，支持7种数据类型
 - **SharedFormula** - 智能公式优化，内存节省50-80%
 - **FormatDescriptor** - 不可变格式描述符，线程安全
 - **StyleBuilder** - 流畅样式构建器，链式调用API
 
-#### XML处理系统 (XML)
-- **UnifiedXMLGenerator** - 统一XML生成架构
-- **WorksheetXMLGenerator** - 工作表XML生成器
+#### XML处理系统 (XML) 🆕
+- **UnifiedXMLGenerator** - 统一XML生成架构，高性能流式处理
+- **WorksheetXMLGenerator** - 工作表XML生成器，完全消除字符串拼接
 - **StyleSerializer** - 样式序列化器，支持完整Excel格式
+- **XMLUtils** - 统一XML转义处理，优化文本处理性能
 
 #### 存储引擎 (Archive) 
 - **ZipArchive** - 高性能ZIP处理
