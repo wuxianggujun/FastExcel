@@ -1240,14 +1240,46 @@ void Worksheet::sortRange(int first_row, int first_col, int last_row, int last_c
 
 int Worksheet::createSharedFormula(int first_row, int first_col, int last_row, int last_col, const std::string& formula) {
     if (!shared_formula_manager_) {
-        return -1;
+        shared_formula_manager_ = std::make_unique<SharedFormulaManager>();
     }
     
     // 构建范围引用字符串
     std::string range_ref = utils::CommonUtils::rangeReference(first_row, first_col, last_row, last_col);
     
     // 使用SharedFormulaManager注册共享公式
-    return shared_formula_manager_->registerSharedFormula(formula, range_ref);
+    int shared_index = shared_formula_manager_->registerSharedFormula(formula, range_ref);
+    
+    if (shared_index >= 0) {
+        // 获取注册的共享公式对象并更新受影响的单元格列表
+        const SharedFormula* shared_formula = shared_formula_manager_->getSharedFormula(shared_index);
+        if (shared_formula) {
+            // 手动添加受影响的单元格到统计中
+            for (int row = first_row; row <= last_row; ++row) {
+                for (int col = first_col; col <= last_col; ++col) {
+                    // 这里需要调用非const版本来更新affected_cells_
+                    auto* mutable_formula = const_cast<SharedFormula*>(shared_formula);
+                    mutable_formula->addAffectedCell(row, col);
+                }
+            }
+        }
+        
+        // 为范围内的每个单元格设置共享公式引用
+        for (int row = first_row; row <= last_row; ++row) {
+            for (int col = first_col; col <= last_col; ++col) {
+                Cell& cell = getCell(row, col);
+                if (row == first_row && col == first_col) {
+                    // 主单元格存储完整的基础公式和共享公式索引
+                    cell.setFormula(formula);  // 先设置常规公式
+                    cell.setSharedFormula(shared_index);  // 然后转换为共享公式
+                } else {
+                    // 其他单元格只存储共享公式引用
+                    cell.setSharedFormulaReference(shared_index);
+                }
+            }
+        }
+    }
+    
+    return shared_index;
 }
 
 // 公式优化方法已移除，请使用新的架构

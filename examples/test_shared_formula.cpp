@@ -20,8 +20,8 @@ int main() {
         // 写入一些数据作为基础
         std::cout << "Writing base data..." << std::endl;
         for (int row = 0; row < 5; ++row) {
-            worksheet->writeNumber(row, 0, row + 1);  // A列：1, 2, 3, 4, 5
-            worksheet->writeNumber(row, 1, (row + 1) * 2);  // B列：2, 4, 6, 8, 10
+            worksheet->setValue(row, 0, row + 1);  // A列：1, 2, 3, 4, 5
+            worksheet->setValue(row, 1, (row + 1) * 2);  // B列：2, 4, 6, 8, 10
         }
         
         // 创建共享公式：C列 = A列 + B列
@@ -59,7 +59,7 @@ int main() {
         std::cout << "\nWriting individual formulas for comparison..." << std::endl;
         for (int row = 0; row < 5; ++row) {
             std::string formula = "A" + std::to_string(row + 1) + "+B" + std::to_string(row + 1);
-            worksheet->writeFormula(row, 3, formula);  // D列使用单独的公式
+            worksheet->getCell(row, 3).setFormula(formula);  // D列使用单独的公式
         }
         
         // 保存工作簿

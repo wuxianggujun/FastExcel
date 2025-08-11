@@ -3,6 +3,7 @@
 #include "fastexcel/core/Workbook.hpp"
 #include "fastexcel/utils/Logger.hpp"
 #include "fastexcel/utils/TimeUtils.hpp"
+#include "fastexcel/utils/XMLUtils.hpp"
 #include <sstream>
 #include <iomanip>
 
@@ -33,35 +34,35 @@ void DocPropsXMLGenerator::generateCoreXML(const core::Workbook* workbook,
     // 标题
     if (!props.title.empty()) {
         writer.startElement("dc:title");
-        writer.writeText(escapeXMLText(props.title));
+        writer.writeText(utils::XMLUtils::escapeXML(props.title));
         writer.endElement(); // dc:title
     }
 
     // 主题
     if (!props.subject.empty()) {
         writer.startElement("dc:subject");
-        writer.writeText(escapeXMLText(props.subject));
+        writer.writeText(utils::XMLUtils::escapeXML(props.subject));
         writer.endElement(); // dc:subject
     }
 
     // 作者
     if (!props.author.empty()) {
         writer.startElement("dc:creator");
-        writer.writeText(escapeXMLText(props.author));
+        writer.writeText(utils::XMLUtils::escapeXML(props.author));
         writer.endElement(); // dc:creator
     }
 
     // 关键词
     if (!props.keywords.empty()) {
         writer.startElement("cp:keywords");
-        writer.writeText(escapeXMLText(props.keywords));
+        writer.writeText(utils::XMLUtils::escapeXML(props.keywords));
         writer.endElement(); // cp:keywords
     }
 
     // 描述/注释
     if (!props.comments.empty()) {
         writer.startElement("dc:description");
-        writer.writeText(escapeXMLText(props.comments));
+        writer.writeText(utils::XMLUtils::escapeXML(props.comments));
         writer.endElement(); // dc:description
     }
 
@@ -85,14 +86,14 @@ void DocPropsXMLGenerator::generateCoreXML(const core::Workbook* workbook,
     // 类别
     if (!props.category.empty()) {
         writer.startElement("cp:category");
-        writer.writeText(escapeXMLText(props.category));
+        writer.writeText(utils::XMLUtils::escapeXML(props.category));
         writer.endElement(); // cp:category
     }
 
     // 状态
     if (!props.status.empty()) {
         writer.startElement("cp:contentStatus");
-        writer.writeText(escapeXMLText(props.status));
+        writer.writeText(utils::XMLUtils::escapeXML(props.status));
         writer.endElement(); // cp:contentStatus
     }
 
@@ -137,7 +138,7 @@ void DocPropsXMLGenerator::generateAppXML(const core::Workbook* workbook,
     // 公司信息
     writer.startElement("Company");
     const auto& props = workbook->getDocumentProperties();
-    writer.writeText(escapeXMLText(props.company.empty() ? "FastExcel Library" : props.company));
+    writer.writeText(utils::XMLUtils::escapeXML(props.company.empty() ? "FastExcel Library" : props.company));
     writer.endElement(); // Company
 
     // 链接更新状态
@@ -190,11 +191,11 @@ void DocPropsXMLGenerator::generateCustomXML(const core::Workbook* workbook,
         writer.startElement("property");
         writer.writeAttribute("fmtid", "{D5CDD505-2E9C-101B-9397-08002B2CF9AE}");
         writer.writeAttribute("pid", std::to_string(pid++));
-        writer.writeAttribute("name", escapeXMLText(name));
+        writer.writeAttribute("name", utils::XMLUtils::escapeXML(name));
 
         // 使用lpwstr类型存储字符串值
         writer.startElement("vt:lpwstr");
-        writer.writeText(escapeXMLText(value));
+        writer.writeText(utils::XMLUtils::escapeXML(value));
         writer.endElement(); // vt:lpwstr
 
         writer.endElement(); // property
@@ -213,30 +214,6 @@ void DocPropsXMLGenerator::writeXMLHeader(XMLStreamWriter& writer) {
 std::string DocPropsXMLGenerator::formatTimeISO8601(const std::tm& time) {
     // 使用 TimeUtils 进行时间格式化
     return utils::TimeUtils::formatTimeISO8601(time);
-}
-
-std::string DocPropsXMLGenerator::escapeXMLText(const std::string& text) {
-    std::string result;
-    result.reserve(text.length() * 1.1); // 预分配稍多空间
-
-    for (char c : text) {
-        switch (c) {
-            case '&': result += "&amp;"; break;
-            case '<': result += "&lt;"; break;
-            case '>': result += "&gt;"; break;
-            case '"': result += "&quot;"; break;
-            case '\'': result += "&apos;"; break;
-            default:
-                // 跳过无效控制字符
-                if (c < 0x20 && c != 0x09 && c != 0x0A && c != 0x0D) {
-                    continue;
-                }
-                result += c;
-                break;
-        }
-    }
-
-    return result;
 }
 
 void DocPropsXMLGenerator::generateHeadingPairs(XMLStreamWriter& writer, size_t worksheet_count) {
@@ -272,7 +249,7 @@ void DocPropsXMLGenerator::generateTitlesOfParts(XMLStreamWriter& writer,
 
     for (const auto& name : worksheet_names) {
         writer.startElement("vt:lpstr");
-        writer.writeText(escapeXMLText(name));
+        writer.writeText(utils::XMLUtils::escapeXML(name));
         writer.endElement(); // vt:lpstr
     }
 

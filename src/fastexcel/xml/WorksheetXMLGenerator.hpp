@@ -165,13 +165,6 @@ private:
     // ========== 辅助方法 ==========
     
     /**
-     * @brief 转义XML文本
-     * @param text 原始文本
-     * @return 转义后的文本
-     */
-    std::string escapeXMLText(const std::string& text);
-    
-    /**
      * @brief 获取单元格格式索引
      * @param cell 单元格对象
      * @return 格式索引，-1表示无格式

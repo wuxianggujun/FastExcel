@@ -77,13 +77,6 @@ private:
     static std::string formatTimeISO8601(const std::tm& time);
 
     /**
-     * @brief 转义XML文本中的特殊字符
-     * @param text 原始文本
-     * @return 转义后的文本
-     */
-    static std::string escapeXMLText(const std::string& text);
-
-    /**
      * @brief 生成HeadingPairs元素（用于app.xml）
      * @param writer XML写入器
      * @param worksheet_count 工作表数量

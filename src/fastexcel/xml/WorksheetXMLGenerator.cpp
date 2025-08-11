@@ -7,6 +7,7 @@
 #include "fastexcel/core/FormatRepository.hpp"
 #include "fastexcel/core/SharedFormula.hpp"
 #include "fastexcel/utils/CommonUtils.hpp"
+#include "fastexcel/utils/XMLUtils.hpp"
 #include "fastexcel/utils/Logger.hpp"
 #include <cstring>
 #include <algorithm>
@@ -374,7 +375,7 @@ void WorksheetXMLGenerator::generateSheetData(XMLStreamWriter& writer) {
                         writer.writeAttribute("t", "inlineStr");
                         writer.startElement("is");
                         writer.startElement("t");
-                        writer.writeText(escapeXMLText(cell.getStringValue()).c_str());
+                        writer.writeText(utils::XMLUtils::escapeXML(cell.getValue<std::string>()).c_str());
                         writer.endElement(); // t
                         writer.endElement(); // is
                     }
@@ -652,24 +653,6 @@ void WorksheetXMLGenerator::generateSheetDataStreaming(XMLStreamWriter& writer) 
 
 // ========== 辅助方法 ==========
 
-std::string WorksheetXMLGenerator::escapeXMLText(const std::string& text) {
-    std::string result;
-    result.reserve(static_cast<size_t>(text.length() * 1.1));
-    
-    for (char c : text) {
-        switch (c) {
-            case '&': result += "&amp;"; break;
-            case '<': result += "&lt;"; break;
-            case '>': result += "&gt;"; break;
-            case '"': result += "&quot;"; break;
-            case '\'': result += "&apos;"; break;
-            default: result += c; break;
-        }
-    }
-    
-    return result;
-}
-
 int WorksheetXMLGenerator::getCellFormatIndex(const core::Cell& cell) {
     if (!cell.hasFormat() || !format_repo_) {
         return -1;
@@ -763,7 +746,7 @@ std::string WorksheetXMLGenerator::generateCellXML(int row, int col, const core:
                 }
                 cell_xml += std::to_string(sst_index) + "</v></c>";
             } else {
-                cell_xml += " t=\"inlineStr\"><is><t>" + escapeXMLText(cell.getStringValue()) + "</t></is></c>";
+                cell_xml += " t=\"inlineStr\"><is><t>" + utils::XMLUtils::escapeXML(cell.getValue<std::string>()) + "</t></is></c>";
             }
         } else if (cell.isNumber()) {
             cell_xml += "><v>" + std::to_string(cell.getNumberValue()) + "</v></c>";
@@ -823,13 +806,11 @@ void WorksheetXMLGenerator::generateCellXMLStreaming(XMLStreamWriter& writer, in
                         
                         writer.endElement(); // f
                         
-                        // 输出结果值
+                        // 输出结果值 (对于共享公式，总是输出结果，即使是0)
                         double result = cell.getFormulaResult();
-                        if (result != 0.0) {
-                            writer.startElement("v");
-                            writer.writeText(std::to_string(result).c_str());
-                            writer.endElement(); // v
-                        }
+                        writer.startElement("v");
+                        writer.writeText(std::to_string(result).c_str());
+                        writer.endElement(); // v
                     }
                 }
             } else {
@@ -858,7 +839,7 @@ void WorksheetXMLGenerator::generateCellXMLStreaming(XMLStreamWriter& writer, in
                 writer.writeAttribute("t", "inlineStr");
                 writer.startElement("is");
                 writer.startElement("t");
-                writer.writeText(escapeXMLText(cell.getStringValue()).c_str());
+                writer.writeText(utils::XMLUtils::escapeXML(cell.getValue<std::string>()).c_str());
                 writer.endElement(); // t
                 writer.endElement(); // is
             }
