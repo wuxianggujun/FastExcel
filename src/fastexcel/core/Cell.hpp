@@ -58,27 +58,25 @@ private:
     
     // 可选字段指针（只在需要时分配） - 延迟分配策略
     struct ExtendedData {
-        std::string* long_string;    // 长字符串
-        std::string* formula;        // 公式
-        std::string* hyperlink;      // 超链接
-        std::string* comment;        // 批注
+        std::unique_ptr<std::string> long_string;    // 长字符串
+        std::unique_ptr<std::string> formula;        // 公式
+        std::unique_ptr<std::string> hyperlink;      // 超链接
+        std::unique_ptr<std::string> comment;        // 批注
         // 格式相关字段已移除，现在使用FormatDescriptor
         double formula_result;       // 公式计算结果
         int shared_formula_index;    // 共享公式索引（-1表示不是共享公式）
         
-        ExtendedData() : long_string(nullptr), formula(nullptr),
-                        hyperlink(nullptr), comment(nullptr), formula_result(0.0),
+        ExtendedData() : formula_result(0.0),
                         shared_formula_index(-1) {}
     };
     
-    ExtendedData* extended_;  // 只在需要时分配
+    std::unique_ptr<ExtendedData> extended_;  // 只在需要时分配
     
     // 辅助方法
     void ensureExtended();
     void clearExtended();
     void initializeFlags();
     void deepCopyExtendedData(const Cell& other);
-    void copyStringField(std::string*& dest, const std::string* src);
     void resetToEmpty();
     
 public:

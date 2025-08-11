@@ -105,10 +105,7 @@ void Cell::setValueImpl(const std::string& value) {
         flags_.type = CellType::String;  // 长字符串使用String类型
         // 长字符串存储
         ensureExtended();
-        if (!extended_->long_string) {
-            extended_->long_string = new std::string();
-        }
-        *extended_->long_string = value;
+        extended_->long_string = std::make_unique<std::string>(value);
     }
 }
 
@@ -119,10 +116,7 @@ void Cell::setFormula(const std::string& formula, double result) {
     }
     
     ensureExtended();
-    if (!extended_->formula) {
-        extended_->formula = new std::string();
-    }
-    *extended_->formula = formula;
+    extended_->formula = std::make_unique<std::string>(formula);
     extended_->formula_result = result;
     flags_.has_formula_result = true;
 }
@@ -238,15 +232,14 @@ void Cell::setHyperlink(const std::string& url) {
     if (!url.empty()) {
         ensureExtended();
         if (!extended_->hyperlink) {
-            extended_->hyperlink = new std::string();
+            extended_->hyperlink = std::make_unique<std::string>();
         }
         *extended_->hyperlink = url;
         flags_.has_hyperlink = true;
     } else {
         flags_.has_hyperlink = false;
         if (extended_ && extended_->hyperlink) {
-            delete extended_->hyperlink;
-            extended_->hyperlink = nullptr;
+            extended_->hyperlink.reset();
         }
     }
 }
@@ -263,12 +256,11 @@ void Cell::setComment(const std::string& comment) {
     if (!comment.empty()) {
         ensureExtended();
         if (!extended_->comment) {
-            extended_->comment = new std::string();
+            extended_->comment = std::make_unique<std::string>();
         }
         *extended_->comment = comment;
     } else if (extended_ && extended_->comment) {
-        delete extended_->comment;
-        extended_->comment = nullptr;
+        extended_->comment.reset();
     }
 }
 
@@ -287,7 +279,8 @@ void Cell::clear() {
     value_.number = 0.0;
     // 重置FormatDescriptor
     format_descriptor_holder_.reset();
-    clearExtended();
+    // smart pointer 自动清理
+    extended_.reset();
 }
 
 size_t Cell::getMemoryUsage() const {
@@ -304,6 +297,9 @@ size_t Cell::getMemoryUsage() const {
         if (extended_->hyperlink) {
             usage += sizeof(std::string) + extended_->hyperlink->capacity();
         }
+        if (extended_->comment) {
+            usage += sizeof(std::string) + extended_->comment->capacity();
+        }
         // Format相关内存计算已移除，现在使用FormatDescriptor
     }
     return usage;
@@ -311,25 +307,19 @@ size_t Cell::getMemoryUsage() const {
 
 void Cell::ensureExtended() {
     if (!extended_) {
-        extended_ = new ExtendedData();
+        extended_ = std::make_unique<ExtendedData>();
     }
 }
 
 void Cell::clearExtended() {
-    if (extended_) {
-        delete extended_->long_string;
-        delete extended_->formula;
-        delete extended_->hyperlink;
-        delete extended_->comment;
-        delete extended_;
-        extended_ = nullptr;
-    }
+    // smart pointer会自动清理，不需要手动delete
+    extended_.reset();
 }
 
 Cell::Cell(Cell&& other) noexcept : extended_(nullptr) {
     flags_ = other.flags_;
     value_ = other.value_;
-    extended_ = other.extended_;
+    extended_ = std::move(other.extended_);
     format_descriptor_holder_ = std::move(other.format_descriptor_holder_);
     
     // 重置源对象
@@ -338,13 +328,13 @@ Cell::Cell(Cell&& other) noexcept : extended_(nullptr) {
 
 Cell& Cell::operator=(Cell&& other) noexcept {
     if (this != &other) {
-        clearExtended();
-        // 重置FormatDescriptor
-    format_descriptor_holder_.reset();
+        // smart pointer会自动清理
+        extended_.reset();
+        format_descriptor_holder_.reset();
         
         flags_ = other.flags_;
         value_ = other.value_;
-        extended_ = other.extended_;
+        extended_ = std::move(other.extended_);
         format_descriptor_holder_ = std::move(other.format_descriptor_holder_);
         
         // 重置源对象
@@ -357,23 +347,27 @@ Cell& Cell::operator=(Cell&& other) noexcept {
 void Cell::deepCopyExtendedData(const Cell& other) {
     if (other.extended_) {
         ensureExtended();
-        copyStringField(extended_->long_string, other.extended_->long_string);
-        copyStringField(extended_->formula, other.extended_->formula);
-        copyStringField(extended_->hyperlink, other.extended_->hyperlink);
-        // Format相关复制已移除，现在使用FormatDescriptor
+        
+        // 使用 smart pointer 安全拷贝
+        if (other.extended_->long_string) {
+            extended_->long_string = std::make_unique<std::string>(*other.extended_->long_string);
+        }
+        if (other.extended_->formula) {
+            extended_->formula = std::make_unique<std::string>(*other.extended_->formula);
+        }
+        if (other.extended_->hyperlink) {
+            extended_->hyperlink = std::make_unique<std::string>(*other.extended_->hyperlink);
+        }
+        if (other.extended_->comment) {
+            extended_->comment = std::make_unique<std::string>(*other.extended_->comment);
+        }
+        
+        // 拷贝基础数据
         extended_->formula_result = other.extended_->formula_result;
+        extended_->shared_formula_index = other.extended_->shared_formula_index;
     }
 }
 
-// 私有辅助方法：拷贝字符串字段
-void Cell::copyStringField(std::string*& dest, const std::string* src) {
-    if (src) {
-        if (!dest) {
-            dest = new std::string();
-        }
-        *dest = *src;
-    }
-}
 
 // 私有辅助方法：重置为空状态
 void Cell::resetToEmpty() {
@@ -381,7 +375,7 @@ void Cell::resetToEmpty() {
     flags_.has_format = false;
     flags_.has_hyperlink = false;
     flags_.has_formula_result = false;
-    extended_ = nullptr;
+    extended_.reset();  // smart pointer 自动清理
     // 重置FormatDescriptor
     format_descriptor_holder_.reset();
 }
@@ -395,9 +389,9 @@ Cell::Cell(const Cell& other) : extended_(nullptr) {
 
 Cell& Cell::operator=(const Cell& other) {
     if (this != &other) {
-        clearExtended();
-        // 重置FormatDescriptor
-    format_descriptor_holder_.reset();
+        // smart pointer会自动清理
+        extended_.reset();
+        format_descriptor_holder_.reset();
         
         flags_ = other.flags_;
         value_ = other.value_;
