@@ -13,7 +13,7 @@ int main() {
             return 1;
         }
         
-        auto worksheet = workbook->addWorksheet("格式演示");
+        auto worksheet = workbook->addSheet("格式演示");
         
         std::cout << "=== FastExcel 自动换行与数字格式演示 ===" << std::endl;
         

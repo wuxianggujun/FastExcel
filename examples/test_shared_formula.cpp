@@ -11,7 +11,7 @@ int main() {
         }
         
         // 添加工作表
-        auto worksheet = workbook->addWorksheet("SharedFormulaTest");
+        auto worksheet = workbook->addSheet("SharedFormulaTest");
         if (!worksheet) {
             std::cout << "Failed to add worksheet" << std::endl;
             return 1;

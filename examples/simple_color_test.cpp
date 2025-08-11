@@ -14,7 +14,7 @@ int main() {
         }
         
         // 添加工作表
-        auto worksheet = workbook->addWorksheet("ColorTest");
+        auto worksheet = workbook->addSheet("ColorTest");
         
         // 写入数据并测试颜色读取
         worksheet->writeString(0, 0, "测试文本");

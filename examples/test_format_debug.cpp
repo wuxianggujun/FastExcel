@@ -10,7 +10,7 @@ int main() {
         auto workbook = Workbook::create(Path("test_format.xlsx"));
         workbook->open();
         
-        auto worksheet = workbook->addWorksheet("Test");
+        auto worksheet = workbook->addSheet("Test");
         
         // 获取一个单元格并设置格式
         auto& cell = worksheet->getCell(0, 0);

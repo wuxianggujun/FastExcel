@@ -22,6 +22,9 @@
 #include <optional>     // 🚀 新增：支持安全访问方法
 
 namespace fastexcel {
+namespace xml {
+    class WorksheetXMLGenerator; // 前向声明
+}
 namespace core {
 
 // 前向声明
@@ -170,6 +173,7 @@ struct SheetView {
  * - 图表支持
  */
 class Worksheet {
+    friend class ::fastexcel::xml::WorksheetXMLGenerator;  // 让XML生成器能访问private方法
 private:
     std::string name_;
     std::map<std::pair<int, int>, Cell> cells_; // (row, col) -> Cell
@@ -439,82 +443,6 @@ public:
         }
     }
     
-    /**
-     * @brief 写入字符串
-     * @param row 行号
-     * @param col 列号
-     * @param value 字符串值
-     */
-    void writeString(int row, int col, const std::string& value);
-    
-    /**
-     * @brief 写入数字
-     * @param row 行号
-     * @param col 列号
-     * @param value 数字值
-     */
-    void writeNumber(int row, int col, double value);
-    
-    /**
-     * @brief 写入布尔值
-     * @param row 行号
-     * @param col 列号
-     * @param value 布尔值
-     */
-    void writeBoolean(int row, int col, bool value);
-    
-    /**
-     * @brief 写入公式
-     * @param row 行号
-     * @param col 列号
-     * @param formula 公式（不包含=号）
-     */
-    void writeFormula(int row, int col, const std::string& formula);
-    
-    /**
-     * @brief 创建共享公式
-     * @param first_row 起始行
-     * @param first_col 起始列
-     * @param last_row 结束行
-     * @param last_col 结束列
-     * @param formula 基础公式（不包含=号）
-     * @return 共享公式索引，-1表示创建失败
-     */
-    int createSharedFormula(int first_row, int first_col, int last_row, int last_col, const std::string& formula);
-    
-    /**
-     * @brief 获取共享公式管理器
-     * @return 共享公式管理器指针
-     */
-    SharedFormulaManager* getSharedFormulaManager() const { return shared_formula_manager_.get(); }
-    
-    /**
-     * @brief 自动优化工作表中的公式为共享公式
-     * @param min_similar_count 最小相似公式数量（默认3个）
-     * @return 优化的公式数量
-     * 
-     * 该方法会自动检测工作表中的相似公式模式，并将其转换为共享公式以节省内存。
-     * 例如：多个单元格包含类似 =A1+B1, =A2+B2, =A3+B3 的公式会被优化为一个共享公式。
-     */
-    int optimizeFormulas(int min_similar_count = 3);
-    
-    /**
-     * @brief 分析公式优化潜力
-     * @return 优化报告结构
-     */
-    struct FormulaOptimizationReport {
-        size_t total_formulas = 0;           // 总公式数量
-        size_t optimizable_formulas = 0;     // 可优化的公式数量  
-        size_t estimated_memory_savings = 0; // 预估内存节省（字节）
-        double optimization_ratio = 0.0;     // 优化比率（百分比）
-        std::vector<std::string> pattern_examples; // 模式示例
-    };
-    
-    /**
-     * @brief 获取公式优化分析报告
-     * @return 优化报告
-     */
-    FormulaOptimizationReport analyzeFormulaOptimization() const;
     
     /**
      * @brief 写入日期时间
@@ -534,32 +462,6 @@ public:
     void writeUrl(int row, int col, const std::string& url, const std::string& string = "");
     
     // ========== 批量数据操作 ==========
-    
-    /**
-     * @brief 批量写入字符串数据
-     * @param start_row 起始行
-     * @param start_col 起始列
-     * @param data 二维字符串数组
-     */
-    void writeRange(int start_row, int start_col, const std::vector<std::vector<std::string>>& data);
-    
-    /**
-     * @brief 批量写入数字数据
-     * @param start_row 起始行
-     * @param start_col 起始列
-     * @param data 二维数字数组
-     */
-    void writeRange(int start_row, int start_col, const std::vector<std::vector<double>>& data);
-    
-    /**
-     * @brief 模板化批量写入
-     * @tparam T 数据类型
-     * @param start_row 起始行
-     * @param start_col 起始列
-     * @param data 二维数据数组
-     */
-    template<typename T>
-    void writeRange(int start_row, int start_col, const std::vector<std::vector<T>>& data);
     
     // 🚀 新API：模板化范围操作
     /**
@@ -1011,6 +913,50 @@ public:
      */
     size_t getCellCount() const { return cells_.size(); }
     
+    // 🚀 新API：便捷的工作表状态检查方法
+    /**
+     * @brief 检查工作表是否为空（无任何单元格数据）
+     * @return 是否为空
+     * 
+     * @example
+     * if (worksheet.isEmpty()) {
+     *     std::cout << "工作表为空" << std::endl;
+     * }
+     */
+    bool isEmpty() const { return cells_.empty(); }
+    
+    /**
+     * @brief 检查工作表是否有数据
+     * @return 是否有数据
+     */
+    bool hasData() const { return !cells_.empty(); }
+    
+    /**
+     * @brief 获取总行数（有数据的行）
+     * @return 总行数
+     */
+    int getRowCount() const;
+    
+    /**
+     * @brief 获取总列数（有数据的列）
+     * @return 总列数
+     */
+    int getColumnCount() const;
+    
+    /**
+     * @brief 获取指定行的单元格数量
+     * @param row 行号
+     * @return 该行的单元格数量
+     */
+    int getCellCountInRow(int row) const;
+    
+    /**
+     * @brief 获取指定列的单元格数量
+     * @param col 列号
+     * @return 该列的单元格数量
+     */
+    int getCellCountInColumn(int col) const;
+    
     /**
      * @brief 检查单元格是否存在
      * @param row 行号
@@ -1385,6 +1331,143 @@ public:
      */
     void sortRange(int first_row, int first_col, int last_row, int last_col,
                    int sort_column = 0, bool ascending = true, bool has_header = false);
+    
+    // ========== 共享公式管理 ==========
+    
+    /**
+     * @brief 创建共享公式
+     * @param first_row 起始行
+     * @param first_col 起始列
+     * @param last_row 结束行
+     * @param last_col 结束列
+     * @param formula 基础公式
+     * @return 共享索引，失败返回-1
+     */
+    int createSharedFormula(int first_row, int first_col, int last_row, int last_col, const std::string& formula);
+    
+    /**
+     * @brief 获取共享公式管理器
+     * @return 共享公式管理器指针
+     */
+    const SharedFormulaManager* getSharedFormulaManager() const { return shared_formula_manager_.get(); }
+    
+    // 🚀 新API：便捷的行列操作方法
+    /**
+     * @brief 追加行数据
+     * @tparam T 数据类型
+     * @param data 行数据
+     * @return 新行的行号
+     * 
+     * @example
+     * std::vector<std::string> row_data = {"Name", "Age", "Score"};
+     * int row_num = worksheet.appendRow(row_data);
+     */
+    template<typename T>
+    int appendRow(const std::vector<T>& data) {
+        auto [max_row, max_col] = getUsedRange();
+        int new_row = max_row + 1;
+        
+        for (size_t i = 0; i < data.size(); ++i) {
+            setValue(new_row, static_cast<int>(i), data[i]);
+        }
+        
+        return new_row;
+    }
+    
+    /**
+     * @brief 获取整行的数据
+     * @tparam T 返回类型
+     * @param row 行号
+     * @return 行数据向量
+     * 
+     * @example
+     * auto row_data = worksheet.getRowData<std::string>(0);
+     * for (const auto& cell : row_data) {
+     *     std::cout << cell << " ";
+     * }
+     */
+    template<typename T>
+    std::vector<T> getRowData(int row) const {
+        std::vector<T> result;
+        auto [max_row, max_col] = getUsedRange();
+        
+        for (int col = 0; col <= max_col; ++col) {
+            if (hasCellAt(row, col)) {
+                result.push_back(getValue<T>(row, col));
+            } else {
+                result.push_back(T{}); // 默认值
+            }
+        }
+        
+        return result;
+    }
+    
+    /**
+     * @brief 获取整列的数据
+     * @tparam T 返回类型
+     * @param col 列号
+     * @return 列数据向量
+     */
+    template<typename T>
+    std::vector<T> getColumnData(int col) const {
+        std::vector<T> result;
+        auto [max_row, max_col] = getUsedRange();
+        
+        for (int row = 0; row <= max_row; ++row) {
+            if (hasCellAt(row, col)) {
+                result.push_back(getValue<T>(row, col));
+            } else {
+                result.push_back(T{}); // 默认值
+            }
+        }
+        
+        return result;
+    }
+    
+    /**
+     * @brief 清空指定行的所有数据
+     * @param row 行号
+     */
+    void clearRow(int row);
+    
+    /**
+     * @brief 清空指定列的所有数据
+     * @param col 列号
+     */
+    void clearColumn(int col);
+    
+    /**
+     * @brief 清空所有单元格数据
+     */
+    void clearAll();
+    
+    /**
+     * @brief 批量设置行数据
+     * @tparam T 数据类型
+     * @param row 行号
+     * @param data 数据向量
+     * @param start_col 起始列号（默认0）
+     */
+    template<typename T>
+    void setRowData(int row, const std::vector<T>& data, int start_col = 0) {
+        for (size_t i = 0; i < data.size(); ++i) {
+            setValue(row, start_col + static_cast<int>(i), data[i]);
+        }
+    }
+    
+    /**
+     * @brief 批量设置列数据
+     * @tparam T 数据类型
+     * @param col 列号
+     * @param data 数据向量
+     * @param start_row 起始行号（默认0）
+     */
+    template<typename T>
+    void setColumnData(int col, const std::vector<T>& data, int start_row = 0) {
+        for (size_t i = 0; i < data.size(); ++i) {
+            setValue(start_row + static_cast<int>(i), col, data[i]);
+        }
+    }
 
 private:
     // 内部辅助方法
@@ -1413,24 +1496,5 @@ private:
     void shiftCellsForRowDeletion(int row, int count);
     void shiftCellsForColumnDeletion(int col, int count);
 };
-
-// 模板方法实现
-template<typename T>
-void Worksheet::writeRange(int start_row, int start_col, const std::vector<std::vector<T>>& data) {
-    for (size_t row = 0; row < data.size(); ++row) {
-        for (size_t col = 0; col < data[row].size(); ++col) {
-            int target_row = static_cast<int>(start_row + row);
-            int target_col = static_cast<int>(start_col + col);
-            
-            if constexpr (std::is_same_v<T, std::string>) {
-                writeString(target_row, target_col, data[row][col]);
-            } else if constexpr (std::is_arithmetic_v<T>) {
-                writeNumber(target_row, target_col, static_cast<double>(data[row][col]));
-            } else if constexpr (std::is_same_v<T, bool>) {
-                writeBoolean(target_row, target_col, data[row][col]);
-            }
-        }
-    }
-}
 
 }} // namespace fastexcel::core

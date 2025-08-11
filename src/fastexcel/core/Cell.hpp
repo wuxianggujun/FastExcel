@@ -8,6 +8,9 @@
 #include <type_traits>  // 🚀 新增：支持模板类型判断
 
 namespace fastexcel {
+namespace xml {
+    class WorksheetXMLGenerator; // 前向声明
+}
 namespace core {
 
 // 前向声明
@@ -28,6 +31,9 @@ enum class CellType : uint8_t {
 };
 
 class Cell {
+    friend class Worksheet;  // 让Worksheet能访问private方法
+    friend class Workbook;   // 让Workbook能访问private方法
+    friend class ::fastexcel::xml::WorksheetXMLGenerator;  // 让XML生成器能访问private方法
 private:
     // 使用位域压缩标志 - 借鉴libxlsxwriter的优化思路
     struct {
@@ -94,13 +100,6 @@ public:
     Cell& operator=(std::string_view value);
     Cell& operator=(const char* value);
     
-    // 基本值设置
-    void setValue(double value);
-    void setValue(bool value);
-    void setValue(const std::string& value);
-    void setValue(const char* value) { setValue(std::string(value)); }  // 避免隐式转换到bool
-    void setValue(int value) { setValue(static_cast<double>(value)); }
-    
     // 公式设置
     void setFormula(const std::string& formula, double result = 0.0);
     
@@ -118,9 +117,6 @@ public:
     
     // 内部方法：获取真实的类型（用于测试和内部逻辑）
     CellType getInternalType() const { return flags_.type; }
-    double getNumberValue() const;
-    bool getBooleanValue() const;
-    std::string getStringValue() const;
     std::string getFormula() const;
     double getFormulaResult() const;
     
@@ -164,11 +160,11 @@ public:
     template<typename T>
     void setValue(const T& value) {
         if constexpr (std::is_arithmetic_v<T> && !std::is_same_v<T, bool>) {
-            setValue(static_cast<double>(value));
+            setValueImpl(static_cast<double>(value));
         } else if constexpr (std::is_same_v<T, bool>) {
-            setValue(value);
+            setValueImpl(value);
         } else if constexpr (std::is_convertible_v<T, std::string>) {
-            setValue(std::string(value));
+            setValueImpl(std::string(value));
         } else {
             static_assert(std::is_arithmetic_v<T>, 
                           "Unsupported type for Cell::setValue<T>()");
@@ -198,6 +194,52 @@ public:
     bool isFormula() const { return flags_.type == CellType::Formula || flags_.type == CellType::SharedFormula; }
     bool isDate() const { return flags_.type == CellType::Date; }
     
+    // 🚀 新API：便捷访问方法（统一命名风格）
+    /**
+     * @brief 将单元格值转为字符串
+     * @return 字符串表示的值
+     */
+    std::string asString() const { return getValue<std::string>(); }
+    
+    /**
+     * @brief 将单元格值转为数字
+     * @return 数字值，如果无法转换则抛出异常
+     */
+    double asNumber() const { return getValue<double>(); }
+    
+    /**
+     * @brief 将单元格值转为布尔值
+     * @return 布尔值，如果无法转换则抛出异常
+     */
+    bool asBool() const { return getValue<bool>(); }
+    
+    /**
+     * @brief 将单元格值转为整数
+     * @return 整数值，如果无法转换则抛出异常
+     */
+    int asInt() const { return getValue<int>(); }
+    
+    // 🚀 新API：安全的类型转换方法
+    /**
+     * @brief 检查是否可以转换为指定类型
+     * @tparam T 目标类型
+     * @return 是否可以安全转换
+     */
+    template<typename T>
+    bool canConvertTo() const noexcept {
+        return tryGetValue<T>().has_value();
+    }
+    
+    /**
+     * @brief 安全类型转换
+     * @tparam T 目标类型
+     * @return 转换结果的optional，失败时返回nullopt
+     */
+    template<typename T>
+    std::optional<T> safeCast() const noexcept {
+        return tryGetValue<T>();
+    }
+    
     // 清空
     void clear();
     
@@ -215,6 +257,14 @@ public:
 private:
     // FormatDescriptor的shared_ptr持有者
     mutable std::shared_ptr<const FormatDescriptor> format_descriptor_holder_;
+    
+    // 内部实现方法（由模板API调用）
+    void setValueImpl(double value);
+    void setValueImpl(bool value);
+    void setValueImpl(const std::string& value);
+    double getNumberValue() const;
+    bool getBooleanValue() const;
+    std::string getStringValue() const;
 };
 
 }} // namespace fastexcel::core

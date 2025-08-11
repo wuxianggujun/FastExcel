@@ -26,6 +26,9 @@
 #include <stdexcept>  // 🚀 新增：支持异常处理
 
 namespace fastexcel {
+namespace xml {
+    class DocPropsXMLGenerator; // 前向声明
+}
 namespace opc {
     class PackageEditor;  // 前向声明PackageEditor
 }
@@ -119,6 +122,7 @@ class Workbook {
     friend class ExcelStructureGenerator;
     friend class ::fastexcel::opc::PackageEditor;  // 让PackageEditor能访问私有方法
     friend class ::fastexcel::reader::XLSXReader;  // 让XLSXReader能访问私有open方法
+    friend class ::fastexcel::xml::DocPropsXMLGenerator;  // 让XML生成器能访问私有方法
 private:
     std::string filename_;
     std::vector<std::shared_ptr<Worksheet>> worksheets_;
@@ -327,7 +331,7 @@ public:
      */
     std::shared_ptr<const Worksheet> getSheet(size_t index) const;
     
-    // 🚀 新API：便捷的工作表访问操作符
+    // 🚀 便捷的工作表访问操作符
     /**
      * @brief 通过索引访问工作表（操作符重载）
      * @param index 工作表索引
@@ -379,10 +383,105 @@ public:
     size_t getSheetCount() const { return worksheets_.size(); }
     
     /**
+     * @brief 检查工作簿是否为空（无工作表）
+     * @return 是否为空
+     */
+    bool isEmpty() const { return worksheets_.empty(); }
+    
+    /**
+     * @brief 获取第一个工作表
+     * @return 第一个工作表指针，如果无工作表返回nullptr
+     * 
+     * @example
+     * if (auto firstSheet = workbook.getFirstSheet()) {
+     *     firstSheet->setValue("A1", std::string("Hello"));
+     * }
+     */
+    std::shared_ptr<Worksheet> getFirstSheet();
+    
+    /**
+     * @brief 获取第一个工作表（只读版本）
+     * @return 第一个工作表指针，如果无工作表返回nullptr
+     */
+    std::shared_ptr<const Worksheet> getFirstSheet() const;
+    
+    /**
+     * @brief 获取最后一个工作表
+     * @return 最后一个工作表指针，如果无工作表返回nullptr
+     */
+    std::shared_ptr<Worksheet> getLastSheet();
+    
+    /**
+     * @brief 获取最后一个工作表（只读版本）
+     * @return 最后一个工作表指针，如果无工作表返回nullptr
+     */
+    std::shared_ptr<const Worksheet> getLastSheet() const;
+    
+    /**
      * @brief 获取所有工作表名称
      * @return 工作表名称列表
      */
     std::vector<std::string> getSheetNames() const;
+    
+    // 🚀 新API：便捷的工作表查找方法
+    /**
+     * @brief 检查是否存在指定名称的工作表
+     * @param name 工作表名称
+     * @return 是否存在
+     * 
+     * @example
+     * if (workbook.hasSheet("Data")) {
+     *     auto sheet = workbook.getSheet("Data");
+     * }
+     */
+    bool hasSheet(const std::string& name) const;
+    
+    /**
+     * @brief 查找工作表（可能不存在）
+     * @param name 工作表名称
+     * @return 工作表指针，如果不存在返回nullptr
+     * 
+     * @example
+     * if (auto sheet = workbook.findSheet("Data")) {
+     *     // 工作表存在，可以安全使用
+     *     sheet->setValue("A1", std::string("Hello"));
+     * }
+     */
+    std::shared_ptr<Worksheet> findSheet(const std::string& name);
+    
+    /**
+     * @brief 查找工作表（只读版本）
+     * @param name 工作表名称
+     * @return 工作表指针，如果不存在返回nullptr
+     */
+    std::shared_ptr<const Worksheet> findSheet(const std::string& name) const;
+    
+    /**
+     * @brief 获取所有工作表
+     * @return 工作表指针列表
+     * 
+     * @example
+     * for (auto& sheet : workbook.getAllSheets()) {
+     *     std::cout << "工作表: " << sheet->getName() << std::endl;
+     * }
+     */
+    std::vector<std::shared_ptr<Worksheet>> getAllSheets();
+    
+    /**
+     * @brief 获取所有工作表（只读版本）
+     * @return 工作表指针列表
+     */
+    std::vector<std::shared_ptr<const Worksheet>> getAllSheets() const;
+    
+    /**
+     * @brief 清空所有工作表
+     * @return 清理的工作表数量
+     * 
+     * @example
+     * int count = workbook.clearAllSheets();
+     * std::cout << "已清理 " << count << " 个工作表" << std::endl;
+     */
+    int clearAllSheets();
     
     /**
      * @brief 重命名工作表
@@ -804,41 +903,41 @@ public:
      * @param name 属性名
      * @param value 属性值
      */
-    void setCustomProperty(const std::string& name, const std::string& value);
+    void setProperty(const std::string& name, const std::string& value);
     
     /**
      * @brief 添加自定义属性（数字）
      * @param name 属性名
      * @param value 属性值
      */
-    void setCustomProperty(const std::string& name, double value);
+    void setProperty(const std::string& name, double value);
     
     /**
      * @brief 添加自定义属性（布尔）
      * @param name 属性名
      * @param value 属性值
      */
-    void setCustomProperty(const std::string& name, bool value);
+    void setProperty(const std::string& name, bool value);
     
     /**
      * @brief 获取自定义属性
      * @param name 属性名
      * @return 属性值（如果不存在返回空字符串）
      */
-    std::string getCustomProperty(const std::string& name) const;
+    std::string getProperty(const std::string& name) const;
     
     /**
      * @brief 删除自定义属性
      * @param name 属性名
      * @return 是否成功
      */
-    bool removeCustomProperty(const std::string& name);
+    bool removeProperty(const std::string& name);
     
     /**
      * @brief 获取所有自定义属性
      * @return 自定义属性映射 (名称 -> 值)
      */
-    std::unordered_map<std::string, std::string> getCustomProperties() const;
+    std::unordered_map<std::string, std::string> getAllProperties() const;
     
     // ========== 定义名称 ==========
     

@@ -418,6 +418,108 @@ std::vector<std::string> Workbook::getSheetNames() const {
     return names;
 }
 
+// 🚀 新API：便捷的工作表查找方法
+bool Workbook::hasSheet(const std::string& name) const {
+    auto it = std::find_if(worksheets_.begin(), worksheets_.end(),
+                          [&name](const std::shared_ptr<Worksheet>& ws) {
+                              return ws->getName() == name;
+                          });
+    return it != worksheets_.end();
+}
+
+std::shared_ptr<Worksheet> Workbook::findSheet(const std::string& name) {
+    auto it = std::find_if(worksheets_.begin(), worksheets_.end(),
+                          [&name](const std::shared_ptr<Worksheet>& ws) {
+                              return ws->getName() == name;
+                          });
+    
+    if (it != worksheets_.end()) {
+        return *it;
+    }
+    
+    return nullptr;
+}
+
+std::shared_ptr<const Worksheet> Workbook::findSheet(const std::string& name) const {
+    auto it = std::find_if(worksheets_.begin(), worksheets_.end(),
+                          [&name](const std::shared_ptr<Worksheet>& ws) {
+                              return ws->getName() == name;
+                          });
+    
+    if (it != worksheets_.end()) {
+        return *it;
+    }
+    
+    return nullptr;
+}
+
+std::vector<std::shared_ptr<Worksheet>> Workbook::getAllSheets() {
+    std::vector<std::shared_ptr<Worksheet>> sheets;
+    sheets.reserve(worksheets_.size());
+    
+    for (auto& worksheet : worksheets_) {
+        sheets.push_back(worksheet);
+    }
+    
+    return sheets;
+}
+
+std::vector<std::shared_ptr<const Worksheet>> Workbook::getAllSheets() const {
+    std::vector<std::shared_ptr<const Worksheet>> sheets;
+    sheets.reserve(worksheets_.size());
+    
+    for (const auto& worksheet : worksheets_) {
+        sheets.push_back(worksheet);
+    }
+    
+    return sheets;
+}
+
+int Workbook::clearAllSheets() {
+    ensureEditable("clearAllSheets");
+    
+    int count = static_cast<int>(worksheets_.size());
+    worksheets_.clear();
+    
+    // 重置工作表ID计数器
+    next_sheet_id_ = 1;
+    
+    // 重置活动工作表索引
+    active_worksheet_index_ = 0;
+    
+    CORE_DEBUG("Cleared all worksheets, removed {} sheets", count);
+    
+    return count;
+}
+
+std::shared_ptr<Worksheet> Workbook::getFirstSheet() {
+    if (!worksheets_.empty()) {
+        return worksheets_.front();
+    }
+    return nullptr;
+}
+
+std::shared_ptr<const Worksheet> Workbook::getFirstSheet() const {
+    if (!worksheets_.empty()) {
+        return worksheets_.front();
+    }
+    return nullptr;
+}
+
+std::shared_ptr<Worksheet> Workbook::getLastSheet() {
+    if (!worksheets_.empty()) {
+        return worksheets_.back();
+    }
+    return nullptr;
+}
+
+std::shared_ptr<const Worksheet> Workbook::getLastSheet() const {
+    if (!worksheets_.empty()) {
+        return worksheets_.back();
+    }
+    return nullptr;
+}
+
 bool Workbook::renameSheet(const std::string& old_name, const std::string& new_name) {
     auto worksheet = getSheet(old_name);
     if (!worksheet) {
@@ -648,27 +750,27 @@ void Workbook::setThemeMinorFontComplex(const std::string& name) {
 
 // ========== 自定义属性 ==========
 
-void Workbook::setCustomProperty(const std::string& name, const std::string& value) {
+void Workbook::setProperty(const std::string& name, const std::string& value) {
     custom_property_manager_->setProperty(name, value);
 }
 
-void Workbook::setCustomProperty(const std::string& name, double value) {
+void Workbook::setProperty(const std::string& name, double value) {
     custom_property_manager_->setProperty(name, value);
 }
 
-void Workbook::setCustomProperty(const std::string& name, bool value) {
+void Workbook::setProperty(const std::string& name, bool value) {
     custom_property_manager_->setProperty(name, value);
 }
 
-std::string Workbook::getCustomProperty(const std::string& name) const {
+std::string Workbook::getProperty(const std::string& name) const {
     return custom_property_manager_->getProperty(name);
 }
 
-bool Workbook::removeCustomProperty(const std::string& name) {
+bool Workbook::removeProperty(const std::string& name) {
     return custom_property_manager_->removeProperty(name);
 }
 
-std::unordered_map<std::string, std::string> Workbook::getCustomProperties() const {
+std::unordered_map<std::string, std::string> Workbook::getAllProperties() const {
     return custom_property_manager_->getAllProperties();
 }
 
@@ -1279,7 +1381,7 @@ bool Workbook::mergeWorkbook(const std::unique_ptr<Workbook>& other_workbook, co
             
             // 合并自定义属性
             for (const auto& prop : other_workbook->custom_property_manager_->getAllDetailedProperties()) {
-                setCustomProperty(prop.name, prop.value);
+                setProperty(prop.name, prop.value);
             }
             
             CORE_DEBUG("Merged document properties");
@@ -1331,7 +1433,7 @@ bool Workbook::exportWorksheets(const std::vector<std::string>& worksheet_names,
         export_workbook->doc_properties_ = doc_properties_;
         // 复制自定义属性
         for (const auto& prop : custom_property_manager_->getAllDetailedProperties()) {
-            export_workbook->setCustomProperty(prop.name, prop.value);
+            export_workbook->setProperty(prop.name, prop.value);
         }
         
         // 保存导出的工作簿

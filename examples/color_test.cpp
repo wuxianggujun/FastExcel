@@ -23,7 +23,7 @@ int main() {
         }
         
         // 添加工作表
-        auto worksheet = workbook->addWorksheet("ColorTest");
+        auto worksheet = workbook->addSheet("ColorTest");
         
         // 创建不同颜色的样式
         auto redStyle = workbook->createStyleBuilder()

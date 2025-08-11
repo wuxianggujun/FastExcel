@@ -227,7 +227,7 @@ bool WorksheetParser::parseCell(const std::string& cell_xml,
                 if (auto wb = worksheet->getParentWorkbook()) {
                     wb->addSharedStringWithIndex(it->second, string_index);
                 }
-                worksheet->writeString(row, col, it->second);
+                worksheet->setValue(row, col, it->second);
             }
         } catch (const std::exception& e) {
             std::cerr << "解析共享字符串索引失败: " << e.what() << std::endl;
@@ -235,23 +235,23 @@ bool WorksheetParser::parseCell(const std::string& cell_xml,
     } else if (cell_type == "inlineStr") {
         // 内联字符串
         std::string decoded_value = decodeXMLEntities(cell_value);
-        worksheet->writeString(row, col, decoded_value);
+        worksheet->setValue(row, col, decoded_value);
     } else if (cell_type == "b") {
         // 布尔值
         bool bool_value = (cell_value == "1" || cell_value == "true");
-        worksheet->writeBoolean(row, col, bool_value);
+        worksheet->setValue(row, col, bool_value);
     } else if (cell_type == "str") {
         // 公式字符串结果
         std::string decoded_value = decodeXMLEntities(cell_value);
-        worksheet->writeString(row, col, decoded_value);
+        worksheet->setValue(row, col, decoded_value);
     } else if (cell_type == "e") {
         // 错误值
         std::string decoded_value = decodeXMLEntities(cell_value);
-        worksheet->writeString(row, col, "#ERROR: " + decoded_value);
+        worksheet->setValue(row, col, "#ERROR: " + decoded_value);
     } else if (cell_type == "d") {
         // 日期值（ISO 8601格式）
         std::string decoded_value = decodeXMLEntities(cell_value);
-        worksheet->writeString(row, col, decoded_value);
+        worksheet->setValue(row, col, decoded_value);
     } else {
         // 数字或默认类型
         if (!cell_value.empty()) {
@@ -263,18 +263,18 @@ bool WorksheetParser::parseCell(const std::string& cell_xml,
                 if (isDateFormat(style_index, styles)) {
                     // 将Excel日期数字转换为可读格式
                     std::string date_str = convertExcelDateToString(number_value);
-                    worksheet->writeString(row, col, date_str);
+                    worksheet->setValue(row, col, date_str);
                 } else {
-                    worksheet->writeNumber(row, col, number_value);
+                    worksheet->setValue(row, col, number_value);
                 }
             } catch (const std::exception& e) {
                 // 如果不能转换为数字，当作字符串处理
                 std::string decoded_value = decodeXMLEntities(cell_value);
-                worksheet->writeString(row, col, decoded_value);
+                worksheet->setValue(row, col, decoded_value);
             }
         } else if (!formula.empty()) {
             // 只有公式没有值的情况
-            worksheet->writeString(row, col, "=" + formula);
+            worksheet->setValue(row, col, "=" + formula);
         }
     }
     

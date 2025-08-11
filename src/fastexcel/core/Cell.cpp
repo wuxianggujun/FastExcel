@@ -19,25 +19,25 @@ Cell::Cell() : extended_(nullptr) {
     initializeFlags();
 }
 
-// 便利构造函数实现 - 使用委托构造函数
+// 便利构造函数实现 - 使用模板API
 Cell::Cell(const std::string& value) : Cell() {
-    setValue(value);
+    setValue<std::string>(value);
 }
 
 Cell::Cell(const char* value) : Cell() {
-    setValue(std::string(value));
+    setValue<std::string>(std::string(value));
 }
 
 Cell::Cell(double value) : Cell() {
-    setValue(value);
+    setValue<double>(value);
 }
 
 Cell::Cell(int value) : Cell() {
-    setValue(static_cast<double>(value));
+    setValue<int>(value);
 }
 
 Cell::Cell(bool value) : Cell() {
-    setValue(value);
+    setValue<bool>(value);
 }
 
 Cell::~Cell() {
@@ -47,48 +47,50 @@ Cell::~Cell() {
 // ========== V3风格赋值运算 ==========
 
 Cell& Cell::operator=(double value) {
-    setValue(value);
+    setValue<double>(value);
     return *this;
 }
 
 Cell& Cell::operator=(int value) {
-    setValue(static_cast<double>(value));
+    setValue<int>(value);
     return *this;
 }
 
 Cell& Cell::operator=(bool value) {
-    setValue(value);
+    setValue<bool>(value);
     return *this;
 }
 
 Cell& Cell::operator=(const std::string& value) {
-    setValue(value);
+    setValue<std::string>(value);
     return *this;
 }
 
 Cell& Cell::operator=(std::string_view value) {
-    setValue(std::string(value));
+    setValue<std::string>(std::string(value));
     return *this;
 }
 
 Cell& Cell::operator=(const char* value) {
-    setValue(std::string(value));
+    setValue<std::string>(std::string(value));
     return *this;
 }
 
-void Cell::setValue(double value) {
+// ========== 内部实现方法（由模板API调用）==========
+
+void Cell::setValueImpl(double value) {
     clear();
     flags_.type = CellType::Number;
     value_.number = value;
 }
 
-void Cell::setValue(bool value) {
+void Cell::setValueImpl(bool value) {
     clear();
     flags_.type = CellType::Boolean;
     value_.boolean = value;
 }
 
-void Cell::setValue(const std::string& value) {
+void Cell::setValueImpl(const std::string& value) {
     clear();
     
     // 短字符串内联存储优化 - 借鉴libxlsxwriter的思路
@@ -124,6 +126,8 @@ void Cell::setFormula(const std::string& formula, double result) {
     extended_->formula_result = result;
     flags_.has_formula_result = true;
 }
+
+// ========== 内部get方法实现 ==========
 
 double Cell::getNumberValue() const {
     if (flags_.type == CellType::Number) {

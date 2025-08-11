@@ -15,7 +15,7 @@ int main() {
         }
         
         // 添加工作表
-        auto worksheet = workbook->addWorksheet("RGBColorTest");
+        auto worksheet = workbook->addSheet("RGBColorTest");
         
         std::cout << "=== FastExcel RGB三参数颜色构造函数测试 ===" << std::endl;
         

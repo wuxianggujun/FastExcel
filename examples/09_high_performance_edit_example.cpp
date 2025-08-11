@@ -100,7 +100,7 @@ void demonstrateHighPerformanceEditing() {
     workbook->setHighPerformanceMode(true);
     std::cout << "✓ 已启用超高性能模式（无压缩、大缓冲区、流式XML）" << std::endl;
     
-    auto worksheet = workbook->addWorksheet("大数据表");
+    auto worksheet = workbook->addSheet("大数据表");
     if (!worksheet) {
         std::cout << "✗ 无法创建工作表" << std::endl;
         return;
@@ -186,7 +186,7 @@ void demonstrateMemoryOptimizedEditing() {
         }
         
         // 创建测试数据
-        auto ws = workbook->addWorksheet("测试数据");
+        auto ws = workbook->addSheet("测试数据");
         for (int i = 0; i < 100; ++i) {
             ws->writeString(i, 0, "测试" + std::to_string(i));
             ws->writeNumber(i, 1, i * 1.5);
@@ -256,7 +256,7 @@ void demonstrateStreamingProcessing() {
     
     std::cout << "✓ 流式模式配置完成" << std::endl;
     
-    auto worksheet = workbook->addWorksheet("流式数据");
+    auto worksheet = workbook->addSheet("流式数据");
     
     // 模拟流式写入大量数据
     const int TOTAL_ROWS = 50000;

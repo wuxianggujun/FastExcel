@@ -10,9 +10,9 @@ void printCellInfo(const Cell& cell, int row, int col) {
     
     // 显示单元格值
     if (cell.isNumber()) {
-        std::cout << "   📊 数值: " << cell.getNumberValue() << std::endl;
+        std::cout << "   📊 数值: " << cell.getValue<double>() << std::endl;
     } else if (cell.isString()) {
-        std::cout << "   📝 文本: \"" << cell.getStringValue() << "\"" << std::endl;
+        std::cout << "   📝 文本: \"" << cell.getValue<std::string>() << "\"" << std::endl;
     } else if (cell.isFormula()) {
         std::cout << "   🔢 公式: " << cell.getFormula() << " = " << cell.getFormulaResult() << std::endl;
     }
@@ -82,37 +82,37 @@ int main() {
             int currencyId = workbook->addStyle(currencyStyle);
             
             // 写入数据
-            worksheet->writeString(0, 0, "项目名称");
+            worksheet->setValue(0, 0, std::string("项目名称"));
             worksheet->getCell(0, 0).setFormat(workbook->getStyles().getFormat(titleId));
             
-            worksheet->writeString(0, 1, "数值");
+            worksheet->setValue(0, 1, std::string("数值"));
             worksheet->getCell(0, 1).setFormat(workbook->getStyles().getFormat(titleId));
             
-            worksheet->writeString(0, 2, "百分比");
+            worksheet->setValue(0, 2, std::string("百分比"));
             worksheet->getCell(0, 2).setFormat(workbook->getStyles().getFormat(titleId));
             
-            worksheet->writeString(0, 3, "金额");
+            worksheet->setValue(0, 3, std::string("金额"));
             worksheet->getCell(0, 3).setFormat(workbook->getStyles().getFormat(titleId));
             
             // 数据行
-            worksheet->writeString(1, 0, "产品A");
-            worksheet->writeNumber(1, 1, 123.456);
+            worksheet->setValue(1, 0, std::string("产品A"));
+            worksheet->setValue(1, 1, 123.456);
             worksheet->getCell(1, 1).setFormat(workbook->getStyles().getFormat(numberId));
             
-            worksheet->writeNumber(1, 2, 0.85);
+            worksheet->setValue(1, 2, 0.85);
             worksheet->getCell(1, 2).setFormat(workbook->getStyles().getFormat(percentId));
             
-            worksheet->writeNumber(1, 3, 1234.56);
+            worksheet->setValue(1, 3, 1234.56);
             worksheet->getCell(1, 3).setFormat(workbook->getStyles().getFormat(currencyId));
             
-            worksheet->writeString(2, 0, "产品B");
-            worksheet->writeNumber(2, 1, 987.654);
+            worksheet->setValue(2, 0, std::string("产品B"));
+            worksheet->setValue(2, 1, 987.654);
             worksheet->getCell(2, 1).setFormat(workbook->getStyles().getFormat(numberId));
             
-            worksheet->writeNumber(2, 2, 0.92);
+            worksheet->setValue(2, 2, 0.92);
             worksheet->getCell(2, 2).setFormat(workbook->getStyles().getFormat(percentId));
             
-            worksheet->writeNumber(2, 3, 2345.67);
+            worksheet->setValue(2, 3, 2345.67);
             worksheet->getCell(2, 3).setFormat(workbook->getStyles().getFormat(currencyId));
             
             workbook->save();
@@ -155,10 +155,10 @@ int main() {
         std::cout << "\n✏️ 步骤3: 编辑Excel文件..." << std::endl;
         
         // 添加新的数据行
-        worksheet->writeString(3, 0, "产品C");
-        worksheet->writeNumber(3, 1, 555.555);
-        worksheet->writeNumber(3, 2, 0.78);
-        worksheet->writeNumber(3, 3, 3456.78);
+        worksheet->setValue(3, 0, std::string("产品C"));
+        worksheet->setValue(3, 1, 555.555);
+        worksheet->setValue(3, 2, 0.78);
+        worksheet->setValue(3, 3, 3456.78);
         
         // 创建新的样式用于编辑
         auto editStyle = readWorkbook->createStyleBuilder()
@@ -178,18 +178,18 @@ int main() {
         // 修改现有单元格
         std::cout << "\n🔄 修改现有数据..." << std::endl;
         auto& existingCell = worksheet->getCell(1, 1);
-        std::cout << "   原值: " << existingCell.getNumberValue() << std::endl;
+        std::cout << "   原值: " << existingCell.getValue<double>() << std::endl;
         
         // 修改数值但保持格式
         auto oldFormat = existingCell.getFormatDescriptor();
         existingCell.setValue(999.999);
         existingCell.setFormat(oldFormat);  // 保持原格式
         
-        std::cout << "   新值: " << existingCell.getNumberValue() << " (保持原格式)" << std::endl;
+        std::cout << "   新值: " << existingCell.getValue<double>() << " (保持原格式)" << std::endl;
         
         // 添加公式单元格
-        worksheet->writeFormula(4, 1, "SUM(B2:B4)");
-        worksheet->writeString(4, 0, "总计");
+        worksheet->getCell(4, 1).setFormula("SUM(B2:B4)");
+        worksheet->setValue(4, 0, std::string("总计"));
         
         // 保存修改后的文件
         readWorkbook->saveAs("test_read_edit_modified.xlsx");
@@ -210,7 +210,7 @@ int main() {
         // 检查新添加的数据
         if (verifyWorksheet->hasCellAt(3, 0)) {
             const auto& newDataCell = verifyWorksheet->getCell(3, 0);
-            std::cout << "   ✅ 新数据行: " << newDataCell.getStringValue() << std::endl;
+            std::cout << "   ✅ 新数据行: " << newDataCell.getValue<std::string>() << std::endl;
         }
         
         // 检查公式

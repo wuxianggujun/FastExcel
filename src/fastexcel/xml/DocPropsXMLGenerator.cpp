@@ -172,7 +172,7 @@ void DocPropsXMLGenerator::generateCustomXML(const core::Workbook* workbook,
     }
 
     // 检查是否有自定义属性
-    auto custom_props = workbook->getCustomProperties();
+    auto custom_props = workbook->getAllProperties();
     if (custom_props.empty()) {
         XML_DEBUG("No custom properties found, skipping custom.xml generation");
         return;

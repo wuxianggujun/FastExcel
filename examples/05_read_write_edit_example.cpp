@@ -24,7 +24,7 @@ void demonstrateBasicReadWrite() {
             return;
         }
         
-        auto worksheet = workbook->addWorksheet("员工数据");
+        auto worksheet = workbook->addSheet("员工数据");
         
         // 写入表头
         worksheet->writeString(0, 0, "姓名");
@@ -192,7 +192,7 @@ void demonstrateEditingFeatures() {
         
         // 6. 添加新工作表
         std::cout << "✓ 添加新工作表..." << std::endl;
-        auto summary_sheet = workbook->addWorksheet("薪资统计");
+        auto summary_sheet = workbook->addSheet("薪资统计");
         summary_sheet->writeString(0, 0, "部门");
         summary_sheet->writeString(0, 1, "平均薪资");
         summary_sheet->writeString(1, 0, "研发部");
@@ -247,9 +247,9 @@ void demonstrateAdvancedFeatures() {
         std::cout << "✓ 启用高性能模式" << std::endl;
         
         // 创建多个工作表
-        auto sales_sheet = workbook->addWorksheet("销售数据");
-        auto product_sheet = workbook->addWorksheet("产品信息");
-        auto analysis_sheet = workbook->addWorksheet("数据分析");
+        auto sales_sheet = workbook->addSheet("销售数据");
+        auto product_sheet = workbook->addSheet("产品信息");
+        auto analysis_sheet = workbook->addSheet("数据分析");
         
         // 在销售数据表中添加大量数据
         std::cout << "✓ 生成大量测试数据..." << std::endl;

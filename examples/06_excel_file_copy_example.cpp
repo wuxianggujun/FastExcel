@@ -111,7 +111,7 @@ public:
                 std::cout << "  Copying worksheet: " << sheet_name << std::endl;
                 
                 // 创建目标工作表
-                auto target_worksheet = target_workbook->addWorksheet(sheet_name);
+                auto target_worksheet = target_workbook->addSheet(sheet_name);
                 
                 // 获取源工作表的数据范围
                 auto [max_row, max_col] = source_worksheet->getUsedRange();

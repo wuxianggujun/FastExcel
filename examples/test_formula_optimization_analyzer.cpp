@@ -141,7 +141,7 @@ int main() {
             return 1;
         }
 
-        auto worksheet = workbook->addWorksheet("OptimizationTest");
+        auto worksheet = workbook->addSheet("OptimizationTest");
         if (!worksheet) {
             std::cout << "❌ 无法添加工作表" << std::endl;
             return 1;

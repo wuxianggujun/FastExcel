@@ -48,155 +48,7 @@ const Cell& Worksheet::getCell(int row, int col) const {
     return it->second;
 }
 
-// ========== 基本写入方法 ==========
-
-void Worksheet::writeString(int row, int col, const std::string& value) {
-    if (parent_workbook_ && parent_workbook_->getDirtyManager()) {
-        std::string sheet_path = "xl/worksheets/sheet" + std::to_string(sheet_id_) + ".xml";
-        parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::CONTENT);
-    }
-    this->validateCellPosition(row, col);
-    
-    Cell cell;
-    if (sst_) {
-        // 使用共享字符串表
-        sst_->addString(value);
-        cell.setValue(value);
-    } else {
-        cell.setValue(value);
-    }
-    
-    if (optimize_mode_) {
-        this->writeOptimizedCell(row, col, std::move(cell));
-    } else {
-        auto& target_cell = cells_[std::make_pair(row, col)];
-        target_cell = std::move(cell);
-        this->updateUsedRange(row, col);
-    }
-}
-
-void Worksheet::writeNumber(int row, int col, double value) {
-    if (parent_workbook_ && parent_workbook_->getDirtyManager()) {
-        std::string sheet_path = "xl/worksheets/sheet" + std::to_string(sheet_id_) + ".xml";
-        parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::CONTENT);
-    }
-    this->validateCellPosition(row, col);
-    
-    Cell cell;
-    cell.setValue(value);
-    
-    if (optimize_mode_) {
-        this->writeOptimizedCell(row, col, std::move(cell));
-    } else {
-        auto& target_cell = cells_[std::make_pair(row, col)];
-        target_cell = std::move(cell);
-        this->updateUsedRange(row, col);
-    }
-}
-
-void Worksheet::writeBoolean(int row, int col, bool value) {
-    if (parent_workbook_ && parent_workbook_->getDirtyManager()) {
-        std::string sheet_path = "xl/worksheets/sheet" + std::to_string(sheet_id_) + ".xml";
-        parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::CONTENT);
-    }
-    this->validateCellPosition(row, col);
-    
-    Cell cell;
-    cell.setValue(value);
-    
-    if (optimize_mode_) {
-        this->writeOptimizedCell(row, col, std::move(cell));
-    } else {
-        auto& target_cell = cells_[std::make_pair(row, col)];
-        target_cell = std::move(cell);
-        this->updateUsedRange(row, col);
-    }
-}
-
-void Worksheet::writeFormula(int row, int col, const std::string& formula) {
-    if (parent_workbook_ && parent_workbook_->getDirtyManager()) {
-        std::string sheet_path = "xl/worksheets/sheet" + std::to_string(sheet_id_) + ".xml";
-        parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::CONTENT);
-    }
-    this->validateCellPosition(row, col);
-    
-    Cell cell;
-    cell.setFormula(formula);
-    
-    if (optimize_mode_) {
-        this->writeOptimizedCell(row, col, std::move(cell));
-    } else {
-        auto& target_cell = cells_[std::make_pair(row, col)];
-        target_cell = std::move(cell);
-        this->updateUsedRange(row, col);
-    }
-}
-
-int Worksheet::createSharedFormula(int first_row, int first_col, int last_row, int last_col, const std::string& formula) {
-    if (parent_workbook_ && parent_workbook_->getDirtyManager()) {
-        std::string sheet_path = "xl/worksheets/sheet" + std::to_string(sheet_id_) + ".xml";
-        parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::CONTENT);
-    }
-    
-    // 验证范围
-    validateRange(first_row, first_col, last_row, last_col);
-    
-    if (!shared_formula_manager_) {
-        shared_formula_manager_ = std::make_unique<SharedFormulaManager>();
-    }
-    
-    // 创建共享公式范围字符串
-    std::string range = utils::CommonUtils::cellReference(first_row, first_col) + ":" +
-                       utils::CommonUtils::cellReference(last_row, last_col);
-    
-    // 注册共享公式
-    int shared_index = shared_formula_manager_->registerSharedFormula(formula, range);
-    if (shared_index < 0) {
-        CORE_ERROR("Failed to register shared formula in range {}", range);
-        return -1;
-    }
-    
-    // 获取注册的共享公式对象并更新受影响的单元格列表
-    const SharedFormula* shared_formula = shared_formula_manager_->getSharedFormula(shared_index);
-    if (shared_formula) {
-        // 手动添加受影响的单元格到统计中
-        for (int row = first_row; row <= last_row; ++row) {
-            for (int col = first_col; col <= last_col; ++col) {
-                // 这里需要调用非const版本来更新affected_cells_
-                auto* mutable_formula = const_cast<SharedFormula*>(shared_formula);
-                mutable_formula->addAffectedCell(row, col);
-            }
-        }
-    }
-    
-    // 为范围内的每个单元格设置共享公式引用
-    for (int row = first_row; row <= last_row; ++row) {
-        for (int col = first_col; col <= last_col; ++col) {
-            Cell cell;
-            if (row == first_row && col == first_col) {
-                // 主单元格存储完整的基础公式和共享公式索引
-                cell.setFormula(formula);  // 先设置常规公式
-                cell.setSharedFormula(shared_index);  // 然后转换为共享公式
-            } else {
-                // 其他单元格只存储共享公式引用
-                cell.setSharedFormulaReference(shared_index);
-            }
-            
-            if (optimize_mode_) {
-                this->writeOptimizedCell(row, col, std::move(cell));
-            } else {
-                auto& target_cell = cells_[std::make_pair(row, col)];
-                target_cell = std::move(cell);
-                this->updateUsedRange(row, col);
-            }
-        }
-    }
-    
-    CORE_DEBUG("Created shared formula: index={}, range={}, formula='{}'", 
-             shared_index, range, formula);
-    
-    return shared_index;
-}
+// ========== 基本写入方法（已移除旧API） ==========
 
 void Worksheet::writeDateTime(int row, int col, const std::tm& datetime) {
     if (parent_workbook_ && parent_workbook_->getDirtyManager()) {
@@ -207,7 +59,7 @@ void Worksheet::writeDateTime(int row, int col, const std::tm& datetime) {
     
     // 使用 TimeUtils 将日期时间转换为Excel序列号
     double excel_serial = utils::TimeUtils::toExcelSerialNumber(datetime);
-    this->writeNumber(row, col, excel_serial);
+    this->setValue(row, col, excel_serial);
 }
 
 void Worksheet::writeUrl(int row, int col, const std::string& url, const std::string& string) {
@@ -218,32 +70,17 @@ void Worksheet::writeUrl(int row, int col, const std::string& url, const std::st
         parent_workbook_->getDirtyManager()->markDirty(rels_path, DirtyManager::DirtyLevel::CONTENT);
     }
     this->validateCellPosition(row, col);
-    auto& cell = cells_[std::make_pair(row, col)];
     
     std::string display_text = string.empty() ? url : string;
-    cell.setValue(display_text);
-    cell.setHyperlink(url);
+    this->setValue(row, col, display_text);
+    this->getCell(row, col).setHyperlink(url);
     
     this->updateUsedRange(row, col);
 }
 
 // ========== 批量数据操作 ==========
 
-void Worksheet::writeRange(int start_row, int start_col, const std::vector<std::vector<std::string>>& data) {
-    for (size_t row = 0; row < data.size(); ++row) {
-        for (size_t col = 0; col < data[row].size(); ++col) {
-            writeString(static_cast<int>(start_row + row), static_cast<int>(start_col + col), data[row][col]);
-        }
-    }
-}
-
-void Worksheet::writeRange(int start_row, int start_col, const std::vector<std::vector<double>>& data) {
-    for (size_t row = 0; row < data.size(); ++row) {
-        for (size_t col = 0; col < data[row].size(); ++col) {
-            writeNumber(static_cast<int>(start_row + row), static_cast<int>(start_col + col), data[row][col]);
-        }
-    }
-}
+// 旧的writeRange方法已移除，请使用新的模板化API setRange方法
 
 // ========== 行列操作 ==========
 
@@ -1096,11 +933,11 @@ void Worksheet::copyCell(int src_row, int src_col, int dst_row, int dst_col, boo
     
     // 复制值
     if (src_cell.isString()) {
-        dst_cell.setValue(src_cell.getStringValue());
+        dst_cell.setValue(src_cell.getValue<std::string>());
     } else if (src_cell.isNumber()) {
-        dst_cell.setValue(src_cell.getNumberValue());
+        dst_cell.setValue(src_cell.getValue<double>());
     } else if (src_cell.isBoolean()) {
-        dst_cell.setValue(src_cell.getBooleanValue());
+        dst_cell.setValue(src_cell.getValue<bool>());
     } else if (src_cell.isFormula()) {
         dst_cell.setFormula(src_cell.getFormula(), src_cell.getFormulaResult());
     }
@@ -1218,7 +1055,7 @@ int Worksheet::findAndReplace(const std::string& find_text, const std::string& r
             continue; // 只处理字符串单元格
         }
         
-        std::string cell_text = cell.getStringValue();
+        std::string cell_text = cell.getValue<std::string>();
         std::string search_text = find_text;
         std::string target_text = cell_text;
         
@@ -1288,7 +1125,7 @@ std::vector<std::pair<int, int>> Worksheet::findCells(const std::string& search_
             continue; // 只搜索字符串单元格
         }
         
-        std::string cell_text = cell.getStringValue();
+        std::string cell_text = cell.getValue<std::string>();
         std::string target_text = cell_text;
         std::string find_text = search_text;
         
@@ -1369,12 +1206,12 @@ void Worksheet::sortRange(int first_row, int first_col, int last_row, int last_c
             
             // 比较单元格值
             if (a_cell.isNumber() && b_cell.isNumber()) {
-                double a_val = a_cell.getNumberValue();
-                double b_val = b_cell.getNumberValue();
+                double a_val = a_cell.getValue<double>();
+                double b_val = b_cell.getValue<double>();
                 return ascending ? (a_val < b_val) : (a_val > b_val);
             } else if (a_cell.isString() && b_cell.isString()) {
-                const std::string& a_str = a_cell.getStringValue();
-                const std::string& b_str = b_cell.getStringValue();
+                const std::string& a_str = a_cell.getValue<std::string>();
+                const std::string& b_str = b_cell.getValue<std::string>();
                 return ascending ? (a_str < b_str) : (a_str > b_str);
             } else {
                 // 混合类型：数字 < 字符串
@@ -1399,132 +1236,100 @@ void Worksheet::sortRange(int first_row, int first_col, int last_row, int last_c
     }
 }
 
-// ========== 公式优化方法 ==========
+// ========== 共享公式管理 ==========
 
-int Worksheet::optimizeFormulas(int min_similar_count) {
+int Worksheet::createSharedFormula(int first_row, int first_col, int last_row, int last_col, const std::string& formula) {
     if (!shared_formula_manager_) {
-        shared_formula_manager_ = std::make_unique<SharedFormulaManager>();
+        return -1;
     }
     
-    // 收集所有非共享公式
-    std::map<std::pair<int, int>, std::string> formulas;
-    auto [max_row, max_col] = getUsedRange();
+    // 构建范围引用字符串
+    std::string range_ref = utils::CommonUtils::rangeReference(first_row, first_col, last_row, last_col);
     
-    for (int row = 0; row <= max_row; ++row) {
-        for (int col = 0; col <= max_col; ++col) {
-            if (hasCellAt(row, col)) {
-                const auto& cell = getCell(row, col);
-                if (cell.isFormula() && !cell.isSharedFormula()) {
-                    formulas[{row, col}] = cell.getFormula();
-                }
-            }
-        }
-    }
-    
-    if (formulas.empty()) {
-        CORE_DEBUG("工作表中没有可优化的公式");
+    // 使用SharedFormulaManager注册共享公式
+    return shared_formula_manager_->registerSharedFormula(formula, range_ref);
+}
+
+// 公式优化方法已移除，请使用新的架构
+
+// 🚀 新API：便捷的工作表状态检查方法实现
+int Worksheet::getRowCount() const {
+    if (cells_.empty()) {
         return 0;
     }
     
-    // 使用共享公式管理器进行优化
-    int optimized_count = shared_formula_manager_->optimizeFormulas(formulas, min_similar_count);
-    
-    if (optimized_count > 0) {
-        CORE_DEBUG("成功优化 {} 个公式为共享公式", optimized_count);
-        
-        // 🔧 关键修复：将对应的Cell对象标记为共享公式
-        // 获取所有共享公式索引，并更新对应的单元格
-        auto shared_indices = shared_formula_manager_->getAllSharedIndices();
-        for (int shared_index : shared_indices) {
-            const SharedFormula* shared_formula = shared_formula_manager_->getSharedFormula(shared_index);
-            if (shared_formula) {
-                const auto& affected_cells = shared_formula->getAffectedCells();
-                for (const auto& [row, col] : affected_cells) {
-                    if (hasCellAt(row, col)) {
-                        Cell& cell = getCell(row, col);
-                        if (cell.isFormula() && !cell.isSharedFormula()) {
-                            // 将普通公式转换为共享公式引用
-                            cell.setSharedFormula(shared_index);
-                        }
-                    }
-                }
-            }
-        }
-        
-        // 标记为修改状态
-        if (parent_workbook_ && parent_workbook_->getDirtyManager()) {
-            std::string sheet_path = "xl/worksheets/sheet" + std::to_string(sheet_id_) + ".xml";
-            parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::CONTENT);
-        }
+    int max_row = -1;
+    for (const auto& [pos, cell] : cells_) {
+        max_row = std::max(max_row, pos.first);
     }
     
-    return optimized_count;
+    return max_row + 1; // 返回实际行数（从0开始，所以+1）
 }
 
-Worksheet::FormulaOptimizationReport Worksheet::analyzeFormulaOptimization() const {
-    FormulaOptimizationReport report;
+int Worksheet::getColumnCount() const {
+    if (cells_.empty()) {
+        return 0;
+    }
     
-    // 收集所有公式
-    std::map<std::pair<int, int>, std::string> formulas;
-    auto [max_row, max_col] = getUsedRange();
+    int max_col = -1;
+    for (const auto& [pos, cell] : cells_) {
+        max_col = std::max(max_col, pos.second);
+    }
     
-    for (int row = 0; row <= max_row; ++row) {
-        for (int col = 0; col <= max_col; ++col) {
-            if (hasCellAt(row, col)) {
-                const auto& cell = getCell(row, col);
-                if (cell.isFormula()) {
-                    formulas[{row, col}] = cell.getFormula();
-                }
-            }
+    return max_col + 1; // 返回实际列数（从0开始，所以+1）
+}
+
+int Worksheet::getCellCountInRow(int row) const {
+    int count = 0;
+    for (const auto& [pos, cell] : cells_) {
+        if (pos.first == row && !cell.isEmpty()) {
+            count++;
         }
     }
-    
-    report.total_formulas = formulas.size();
-    
-    if (formulas.empty()) {
-        return report;
-    }
-    
-    // 使用临时的共享公式管理器进行分析
-    SharedFormulaManager temp_manager;
-    auto patterns = temp_manager.detectSharedFormulaPatterns(formulas);
-    
-    // 分析优化潜力
-    size_t optimizable_count = 0;
-    size_t estimated_savings = 0;
-    
-    for (const auto& pattern : patterns) {
-        if (pattern.matching_cells.size() >= 3) { // 至少3个相似公式
-            optimizable_count += pattern.matching_cells.size();
-            estimated_savings += pattern.estimated_savings;
-            
-            // 添加模式示例（限制最多5个）
-            if (report.pattern_examples.size() < 5) {
-                std::string example = "模式: " + std::to_string(pattern.matching_cells.size()) + 
-                    " 个相似公式，预估节省 " + std::to_string(pattern.estimated_savings) + " 字节";
-                
-                // 添加具体公式示例
-                if (!pattern.matching_cells.empty()) {
-                    auto first_pos = pattern.matching_cells[0];
-                    auto formula_it = formulas.find(first_pos);
-                    if (formula_it != formulas.end()) {
-                        std::string cell_ref = utils::CommonUtils::cellReference(first_pos.first, first_pos.second);
-                        example += " (示例: " + cell_ref + " = " + formula_it->second + ")";
-                    }
-                }
-                report.pattern_examples.push_back(example);
-            }
+    return count;
+}
+
+int Worksheet::getCellCountInColumn(int col) const {
+    int count = 0;
+    for (const auto& [pos, cell] : cells_) {
+        if (pos.second == col && !cell.isEmpty()) {
+            count++;
         }
     }
-    
-    report.optimizable_formulas = optimizable_count;
-    report.estimated_memory_savings = estimated_savings;
-    
-    if (report.total_formulas > 0) {
-        report.optimization_ratio = static_cast<double>(optimizable_count) / report.total_formulas * 100.0;
+    return count;
+}
+
+// 注意：这些方法与头文件中的声明重复，已在头文件的实现中定义
+
+void Worksheet::clearRow(int row) {
+    // 删除指定行的所有单元格
+    auto it = cells_.begin();
+    while (it != cells_.end()) {
+        if (it->first.first == row) {
+            it = cells_.erase(it);
+        } else {
+            ++it;
+        }
     }
-    
-    return report;
+    CORE_DEBUG("Cleared row {}", row);
+}
+
+void Worksheet::clearColumn(int col) {
+    // 删除指定列的所有单元格
+    auto it = cells_.begin();
+    while (it != cells_.end()) {
+        if (it->first.second == col) {
+            it = cells_.erase(it);
+        } else {
+            ++it;
+        }
+    }
+    CORE_DEBUG("Cleared column {}", col);
+}
+
+void Worksheet::clearAll() {
+    cells_.clear();
+    CORE_DEBUG("Cleared all cells in worksheet '{}'", name_);
 }
 
 // 🚀 新API：链式调用方法实现

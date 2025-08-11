@@ -14,7 +14,7 @@ int main() {
                 return 1;
             }
             
-            auto worksheet = workbook->addWorksheet("SharedFormulaRoundTrip");
+            auto worksheet = workbook->addSheet("SharedFormulaRoundTrip");
             if (!worksheet) {
                 std::cout << "无法添加工作表" << std::endl;
                 return 1;

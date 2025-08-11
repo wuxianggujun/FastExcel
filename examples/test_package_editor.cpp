@@ -23,8 +23,8 @@ void testPackageEditorFromWorkbook() {
         }
         
         // 2. 添加一些工作表
-        workbook->addWorksheet("销售数据");
-        workbook->addWorksheet("财务报表");
+        workbook->addSheet("销售数据");
+        workbook->addSheet("财务报表");
         
         // 3. 获取工作表并添加一些数据
         auto sheet1 = workbook->getWorksheet("销售数据");
@@ -55,7 +55,7 @@ void testPackageEditorFromWorkbook() {
         // 6. 通过 Workbook 添加新工作表
         auto wb = editor->getWorkbook();
         if (wb) {
-            wb->addWorksheet("库存管理");
+            wb->addSheet("库存管理");
             std::cout << "  ✓ 添加新工作表 '库存管理'" << std::endl;
         }
         
