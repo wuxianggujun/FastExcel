@@ -59,6 +59,7 @@ set(FASTEXCEL_SOURCES
         src/fastexcel/core/Path.cpp
         src/fastexcel/core/Workbook.cpp
         src/fastexcel/core/Worksheet.cpp
+        src/fastexcel/core/WorksheetChain.cpp  # 🚀 新增：链式调用助手类
         src/fastexcel/core/SharedStringTable.cpp
         src/fastexcel/core/SharedFormula.cpp
         src/fastexcel/core/FormatRepository.cpp

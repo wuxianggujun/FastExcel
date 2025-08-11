@@ -56,7 +56,7 @@ public:
             w.startElement("Override"); w.writeAttribute("PartName", "/xl/workbook.xml"); w.writeAttribute("ContentType", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"); w.endElement();
             w.startElement("Override"); w.writeAttribute("PartName", "/xl/styles.xml"); w.writeAttribute("ContentType", "application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"); w.endElement();
             if (ctx.workbook) {
-                auto sheet_names = ctx.workbook->getWorksheetNames();
+                auto sheet_names = ctx.workbook->getSheetNames();
                 for (size_t i = 0; i < sheet_names.size(); ++i) {
                     w.startElement("Override");
                     w.writeAttribute("PartName", (std::string("/xl/worksheets/sheet") + std::to_string(i+1) + ".xml").c_str());
@@ -110,7 +110,7 @@ public:
                 w.startElement("Relationships"); w.writeAttribute("xmlns", "http://schemas.openxmlformats.org/package/2006/relationships");
                 int rId = 1;
                 if (ctx.workbook) {
-                    auto sheet_names = ctx.workbook->getWorksheetNames();
+                    auto sheet_names = ctx.workbook->getSheetNames();
                     for (size_t i = 0; i < sheet_names.size(); ++i) {
                         w.startElement("Relationship");
                         w.writeAttribute("Id", (std::string("rId") + std::to_string(rId++)).c_str());
@@ -136,9 +136,9 @@ public:
                 w.startElement("bookViews"); w.startElement("workbookView"); w.writeAttribute("xWindow", "240"); w.writeAttribute("yWindow", "15"); w.writeAttribute("windowWidth", "16095"); w.writeAttribute("windowHeight", "9660"); w.writeAttribute("activeTab", "0"); w.endElement(); w.endElement();
                 w.startElement("sheets");
                 if (ctx.workbook) {
-                    auto sheet_names = ctx.workbook->getWorksheetNames();
+                    auto sheet_names = ctx.workbook->getSheetNames();
                     for (size_t i = 0; i < sheet_names.size(); ++i) {
-                        auto ws = ctx.workbook->getWorksheet(sheet_names[i]);
+                        auto ws = ctx.workbook->getSheet(sheet_names[i]);
                         w.startElement("sheet");
                         w.writeAttribute("name", sheet_names[i].c_str());
                         int sheetId = ws ? ws->getSheetId() : static_cast<int>(i+1);
@@ -230,7 +230,7 @@ public:
     std::vector<std::string> partNames(const XMLContextView& ctx) const override {
         std::vector<std::string> parts;
         if (!ctx.workbook) return parts;
-        auto names = ctx.workbook->getWorksheetNames();
+        auto names = ctx.workbook->getSheetNames();
         for (size_t i = 0; i < names.size(); ++i) {
             parts.emplace_back("xl/worksheets/sheet" + std::to_string(i + 1) + ".xml");
         }
@@ -258,9 +258,9 @@ public:
             XML_ERROR("Failed to parse sheet index from path: {}, extracted: '{}'", part, number_str);
             return false;
         }
-        auto names = ctx.workbook->getWorksheetNames();
+        auto names = ctx.workbook->getSheetNames();
         if (idx < 0 || static_cast<size_t>(idx) >= names.size()) return false;
-        auto ws = ctx.workbook->getWorksheet(static_cast<size_t>(idx));
+        auto ws = ctx.workbook->getSheet(static_cast<size_t>(idx));
         if (!ws) return false;
 
         // 使用现有 WorksheetXMLGenerator 流式输出
@@ -275,7 +275,7 @@ public:
     std::vector<std::string> partNames(const XMLContextView& ctx) const override {
         std::vector<std::string> parts;
         if (!ctx.workbook) return parts;
-        auto names = ctx.workbook->getWorksheetNames();
+        auto names = ctx.workbook->getSheetNames();
         for (size_t i = 0; i < names.size(); ++i) {
             parts.emplace_back("xl/worksheets/_rels/sheet" + std::to_string(i + 1) + ".xml.rels");
         }
@@ -301,7 +301,7 @@ public:
             XML_ERROR("Failed to parse sheet index from rels path: {}, extracted: '{}'", part, number_str);
             return false;
         }
-        auto ws = ctx.workbook->getWorksheet(static_cast<size_t>(idx));
+        auto ws = ctx.workbook->getSheet(static_cast<size_t>(idx));
         if (!ws) return true; // nothing to do
         std::string rels_xml;
         ws->generateRelsXML([&rels_xml](const char* data, size_t size){ rels_xml.append(data, size); });

@@ -130,7 +130,7 @@ void DocPropsXMLGenerator::generateAppXML(const core::Workbook* workbook,
     writer.endElement(); // ScaleCrop
 
     // 生成HeadingPairs和TitlesOfParts
-    auto worksheet_names = workbook->getWorksheetNames();
+    auto worksheet_names = workbook->getSheetNames();
     generateHeadingPairs(writer, worksheet_names.size());
     generateTitlesOfParts(writer, worksheet_names);
 

@@ -26,7 +26,7 @@ int main() {
         EXAMPLE_INFO("=== FastExcel读取功能演示 ===");
         
         // 获取工作表名称列表
-        auto worksheet_names = reader.getWorksheetNames();
+        auto worksheet_names = reader.getSheetNames();
         EXAMPLE_INFO("发现 {} 个工作表:", worksheet_names.size());
         for (size_t i = 0; i < worksheet_names.size(); ++i) {
             EXAMPLE_INFO("  {}. {}", (i + 1), worksheet_names[i]);
@@ -130,11 +130,11 @@ int main() {
         auto workbook = reader.loadWorkbook();
         if (workbook) {
             std::cout << "工作簿加载成功!" << std::endl;
-            std::cout << "包含 " << workbook->getWorksheetCount() << " 个工作表" << std::endl;
+            std::cout << "包含 " << workbook->getSheetCount() << " 个工作表" << std::endl;
             
             // 显示每个工作表的基本信息
-            for (size_t i = 0; i < workbook->getWorksheetCount(); ++i) {
-                auto ws = workbook->getWorksheet(i);
+            for (size_t i = 0; i < workbook->getSheetCount(); ++i) {
+                auto ws = workbook->getSheet(i);
                 if (ws) {
                     auto used_range = ws->getUsedRange();
                     int rows = used_range.first;

@@ -68,7 +68,7 @@ public:
     inline void trace(const std::string& fmt_str, Args&&... args) {
         if (should_log(Level::TRACE)) {
             try {
-                trace(fmt::format(fmt_str, std::forward<Args>(args)...));
+                trace(fmt::vformat(fmt_str, fmt::make_format_args(args...)));
             } catch (...) {
                 trace(fmt_str);
             }
@@ -79,7 +79,7 @@ public:
     inline void debug(const std::string& fmt_str, Args&&... args) {
         if (should_log(Level::DEBUG)) {
             try {
-                debug(fmt::format(fmt_str, std::forward<Args>(args)...));
+                debug(fmt::vformat(fmt_str, fmt::make_format_args(args...)));
             } catch (...) {
                 debug(fmt_str);
             }
@@ -90,7 +90,7 @@ public:
     inline void info(const std::string& fmt_str, Args&&... args) {
         if (should_log(Level::INFO)) {
             try {
-                info(fmt::format(fmt_str, std::forward<Args>(args)...));
+                info(fmt::vformat(fmt_str, fmt::make_format_args(args...)));
             } catch (...) {
                 info(fmt_str);
             }
@@ -101,7 +101,7 @@ public:
     inline void warn(const std::string& fmt_str, Args&&... args) {
         if (should_log(Level::WARN)) {
             try {
-                warn(fmt::format(fmt_str, std::forward<Args>(args)...));
+                warn(fmt::vformat(fmt_str, fmt::make_format_args(args...)));
             } catch (...) {
                 warn(fmt_str);
             }
@@ -112,7 +112,7 @@ public:
     inline void error(const std::string& fmt_str, Args&&... args) {
         if (should_log(Level::ERROR)) {
             try {
-                error(fmt::format(fmt_str, std::forward<Args>(args)...));
+                error(fmt::vformat(fmt_str, fmt::make_format_args(args...)));
             } catch (...) {
                 error(fmt_str);
             }
@@ -123,7 +123,7 @@ public:
     inline void critical(const std::string& fmt_str, Args&&... args) {
         if (should_log(Level::CRITICAL)) {
             try {
-                critical(fmt::format(fmt_str, std::forward<Args>(args)...));
+                critical(fmt::vformat(fmt_str, fmt::make_format_args(args...)));
             } catch (...) {
                 critical(fmt_str);
             }

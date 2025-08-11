@@ -23,7 +23,7 @@ int main() {
         }
         
         // 添加工作表
-        auto worksheet = workbook->addWorksheet("格式化示例");
+        auto worksheet = workbook->addSheet("格式化示例");
         
         // ========== 创建各种格式 ==========
         

@@ -155,7 +155,7 @@ bool ExcelStructureGenerator::generateBasicFiles() {
 }
 
 bool ExcelStructureGenerator::generateWorksheets() {
-    size_t worksheet_count = workbook_->getWorksheetCount();
+    size_t worksheet_count = workbook_->getSheetCount();
     if (worksheet_count == 0) {
         CORE_WARN("No worksheets to generate");
         return true;
@@ -167,7 +167,7 @@ bool ExcelStructureGenerator::generateWorksheets() {
     auto xml_generator = xml::UnifiedXMLGenerator::fromWorkbook(workbook_);
 
     for (size_t i = 0; i < worksheet_count; ++i) {
-        auto worksheet = workbook_->getWorksheet(i);
+        auto worksheet = workbook_->getSheet(i);
         if (!worksheet) {
             CORE_ERROR("Worksheet {} is null", i);
             return false;

@@ -5,6 +5,7 @@
 #include <optional>
 #include <memory>
 #include <cstdint>
+#include <type_traits>  // 🚀 新增：支持模板类型判断
 
 namespace fastexcel {
 namespace core {
@@ -142,6 +143,52 @@ public:
     void setComment(const std::string& comment);
     std::string getComment() const;
     bool hasComment() const { return extended_ && extended_->comment; }
+    
+    // 🚀 新API：模板化的值获取和设置
+    template<typename T>
+    T getValue() const {
+        if constexpr (std::is_same_v<T, std::string>) {
+            return getStringValue();
+        } else if constexpr (std::is_floating_point_v<T>) {
+            return static_cast<T>(getNumberValue());
+        } else if constexpr (std::is_integral_v<T> && !std::is_same_v<T, bool>) {
+            return static_cast<T>(getNumberValue());
+        } else if constexpr (std::is_same_v<T, bool>) {
+            return getBooleanValue();
+        } else {
+            static_assert(std::is_same_v<T, std::string>, 
+                          "Unsupported type for Cell::getValue<T>()");
+        }
+    }
+    
+    template<typename T>
+    void setValue(const T& value) {
+        if constexpr (std::is_arithmetic_v<T> && !std::is_same_v<T, bool>) {
+            setValue(static_cast<double>(value));
+        } else if constexpr (std::is_same_v<T, bool>) {
+            setValue(value);
+        } else if constexpr (std::is_convertible_v<T, std::string>) {
+            setValue(std::string(value));
+        } else {
+            static_assert(std::is_arithmetic_v<T>, 
+                          "Unsupported type for Cell::setValue<T>()");
+        }
+    }
+    
+    // 🚀 新API：安全访问方法
+    template<typename T>
+    std::optional<T> tryGetValue() const noexcept {
+        try {
+            return getValue<T>();
+        } catch (...) {
+            return std::nullopt;
+        }
+    }
+    
+    template<typename T>
+    T getValueOr(const T& default_value) const noexcept {
+        return tryGetValue<T>().value_or(default_value);
+    }
     
     // 状态检查
     bool isEmpty() const { return flags_.type == CellType::Empty; }

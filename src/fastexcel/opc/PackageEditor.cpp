@@ -46,7 +46,7 @@ std::unique_ptr<PackageEditor> PackageEditor::fromWorkbook(core::Workbook* workb
     editor->initializeServices(nullptr, workbook);
     
     OPC_INFO("Created PackageEditor from Workbook with {} sheets", 
-             workbook->getWorksheetNames().size());
+             workbook->getSheetNames().size());
     return editor;
 }
 
@@ -61,7 +61,7 @@ std::unique_ptr<PackageEditor> PackageEditor::create() {
     }
     
     // 添加默认工作表
-    workbook->addWorksheet("Sheet1");
+    workbook->addSheet("Sheet1");
     
     editor->initializeServices(nullptr, workbook.release());
     OPC_INFO("Created new Excel package with default sheet");
@@ -93,7 +93,7 @@ bool PackageEditor::initializeServices(std::unique_ptr<archive::ZipReader> zip_r
         change_tracker_->markPartDirty("xl/_rels/workbook.xml.rels");
         
         // 为每个工作表标记dirty
-        auto sheet_names = workbook_->getWorksheetNames();
+        auto sheet_names = workbook_->getSheetNames();
         for (size_t i = 0; i < sheet_names.size(); ++i) {
             std::string sheet_path = "xl/worksheets/sheet" + std::to_string(i + 1) + ".xml";
             change_tracker_->markPartDirty(sheet_path);
@@ -120,7 +120,7 @@ void PackageEditor::detectChanges() {
         change_tracker_->markPartDirty("xl/styles.xml");
         
         // 检查工作表修改
-        auto sheet_names = workbook_->getWorksheetNames();
+        auto sheet_names = workbook_->getSheetNames();
         for (size_t i = 0; i < sheet_names.size(); ++i) {
             std::string sheet_path = "xl/worksheets/sheet" + std::to_string(i + 1) + ".xml";
             change_tracker_->markPartDirty(sheet_path);
@@ -232,7 +232,7 @@ std::string PackageEditor::extractSheetNameFromPath(const std::string& path) con
     try {
         int sheet_id = std::stoi(id_str);
         if (workbook_) {
-            auto sheet_names = workbook_->getWorksheetNames();
+            auto sheet_names = workbook_->getSheetNames();
             if (sheet_id > 0 && sheet_id <= static_cast<int>(sheet_names.size())) {
                 return sheet_names[sheet_id - 1];
             }
@@ -292,7 +292,7 @@ PackageEditor::ChangeStats PackageEditor::getChangeStats() const {
 
 std::vector<std::string> PackageEditor::getSheetNames() const {
     if (workbook_) {
-        return workbook_->getWorksheetNames();
+        return workbook_->getSheetNames();
     }
     return {};
 }

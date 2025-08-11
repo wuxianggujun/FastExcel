@@ -1,5 +1,6 @@
 #include "fastexcel/utils/ModuleLoggers.hpp"
 #include "fastexcel/core/Worksheet.hpp"
+#include "fastexcel/core/WorksheetChain.hpp"  // 🚀 新增：链式调用支持
 #include "fastexcel/core/Workbook.hpp"
 #include "fastexcel/core/DirtyManager.hpp"
 #include "fastexcel/core/SharedStringTable.hpp"
@@ -1524,6 +1525,11 @@ Worksheet::FormulaOptimizationReport Worksheet::analyzeFormulaOptimization() con
     }
     
     return report;
+}
+
+// 🚀 新API：链式调用方法实现
+WorksheetChain Worksheet::chain() {
+    return WorksheetChain(*this);
 }
 
 } // namespace core

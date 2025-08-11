@@ -1,15 +1,20 @@
 /**
  * @file 08_sheet_copy_with_format_example.cpp
- * @brief 复制指定工作表并保持格式的示例
+ * @brief 复制指定工作表并保持格式的示例（展示新API功能）
  * 
  * 这个示例演示如何：
- * - 读取源Excel文件的第三个工作表（屏柜分项表）
- * - 复制所有单元格内容和格式
- * - 写入到新的Excel文件
- * - 测试格式写入功能是否正常
+ * - 使用新的模板化API进行单元格操作
+ * - 使用Excel地址格式（如"A1", "B2"）访问单元格
+ * - 使用链式调用API简化代码
+ * - 使用范围操作API批量处理数据
+ * - 使用跨工作表访问方法
+ * - 使用安全访问方法（tryGetValue, getValueOr）
+ * - 读取源Excel文件并保持格式复制
+ * - 测试新的API与现有代码的兼容性
  */
 
 #include "fastexcel/FastExcel.hpp"
+#include "fastexcel/core/WorksheetChain.hpp"  // 🚀 新增：链式调用支持
 #include <iostream>
 #include <string>
 #include <chrono>
@@ -52,15 +57,15 @@ public:
             
             // 加载源工作簿
             std::cout << "\\nStep 1: Loading source workbook..." << std::endl;
-            auto source_workbook = Workbook::open(source_file_);
+            auto source_workbook = Workbook::openForEditing(source_file_);
             if (!source_workbook) {
                 std::cerr << "Error: Failed to load source workbook" << std::endl;
                 return false;
             }
-            std::cout << "OK: Source workbook loaded with " << source_workbook->getWorksheetCount() << " worksheets" << std::endl;
+            std::cout << "OK: Source workbook loaded with " << source_workbook->getSheetCount() << " worksheets" << std::endl;
             
             
-            auto source_worksheet = source_workbook->getWorksheet(0);
+            auto source_worksheet = source_workbook->getSheet(0);
             if (!source_worksheet) {
                 std::cerr << "Error: Failed to get third worksheet" << std::endl;
                 return false;
@@ -75,12 +80,7 @@ public:
                 return false;
             }
             
-            // 🔧 关键修复：必须打开目标工作簿
-            if (!target_workbook->open()) {
-                std::cerr << "Error: Failed to open target workbook" << std::endl;
-                return false;
-            }
-            std::cout << "OK: Target workbook created and opened" << std::endl;
+            std::cout << "OK: Target workbook created and ready" << std::endl;
             
             // 复制样式数据和主题
             std::cout << "\\nStep 3: Copying styles and theme..." << std::endl;
@@ -88,12 +88,60 @@ public:
             std::cout << "OK: Styles and theme copied automatically" << std::endl;
             
             // 创建目标工作表（使用源工作表名称）
-            auto target_worksheet = target_workbook->addWorksheet(source_worksheet->getName());
+            auto target_worksheet = target_workbook->addSheet(source_worksheet->getName());
             if (!target_worksheet) {
                 std::cerr << "Error: Failed to create target worksheet" << std::endl;
                 return false;
             }
             std::cout << "OK: Target worksheet renamed to '" << target_worksheet->getName() << "'" << std::endl;
+            
+            // 🚀 新功能演示：使用新的API设置一些示例数据
+            std::cout << "\n=== 新API功能演示 ===" << std::endl;
+            
+            // 演示1：使用模板化的setValue方法
+            target_worksheet->setValue("A1", std::string("FastExcel 新API演示"));
+            target_worksheet->setValue("A2", std::string("模板化方法"));
+            target_worksheet->setValue("B2", 123.45);
+            target_worksheet->setValue("C2", true);
+            std::cout << "✓ 使用模板化setValue方法设置了A1-C2的值" << std::endl;
+            
+            // 演示2：使用Excel地址格式
+            target_worksheet->setValue("D1", std::string("Excel地址格式"));
+            target_worksheet->setValue("D2", 2024);
+            std::cout << "✓ 使用Excel地址格式设置了D1-D2的值" << std::endl;
+            
+            // 演示3：使用链式调用
+            target_worksheet->chain()
+                .setValue("A3", std::string("链式调用"))
+                .setValue("B3", 999.99)
+                .setValue("C3", false)
+                .setColumnWidth(0, 20.0)
+                .setRowHeight(2, 25.0);
+            std::cout << "✓ 使用链式调用设置了A3-C3的值和格式" << std::endl;
+            
+            // 演示4：使用范围操作
+            std::vector<std::vector<std::string>> range_data = {
+                {"范围操作", "演示", "数据"},
+                {"第二行", "测试", "内容"}
+            };
+            target_worksheet->setRange("A4:C5", range_data);
+            std::cout << "✓ 使用范围操作设置了A4:C5的数据" << std::endl;
+            
+            // 演示5：使用Workbook的跨工作表访问
+            target_workbook->setValue("Sheet1!F1", std::string("跨工作表访问"));
+            target_workbook->setValue(0, 5, 1, 42.0);  // 通过索引访问
+            std::cout << "✓ 演示了跨工作表的单元格访问方法" << std::endl;
+            
+            // 演示6：安全访问方法
+            auto safe_value = target_worksheet->tryGetValue<std::string>("A1");
+            if (safe_value.has_value()) {
+                std::cout << "✓ 安全获取A1的值: " << safe_value.value() << std::endl;
+            }
+            
+            auto default_value = target_worksheet->getValueOr<double>("Z99", 0.0);
+            std::cout << "✓ 获取Z99的值或默认值: " << default_value << std::endl;
+            
+            std::cout << "=== 新API演示完成，开始复制源文件 ===" << std::endl;
             
             // 获取源工作表的使用范围
             auto used_range = source_worksheet->getUsedRange();
@@ -114,31 +162,31 @@ public:
                     const auto& source_cell = source_worksheet->getCell(row, col);
                     auto& target_cell = target_worksheet->getCell(row, col);
                     
-                    // 复制单元格值
+                    // 🚀 新API：使用模板化方法复制单元格值
                     switch (source_cell.getType()) {
                     case CellType::String: {
-                        auto value = source_cell.getStringValue();
+                        auto value = source_cell.getValue<std::string>();
                         if (!value.empty()) {
-                            target_cell.setValue(value);
+                            target_worksheet->setValue(row, col, value);  // 使用新的模板API
                             copied_cells++;
                         }
                         break;
                     }
                     case CellType::Number: {
-                        auto value = source_cell.getNumberValue();
-                        target_cell.setValue(value);
+                        auto value = source_cell.getValue<double>();
+                        target_worksheet->setValue(row, col, value);  // 使用新的模板API
                         copied_cells++;
                         break;
                     }
                     case CellType::Boolean: {
-                        auto value = source_cell.getBooleanValue();
-                        target_cell.setValue(value);
+                        auto value = source_cell.getValue<bool>();
+                        target_worksheet->setValue(row, col, value);  // 使用新的模板API
                         copied_cells++;
                         break;
                     }
                     case CellType::Date: {
-                        auto value = source_cell.getNumberValue(); // 日期作为数字存储
-                        target_cell.setValue(value);
+                        auto value = source_cell.getValue<double>(); // 日期作为数字存储
+                        target_worksheet->setValue(row, col, value);  // 使用新的模板API
                         copied_cells++;
                         break;
                     }

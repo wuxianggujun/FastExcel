@@ -64,7 +64,7 @@ public:
     
     std::string generateWorksheetXML(const std::string& sheet_name) override {
         if (!workbook_) return \"\";
-        auto worksheet = workbook_->getWorksheet(sheet_name);
+        auto worksheet = workbook_->getSheet(sheet_name);
         if (!worksheet) return \"\";
         
         return callbackToString([this, worksheet](const auto& callback) {

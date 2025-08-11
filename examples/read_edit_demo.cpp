@@ -50,7 +50,7 @@ int main() {
                 std::cout << "❌ 无法创建工作簿" << std::endl;
                 return 1;
             }
-            auto worksheet = workbook->addWorksheet("测试数据");
+            auto worksheet = workbook->addSheet("测试数据");
             
             // 创建各种格式的数据
             auto titleStyle = workbook->createStyleBuilder()
@@ -130,7 +130,7 @@ int main() {
             return 1;
         }
         
-        auto worksheet = readWorkbook->getWorksheet("测试数据");
+        auto worksheet = readWorkbook->getSheet("测试数据");
         if (!worksheet) {
             std::cout << "❌ 找不到工作表" << std::endl;
             return 1;
@@ -201,7 +201,7 @@ int main() {
         std::cout << "\n🔍 步骤4: 验证编辑结果..." << std::endl;
         
         auto verifyWorkbook = Workbook::openForReading(Path("test_read_edit_modified.xlsx"));
-        auto verifyWorksheet = verifyWorkbook->getWorksheet("测试数据");
+        auto verifyWorksheet = verifyWorkbook->getSheet("测试数据");
         
         std::cout << "   📊 验证修改后的数据:" << std::endl;
         auto [newMaxRow, newMaxCol] = verifyWorksheet->getUsedRange();

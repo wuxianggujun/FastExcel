@@ -8,6 +8,7 @@
 #include "fastexcel/core/DirtyManager.hpp"
 #include "fastexcel/archive/FileManager.hpp"
 #include "fastexcel/utils/CommonUtils.hpp"
+#include "fastexcel/utils/AddressParser.hpp"  // 🚀 新增：Excel地址解析支持
 #include "fastexcel/theme/Theme.hpp"
 #include "FormatDescriptor.hpp"
 #include "FormatRepository.hpp"
@@ -22,6 +23,7 @@
 #include <set>
 #include <ctime>
 #include <functional>
+#include <stdexcept>  // 🚀 新增：支持异常处理
 
 namespace fastexcel {
 namespace opc {
@@ -168,6 +170,9 @@ private:
     // 工作簿选项（包含保留未修改部件的设置）
     bool preserve_unknown_parts_ = true; // 保留未修改的Excel部件（如绘图、打印设置等）
 
+    // 活动工作表管理
+    size_t active_worksheet_index_ = 0;  // 当前活动工作表的索引
+
 public:
     /**
      * @brief 创建工作簿（直接可用，无需再调用open）
@@ -270,7 +275,7 @@ public:
      * @param name 工作表名称（空则自动生成）
      * @return 工作表指针
      */
-    std::shared_ptr<Worksheet> addWorksheet(const std::string& name = "");
+    std::shared_ptr<Worksheet> addSheet(const std::string& name = "");
     
     /**
      * @brief 插入工作表
@@ -278,61 +283,106 @@ public:
      * @param name 工作表名称
      * @return 工作表指针
      */
-    std::shared_ptr<Worksheet> insertWorksheet(size_t index, const std::string& name = "");
+    std::shared_ptr<Worksheet> insertSheet(size_t index, const std::string& name = "");
     
     /**
      * @brief 删除工作表
      * @param name 工作表名称
      * @return 是否成功
      */
-    bool removeWorksheet(const std::string& name);
+    bool removeSheet(const std::string& name);
     
     /**
      * @brief 删除工作表
      * @param index 工作表索引
      * @return 是否成功
      */
-    bool removeWorksheet(size_t index);
+    bool removeSheet(size_t index);
     
     /**
      * @brief 获取工作表（按名称）
      * @param name 工作表名称
      * @return 工作表指针
      */
-    std::shared_ptr<Worksheet> getWorksheet(const std::string& name);
+    std::shared_ptr<Worksheet> getSheet(const std::string& name);
     
     /**
      * @brief 获取工作表（按索引）
      * @param index 工作表索引
      * @return 工作表指针
      */
-    std::shared_ptr<Worksheet> getWorksheet(size_t index);
+    std::shared_ptr<Worksheet> getSheet(size_t index);
     
     /**
      * @brief 获取工作表（按名称，只读）
      * @param name 工作表名称
      * @return 工作表指针
      */
-    std::shared_ptr<const Worksheet> getWorksheet(const std::string& name) const;
+    std::shared_ptr<const Worksheet> getSheet(const std::string& name) const;
     
     /**
      * @brief 获取工作表（按索引，只读）
      * @param index 工作表索引
      * @return 工作表指针
      */
-    std::shared_ptr<const Worksheet> getWorksheet(size_t index) const;
+    std::shared_ptr<const Worksheet> getSheet(size_t index) const;
+    
+    // 🚀 新API：便捷的工作表访问操作符
+    /**
+     * @brief 通过索引访问工作表（操作符重载）
+     * @param index 工作表索引
+     * @return 工作表指针
+     * 
+     * @example
+     * auto worksheet = workbook[0];  // 获取第一个工作表
+     * workbook[0]->setValue("A1", std::string("Hello"));  // 直接操作
+     */
+    std::shared_ptr<Worksheet> operator[](size_t index) {
+        return getSheet(index);
+    }
+    
+    /**
+     * @brief 通过索引访问工作表（只读操作符重载）
+     * @param index 工作表索引
+     * @return 工作表指针
+     */
+    std::shared_ptr<const Worksheet> operator[](size_t index) const {
+        return getSheet(index);
+    }
+    
+    /**
+     * @brief 通过名称访问工作表（操作符重载）
+     * @param name 工作表名称
+     * @return 工作表指针
+     * 
+     * @example
+     * auto worksheet = workbook["Sheet1"];  // 获取名为"Sheet1"的工作表
+     * workbook["Sheet1"]->setValue("A1", std::string("Hello"));  // 直接操作
+     */
+    std::shared_ptr<Worksheet> operator[](const std::string& name) {
+        return getSheet(name);
+    }
+    
+    /**
+     * @brief 通过名称访问工作表（只读操作符重载）
+     * @param name 工作表名称
+     * @return 工作表指针
+     */
+    std::shared_ptr<const Worksheet> operator[](const std::string& name) const {
+        return getSheet(name);
+    }
     
     /**
      * @brief 获取工作表数量
      * @return 工作表数量
      */
-    size_t getWorksheetCount() const { return worksheets_.size(); }
+    size_t getSheetCount() const { return worksheets_.size(); }
     
     /**
      * @brief 获取所有工作表名称
      * @return 工作表名称列表
      */
-    std::vector<std::string> getWorksheetNames() const;
+    std::vector<std::string> getSheetNames() const;
     
     /**
      * @brief 重命名工作表
@@ -340,7 +390,7 @@ public:
      * @param new_name 新名称
      * @return 是否成功
      */
-    bool renameWorksheet(const std::string& old_name, const std::string& new_name);
+    bool renameSheet(const std::string& old_name, const std::string& new_name);
     
     /**
      * @brief 移动工作表
@@ -348,7 +398,7 @@ public:
      * @param to_index 目标位置
      * @return 是否成功
      */
-    bool moveWorksheet(size_t from_index, size_t to_index);
+    bool moveSheet(size_t from_index, size_t to_index);
     
     /**
      * @brief 复制工作表
@@ -372,6 +422,135 @@ public:
      * @param index 工作表索引
      */
     void setActiveWorksheet(size_t index);
+    
+    /**
+     * @brief 获取活动工作表
+     * @return 活动工作表指针，如果没有工作表则返回nullptr
+     * 
+     * @example
+     * auto activeSheet = workbook.getActiveWorksheet();
+     * if (activeSheet) {
+     *     activeSheet->setValue("A1", std::string("Hello"));
+     * }
+     */
+    std::shared_ptr<Worksheet> getActiveWorksheet();
+    
+    /**
+     * @brief 获取活动工作表（只读）
+     * @return 活动工作表指针，如果没有工作表则返回nullptr
+     */
+    std::shared_ptr<const Worksheet> getActiveWorksheet() const;
+    
+    // 🚀 新API：便捷的单元格访问方法（跨工作表）
+    /**
+     * @brief 通过工作表索引和单元格坐标获取值
+     * @tparam T 返回值类型
+     * @param sheet_index 工作表索引
+     * @param row 行号
+     * @param col 列号
+     * @return 单元格值
+     * 
+     * @example
+     * auto value = workbook.getValue<std::string>(0, 0, 0);  // 获取第一个工作表A1的字符串值
+     * auto number = workbook.getValue<double>(1, 1, 1);      // 获取第二个工作表B2的数字值
+     */
+    template<typename T>
+    T getValue(size_t sheet_index, int row, int col) const {
+        auto worksheet = getSheet(sheet_index);
+        if (!worksheet) {
+            throw std::runtime_error("Invalid worksheet index: " + std::to_string(sheet_index));
+        }
+        return worksheet->getValue<T>(row, col);
+    }
+    
+    /**
+     * @brief 通过工作表名称和单元格坐标设置值
+     * @tparam T 值类型
+     * @param sheet_name 工作表名称
+     * @param row 行号
+     * @param col 列号
+     * @param value 要设置的值
+     * 
+     * @example
+     * workbook.setValue("Sheet1", 0, 0, std::string("Hello"));  // 在Sheet1的A1设置字符串
+     * workbook.setValue("Data", 1, 1, 123.45);                  // 在Data工作表的B2设置数字
+     */
+    template<typename T>
+    void setValue(const std::string& sheet_name, int row, int col, const T& value) {
+        auto worksheet = getSheet(sheet_name);
+        if (!worksheet) {
+            throw std::runtime_error("Worksheet not found: " + sheet_name);
+        }
+        worksheet->setValue<T>(row, col, value);
+    }
+    
+    /**
+     * @brief 通过工作表索引和单元格坐标设置值
+     * @tparam T 值类型
+     * @param sheet_index 工作表索引
+     * @param row 行号
+     * @param col 列号
+     * @param value 要设置的值
+     */
+    template<typename T>
+    void setValue(size_t sheet_index, int row, int col, const T& value) {
+        auto worksheet = getSheet(sheet_index);
+        if (!worksheet) {
+            throw std::runtime_error("Invalid worksheet index: " + std::to_string(sheet_index));
+        }
+        worksheet->setValue<T>(row, col, value);
+    }
+    
+    /**
+     * @brief 通过完整地址字符串访问单元格（支持跨工作表）
+     * @tparam T 返回值类型
+     * @param full_address 完整地址（如"Sheet1!A1", "Data!B2"）
+     * @return 单元格值
+     * 
+     * @example
+     * auto value = workbook.getValue<std::string>("Sheet1!A1");  // 获取Sheet1工作表A1的值
+     * auto value = workbook.getValue<double>("Data!C3");         // 获取Data工作表C3的值
+     */
+    template<typename T>
+    T getValue(const std::string& full_address) const {
+        auto [sheet_name, row, col] = utils::AddressParser::parseAddress(full_address);
+        if (sheet_name.empty()) {
+            // 如果没有工作表名，使用第一个工作表
+            return getValue<T>(0, row, col);
+        }
+        
+        auto worksheet = getSheet(sheet_name);
+        if (!worksheet) {
+            throw std::runtime_error("Worksheet not found: " + sheet_name);
+        }
+        return worksheet->getValue<T>(row, col);
+    }
+    
+    /**
+     * @brief 通过完整地址字符串设置单元格值（支持跨工作表）
+     * @tparam T 值类型
+     * @param full_address 完整地址（如"Sheet1!A1", "Data!B2"）
+     * @param value 要设置的值
+     * 
+     * @example
+     * workbook.setValue("Sheet1!A1", std::string("Hello"));  // 在Sheet1的A1设置字符串
+     * workbook.setValue("Data!C3", 123.45);                  // 在Data工作表的C3设置数字
+     */
+    template<typename T>
+    void setValue(const std::string& full_address, const T& value) {
+        auto [sheet_name, row, col] = utils::AddressParser::parseAddress(full_address);
+        if (sheet_name.empty()) {
+            // 如果没有工作表名，使用第一个工作表
+            setValue<T>(0, row, col, value);
+            return;
+        }
+        
+        auto worksheet = getSheet(sheet_name);
+        if (!worksheet) {
+            throw std::runtime_error("Worksheet not found: " + sheet_name);
+        }
+        worksheet->setValue<T>(row, col, value);
+    }
     
     // ========== 样式管理 ==========
     

@@ -157,7 +157,7 @@ core::ErrorCode XLSXReader::loadWorkbook(std::unique_ptr<core::Workbook>& workbo
         // 直接在内存中构建数据结构，无需临时文件
         for (const auto& sheet_name : worksheet_names_) {
             try {
-                auto worksheet = workbook->addWorksheet(sheet_name);
+                auto worksheet = workbook->addSheet(sheet_name);
                 if (worksheet) {
                     auto it = worksheet_paths_.find(sheet_name);
                     if (it != worksheet_paths_.end()) {

@@ -6,6 +6,7 @@
 #include "fastexcel/core/CellRangeManager.hpp"
 #include "fastexcel/core/SharedFormula.hpp"
 #include "fastexcel/utils/CommonUtils.hpp"
+#include "fastexcel/utils/AddressParser.hpp"  // 🚀 新增：Excel地址解析支持
 #include "fastexcel/xml/XMLStreamWriter.hpp"
 #include <string>
 #include <vector>
@@ -17,6 +18,8 @@
 #include <set>
 #include <functional>
 #include <sstream>
+#include <type_traits>  // 🚀 新增：支持模板类型判断
+#include <optional>     // 🚀 新增：支持安全访问方法
 
 namespace fastexcel {
 namespace core {
@@ -26,6 +29,9 @@ class Workbook;
 class SharedStringTable;
 class FormatRepository;
 class SharedFormulaManager;
+
+// WorksheetChain类在独立的头文件中定义
+class WorksheetChain;
 
 // 列信息结构
 struct ColumnInfo {
@@ -301,6 +307,138 @@ public:
     Cell& getCell(int row, int col);
     const Cell& getCell(int row, int col) const;
     
+    // 🚀 新API：模板化的单元格值获取和设置
+    /**
+     * @brief 模板化获取单元格值
+     * @tparam T 返回值类型
+     * @param row 行号（0开始）
+     * @param col 列号（0开始）
+     * @return 指定类型的值
+     * 
+     * @example
+     * auto str_value = worksheet.getValue<std::string>(0, 0);  // 获取A1的字符串值
+     * auto num_value = worksheet.getValue<double>(1, 1);       // 获取B2的数字值
+     * auto bool_value = worksheet.getValue<bool>(2, 2);        // 获取C3的布尔值
+     */
+    template<typename T>
+    T getValue(int row, int col) const {
+        return getCell(row, col).getValue<T>();
+    }
+    
+    /**
+     * @brief 模板化设置单元格值
+     * @tparam T 值类型
+     * @param row 行号（0开始）
+     * @param col 列号（0开始）
+     * @param value 要设置的值
+     * 
+     * @example
+     * worksheet.setValue(0, 0, std::string("Hello"));  // 设置A1为字符串
+     * worksheet.setValue(1, 1, 123.45);                // 设置B2为数字
+     * worksheet.setValue(2, 2, true);                   // 设置C3为布尔值
+     */
+    template<typename T>
+    void setValue(int row, int col, const T& value) {
+        getCell(row, col).setValue<T>(value);
+    }
+    
+    /**
+     * @brief 安全获取单元格值（不抛异常）
+     * @tparam T 返回值类型
+     * @param row 行号（0开始）
+     * @param col 列号（0开始）
+     * @return 可选值，失败时返回std::nullopt
+     */
+    template<typename T>
+    std::optional<T> tryGetValue(int row, int col) const noexcept {
+        if (!hasCellAt(row, col)) {
+            return std::nullopt;
+        }
+        return getCell(row, col).tryGetValue<T>();
+    }
+    
+    /**
+     * @brief 获取单元格值或默认值
+     * @tparam T 返回值类型
+     * @param row 行号（0开始）
+     * @param col 列号（0开始）
+     * @param default_value 默认值
+     * @return 单元格值或默认值
+     */
+    template<typename T>
+    T getValueOr(int row, int col, const T& default_value) const noexcept {
+        if (!hasCellAt(row, col)) {
+            return default_value;
+        }
+        return getCell(row, col).getValueOr<T>(default_value);
+    }
+    
+    // 🚀 新API：Excel地址格式支持
+    /**
+     * @brief 通过Excel地址获取单元格值
+     * @tparam T 返回值类型
+     * @param address Excel地址（如"A1", "B2"）
+     * @return 指定类型的值
+     * 
+     * @example
+     * auto value = worksheet.getValue<std::string>("A1");  // 获取A1的字符串值
+     * auto value = worksheet.getValue<double>("B2");       // 获取B2的数字值
+     */
+    template<typename T>
+    T getValue(const std::string& address) const {
+        auto [sheet, row, col] = utils::AddressParser::parseAddress(address);
+        return getValue<T>(row, col);
+    }
+    
+    /**
+     * @brief 通过Excel地址设置单元格值
+     * @tparam T 值类型
+     * @param address Excel地址（如"A1", "B2"）
+     * @param value 要设置的值
+     * 
+     * @example
+     * worksheet.setValue("A1", std::string("Hello"));  // 设置A1为字符串
+     * worksheet.setValue("B2", 123.45);                // 设置B2为数字
+     */
+    template<typename T>
+    void setValue(const std::string& address, const T& value) {
+        auto [sheet, row, col] = utils::AddressParser::parseAddress(address);
+        setValue<T>(row, col, value);
+    }
+    
+    /**
+     * @brief 通过Excel地址安全获取单元格值
+     * @tparam T 返回值类型
+     * @param address Excel地址（如"A1", "B2"）
+     * @return 可选值，失败时返回std::nullopt
+     */
+    template<typename T>
+    std::optional<T> tryGetValue(const std::string& address) const noexcept {
+        try {
+            auto [sheet, row, col] = utils::AddressParser::parseAddress(address);
+            return tryGetValue<T>(row, col);
+        } catch (...) {
+            return std::nullopt;
+        }
+    }
+    
+    /**
+     * @brief 通过Excel地址获取单元格值或默认值
+     * @tparam T 返回值类型
+     * @param address Excel地址（如"A1", "B2"）
+     * @param default_value 默认值
+     * @return 单元格值或默认值
+     */
+    template<typename T>
+    T getValueOr(const std::string& address, const T& default_value) const noexcept {
+        try {
+            auto [sheet, row, col] = utils::AddressParser::parseAddress(address);
+            return getValueOr<T>(row, col, default_value);
+        } catch (...) {
+            return default_value;
+        }
+    }
+    
     /**
      * @brief 写入字符串
      * @param row 行号
@@ -422,6 +560,118 @@ public:
      */
     template<typename T>
     void writeRange(int start_row, int start_col, const std::vector<std::vector<T>>& data);
+    
+    // 🚀 新API：模板化范围操作
+    /**
+     * @brief 获取范围内的所有值
+     * @tparam T 返回值类型
+     * @param start_row 开始行
+     * @param start_col 开始列
+     * @param end_row 结束行
+     * @param end_col 结束列
+     * @return 二维数组，包含范围内的所有值
+     * 
+     * @example
+     * auto data = worksheet.getRange<std::string>(0, 0, 2, 2);  // 获取A1:C3范围的字符串值
+     * auto numbers = worksheet.getRange<double>(1, 1, 3, 3);    // 获取B2:D4范围的数字值
+     */
+    template<typename T>
+    std::vector<std::vector<T>> getRange(int start_row, int start_col, int end_row, int end_col) const {
+        std::vector<std::vector<T>> result;
+        result.reserve(end_row - start_row + 1);
+        
+        for (int row = start_row; row <= end_row; ++row) {
+            std::vector<T> row_data;
+            row_data.reserve(end_col - start_col + 1);
+            
+            for (int col = start_col; col <= end_col; ++col) {
+                if (hasCellAt(row, col)) {
+                    row_data.push_back(getCell(row, col).getValue<T>());
+                } else {
+                    // 空单元格返回默认值
+                    if constexpr (std::is_same_v<T, std::string>) {
+                        row_data.push_back("");
+                    } else if constexpr (std::is_arithmetic_v<T>) {
+                        row_data.push_back(static_cast<T>(0));
+                    } else if constexpr (std::is_same_v<T, bool>) {
+                        row_data.push_back(false);
+                    }
+                }
+            }
+            result.push_back(std::move(row_data));
+        }
+        return result;
+    }
+    
+    /**
+     * @brief 通过Excel地址获取范围内的所有值
+     * @tparam T 返回值类型
+     * @param range Excel范围地址（如"A1:C3"）
+     * @return 二维数组，包含范围内的所有值
+     * 
+     * @example
+     * auto data = worksheet.getRange<std::string>("A1:C3");  // 获取A1:C3范围的字符串值
+     * auto numbers = worksheet.getRange<double>("B2:D4");    // 获取B2:D4范围的数字值
+     */
+    template<typename T>
+    std::vector<std::vector<T>> getRange(const std::string& range) const {
+        auto [sheet, start_row, start_col, end_row, end_col] = utils::AddressParser::parseRange(range);
+        return getRange<T>(start_row, start_col, end_row, end_col);
+    }
+    
+    /**
+     * @brief 设置范围内的所有值
+     * @tparam T 值类型
+     * @param start_row 开始行
+     * @param start_col 开始列
+     * @param data 二维数据数组
+     * 
+     * @example
+     * std::vector<std::vector<std::string>> data = {{"A", "B"}, {"C", "D"}};
+     * worksheet.setRange(0, 0, data);  // 设置A1:B2的值
+     */
+    template<typename T>
+    void setRange(int start_row, int start_col, const std::vector<std::vector<T>>& data) {
+        for (size_t row_idx = 0; row_idx < data.size(); ++row_idx) {
+            for (size_t col_idx = 0; col_idx < data[row_idx].size(); ++col_idx) {
+                int target_row = static_cast<int>(start_row + row_idx);
+                int target_col = static_cast<int>(start_col + col_idx);
+                setValue<T>(target_row, target_col, data[row_idx][col_idx]);
+            }
+        }
+    }
+    
+    /**
+     * @brief 通过Excel地址设置范围内的所有值
+     * @tparam T 值类型  
+     * @param range Excel范围地址（如"A1:C3"）
+     * @param data 二维数据数组
+     * 
+     * @example
+     * std::vector<std::vector<std::string>> data = {{"A", "B"}, {"C", "D"}};
+     * worksheet.setRange("A1:B2", data);  // 设置A1:B2的值
+     */
+    template<typename T>
+    void setRange(const std::string& range, const std::vector<std::vector<T>>& data) {
+        auto [sheet, start_row, start_col, end_row, end_col] = utils::AddressParser::parseRange(range);
+        setRange<T>(start_row, start_col, data);
+    }
+    
+    // 🚀 新API：链式调用支持
+    /**
+     * @brief 获取链式调用对象
+     * @return 链式调用助手对象
+     * 
+     * @example
+     * worksheet.chain()
+     *     .setValue("A1", std::string("Hello"))
+     *     .setValue("B1", 123.45)
+     *     .setValue("C1", true)
+     *     .setColumnWidth(0, 15.0)
+     *     .setRowHeight(0, 20.0)
+     *     .mergeCells(1, 0, 1, 2);
+     */
+    WorksheetChain chain();
     
     // ========== 行列操作 ==========
     

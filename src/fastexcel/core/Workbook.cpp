@@ -259,16 +259,16 @@ bool Workbook::close() {
 
 // ========== 工作表管理 ==========
 
-std::shared_ptr<Worksheet> Workbook::addWorksheet(const std::string& name) {
+std::shared_ptr<Worksheet> Workbook::addSheet(const std::string& name) {
     // 运行时检查：只读模式不能添加工作表
-    ensureEditable("addWorksheet");
+    ensureEditable("addSheet");
     
     std::string sheet_name;
     if (name.empty()) {
         sheet_name = generateUniqueSheetName("Sheet1");
     } else {
         // 检查名称是否已存在，如果存在则生成唯一名称
-        if (getWorksheet(name) != nullptr) {
+        if (getSheet(name) != nullptr) {
             sheet_name = generateUniqueSheetName(name);
         } else {
             sheet_name = name;
@@ -283,9 +283,10 @@ std::shared_ptr<Worksheet> Workbook::addWorksheet(const std::string& name) {
     auto worksheet = std::make_shared<Worksheet>(sheet_name, std::shared_ptr<Workbook>(this, [](Workbook*){}), next_sheet_id_++);
     worksheets_.push_back(worksheet);
     
-    // 关键修复：如果这是第一个工作表，自动设置为激活状态
+    // 🚀 新增：如果这是第一个工作表，自动设置为激活状态
     if (worksheets_.size() == 1) {
         worksheet->setTabSelected(true);
+        active_worksheet_index_ = 0;
         CORE_DEBUG("Added worksheet: {} (activated as first sheet)", sheet_name);
     } else {
         CORE_DEBUG("Added worksheet: {}", sheet_name);
@@ -294,9 +295,9 @@ std::shared_ptr<Worksheet> Workbook::addWorksheet(const std::string& name) {
     return worksheet;
 }
 
-std::shared_ptr<Worksheet> Workbook::insertWorksheet(size_t index, const std::string& name) {
+std::shared_ptr<Worksheet> Workbook::insertSheet(size_t index, const std::string& name) {
     // 运行时检查：只读模式不能插入工作表
-    ensureEditable("insertWorksheet");
+    ensureEditable("insertSheet");
     
     if (index > worksheets_.size()) {
         index = worksheets_.size();
@@ -316,9 +317,9 @@ std::shared_ptr<Worksheet> Workbook::insertWorksheet(size_t index, const std::st
     return worksheet;
 }
 
-bool Workbook::removeWorksheet(const std::string& name) {
+bool Workbook::removeSheet(const std::string& name) {
     // 运行时检查：只读模式不能删除工作表
-    ensureEditable("removeWorksheet");
+    ensureEditable("removeSheet");
     
     auto it = std::find_if(worksheets_.begin(), worksheets_.end(),
                           [&name](const std::shared_ptr<Worksheet>& ws) {
@@ -334,13 +335,31 @@ bool Workbook::removeWorksheet(const std::string& name) {
     return false;
 }
 
-bool Workbook::removeWorksheet(size_t index) {
+bool Workbook::removeSheet(size_t index) {
     // 运行时检查：只读模式不能删除工作表
-    ensureEditable("removeWorksheet");
+    ensureEditable("removeSheet");
     
     if (index < worksheets_.size()) {
         std::string name = worksheets_[index]->getName();
         worksheets_.erase(worksheets_.begin() + index);
+        
+        // 🚀 新增：更新活动工作表索引
+        if (active_worksheet_index_ == index) {
+            // 如果删除的是当前活动工作表
+            if (worksheets_.empty()) {
+                active_worksheet_index_ = 0;  // 没有工作表了
+            } else if (active_worksheet_index_ >= worksheets_.size()) {
+                active_worksheet_index_ = worksheets_.size() - 1;  // 设置为最后一个
+                worksheets_[active_worksheet_index_]->setTabSelected(true);
+            } else {
+                // 保持当前索引，激活新的工作表
+                worksheets_[active_worksheet_index_]->setTabSelected(true);
+            }
+        } else if (active_worksheet_index_ > index) {
+            // 如果删除的工作表在活动工作表之前，索引需要减1
+            active_worksheet_index_--;
+        }
+        
         CORE_DEBUG("Removed worksheet: {} at index {}", name, index);
         return true;
     }
@@ -348,7 +367,7 @@ bool Workbook::removeWorksheet(size_t index) {
     return false;
 }
 
-std::shared_ptr<Worksheet> Workbook::getWorksheet(const std::string& name) {
+std::shared_ptr<Worksheet> Workbook::getSheet(const std::string& name) {
     auto it = std::find_if(worksheets_.begin(), worksheets_.end(), 
                           [&name](const std::shared_ptr<Worksheet>& ws) {
                               return ws->getName() == name;
@@ -361,14 +380,14 @@ std::shared_ptr<Worksheet> Workbook::getWorksheet(const std::string& name) {
     return nullptr;
 }
 
-std::shared_ptr<Worksheet> Workbook::getWorksheet(size_t index) {
+std::shared_ptr<Worksheet> Workbook::getSheet(size_t index) {
     if (index < worksheets_.size()) {
         return worksheets_[index];
     }
     return nullptr;
 }
 
-std::shared_ptr<const Worksheet> Workbook::getWorksheet(const std::string& name) const {
+std::shared_ptr<const Worksheet> Workbook::getSheet(const std::string& name) const {
     auto it = std::find_if(worksheets_.begin(), worksheets_.end(),
                           [&name](const std::shared_ptr<Worksheet>& ws) {
                               return ws->getName() == name;
@@ -381,14 +400,14 @@ std::shared_ptr<const Worksheet> Workbook::getWorksheet(const std::string& name)
     return nullptr;
 }
 
-std::shared_ptr<const Worksheet> Workbook::getWorksheet(size_t index) const {
+std::shared_ptr<const Worksheet> Workbook::getSheet(size_t index) const {
     if (index < worksheets_.size()) {
         return worksheets_[index];
     }
     return nullptr;
 }
 
-std::vector<std::string> Workbook::getWorksheetNames() const {
+std::vector<std::string> Workbook::getSheetNames() const {
     std::vector<std::string> names;
     names.reserve(worksheets_.size());
     
@@ -399,8 +418,8 @@ std::vector<std::string> Workbook::getWorksheetNames() const {
     return names;
 }
 
-bool Workbook::renameWorksheet(const std::string& old_name, const std::string& new_name) {
-    auto worksheet = getWorksheet(old_name);
+bool Workbook::renameSheet(const std::string& old_name, const std::string& new_name) {
+    auto worksheet = getSheet(old_name);
     if (!worksheet) {
         return false;
     }
@@ -414,7 +433,7 @@ bool Workbook::renameWorksheet(const std::string& old_name, const std::string& n
     return true;
 }
 
-bool Workbook::moveWorksheet(size_t from_index, size_t to_index) {
+bool Workbook::moveSheet(size_t from_index, size_t to_index) {
     if (from_index >= worksheets_.size() || to_index >= worksheets_.size()) {
         return false;
     }
@@ -437,7 +456,7 @@ bool Workbook::moveWorksheet(size_t from_index, size_t to_index) {
 }
 
 std::shared_ptr<Worksheet> Workbook::copyWorksheet(const std::string& source_name, const std::string& new_name) {
-    auto source_worksheet = getWorksheet(source_name);
+    auto source_worksheet = getSheet(source_name);
     if (!source_worksheet) {
         return nullptr;
     }
@@ -467,7 +486,33 @@ void Workbook::setActiveWorksheet(size_t index) {
     // 设置指定工作表为活动状态
     if (index < worksheets_.size()) {
         worksheets_[index]->setTabSelected(true);
+        active_worksheet_index_ = index;  // 🚀 新增：更新活动工作表索引
     }
+}
+
+std::shared_ptr<Worksheet> Workbook::getActiveWorksheet() {
+    if (worksheets_.empty()) {
+        return nullptr;
+    }
+    
+    // 确保活动工作表索引在有效范围内
+    if (active_worksheet_index_ >= worksheets_.size()) {
+        active_worksheet_index_ = 0;
+    }
+    
+    return worksheets_[active_worksheet_index_];
+}
+
+std::shared_ptr<const Worksheet> Workbook::getActiveWorksheet() const {
+    if (worksheets_.empty()) {
+        return nullptr;
+    }
+    
+    // 确保活动工作表索引在有效范围内
+    size_t safe_index = (active_worksheet_index_ < worksheets_.size()) ? 
+                        active_worksheet_index_ : 0;
+    
+    return worksheets_[safe_index];
 }
 
 // ========== 样式管理 ==========
@@ -862,7 +907,7 @@ bool Workbook::generateExcelStructure() {
 
 std::string Workbook::generateUniqueSheetName(const std::string& base_name) const {
     // 如果base_name不存在，直接返回
-    if (getWorksheet(base_name) == nullptr) {
+    if (getSheet(base_name) == nullptr) {
         return base_name;
     }
     
@@ -870,7 +915,7 @@ std::string Workbook::generateUniqueSheetName(const std::string& base_name) cons
     if (base_name == "Sheet1") {
         int counter = 2;
         std::string name = "Sheet" + std::to_string(counter);
-        while (getWorksheet(name) != nullptr) {
+        while (getSheet(name) != nullptr) {
             name = "Sheet" + std::to_string(++counter);
         }
         return name;
@@ -879,7 +924,7 @@ std::string Workbook::generateUniqueSheetName(const std::string& base_name) cons
     // 对于其他base_name，添加数字后缀
     int suffix_counter = 1;
     std::string name = base_name + std::to_string(suffix_counter);
-    while (getWorksheet(name) != nullptr) {
+    while (getSheet(name) != nullptr) {
         name = base_name + std::to_string(++suffix_counter);
     }
     
@@ -1186,9 +1231,9 @@ bool Workbook::mergeWorkbook(const std::unique_ptr<Workbook>& other_workbook, co
                 std::string new_name = options.name_prefix + other_worksheet->getName();
                 
                 // 检查名称冲突
-                if (getWorksheet(new_name) != nullptr) {
+                if (getSheet(new_name) != nullptr) {
                     if (options.overwrite_existing) {
-                        removeWorksheet(new_name);
+                        removeSheet(new_name);
                         CORE_INFO("Removed existing worksheet for merge: {}", new_name);
                     } else {
                         new_name = generateUniqueSheetName(new_name);
@@ -1197,7 +1242,7 @@ bool Workbook::mergeWorkbook(const std::unique_ptr<Workbook>& other_workbook, co
                 }
                 
                 // 创建新工作表并复制内容
-                auto new_worksheet = addWorksheet(new_name);
+                auto new_worksheet = addSheet(new_name);
                 if (new_worksheet) {
                     // 这里需要实现深拷贝逻辑
                     // 简化版本：复制基本属性
@@ -1267,13 +1312,13 @@ bool Workbook::exportWorksheets(const std::vector<std::string>& worksheet_names,
         // 复制指定的工作表
         int exported_count = 0;
         for (const std::string& name : worksheet_names) {
-            auto source_worksheet = getWorksheet(name);
+            auto source_worksheet = getSheet(name);
             if (!source_worksheet) {
                 CORE_WARN("Worksheet not found for export: {}", name);
                 continue;
             }
             
-            auto new_worksheet = export_workbook->addWorksheet(name);
+            auto new_worksheet = export_workbook->addSheet(name);
             if (new_worksheet) {
                 // 这里需要实现深拷贝逻辑
                 // 简化版本：复制基本属性
@@ -1311,7 +1356,7 @@ int Workbook::batchRenameWorksheets(const std::unordered_map<std::string, std::s
     int renamed_count = 0;
     
     for (const auto& [old_name, new_name] : rename_map) {
-        if (renameWorksheet(old_name, new_name)) {
+        if (renameSheet(old_name, new_name)) {
             renamed_count++;
             CORE_DEBUG("Renamed worksheet: {} -> {}", old_name, new_name);
         } else {
@@ -1327,7 +1372,7 @@ int Workbook::batchRemoveWorksheets(const std::vector<std::string>& worksheet_na
     int removed_count = 0;
     
     for (const std::string& name : worksheet_names) {
-        if (removeWorksheet(name)) {
+        if (removeSheet(name)) {
             removed_count++;
             CORE_DEBUG("Removed worksheet: {}", name);
         } else {
@@ -1352,7 +1397,7 @@ bool Workbook::reorderWorksheets(const std::vector<std::string>& new_order) {
         
         // 按新顺序重新排列工作表
         for (const std::string& name : new_order) {
-            auto worksheet = getWorksheet(name);
+            auto worksheet = getSheet(name);
             if (!worksheet) {
                 CORE_ERROR("Worksheet not found in reorder list: {}", name);
                 return false;

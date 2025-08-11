@@ -23,7 +23,7 @@ int main() {
         }
         
         // 添加工作表
-        auto worksheet = workbook->addWorksheet("数据表");
+        auto worksheet = workbook->addSheet("数据表");
         if (!worksheet) {
             EXAMPLE_ERROR("无法创建工作表");
             return -1;
