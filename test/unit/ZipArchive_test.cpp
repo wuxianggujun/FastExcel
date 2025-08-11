@@ -49,7 +49,7 @@ protected:
             }
         } catch (const std::exception& e) {
             // 忽略清理错误，避免影响测试结果
-            LOG_WARN("Failed to clean up test file {}: {}", test_zip_path_, e.what());
+            FASTEXCEL_LOG_WARN("Failed to clean up test file {}: {}", test_zip_path_, e.what());
         }
         
         // 关闭日志系统
@@ -82,7 +82,7 @@ protected:
 
 // 测试1: 基本创建和打开
 TEST_F(ZipArchiveTest, CreateAndOpen) {
-    LOG_INFO("Testing basic ZIP archive creation and opening");
+    FASTEXCEL_LOG_INFO("Testing basic ZIP archive creation and opening");
 
     // 创建 ZIP 文件
     zip_archive_ = std::make_unique<ZipArchive>(test_zip_path_);
@@ -102,7 +102,7 @@ TEST_F(ZipArchiveTest, CreateAndOpen) {
 
 // 测试2: 添加和提取字符串文件
 TEST_F(ZipArchiveTest, AddAndExtractStringFile) {
-    LOG_INFO("Testing adding and extracting string files");
+    FASTEXCEL_LOG_INFO("Testing adding and extracting string files");
 
     // 创建 ZIP 文件
     zip_archive_ = std::make_unique<ZipArchive>(test_zip_path_);
@@ -138,7 +138,7 @@ TEST_F(ZipArchiveTest, AddAndExtractStringFile) {
 
 // 测试3: 添加和提取二进制文件
 TEST_F(ZipArchiveTest, AddAndExtractBinaryFile) {
-    LOG_INFO("Testing adding and extracting binary files");
+    FASTEXCEL_LOG_INFO("Testing adding and extracting binary files");
 
     // 创建 ZIP 文件
     zip_archive_ = std::make_unique<ZipArchive>(test_zip_path_);
@@ -176,7 +176,7 @@ TEST_F(ZipArchiveTest, AddAndExtractBinaryFile) {
 
 // 测试4: 添加多个文件并列出
 TEST_F(ZipArchiveTest, AddMultipleFilesAndList) {
-    LOG_INFO("Testing adding multiple files and listing them");
+    FASTEXCEL_LOG_INFO("Testing adding multiple files and listing them");
 
     // 创建 ZIP 文件
     zip_archive_ = std::make_unique<ZipArchive>(test_zip_path_);
@@ -212,7 +212,7 @@ TEST_F(ZipArchiveTest, AddMultipleFilesAndList) {
 
 // 测试5: 大文件处理
 TEST_F(ZipArchiveTest, LargeFileHandling) {
-    LOG_INFO("Testing large file handling");
+    FASTEXCEL_LOG_INFO("Testing large file handling");
 
     // 创建 ZIP 文件
     zip_archive_ = std::make_unique<ZipArchive>(test_zip_path_);
@@ -249,7 +249,7 @@ TEST_F(ZipArchiveTest, LargeFileHandling) {
 
 // 测试6: 特殊字符文件名
 TEST_F(ZipArchiveTest, SpecialCharacterFilename) {
-    LOG_INFO("Testing special characters in filenames");
+    FASTEXCEL_LOG_INFO("Testing special characters in filenames");
 
     // 创建 ZIP 文件
     zip_archive_ = std::make_unique<ZipArchive>(test_zip_path_);
@@ -294,7 +294,7 @@ TEST_F(ZipArchiveTest, SpecialCharacterFilename) {
 
 // 测试7: 空文件处理
 TEST_F(ZipArchiveTest, EmptyFileHandling) {
-    LOG_INFO("Testing empty file handling");
+    FASTEXCEL_LOG_INFO("Testing empty file handling");
 
     // 创建 ZIP 文件
     zip_archive_ = std::make_unique<ZipArchive>(test_zip_path_);
@@ -328,7 +328,7 @@ TEST_F(ZipArchiveTest, EmptyFileHandling) {
 
 // 测试8: 文件不存在的情况
 TEST_F(ZipArchiveTest, NonExistentFile) {
-    LOG_INFO("Testing non-existent file handling");
+    FASTEXCEL_LOG_INFO("Testing non-existent file handling");
 
     // 创建 ZIP 文件
     zip_archive_ = std::make_unique<ZipArchive>(test_zip_path_);
@@ -361,7 +361,7 @@ TEST_F(ZipArchiveTest, NonExistentFile) {
 
 // 测试9: 重复添加同名文件
 TEST_F(ZipArchiveTest, DuplicateFilename) {
-    LOG_INFO("Testing duplicate filename handling");
+    FASTEXCEL_LOG_INFO("Testing duplicate filename handling");
 
     // 创建 ZIP 文件
     zip_archive_ = std::make_unique<ZipArchive>(test_zip_path_);
@@ -399,7 +399,7 @@ TEST_F(ZipArchiveTest, DuplicateFilename) {
 
 // 测试10: 目录结构处理
 TEST_F(ZipArchiveTest, DirectoryStructure) {
-    LOG_INFO("Testing directory structure handling");
+    FASTEXCEL_LOG_INFO("Testing directory structure handling");
 
     // 创建 ZIP 文件
     zip_archive_ = std::make_unique<ZipArchive>(test_zip_path_);

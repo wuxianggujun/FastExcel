@@ -1,3 +1,4 @@
+#include "fastexcel/utils/ModuleLoggers.hpp"
 #include "fastexcel/archive/ZipArchive.hpp"
 #include <stdexcept>
 #include <iostream>

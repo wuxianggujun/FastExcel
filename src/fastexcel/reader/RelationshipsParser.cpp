@@ -1,3 +1,4 @@
+#include "fastexcel/utils/ModuleLoggers.hpp"
 #include "RelationshipsParser.hpp"
 #include "fastexcel/utils/Logger.hpp"
 #include <algorithm>
@@ -7,7 +8,7 @@ namespace reader {
 
 bool RelationshipsParser::parse(const std::string& xml_content) {
     if (xml_content.empty()) {
-        LOG_DEBUG("Empty relationships XML content");
+        READER_DEBUG("Empty relationships XML content");
         return true;
     }
 
@@ -19,7 +20,7 @@ bool RelationshipsParser::parse(const std::string& xml_content) {
         xml::XMLStreamReader reader;
         auto dom = reader.parseToDOM(xml_content);
         if (!dom) {
-            LOG_ERROR("Failed to parse relationships XML to DOM");
+            READER_ERROR("Failed to parse relationships XML to DOM");
             return false;
         }
         
@@ -40,7 +41,7 @@ bool RelationshipsParser::parse(const std::string& xml_content) {
         }
         
         if (!relationshipsEl) {
-            LOG_ERROR("No Relationships element found in XML");
+            READER_ERROR("No Relationships element found in XML");
             return false;
         }
         
@@ -61,19 +62,19 @@ bool RelationshipsParser::parse(const std::string& xml_content) {
                 // 验证必需属性
                 if (!rel.id.empty() && !rel.type.empty() && !rel.target.empty()) {
                     relationships_.push_back(rel);
-                    LOG_DEBUG("Parsed relationship: {} -> {} ({})", rel.id, rel.target, rel.type);
+                    READER_DEBUG("Parsed relationship: {} -> {} ({})", rel.id, rel.target, rel.type);
                 } else {
-                    LOG_WARN("Skipping incomplete relationship: id='{}', type='{}', target='{}'", 
+                    READER_WARN("Skipping incomplete relationship: id='{}', type='{}', target='{}'", 
                              rel.id, rel.type, rel.target);
                 }
             }
         }
         
-        LOG_DEBUG("Successfully parsed {} relationships", relationships_.size());
+        READER_DEBUG("Successfully parsed {} relationships", relationships_.size());
         return true;
         
     } catch (const std::exception& e) {
-        LOG_ERROR("Exception parsing relationships XML: {}", e.what());
+        READER_ERROR("Exception parsing relationships XML: {}", e.what());
         return false;
     }
 }

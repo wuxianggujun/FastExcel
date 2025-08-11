@@ -77,12 +77,12 @@ void initialize();
 void cleanup();
 
 // 日志便捷宏定义
-#define LOG_TRACE(...)    fastexcel::Logger::getInstance().trace(__VA_ARGS__)
-#define LOG_DEBUG(...)    fastexcel::Logger::getInstance().debug(__VA_ARGS__)
-#define LOG_INFO(...)     fastexcel::Logger::getInstance().info(__VA_ARGS__)
-#define LOG_WARN(...)     fastexcel::Logger::getInstance().warn(__VA_ARGS__)
-#define LOG_ERROR(...)    fastexcel::Logger::getInstance().error(__VA_ARGS__)
-#define LOG_CRITICAL(...) fastexcel::Logger::getInstance().critical(__VA_ARGS__)
+#define FASTEXCEL_LOG_TRACE(...)    fastexcel::Logger::getInstance().trace(__VA_ARGS__)
+#define FASTEXCEL_LOG_DEBUG(...)    fastexcel::Logger::getInstance().debug(__VA_ARGS__)
+#define FASTEXCEL_LOG_INFO(...)     fastexcel::Logger::getInstance().info(__VA_ARGS__)
+#define FASTEXCEL_LOG_WARN(...)     fastexcel::Logger::getInstance().warn(__VA_ARGS__)
+#define FASTEXCEL_LOG_ERROR(...)    fastexcel::Logger::getInstance().error(__VA_ARGS__)
+#define FASTEXCEL_LOG_CRITICAL(...) fastexcel::Logger::getInstance().critical(__VA_ARGS__)
 
 } // namespace fastexcel
 

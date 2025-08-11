@@ -1,3 +1,4 @@
+#include "fastexcel/utils/ModuleLoggers.hpp"
 #include "fastexcel/core/Worksheet.hpp"
 #include "fastexcel/core/Workbook.hpp"
 #include "fastexcel/core/DirtyManager.hpp"
@@ -150,7 +151,7 @@ int Worksheet::createSharedFormula(int first_row, int first_col, int last_row, i
     // 注册共享公式
     int shared_index = shared_formula_manager_->registerSharedFormula(formula, range);
     if (shared_index < 0) {
-        LOG_ERROR("Failed to register shared formula in range {}", range);
+        CORE_ERROR("Failed to register shared formula in range {}", range);
         return -1;
     }
     
@@ -190,7 +191,7 @@ int Worksheet::createSharedFormula(int first_row, int first_col, int last_row, i
         }
     }
     
-    LOG_DEBUG("Created shared formula: index={}, range={}, formula='{}'", 
+    CORE_DEBUG("Created shared formula: index={}, range={}, formula='{}'", 
              shared_index, range, formula);
     
     return shared_index;
@@ -1420,7 +1421,7 @@ int Worksheet::optimizeFormulas(int min_similar_count) {
     }
     
     if (formulas.empty()) {
-        LOG_DEBUG("工作表中没有可优化的公式");
+        CORE_DEBUG("工作表中没有可优化的公式");
         return 0;
     }
     
@@ -1428,7 +1429,7 @@ int Worksheet::optimizeFormulas(int min_similar_count) {
     int optimized_count = shared_formula_manager_->optimizeFormulas(formulas, min_similar_count);
     
     if (optimized_count > 0) {
-        LOG_DEBUG("成功优化 {} 个公式为共享公式", optimized_count);
+        CORE_DEBUG("成功优化 {} 个公式为共享公式", optimized_count);
         
         // 🔧 关键修复：将对应的Cell对象标记为共享公式
         // 获取所有共享公式索引，并更新对应的单元格

@@ -1,3 +1,4 @@
+#include "fastexcel/utils/ModuleLoggers.hpp"
 //
 // Created by wuxianggujun on 25-8-4.
 //

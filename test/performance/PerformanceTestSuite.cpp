@@ -104,7 +104,7 @@ PerformanceResult PerformanceTestBase::measurePerformance(const std::string& tes
     try {
         test_function();
     } catch (const std::exception& e) {
-        LOG_ERROR("Performance test '{}' failed: {}", test_name, e.what());
+        FASTEXCEL_LOG_ERROR("Performance test '{}' failed: {}", test_name, e.what());
         result.execution_time_ms = -1; // 标记为失败
         return result;
     }
@@ -164,7 +164,7 @@ void PerformanceTestBase::generateReport(const std::string& output_file) {
 void PerformanceTestBase::exportToCSV(const std::string& csv_file) {
     std::ofstream file(csv_file);
     if (!file.is_open()) {
-        LOG_ERROR("无法打开CSV文件进行写入: {}", csv_file);
+        FASTEXCEL_LOG_ERROR("无法打开CSV文件进行写入: {}", csv_file);
         return;
     }
     
@@ -185,23 +185,23 @@ void PerformanceTestBase::exportToCSV(const std::string& csv_file) {
     }
     
     file.close();
-    LOG_DEBUG("性能测试结果已导出到CSV文件: {}", csv_file);
+    FASTEXCEL_LOG_DEBUG("性能测试结果已导出到CSV文件: {}", csv_file);
 }
 
 void PerformanceTestBase::setupTest() {
-    LOG_DEBUG("设置性能测试环境: {}", test_suite_name_);
+    FASTEXCEL_LOG_DEBUG("设置性能测试环境: {}", test_suite_name_);
 }
 
 void PerformanceTestBase::teardownTest() {
-    LOG_DEBUG("清理性能测试环境: {}", test_suite_name_);
+    FASTEXCEL_LOG_DEBUG("清理性能测试环境: {}", test_suite_name_);
 }
 
 void PerformanceTestBase::logResult(const PerformanceResult& result) {
     if (result.execution_time_ms >= 0) {
-        LOG_DEBUG("性能测试 '{}' 完成: {:.2f}ms, {:.0f} ops/sec, 内存使用 {}KB", 
+        FASTEXCEL_LOG_DEBUG("性能测试 '{}' 完成: {:.2f}ms, {:.0f} ops/sec, 内存使用 {}KB", 
                  result.test_name, result.execution_time_ms, result.operations_per_second, result.memory_usage_kb);
     } else {
-        LOG_ERROR("性能测试 '{}' 失败", result.test_name);
+        FASTEXCEL_LOG_ERROR("性能测试 '{}' 失败", result.test_name);
     }
 }
 
@@ -1037,7 +1037,7 @@ void SharedFormulaPerformanceTest::createFormulaTestData(size_t formula_count) {
 
 void ComprehensivePerformanceTestSuite::setupOutputDirectory() {
     // 创建输出目录的实现
-    LOG_DEBUG("设置性能测试输出目录: {}", output_directory_);
+    FASTEXCEL_LOG_DEBUG("设置性能测试输出目录: {}", output_directory_);
 }
 
 } // namespace test

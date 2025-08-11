@@ -1,5 +1,6 @@
 #pragma once
 
+#include "fastexcel/utils/ModuleLoggers.hpp"
 #include <map>
 #include <set>
 #include <string>
@@ -153,7 +154,7 @@ public:
             info.requiresRegeneration = true;
         }
         
-        LOG_DEBUG("Marked {} as dirty (level: {}, path: {})", 
+        CORE_DEBUG("Marked {} as dirty (level: {}, path: {})", 
                   part, static_cast<int>(level), affectedPath);
         
         // 传播脏标记到依赖项
@@ -377,7 +378,7 @@ private:
                         auto& depInfo = dirtyParts_[dependent];
                         if (propagatedLevel > depInfo.level) {
                             depInfo.level = propagatedLevel;
-                            LOG_DEBUG("Propagated dirty from {} to {} (level: {})",
+                            CORE_DEBUG("Propagated dirty from {} to {} (level: {})",
                                      part, dependent, static_cast<int>(propagatedLevel));
                         }
                     }
@@ -390,7 +391,7 @@ private:
                     auto& depInfo = dirtyParts_[dependent];
                     if (propagatedLevel > depInfo.level) {
                         depInfo.level = propagatedLevel;
-                        LOG_DEBUG("Propagated dirty from {} to {} (level: {})",
+                        CORE_DEBUG("Propagated dirty from {} to {} (level: {})",
                                  part, dependent, static_cast<int>(propagatedLevel));
                     }
                 }

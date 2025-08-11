@@ -7,21 +7,11 @@
 #define ENABLE_BATCH_DEBUG_LOGS 0    // 禁用批处理相关的调试日志
 #define ENABLE_WORKSHEET_DEBUG_LOGS 0 // 禁用工作表调试日志
 
-// 条件日志宏
-#if ENABLE_ZIP_DEBUG_LOGS
-    #define LOG_ZIP_DEBUG(...) LOG_DEBUG(__VA_ARGS__)
-#else
-    #define LOG_ZIP_DEBUG(...) do {} while(0)
-#endif
+// 前向声明 - 这些宏在ModuleLoggers.hpp中实际定义
+// 这里只是为了避免包含循环依赖，真正的定义在ModuleLoggers.hpp
 
-#if ENABLE_BATCH_DEBUG_LOGS
-    #define LOG_BATCH_DEBUG(...) LOG_DEBUG(__VA_ARGS__)
-#else
-    #define LOG_BATCH_DEBUG(...) do {} while(0)
-#endif
-
-#if ENABLE_WORKSHEET_DEBUG_LOGS
-    #define LOG_WORKSHEET_DEBUG(...) LOG_DEBUG(__VA_ARGS__)
-#else
-    #define LOG_WORKSHEET_DEBUG(...) do {} while(0)
-#endif
+// 条件日志宏将在ModuleLoggers.hpp中使用模块宏来定义
+// 例如：
+// FASTEXCEL_LOG_ZIP_DEBUG -> ARCHIVE_DEBUG 
+// FASTEXCEL_LOG_BATCH_DEBUG -> CORE_DEBUG
+// FASTEXCEL_LOG_WORKSHEET_DEBUG -> CORE_DEBUG

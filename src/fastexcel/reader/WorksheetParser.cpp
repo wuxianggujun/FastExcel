@@ -1,3 +1,4 @@
+#include "fastexcel/utils/ModuleLoggers.hpp"
 //
 // Created by wuxianggujun on 25-8-4.
 //
@@ -30,19 +31,19 @@ bool WorksheetParser::parse(const std::string& xml_content,
     
     try {
         // 🔧 关键修复：先解析列样式定义
-        LOG_DEBUG("开始解析列样式定义");
+        READER_DEBUG("开始解析列样式定义");
         parseColumns(xml_content, worksheet, styles, style_id_mapping);
-        LOG_DEBUG("列样式解析完成");
+        READER_DEBUG("列样式解析完成");
 
         // 解析合并单元格（否则编辑保存后会丢失）
-        LOG_DEBUG("开始解析合并单元格");
+        READER_DEBUG("开始解析合并单元格");
         parseMergeCells(xml_content, worksheet);
-        LOG_DEBUG("合并单元格解析完成");
+        READER_DEBUG("合并单元格解析完成");
         
         // 解析共享公式（在解析单元格数据之前）
-        LOG_DEBUG("开始解析共享公式");
+        READER_DEBUG("开始解析共享公式");
         parseSharedFormulas(xml_content, worksheet);
-        LOG_DEBUG("共享公式解析完成");
+        READER_DEBUG("共享公式解析完成");
         
         // 解析工作表数据（行/单元格），并在行级别读取行高
         return parseSheetData(xml_content, worksheet, shared_strings, styles, style_id_mapping);
@@ -511,17 +512,17 @@ bool WorksheetParser::parseColumns(const std::string& xml_content,
                                   core::Worksheet* worksheet,
                                   const std::unordered_map<int, std::shared_ptr<core::FormatDescriptor>>& styles,
                                   const std::unordered_map<int, int>& style_id_mapping) {
-    LOG_DEBUG("parseColumns被调用，xml_content长度: {}", xml_content.length());
+    READER_DEBUG("parseColumns被调用，xml_content长度: {}", xml_content.length());
     
     // 查找 <cols> 标签
     size_t cols_start = xml_content.find("<cols");
     if (cols_start == std::string::npos) {
         // 没有列定义，这是正常的
-        LOG_DEBUG("没有找到<cols>标签");
+        READER_DEBUG("没有找到<cols>标签");
         return true;
     }
     
-    LOG_DEBUG("找到<cols>标签在位置: {}", cols_start);
+    READER_DEBUG("找到<cols>标签在位置: {}", cols_start);
     
     // 找到 <cols> 标签的结束位置
     size_t content_start = xml_content.find(">", cols_start);
@@ -580,7 +581,7 @@ bool WorksheetParser::parseColumns(const std::string& xml_content,
             // 设置列宽（保留Excel默认列宽，即使没有customWidth属性）
             if (width > 0) {
                 worksheet->setColumnWidth(first_col, last_col, width);
-                LOG_DEBUG("设置列宽：列 {}-{} 宽度 {} custom_width={}", first_col, last_col, width, custom_width);
+                READER_DEBUG("设置列宽：列 {}-{} 宽度 {} custom_width={}", first_col, last_col, width, custom_width);
             }
             
             // 设置列样式
@@ -598,7 +599,7 @@ bool WorksheetParser::parseColumns(const std::string& xml_content,
                 if (style_it != styles.end()) {
                     // 🔧 关键修复：设置列格式ID到工作表
                     worksheet->setColumnFormatId(first_col, last_col, mapped_style_id);
-                    LOG_DEBUG("设置列样式：列 {}-{} 原始样式ID {} 映射样式ID {}", first_col, last_col, style_index, mapped_style_id);
+                    READER_DEBUG("设置列样式：列 {}-{} 原始样式ID {} 映射样式ID {}", first_col, last_col, style_index, mapped_style_id);
                 }
             }
             
@@ -739,11 +740,11 @@ bool WorksheetParser::parseRangeRef(const std::string& ref, int& first_row, int&
 // 解析共享公式
 void WorksheetParser::parseSharedFormulas(const std::string& xml_content, core::Worksheet* worksheet) {
     if (!worksheet) {
-        LOG_ERROR("Worksheet is null in parseSharedFormulas");
+        READER_ERROR("Worksheet is null in parseSharedFormulas");
         return;
     }
     
-    LOG_DEBUG("正在解析共享公式...");
+    READER_DEBUG("正在解析共享公式...");
     
     // 存储共享公式主定义（si -> {formula, range}）
     std::unordered_map<int, std::pair<std::string, std::string>> shared_formulas;
@@ -774,14 +775,14 @@ void WorksheetParser::parseSharedFormulas(const std::string& xml_content, core::
             if (!ref.empty() && !formula.empty()) {
                 // 这是主公式定义
                 shared_formulas[si] = {formula, ref};
-                LOG_DEBUG("发现共享公式主定义: si={}, ref={}, formula={}", si, ref, formula);
+                READER_DEBUG("发现共享公式主定义: si={}, ref={}, formula={}", si, ref, formula);
             }
         }
         
         pos = actual_end;
     }
     
-    LOG_DEBUG("找到 {} 个共享公式主定义", shared_formulas.size());
+    READER_DEBUG("找到 {} 个共享公式主定义", shared_formulas.size());
     
     // 为每个共享公式创建 SharedFormulaManager 中的条目
     for (const auto& [si, formula_info] : shared_formulas) {
@@ -793,13 +794,13 @@ void WorksheetParser::parseSharedFormulas(const std::string& xml_content, core::
             // 使用 worksheet 的 createSharedFormula 方法
             int created_si = worksheet->createSharedFormula(first_row, first_col, last_row, last_col, formula);
             if (created_si >= 0) {
-                LOG_DEBUG("成功创建共享公式: si={}, 范围={}:{}-{}:{}", 
+                READER_DEBUG("成功创建共享公式: si={}, 范围={}:{}-{}:{}", 
                          created_si, first_row, first_col, last_row, last_col);
             } else {
-                LOG_ERROR("创建共享公式失败: si={}, 范围={}", si, ref);
+                READER_ERROR("创建共享公式失败: si={}, 范围={}", si, ref);
             }
         } else {
-            LOG_ERROR("无法解析共享公式范围: {}", ref);
+            READER_ERROR("无法解析共享公式范围: {}", ref);
         }
     }
 }

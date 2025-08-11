@@ -1,3 +1,4 @@
+#include "fastexcel/utils/ModuleLoggers.hpp"
 #include "fastexcel/xml/ContentTypes.hpp"
 
 namespace fastexcel {

@@ -1,3 +1,4 @@
+#include "fastexcel/utils/ModuleLoggers.hpp"
 #include "fastexcel/xml/XMLStreamReader.hpp"
 #include <algorithm>
 #include <cstring>
@@ -39,7 +40,7 @@ bool XMLStreamReader::initializeParser() {
     XML_SetCommentHandler(parser_, commentHandler);
     XML_SetProcessingInstructionHandler(parser_, processingInstructionHandler);
     
-    LOG_DEBUG("XML parser initialized with encoding: {}", encoding_.empty() ? "default" : encoding_);
+    XML_DEBUG("XML parser initialized with encoding: {}", encoding_.empty() ? "default" : encoding_);
     return true;
 }
 
@@ -153,7 +154,7 @@ XMLParseError XMLStreamReader::parseFromFile(FILE* file) {
     }
     
     is_parsing_ = false;
-    LOG_DEBUG("Successfully parsed {} bytes, {} elements", bytes_parsed_, elements_parsed_);
+    XML_DEBUG("Successfully parsed {} bytes, {} elements", bytes_parsed_, elements_parsed_);
     return XMLParseError::Ok;
 }
 
@@ -186,7 +187,7 @@ XMLParseError XMLStreamReader::parseFromBuffer(const char* buffer, size_t size) 
     }
     
     is_parsing_ = false;
-    LOG_DEBUG("Successfully parsed {} bytes, {} elements", bytes_parsed_, elements_parsed_);
+    XML_DEBUG("Successfully parsed {} bytes, {} elements", bytes_parsed_, elements_parsed_);
     return XMLParseError::Ok;
 }
 
@@ -225,7 +226,7 @@ XMLParseError XMLStreamReader::parseChunk(const char* chunk, size_t size, bool i
     
     if (is_final) {
         is_parsing_ = false;
-        LOG_DEBUG("Successfully parsed {} bytes, {} elements", bytes_parsed_, elements_parsed_);
+        XML_DEBUG("Successfully parsed {} bytes, {} elements", bytes_parsed_, elements_parsed_);
     }
     
     return XMLParseError::Ok;
@@ -394,13 +395,13 @@ void XMLStreamReader::handleError(XMLParseError error, const std::string& messag
     last_error_ = error;
     last_error_message_ = message;
     
-    LOG_ERROR("XML parse error: {}", message);
+    XML_ERROR("XML parse error: {}", message);
     
     if (error_callback_) {
         try {
             error_callback_(error, message, getCurrentLineNumber(), getCurrentColumnNumber());
         } catch (const std::exception& e) {
-            LOG_ERROR("Error in error callback: {}", e.what());
+            XML_ERROR("Error in error callback: {}", e.what());
         }
     }
 }
@@ -485,7 +486,7 @@ std::unique_ptr<XMLStreamReader::SimpleElement> XMLStreamReader::parseToDOM(cons
     // 解析XML
     XMLParseError result = parseFromString(xml_content);
     if (result != XMLParseError::Ok) {
-        LOG_ERROR("Failed to parse XML to DOM: {}", last_error_message_);
+        XML_ERROR("Failed to parse XML to DOM: {}", last_error_message_);
         return nullptr;
     }
     

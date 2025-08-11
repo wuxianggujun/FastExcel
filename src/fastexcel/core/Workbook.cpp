@@ -1,3 +1,4 @@
+#include "fastexcel/utils/ModuleLoggers.hpp"
 #include "fastexcel/core/Workbook.hpp"
 #include "fastexcel/core/BatchFileWriter.hpp"
 #include "fastexcel/core/CustomPropertyManager.hpp"
@@ -55,7 +56,7 @@ std::unique_ptr<Workbook> Workbook::create(const Path& path) {
     
     // 🎯 API修复：自动打开工作簿，返回可直接使用的对象
     if (!workbook->open()) {
-        LOG_ERROR("Failed to open workbook after creation: {}", path.string());
+        CORE_ERROR("Failed to open workbook after creation: {}", path.string());
         return nullptr;
     }
     
@@ -67,7 +68,7 @@ Workbook::Workbook(const Path& path) : filename_(path.string()) {
     if (path.string().find("::memory::") == 0) {
         // 内存模式：不创建FileManager，保持纯内存操作
         file_manager_ = nullptr;
-        LOG_DEBUG("Created workbook in memory mode: {}", filename_);
+        CORE_DEBUG("Created workbook in memory mode: {}", filename_);
     } else {
         // 文件模式：创建FileManager处理文件操作
         file_manager_ = std::make_unique<archive::FileManager>(path);
@@ -101,14 +102,14 @@ Workbook::~Workbook() {
 bool Workbook::open() {
     // 内存模式无需文件操作
     if (!file_manager_) {
-        LOG_DEBUG("Memory workbook opened: {}", filename_);
+        CORE_DEBUG("Memory workbook opened: {}", filename_);
         return true;
     }
     
     // 文件模式需要打开FileManager
     bool success = file_manager_->open(true);
     if (success) {
-        LOG_INFO("Workbook opened: {}", filename_);
+        CORE_INFO("Workbook opened: {}", filename_);
     }
     
     return success;
@@ -125,19 +126,19 @@ bool Workbook::save() {
         // 设置ZIP压缩级别
         if (file_manager_->isOpen()) {
             if (!file_manager_->setCompressionLevel(options_.compression_level)) {
-                LOG_WARN("Failed to set compression level to {}", options_.compression_level);
+                CORE_WARN("Failed to set compression level to {}", options_.compression_level);
             } else {
-                LOG_ZIP_DEBUG("Set ZIP compression level to {}", options_.compression_level);
+                FASTEXCEL_LOG_ZIP_DEBUG("Set ZIP compression level to {}", options_.compression_level);
             }
         }
         
         // 🔧 修复SharedStrings生成逻辑：移除手动收集，依赖工作表XML生成时自动添加
         // 清空共享字符串列表，让工作表XML生成时自动填充
         if (options_.use_shared_strings) {
-            LOG_DEBUG("SharedStrings enabled - SST will be populated during worksheet XML generation");
+            CORE_DEBUG("SharedStrings enabled - SST will be populated during worksheet XML generation");
             if (shared_string_table_) shared_string_table_->clear();
         } else {
-            LOG_DEBUG("SharedStrings disabled for performance");
+            CORE_DEBUG("SharedStrings disabled for performance");
             if (shared_string_table_) shared_string_table_->clear();
         }
         
@@ -151,14 +152,14 @@ bool Workbook::save() {
 
         // 生成Excel文件结构（会覆盖我们管理的核心部件）
         if (!generateExcelStructure()) {
-            LOG_ERROR("Failed to generate Excel structure");
+            CORE_ERROR("Failed to generate Excel structure");
             return false;
         }
         
-        LOG_INFO("Workbook saved successfully: {}", filename_);
+        CORE_INFO("Workbook saved successfully: {}", filename_);
         return true;
     } catch (const std::exception& e) {
-        LOG_ERROR("Failed to save workbook: {}", e.what());
+        CORE_ERROR("Failed to save workbook: {}", e.what());
         return false;
     }
 }
@@ -176,7 +177,7 @@ bool Workbook::saveAs(const std::string& filename) {
     
     if (is_same_file && was_from_existing && !original_source.empty()) {
         // 如果保存到同一个文件，需要先复制原文件到临时位置
-        LOG_INFO("Saving to same file, creating temporary backup for resource preservation");
+        CORE_INFO("Saving to same file, creating temporary backup for resource preservation");
         
         // 创建临时文件路径
         std::string temp_backup = original_source + ".tmp_backup";
@@ -190,9 +191,9 @@ bool Workbook::saveAs(const std::string& filename) {
             }
             source_path.copyTo(temp_path);
             original_package_path_ = temp_backup;  // 更新源路径为临时文件
-            LOG_DEBUG("Created temporary backup: {}", temp_backup);
+            CORE_DEBUG("Created temporary backup: {}", temp_backup);
         } catch (const std::exception& e) {
-            LOG_ERROR("Failed to create temporary backup: {}", e.what());
+            CORE_ERROR("Failed to create temporary backup: {}", e.what());
             return false;
         }
     }
@@ -229,7 +230,7 @@ bool Workbook::saveAs(const std::string& filename) {
         core::Path temp_path(original_package_path_);
         if (temp_path.exists()) {
             temp_path.remove();
-            LOG_DEBUG("Removed temporary backup: {}", original_package_path_);
+            CORE_DEBUG("Removed temporary backup: {}", original_package_path_);
         }
         original_package_path_ = original_source;  // 恢复原路径
     }
@@ -247,11 +248,11 @@ bool Workbook::isOpen() const {
 bool Workbook::close() {
     // 内存模式只需要重置状态
     if (!file_manager_) {
-        LOG_DEBUG("Memory workbook closed: {}", filename_);
+        CORE_DEBUG("Memory workbook closed: {}", filename_);
     } else {
         // 文件模式需要关闭FileManager
         file_manager_->close();
-        LOG_INFO("Workbook closed: {}", filename_);
+        CORE_INFO("Workbook closed: {}", filename_);
     }
     return true;
 }
@@ -275,7 +276,7 @@ std::shared_ptr<Worksheet> Workbook::addWorksheet(const std::string& name) {
     }
     
     if (!validateSheetName(sheet_name)) {
-        LOG_ERROR("Invalid sheet name: {}", sheet_name);
+        CORE_ERROR("Invalid sheet name: {}", sheet_name);
         return nullptr;
     }
     
@@ -285,9 +286,9 @@ std::shared_ptr<Worksheet> Workbook::addWorksheet(const std::string& name) {
     // 关键修复：如果这是第一个工作表，自动设置为激活状态
     if (worksheets_.size() == 1) {
         worksheet->setTabSelected(true);
-        LOG_DEBUG("Added worksheet: {} (activated as first sheet)", sheet_name);
+        CORE_DEBUG("Added worksheet: {} (activated as first sheet)", sheet_name);
     } else {
-        LOG_DEBUG("Added worksheet: {}", sheet_name);
+        CORE_DEBUG("Added worksheet: {}", sheet_name);
     }
     
     return worksheet;
@@ -304,14 +305,14 @@ std::shared_ptr<Worksheet> Workbook::insertWorksheet(size_t index, const std::st
     std::string sheet_name = name.empty() ? generateUniqueSheetName("Sheet1") : name;
     
     if (!validateSheetName(sheet_name)) {
-        LOG_ERROR("Invalid sheet name: {}", sheet_name);
+        CORE_ERROR("Invalid sheet name: {}", sheet_name);
         return nullptr;
     }
     
     auto worksheet = std::make_shared<Worksheet>(sheet_name, std::shared_ptr<Workbook>(this, [](Workbook*){}), next_sheet_id_++);
     worksheets_.insert(worksheets_.begin() + index, worksheet);
     
-    LOG_DEBUG("Inserted worksheet: {} at index {}", sheet_name, index);
+    CORE_DEBUG("Inserted worksheet: {} at index {}", sheet_name, index);
     return worksheet;
 }
 
@@ -326,7 +327,7 @@ bool Workbook::removeWorksheet(const std::string& name) {
     
     if (it != worksheets_.end()) {
         worksheets_.erase(it);
-        LOG_DEBUG("Removed worksheet: {}", name);
+        CORE_DEBUG("Removed worksheet: {}", name);
         return true;
     }
     
@@ -340,7 +341,7 @@ bool Workbook::removeWorksheet(size_t index) {
     if (index < worksheets_.size()) {
         std::string name = worksheets_[index]->getName();
         worksheets_.erase(worksheets_.begin() + index);
-        LOG_DEBUG("Removed worksheet: {} at index {}", name, index);
+        CORE_DEBUG("Removed worksheet: {} at index {}", name, index);
         return true;
     }
     
@@ -409,7 +410,7 @@ bool Workbook::renameWorksheet(const std::string& old_name, const std::string& n
     }
     
     worksheet->setName(new_name);
-    LOG_DEBUG("Renamed worksheet: {} -> {}", old_name, new_name);
+    CORE_DEBUG("Renamed worksheet: {} -> {}", old_name, new_name);
     return true;
 }
 
@@ -431,7 +432,7 @@ bool Workbook::moveWorksheet(size_t from_index, size_t to_index) {
     
     worksheets_.insert(worksheets_.begin() + to_index, worksheet);
     
-    LOG_DEBUG("Moved worksheet from index {} to {}", from_index, to_index);
+    CORE_DEBUG("Moved worksheet from index {} to {}", from_index, to_index);
     return true;
 }
 
@@ -453,7 +454,7 @@ std::shared_ptr<Worksheet> Workbook::copyWorksheet(const std::string& source_nam
     
     worksheets_.push_back(new_worksheet);
     
-    LOG_DEBUG("Copied worksheet: {} -> {}", source_name, new_name);
+    CORE_DEBUG("Copied worksheet: {} -> {}", source_name, new_name);
     return new_worksheet;
 }
 
@@ -500,15 +501,15 @@ const FormatRepository& Workbook::getStyleRepository() const {
 void Workbook::setThemeXML(const std::string& theme_xml) {
     theme_xml_ = theme_xml;
     theme_dirty_ = true; // 外部显式设置主题XML视为编辑
-    LOG_DEBUG("设置自定义主题XML ({} 字节)", theme_xml_.size());
+    CORE_DEBUG("设置自定义主题XML ({} 字节)", theme_xml_.size());
     // 尝试解析为结构化主题对象
     if (!theme_xml_.empty()) {
         auto parsed = theme::ThemeParser::parseFromXML(theme_xml_);
         if (parsed) {
             theme_ = std::move(parsed);
-            LOG_DEBUG("主题XML已解析为对象: {}", theme_->getName());
+            CORE_DEBUG("主题XML已解析为对象: {}", theme_->getName());
         } else {
-            LOG_WARN("主题XML解析失败，保留原始XML");
+            CORE_WARN("主题XML解析失败，保留原始XML");
         }
     }
 }
@@ -519,13 +520,13 @@ const std::string& Workbook::getThemeXML() const {
 
 void Workbook::setOriginalThemeXML(const std::string& theme_xml) {
     theme_xml_original_ = theme_xml;
-    LOG_DEBUG("保存原始主题XML ({} 字节)", theme_xml_original_.size());
+    CORE_DEBUG("保存原始主题XML ({} 字节)", theme_xml_original_.size());
     // 同步解析一次，便于后续编辑
     if (!theme_xml_original_.empty()) {
         auto parsed = theme::ThemeParser::parseFromXML(theme_xml_original_);
         if (parsed) {
             theme_ = std::move(parsed);
-            LOG_DEBUG("原始主题XML已解析为对象: {}", theme_->getName());
+            CORE_DEBUG("原始主题XML已解析为对象: {}", theme_->getName());
         }
     }
 }
@@ -646,14 +647,14 @@ bool Workbook::addVbaProject(const std::string& vba_project_path) {
     // 检查文件是否存在
     std::ifstream file(vba_project_path, std::ios::binary);
     if (!file.is_open()) {
-        LOG_ERROR("VBA project file not found: {}", vba_project_path);
+        CORE_ERROR("VBA project file not found: {}", vba_project_path);
         return false;
     }
     
     vba_project_path_ = vba_project_path;
     has_vba_ = true;
     
-    LOG_INFO("Added VBA project: {}", vba_project_path);
+    CORE_INFO("Added VBA project: {}", vba_project_path);
     return true;
 }
 
@@ -715,36 +716,36 @@ bool Workbook::shouldGenerateTheme() const {
 }
 
 bool Workbook::shouldGenerateSharedStrings() const {
-    LOG_DEBUG("shouldGenerateSharedStrings() called - analyzing conditions");
+    CORE_DEBUG("shouldGenerateSharedStrings() called - analyzing conditions");
     
     if (!options_.use_shared_strings) {
-        LOG_DEBUG("SharedStrings generation disabled by options_.use_shared_strings = false");
+        CORE_DEBUG("SharedStrings generation disabled by options_.use_shared_strings = false");
         return false; // 未启用SST
     }
-    LOG_DEBUG("options_.use_shared_strings = true, SharedStrings enabled");
+    CORE_DEBUG("options_.use_shared_strings = true, SharedStrings enabled");
     
     if (!dirty_manager_) {
-        LOG_DEBUG("No dirty manager, SharedStrings generation enabled (default true)");
+        CORE_DEBUG("No dirty manager, SharedStrings generation enabled (default true)");
         return true;
     }
-    LOG_DEBUG("DirtyManager exists, checking shouldUpdate for xl/sharedStrings.xml");
+    CORE_DEBUG("DirtyManager exists, checking shouldUpdate for xl/sharedStrings.xml");
     
     bool should_update = dirty_manager_->shouldUpdate("xl/sharedStrings.xml");
-    LOG_DEBUG("DirtyManager shouldUpdate for SharedStrings: {}", should_update);
+    CORE_DEBUG("DirtyManager shouldUpdate for SharedStrings: {}", should_update);
     
     // 🔧 关键修复：如果SharedStringTable有内容但DirtyManager说不需要更新，强制生成
     if (shared_string_table_) {
         size_t string_count = shared_string_table_->getStringCount();
-        LOG_DEBUG("SharedStringTable contains {} strings", string_count);
+        CORE_DEBUG("SharedStringTable contains {} strings", string_count);
         
         if (string_count > 0 && !should_update) {
-            LOG_DEBUG("🔧 FORCE GENERATION: SharedStringTable has {} strings but DirtyManager says no update needed", string_count);
-            LOG_DEBUG("🔧 This happens when target file exists but we're creating new content with strings");
-            LOG_DEBUG("🔧 Forcing SharedStrings generation to avoid missing sharedStrings.xml");
+            CORE_DEBUG("🔧 FORCE GENERATION: SharedStringTable has {} strings but DirtyManager says no update needed", string_count);
+            CORE_DEBUG("🔧 This happens when target file exists but we're creating new content with strings");
+            CORE_DEBUG("🔧 Forcing SharedStrings generation to avoid missing sharedStrings.xml");
             return true; // 强制生成
         }
     } else {
-        LOG_DEBUG("SharedStringTable is null");
+        CORE_DEBUG("SharedStringTable is null");
     }
     
     return should_update;
@@ -814,12 +815,12 @@ bool Workbook::generateExcelStructure() {
             if (total_cells > options_.auto_mode_cell_threshold ||
                 estimated_memory > options_.auto_mode_memory_threshold) {
                 use_streaming = true;
-                LOG_INFO("Auto-selected streaming mode: {} cells, {}MB estimated memory (thresholds: {} cells, {}MB)",
+                CORE_INFO("Auto-selected streaming mode: {} cells, {}MB estimated memory (thresholds: {} cells, {}MB)",
                         total_cells, estimated_memory / (1024*1024),
                         options_.auto_mode_cell_threshold, options_.auto_mode_memory_threshold / (1024*1024));
             } else {
                 use_streaming = false;
-                LOG_INFO("Auto-selected batch mode: {} cells, {}MB estimated memory (thresholds: {} cells, {}MB)",
+                CORE_INFO("Auto-selected batch mode: {} cells, {}MB estimated memory (thresholds: {} cells, {}MB)",
                         total_cells, estimated_memory / (1024*1024),
                         options_.auto_mode_cell_threshold, options_.auto_mode_memory_threshold / (1024*1024));
             }
@@ -828,14 +829,14 @@ bool Workbook::generateExcelStructure() {
         case WorkbookMode::BATCH:
             // 强制批量模式
             use_streaming = false;
-            LOG_INFO("Using forced batch mode: {} cells, {}MB estimated memory",
+            CORE_INFO("Using forced batch mode: {} cells, {}MB estimated memory",
                     total_cells, estimated_memory / (1024*1024));
             break;
             
         case WorkbookMode::STREAMING:
             // 强制流式模式
             use_streaming = true;
-            LOG_INFO("Using forced streaming mode: {} cells, {}MB estimated memory",
+            CORE_INFO("Using forced streaming mode: {} cells, {}MB estimated memory",
                     total_cells, estimated_memory / (1024*1024));
             break;
     }
@@ -843,7 +844,7 @@ bool Workbook::generateExcelStructure() {
     // 如果设置了constant_memory，强制使用流式模式
     if (options_.constant_memory) {
         use_streaming = true;
-        LOG_INFO("Constant memory mode enabled, forcing streaming mode");
+        CORE_INFO("Constant memory mode enabled, forcing streaming mode");
     }
     
     return generateWithGenerator(use_streaming);
@@ -945,7 +946,7 @@ std::string Workbook::getWorksheetRelPath(int sheet_id) const {
 
 void Workbook::setHighPerformanceMode(bool enable) {
     if (enable) {
-        LOG_INFO("Enabling ultra high performance mode (beyond defaults)");
+        CORE_INFO("Enabling ultra high performance mode (beyond defaults)");
         
         // 进一步优化：使用无压缩模式排除压缩算法影响
         options_.compression_level = 0;  // 无压缩
@@ -962,10 +963,10 @@ void Workbook::setHighPerformanceMode(bool enable) {
         options_.auto_mode_cell_threshold = 2000000;  // 200万单元格
         options_.auto_mode_memory_threshold = 200 * 1024 * 1024;  // 200MB
         
-        LOG_INFO("Ultra high performance mode configured: Mode=AUTO, Compression=OFF, RowBuffer={}, XMLBuffer={}MB",
+        CORE_INFO("Ultra high performance mode configured: Mode=AUTO, Compression=OFF, RowBuffer={}, XMLBuffer={}MB",
                 options_.row_buffer_size, options_.xml_buffer_size / (1024*1024));
     } else {
-        LOG_INFO("Using standard high performance mode (default settings)");
+        CORE_INFO("Using standard high performance mode (default settings)");
         
         // 恢复到默认的高性能设置
         options_.mode = WorkbookMode::AUTO;           // 默认自动模式
@@ -989,7 +990,7 @@ std::unique_ptr<Workbook> Workbook::open(const Path& path) {
     try {
         // 使用Path的内置文件检查
         if (!path.exists()) {
-            LOG_ERROR("File not found for editing: {}", path.string());
+            CORE_ERROR("File not found for editing: {}", path.string());
             return nullptr;
         }
         
@@ -997,7 +998,7 @@ std::unique_ptr<Workbook> Workbook::open(const Path& path) {
         reader::XLSXReader reader(path);
         auto result = reader.open();
         if (result != core::ErrorCode::Ok) {
-            LOG_ERROR("Failed to open XLSX file for reading: {}, error code: {}", path.string(), static_cast<int>(result));
+            CORE_ERROR("Failed to open XLSX file for reading: {}, error code: {}", path.string(), static_cast<int>(result));
             return nullptr;
         }
         
@@ -1007,7 +1008,7 @@ std::unique_ptr<Workbook> Workbook::open(const Path& path) {
         reader.close();
         
         if (result != core::ErrorCode::Ok) {
-            LOG_ERROR("Failed to load workbook from file: {}, error code: {}", path.string(), static_cast<int>(result));
+            CORE_ERROR("Failed to load workbook from file: {}, error code: {}", path.string(), static_cast<int>(result));
             return nullptr;
         }
         
@@ -1020,16 +1021,16 @@ std::unique_ptr<Workbook> Workbook::open(const Path& path) {
             
             // 🎯 API修复：为保存功能准备FileManager
             if (!loaded_workbook->open()) {
-                LOG_ERROR("Failed to prepare FileManager for workbook: {}", path.string());
+                CORE_ERROR("Failed to prepare FileManager for workbook: {}", path.string());
                 return nullptr;
             }
         }
         
-        LOG_INFO("Successfully loaded workbook for editing: {}", path.string());
+        CORE_INFO("Successfully loaded workbook for editing: {}", path.string());
         return loaded_workbook;
         
     } catch (const std::exception& e) {
-        LOG_ERROR("Exception while loading workbook for editing: {}, error: {}", path.string(), e.what());
+        CORE_ERROR("Exception while loading workbook for editing: {}, error: {}", path.string(), e.what());
         return nullptr;
     }
 }
@@ -1039,7 +1040,7 @@ std::unique_ptr<Workbook> Workbook::open(const Path& path) {
 std::unique_ptr<Workbook> Workbook::openForReading(const Path& path) {
     try {
         if (!path.exists()) {
-            LOG_ERROR("File not found for reading: {}", path.string());
+            CORE_ERROR("File not found for reading: {}", path.string());
             return nullptr;
         }
         
@@ -1047,7 +1048,7 @@ std::unique_ptr<Workbook> Workbook::openForReading(const Path& path) {
         reader::XLSXReader reader(path);
         auto result = reader.open();
         if (result != core::ErrorCode::Ok) {
-            LOG_ERROR("Failed to open XLSX file for reading: {}, error code: {}", path.string(), static_cast<int>(result));
+            CORE_ERROR("Failed to open XLSX file for reading: {}, error code: {}", path.string(), static_cast<int>(result));
             return nullptr;
         }
         
@@ -1057,7 +1058,7 @@ std::unique_ptr<Workbook> Workbook::openForReading(const Path& path) {
         reader.close();
         
         if (result != core::ErrorCode::Ok) {
-            LOG_ERROR("Failed to load workbook from file: {}, error code: {}", path.string(), static_cast<int>(result));
+            CORE_ERROR("Failed to load workbook from file: {}, error code: {}", path.string(), static_cast<int>(result));
             return nullptr;
         }
         
@@ -1069,18 +1070,18 @@ std::unique_ptr<Workbook> Workbook::openForReading(const Path& path) {
             
             // 🎯 API修复：为保存功能准备FileManager（即使是只读模式，也可能需要另存为）
             if (!loaded_workbook->open()) {
-                LOG_ERROR("Failed to prepare FileManager for workbook: {}", path.string());
+                CORE_ERROR("Failed to prepare FileManager for workbook: {}", path.string());
                 return nullptr;
             }
             
             // 只读模式优化：后续可增加更细粒度的追踪开关，这里不额外操作
         }
         
-        LOG_INFO("Successfully loaded workbook for reading: {}", path.string());
+        CORE_INFO("Successfully loaded workbook for reading: {}", path.string());
         return loaded_workbook;
         
     } catch (const std::exception& e) {
-        LOG_ERROR("Exception while loading workbook for reading: {}, error: {}", path.string(), e.what());
+        CORE_ERROR("Exception while loading workbook for reading: {}, error: {}", path.string(), e.what());
         return nullptr;
     }
 }
@@ -1089,7 +1090,7 @@ std::unique_ptr<Workbook> Workbook::openForEditing(const Path& path) {
     // 编辑模式就是原有的open方法实现
     try {
         if (!path.exists()) {
-            LOG_ERROR("File not found for editing: {}", path.string());
+            CORE_ERROR("File not found for editing: {}", path.string());
             return nullptr;
         }
         
@@ -1097,7 +1098,7 @@ std::unique_ptr<Workbook> Workbook::openForEditing(const Path& path) {
         reader::XLSXReader reader(path);
         auto result = reader.open();
         if (result != core::ErrorCode::Ok) {
-            LOG_ERROR("Failed to open XLSX file for editing: {}, error code: {}", path.string(), static_cast<int>(result));
+            CORE_ERROR("Failed to open XLSX file for editing: {}, error code: {}", path.string(), static_cast<int>(result));
             return nullptr;
         }
         
@@ -1107,7 +1108,7 @@ std::unique_ptr<Workbook> Workbook::openForEditing(const Path& path) {
         reader.close();
         
         if (result != core::ErrorCode::Ok) {
-            LOG_ERROR("Failed to load workbook from file: {}, error code: {}", path.string(), static_cast<int>(result));
+            CORE_ERROR("Failed to load workbook from file: {}, error code: {}", path.string(), static_cast<int>(result));
             return nullptr;
         }
         
@@ -1119,16 +1120,16 @@ std::unique_ptr<Workbook> Workbook::openForEditing(const Path& path) {
             
             // 🎯 API修复：为保存功能准备FileManager
             if (!loaded_workbook->open()) {
-                LOG_ERROR("Failed to prepare FileManager for workbook: {}", path.string());
+                CORE_ERROR("Failed to prepare FileManager for workbook: {}", path.string());
                 return nullptr;
             }
         }
         
-        LOG_INFO("Successfully loaded workbook for editing: {}", path.string());
+        CORE_INFO("Successfully loaded workbook for editing: {}", path.string());
         return loaded_workbook;
         
     } catch (const std::exception& e) {
-        LOG_ERROR("Exception while loading workbook for editing: {}, error: {}", path.string(), e.what());
+        CORE_ERROR("Exception while loading workbook for editing: {}, error: {}", path.string(), e.what());
         return nullptr;
     }
 }
@@ -1146,7 +1147,7 @@ bool Workbook::refresh() {
         Path current_path(current_filename);
         auto refreshed_workbook = open(current_path);
         if (!refreshed_workbook) {
-            LOG_ERROR("Failed to refresh workbook: {}", current_filename);
+            CORE_ERROR("Failed to refresh workbook: {}", current_filename);
             return false;
         }
         
@@ -1160,18 +1161,18 @@ bool Workbook::refresh() {
         // 重新打开工作簿
         open();
         
-        LOG_INFO("Successfully refreshed workbook: {}", current_filename);
+        CORE_INFO("Successfully refreshed workbook: {}", current_filename);
         return true;
         
     } catch (const std::exception& e) {
-        LOG_ERROR("Exception during workbook refresh: {}", e.what());
+        CORE_ERROR("Exception during workbook refresh: {}", e.what());
         return false;
     }
 }
 
 bool Workbook::mergeWorkbook(const std::unique_ptr<Workbook>& other_workbook, const MergeOptions& options) {
     if (!other_workbook) {
-        LOG_ERROR("Cannot merge: other workbook is null");
+        CORE_ERROR("Cannot merge: other workbook is null");
         return false;
     }
     
@@ -1188,10 +1189,10 @@ bool Workbook::mergeWorkbook(const std::unique_ptr<Workbook>& other_workbook, co
                 if (getWorksheet(new_name) != nullptr) {
                     if (options.overwrite_existing) {
                         removeWorksheet(new_name);
-                        LOG_INFO("Removed existing worksheet for merge: {}", new_name);
+                        CORE_INFO("Removed existing worksheet for merge: {}", new_name);
                     } else {
                         new_name = generateUniqueSheetName(new_name);
-                        LOG_INFO("Generated unique name for merge: {}", new_name);
+                        CORE_INFO("Generated unique name for merge: {}", new_name);
                     }
                 }
                 
@@ -1201,7 +1202,7 @@ bool Workbook::mergeWorkbook(const std::unique_ptr<Workbook>& other_workbook, co
                     // 这里需要实现深拷贝逻辑
                     // 简化版本：复制基本属性
                     merged_count++;
-                    LOG_DEBUG("Merged worksheet: {} -> {}", other_worksheet->getName(), new_name);
+                    CORE_DEBUG("Merged worksheet: {} -> {}", other_worksheet->getName(), new_name);
                 }
             }
         }
@@ -1213,7 +1214,7 @@ bool Workbook::mergeWorkbook(const std::unique_ptr<Workbook>& other_workbook, co
             for (const auto& format_item : *other_workbook->format_repo_) {
                 format_repo_->addFormat(*format_item.format);
             }
-            LOG_DEBUG("Merged formats from other workbook");
+            CORE_DEBUG("Merged formats from other workbook");
         }
         
         // 合并文档属性
@@ -1236,22 +1237,22 @@ bool Workbook::mergeWorkbook(const std::unique_ptr<Workbook>& other_workbook, co
                 setCustomProperty(prop.name, prop.value);
             }
             
-            LOG_DEBUG("Merged document properties");
+            CORE_DEBUG("Merged document properties");
         }
         
-        LOG_INFO("Successfully merged workbook: {} worksheets, {} formats",
+        CORE_INFO("Successfully merged workbook: {} worksheets, {} formats",
                 merged_count, other_workbook->format_repo_->getFormatCount());
         return true;
         
     } catch (const std::exception& e) {
-        LOG_ERROR("Exception during workbook merge: {}", e.what());
+        CORE_ERROR("Exception during workbook merge: {}", e.what());
         return false;
     }
 }
 
 bool Workbook::exportWorksheets(const std::vector<std::string>& worksheet_names, const std::string& output_filename) {
     if (worksheet_names.empty()) {
-        LOG_ERROR("No worksheets specified for export");
+        CORE_ERROR("No worksheets specified for export");
         return false;
     }
     
@@ -1259,7 +1260,7 @@ bool Workbook::exportWorksheets(const std::vector<std::string>& worksheet_names,
         // 创建新工作簿
         auto export_workbook = create(Path(output_filename));
         if (!export_workbook->open()) {
-            LOG_ERROR("Failed to create export workbook: {}", output_filename);
+            CORE_ERROR("Failed to create export workbook: {}", output_filename);
             return false;
         }
         
@@ -1268,7 +1269,7 @@ bool Workbook::exportWorksheets(const std::vector<std::string>& worksheet_names,
         for (const std::string& name : worksheet_names) {
             auto source_worksheet = getWorksheet(name);
             if (!source_worksheet) {
-                LOG_WARN("Worksheet not found for export: {}", name);
+                CORE_WARN("Worksheet not found for export: {}", name);
                 continue;
             }
             
@@ -1277,7 +1278,7 @@ bool Workbook::exportWorksheets(const std::vector<std::string>& worksheet_names,
                 // 这里需要实现深拷贝逻辑
                 // 简化版本：复制基本属性
                 exported_count++;
-                LOG_DEBUG("Exported worksheet: {}", name);
+                CORE_DEBUG("Exported worksheet: {}", name);
             }
         }
         
@@ -1293,15 +1294,15 @@ bool Workbook::exportWorksheets(const std::vector<std::string>& worksheet_names,
         export_workbook->close();
         
         if (success) {
-            LOG_INFO("Successfully exported {} worksheets to: {}", exported_count, output_filename);
+            CORE_INFO("Successfully exported {} worksheets to: {}", exported_count, output_filename);
         } else {
-            LOG_ERROR("Failed to save exported workbook: {}", output_filename);
+            CORE_ERROR("Failed to save exported workbook: {}", output_filename);
         }
         
         return success;
         
     } catch (const std::exception& e) {
-        LOG_ERROR("Exception during worksheet export: {}", e.what());
+        CORE_ERROR("Exception during worksheet export: {}", e.what());
         return false;
     }
 }
@@ -1312,13 +1313,13 @@ int Workbook::batchRenameWorksheets(const std::unordered_map<std::string, std::s
     for (const auto& [old_name, new_name] : rename_map) {
         if (renameWorksheet(old_name, new_name)) {
             renamed_count++;
-            LOG_DEBUG("Renamed worksheet: {} -> {}", old_name, new_name);
+            CORE_DEBUG("Renamed worksheet: {} -> {}", old_name, new_name);
         } else {
-            LOG_WARN("Failed to rename worksheet: {} -> {}", old_name, new_name);
+            CORE_WARN("Failed to rename worksheet: {} -> {}", old_name, new_name);
         }
     }
     
-    LOG_INFO("Batch rename completed: {} worksheets renamed", renamed_count);
+    CORE_INFO("Batch rename completed: {} worksheets renamed", renamed_count);
     return renamed_count;
 }
 
@@ -1328,19 +1329,19 @@ int Workbook::batchRemoveWorksheets(const std::vector<std::string>& worksheet_na
     for (const std::string& name : worksheet_names) {
         if (removeWorksheet(name)) {
             removed_count++;
-            LOG_DEBUG("Removed worksheet: {}", name);
+            CORE_DEBUG("Removed worksheet: {}", name);
         } else {
-            LOG_WARN("Failed to remove worksheet: {}", name);
+            CORE_WARN("Failed to remove worksheet: {}", name);
         }
     }
     
-    LOG_INFO("Batch remove completed: {} worksheets removed", removed_count);
+    CORE_INFO("Batch remove completed: {} worksheets removed", removed_count);
     return removed_count;
 }
 
 bool Workbook::reorderWorksheets(const std::vector<std::string>& new_order) {
     if (new_order.size() != worksheets_.size()) {
-        LOG_ERROR("New order size ({}) doesn't match worksheet count ({})",
+        CORE_ERROR("New order size ({}) doesn't match worksheet count ({})",
                  new_order.size(), worksheets_.size());
         return false;
     }
@@ -1353,7 +1354,7 @@ bool Workbook::reorderWorksheets(const std::vector<std::string>& new_order) {
         for (const std::string& name : new_order) {
             auto worksheet = getWorksheet(name);
             if (!worksheet) {
-                LOG_ERROR("Worksheet not found in reorder list: {}", name);
+                CORE_ERROR("Worksheet not found in reorder list: {}", name);
                 return false;
             }
             reordered_worksheets.push_back(worksheet);
@@ -1362,11 +1363,11 @@ bool Workbook::reorderWorksheets(const std::vector<std::string>& new_order) {
         // 替换工作表列表
         worksheets_ = std::move(reordered_worksheets);
         
-        LOG_INFO("Successfully reordered {} worksheets", worksheets_.size());
+        CORE_INFO("Successfully reordered {} worksheets", worksheets_.size());
         return true;
         
     } catch (const std::exception& e) {
-        LOG_ERROR("Exception during worksheet reordering: {}", e.what());
+        CORE_ERROR("Exception during worksheet reordering: {}", e.what());
         return false;
     }
 }
@@ -1390,12 +1391,12 @@ int Workbook::findAndReplaceAll(const std::string& find_text, const std::string&
         total_replacements += replacements;
         
         if (replacements > 0) {
-            LOG_DEBUG("Found and replaced {} occurrences in worksheet: {}",
+            CORE_DEBUG("Found and replaced {} occurrences in worksheet: {}",
                      replacements, worksheet->getName());
         }
     }
     
-    LOG_INFO("Global find and replace completed: {} total replacements", total_replacements);
+    CORE_INFO("Global find and replace completed: {} total replacements", total_replacements);
     return total_replacements;
 }
 
@@ -1421,11 +1422,11 @@ std::vector<std::tuple<std::string, int, int>> Workbook::findAll(const std::stri
         }
         
         if (!worksheet_results.empty()) {
-            LOG_DEBUG("Found {} matches in worksheet: {}", worksheet_results.size(), worksheet->getName());
+            CORE_DEBUG("Found {} matches in worksheet: {}", worksheet_results.size(), worksheet->getName());
         }
     }
     
-    LOG_INFO("Global search completed: {} total matches found", results.size());
+    CORE_INFO("Global search completed: {} total matches found", results.size());
     return results;
 }
 
@@ -1516,7 +1517,7 @@ size_t Workbook::getTotalCellCount() const {
 }
 
 std::unique_ptr<StyleTransferContext> Workbook::copyStylesFrom(const Workbook& source_workbook) {
-    LOG_DEBUG("开始从源工作簿复制样式数据");
+    CORE_DEBUG("开始从源工作簿复制样式数据");
     
     // 创建样式传输上下文
     auto transfer_context = std::make_unique<StyleTransferContext>(*source_workbook.format_repo_, *format_repo_);
@@ -1525,7 +1526,7 @@ std::unique_ptr<StyleTransferContext> Workbook::copyStylesFrom(const Workbook& s
     transfer_context->preloadAllMappings();
     
     auto stats = transfer_context->getTransferStats();
-    LOG_DEBUG("完成样式复制，传输了{}个格式，去重了{}个", 
+    CORE_DEBUG("完成样式复制，传输了{}个格式，去重了{}个", 
              stats.transferred_count, stats.deduplicated_count);
     
     // 🔧 关键修复：自动复制主题XML以保持颜色和字体一致性
@@ -1534,12 +1535,12 @@ std::unique_ptr<StyleTransferContext> Workbook::copyStylesFrom(const Workbook& s
         // 只有当前工作簿没有自定义主题时才复制源主题
         if (theme_xml_.empty()) {
             theme_xml_ = source_theme;
-            LOG_DEBUG("自动复制主题XML ({} 字节)", theme_xml_.size());
+            CORE_DEBUG("自动复制主题XML ({} 字节)", theme_xml_.size());
         } else {
-            LOG_DEBUG("当前工作簿已有自定义主题，保持现有主题不变");
+            CORE_DEBUG("当前工作簿已有自定义主题，保持现有主题不变");
         }
     } else {
-        LOG_DEBUG("源工作簿无自定义主题，保持默认主题");
+        CORE_DEBUG("源工作簿无自定义主题，保持默认主题");
     }
     
     return transfer_context;
@@ -1551,7 +1552,7 @@ FormatRepository::DeduplicationStats Workbook::getStyleStats() const {
 
 bool Workbook::generateWithGenerator(bool use_streaming_writer) {
     if (!file_manager_) {
-        LOG_ERROR("FileManager is null - cannot write workbook");
+        CORE_ERROR("FileManager is null - cannot write workbook");
         return false;
     }
     std::unique_ptr<IFileWriter> writer;
@@ -1598,7 +1599,7 @@ void Workbook::ensureEditable(const std::string& operation) const {
         }
         msg += ": workbook is opened in read-only mode. Use openForEditing() instead of openForReading().";
         
-        LOG_ERROR("{}", msg);
+        CORE_ERROR("{}", msg);
         throw OperationException(msg, operation);
     }
 }
@@ -1643,7 +1644,7 @@ void Workbook::transitionToState(WorkbookState new_state, const std::string& rea
     WorkbookState old_state = state_;
     state_ = new_state;
     
-    LOG_DEBUG("Workbook state transition: {} -> {} ({})", 
+    CORE_DEBUG("Workbook state transition: {} -> {} ({})", 
               static_cast<int>(old_state), 
               static_cast<int>(new_state), 
               reason.empty() ? "no reason" : reason);

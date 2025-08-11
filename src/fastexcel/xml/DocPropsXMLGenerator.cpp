@@ -1,3 +1,4 @@
+#include "fastexcel/utils/ModuleLoggers.hpp"
 #include "DocPropsXMLGenerator.hpp"
 #include "fastexcel/core/Workbook.hpp"
 #include "fastexcel/utils/Logger.hpp"
@@ -13,7 +14,7 @@ namespace xml {
 void DocPropsXMLGenerator::generateCoreXML(const core::Workbook* workbook,
                                            const std::function<void(const char*, size_t)>& callback) {
     if (!workbook) {
-        LOG_WARN("DocPropsXMLGenerator::generateCoreXML - workbook is null");
+        XML_WARN("DocPropsXMLGenerator::generateCoreXML - workbook is null");
         return;
     }
 
@@ -102,7 +103,7 @@ void DocPropsXMLGenerator::generateCoreXML(const core::Workbook* workbook,
 void DocPropsXMLGenerator::generateAppXML(const core::Workbook* workbook,
                                          const std::function<void(const char*, size_t)>& callback) {
     if (!workbook) {
-        LOG_WARN("DocPropsXMLGenerator::generateAppXML - workbook is null");
+        XML_WARN("DocPropsXMLGenerator::generateAppXML - workbook is null");
         return;
     }
 
@@ -166,14 +167,14 @@ void DocPropsXMLGenerator::generateAppXML(const core::Workbook* workbook,
 void DocPropsXMLGenerator::generateCustomXML(const core::Workbook* workbook,
                                             const std::function<void(const char*, size_t)>& callback) {
     if (!workbook) {
-        LOG_WARN("DocPropsXMLGenerator::generateCustomXML - workbook is null");
+        XML_WARN("DocPropsXMLGenerator::generateCustomXML - workbook is null");
         return;
     }
 
     // 检查是否有自定义属性
     auto custom_props = workbook->getCustomProperties();
     if (custom_props.empty()) {
-        LOG_DEBUG("No custom properties found, skipping custom.xml generation");
+        XML_DEBUG("No custom properties found, skipping custom.xml generation");
         return;
     }
 

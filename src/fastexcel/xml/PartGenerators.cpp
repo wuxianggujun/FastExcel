@@ -1,3 +1,4 @@
+#include "fastexcel/utils/ModuleLoggers.hpp"
 #include "IXMLPartGenerator.hpp"
 #include "UnifiedXMLGenerator.hpp"
 #include "WorksheetXMLGenerator.hpp"
@@ -19,7 +20,7 @@ static bool writeWithCallback(IFileWriter& writer,
                               const std::string& path,
                               const std::function<void(const std::function<void(const char*, size_t)>&)>& gen) {
     if (!writer.openStreamingFile(path)) {
-        LOG_ERROR("Failed to open streaming file: {}", path);
+        XML_ERROR("Failed to open streaming file: {}", path);
         return false;
     }
     
@@ -28,7 +29,7 @@ static bool writeWithCallback(IFileWriter& writer,
         gen(cb);
         return writer.closeStreamingFile();
     } catch (const std::exception& e) {
-        LOG_ERROR("Exception during streaming generation for {}: {}", path, e.what());
+        XML_ERROR("Exception during streaming generation for {}: {}", path, e.what());
         writer.closeStreamingFile(); // 确保清理状态
         return false;
     }
@@ -254,7 +255,7 @@ public:
         try {
             idx = std::stoi(number_str) - 1;
         } catch (const std::exception&) {
-            LOG_ERROR("Failed to parse sheet index from path: {}, extracted: '{}'", part, number_str);
+            XML_ERROR("Failed to parse sheet index from path: {}, extracted: '{}'", part, number_str);
             return false;
         }
         auto names = ctx.workbook->getWorksheetNames();
@@ -297,7 +298,7 @@ public:
         try {
             idx = std::stoi(number_str) - 1;
         } catch (const std::exception&) {
-            LOG_ERROR("Failed to parse sheet index from rels path: {}, extracted: '{}'", part, number_str);
+            XML_ERROR("Failed to parse sheet index from rels path: {}, extracted: '{}'", part, number_str);
             return false;
         }
         auto ws = ctx.workbook->getWorksheet(static_cast<size_t>(idx));

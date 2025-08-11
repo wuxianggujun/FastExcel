@@ -1,3 +1,4 @@
+#include "fastexcel/utils/ModuleLoggers.hpp"
 #include "ContentTypesParser.hpp"
 #include "fastexcel/utils/Logger.hpp"
 #include <algorithm>
@@ -7,7 +8,7 @@ namespace reader {
 
 bool ContentTypesParser::parse(const std::string& xml_content) {
     if (xml_content.empty()) {
-        LOG_DEBUG("Empty content types XML content");
+        READER_DEBUG("Empty content types XML content");
         return true;
     }
 
@@ -19,7 +20,7 @@ bool ContentTypesParser::parse(const std::string& xml_content) {
         xml::XMLStreamReader reader;
         auto dom = reader.parseToDOM(xml_content);
         if (!dom) {
-            LOG_ERROR("Failed to parse content types XML to DOM");
+            READER_ERROR("Failed to parse content types XML to DOM");
             return false;
         }
         
@@ -40,7 +41,7 @@ bool ContentTypesParser::parse(const std::string& xml_content) {
         }
         
         if (!typesEl) {
-            LOG_ERROR("No Types element found in content types XML");
+            READER_ERROR("No Types element found in content types XML");
             return false;
         }
         
@@ -57,9 +58,9 @@ bool ContentTypesParser::parse(const std::string& xml_content) {
                 
                 if (!defaultType.extension.empty() && !defaultType.content_type.empty()) {
                     defaults_.push_back(defaultType);
-                    LOG_DEBUG("Parsed default type: .{} -> {}", defaultType.extension, defaultType.content_type);
+                    READER_DEBUG("Parsed default type: .{} -> {}", defaultType.extension, defaultType.content_type);
                 } else {
-                    LOG_WARN("Skipping incomplete default type: extension='{}', contentType='{}'", 
+                    READER_WARN("Skipping incomplete default type: extension='{}', contentType='{}'", 
                              defaultType.extension, defaultType.content_type);
                 }
             } else if (child->name.find("Override") != std::string::npos) {
@@ -70,9 +71,9 @@ bool ContentTypesParser::parse(const std::string& xml_content) {
                 
                 if (!overrideType.part_name.empty() && !overrideType.content_type.empty()) {
                     overrides_.push_back(overrideType);
-                    LOG_DEBUG("Parsed override type: {} -> {}", overrideType.part_name, overrideType.content_type);
+                    READER_DEBUG("Parsed override type: {} -> {}", overrideType.part_name, overrideType.content_type);
                 } else {
-                    LOG_WARN("Skipping incomplete override type: partName='{}', contentType='{}'", 
+                    READER_WARN("Skipping incomplete override type: partName='{}', contentType='{}'", 
                              overrideType.part_name, overrideType.content_type);
                 }
             }
@@ -81,11 +82,11 @@ bool ContentTypesParser::parse(const std::string& xml_content) {
         // 重建索引以提高查找性能
         rebuildIndex();
         
-        LOG_DEBUG("Successfully parsed {} defaults and {} overrides", defaults_.size(), overrides_.size());
+        READER_DEBUG("Successfully parsed {} defaults and {} overrides", defaults_.size(), overrides_.size());
         return true;
         
     } catch (const std::exception& e) {
-        LOG_ERROR("Exception parsing content types XML: {}", e.what());
+        READER_ERROR("Exception parsing content types XML: {}", e.what());
         return false;
     }
 }

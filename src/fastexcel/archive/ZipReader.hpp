@@ -1,3 +1,4 @@
+#include "fastexcel/utils/ModuleLoggers.hpp"
 #pragma once
 
 #include "fastexcel/core/Path.hpp"

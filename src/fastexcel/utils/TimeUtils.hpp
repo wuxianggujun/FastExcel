@@ -172,7 +172,7 @@ public:
             auto end = std::chrono::high_resolution_clock::now();
             auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start_);
             // 这里可以输出到日志或其他地方
-            // LOG_INFO("{} took {} ms", name_, duration.count());
+            // FASTEXCEL_LOG_INFO("{} took {} ms", name_, duration.count());
         }
         
         /**

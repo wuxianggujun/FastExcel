@@ -1,3 +1,4 @@
+#include "fastexcel/utils/ModuleLoggers.hpp"
 #include "WorksheetXMLGenerator.hpp"
 #include "fastexcel/core/Worksheet.hpp"
 #include "fastexcel/core/Workbook.hpp"
@@ -41,7 +42,7 @@ WorksheetXMLGenerator::WorksheetXMLGenerator(const core::Worksheet* worksheet)
 
 void WorksheetXMLGenerator::generate(const std::function<void(const char*, size_t)>& callback) {
     if (!worksheet_) {
-        LOG_ERROR("WorksheetXMLGenerator::generate - worksheet is null");
+        XML_ERROR("WorksheetXMLGenerator::generate - worksheet is null");
         return;
     }
     

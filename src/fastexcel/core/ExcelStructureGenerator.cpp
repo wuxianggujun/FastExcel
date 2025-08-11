@@ -1,3 +1,4 @@
+#include "fastexcel/utils/ModuleLoggers.hpp"
 #include "fastexcel/core/ExcelStructureGenerator.hpp"
 #include "fastexcel/core/BatchFileWriter.hpp"
 #include "fastexcel/core/StreamingFileWriter.hpp"
@@ -25,12 +26,12 @@ ExcelStructureGenerator::~ExcelStructureGenerator() = default;
 
 bool ExcelStructureGenerator::generate() {
     if (!workbook_ || !writer_) {
-        LOG_ERROR("ExcelStructureGenerator not properly initialized");
+        CORE_ERROR("ExcelStructureGenerator not properly initialized");
         return false;
     }
     
     auto start_time = std::chrono::high_resolution_clock::now();
-    LOG_INFO("Starting Excel structure generation using {}", writer_->getTypeName());
+    CORE_INFO("Starting Excel structure generation using {}", writer_->getTypeName());
     reportProgress("Initializing", 0, 100);
     
     try {
@@ -40,7 +41,7 @@ bool ExcelStructureGenerator::generate() {
     reportProgress("Generating basic files", 10, 100);
     auto basic_start = std::chrono::high_resolution_clock::now();
     if (!generateBasicFiles()) {
-            LOG_ERROR("Failed to generate basic Excel files");
+            CORE_ERROR("Failed to generate basic Excel files");
             return false;
         }
         perf_stats_.basic_files_time = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -50,7 +51,7 @@ bool ExcelStructureGenerator::generate() {
         reportProgress("Generating worksheets", 50, 100);
         auto worksheets_start = std::chrono::high_resolution_clock::now();
         if (!generateWorksheets()) {
-            LOG_ERROR("Failed to generate worksheet files");
+            CORE_ERROR("Failed to generate worksheet files");
             return false;
         }
         perf_stats_.worksheets_time = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -60,7 +61,7 @@ bool ExcelStructureGenerator::generate() {
         reportProgress("Finalizing", 90, 100);
         auto finalize_start = std::chrono::high_resolution_clock::now();
         if (!finalize()) {
-            LOG_ERROR("Failed to finalize Excel structure generation");
+            CORE_ERROR("Failed to finalize Excel structure generation");
             return false;
         }
         perf_stats_.finalize_time = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -78,9 +79,9 @@ bool ExcelStructureGenerator::generate() {
         }
         
         auto stats = writer_->getStats();
-        LOG_INFO("Excel structure generation completed successfully: {} files ({} batch, {} streaming), {} total bytes",
+        CORE_INFO("Excel structure generation completed successfully: {} files ({} batch, {} streaming), {} total bytes",
                 stats.files_written, stats.batch_files, stats.streaming_files, stats.total_bytes);
-        LOG_INFO("Performance: Total time {}ms (basic: {}ms, worksheets: {}ms, finalize: {}ms), Peak memory: {} bytes",
+        CORE_INFO("Performance: Total time {}ms (basic: {}ms, worksheets: {}ms, finalize: {}ms), Peak memory: {} bytes",
                 perf_stats_.total_time.count(), perf_stats_.basic_files_time.count(),
                 perf_stats_.worksheets_time.count(), perf_stats_.finalize_time.count(),
                 perf_stats_.peak_memory_usage);
@@ -88,7 +89,7 @@ bool ExcelStructureGenerator::generate() {
         return true;
         
     } catch (const std::exception& e) {
-        LOG_ERROR("Exception during Excel structure generation: {}", e.what());
+        CORE_ERROR("Exception during Excel structure generation: {}", e.what());
         return false;
     }
 }
@@ -107,12 +108,12 @@ std::string ExcelStructureGenerator::getGeneratorType() const {
 }
 
 bool ExcelStructureGenerator::generateBasicFiles() {
-    LOG_DEBUG("Generating basic Excel files via orchestrator");
+    CORE_DEBUG("Generating basic Excel files via orchestrator");
 
     // 创建UnifiedXMLGenerator实例
     auto xml_generator = xml::UnifiedXMLGenerator::fromWorkbook(workbook_);
     if (!xml_generator) {
-        LOG_ERROR("Failed to create UnifiedXMLGenerator from workbook");
+        CORE_ERROR("Failed to create UnifiedXMLGenerator from workbook");
         return false;
     }
 
@@ -145,22 +146,22 @@ bool ExcelStructureGenerator::generateBasicFiles() {
     }
 
     if (!xml_generator->generateParts(*writer_, parts)) {
-        LOG_ERROR("Failed to generate basic parts via orchestrator");
+        CORE_ERROR("Failed to generate basic parts via orchestrator");
         return false;
     }
 
-    LOG_DEBUG("Successfully generated basic Excel files");
+    CORE_DEBUG("Successfully generated basic Excel files");
     return true;
 }
 
 bool ExcelStructureGenerator::generateWorksheets() {
     size_t worksheet_count = workbook_->getWorksheetCount();
     if (worksheet_count == 0) {
-        LOG_WARN("No worksheets to generate");
+        CORE_WARN("No worksheets to generate");
         return true;
     }
 
-    LOG_DEBUG("Generating {} worksheets", worksheet_count);
+    CORE_DEBUG("Generating {} worksheets", worksheet_count);
 
     // 统一的 orchestrator（用于生成 per-sheet rels）
     auto xml_generator = xml::UnifiedXMLGenerator::fromWorkbook(workbook_);
@@ -168,7 +169,7 @@ bool ExcelStructureGenerator::generateWorksheets() {
     for (size_t i = 0; i < worksheet_count; ++i) {
         auto worksheet = workbook_->getWorksheet(i);
         if (!worksheet) {
-            LOG_ERROR("Worksheet {} is null", i);
+            CORE_ERROR("Worksheet {} is null", i);
             return false;
         }
         
@@ -176,13 +177,13 @@ bool ExcelStructureGenerator::generateWorksheets() {
 
         // 若为透传编辑且该sheet未变更，则跳过生成，保留透传版本
         if (!workbook_->shouldGenerateSheet(i)) {
-            LOG_DEBUG("Skip generating sheet{} due to pass-through mode", i + 1);
+            CORE_DEBUG("Skip generating sheet{} due to pass-through mode", i + 1);
             continue;
         }
         
         // 统一通过 orchestrator 生成工作表 XML（内部自动采用流式写入）
         if (!xml_generator || !xml_generator->generateParts(*writer_, {worksheet_path})) {
-            LOG_ERROR("Failed to generate worksheet via orchestrator: {}", worksheet_path);
+            CORE_ERROR("Failed to generate worksheet via orchestrator: {}", worksheet_path);
             return false;
         }
         
@@ -190,7 +191,7 @@ bool ExcelStructureGenerator::generateWorksheets() {
         if (workbook_->shouldGenerateSheetRels(i) && xml_generator) {
             std::string rels_path = "xl/worksheets/_rels/sheet" + std::to_string(i + 1) + ".xml.rels";
             if (!xml_generator->generateParts(*writer_, {rels_path})) {
-                LOG_ERROR("Failed to generate worksheet relations file via orchestrator: {}", rels_path);
+                CORE_ERROR("Failed to generate worksheet relations file via orchestrator: {}", rels_path);
                 return false;
             }
         }
@@ -200,43 +201,43 @@ bool ExcelStructureGenerator::generateWorksheets() {
         reportProgress("Generating worksheets", progress, 100);
     }
     
-    LOG_DEBUG("Successfully generated all worksheets");
+    CORE_DEBUG("Successfully generated all worksheets");
     return true;
 }
 
 bool ExcelStructureGenerator::finalize() {
-    LOG_DEBUG("ExcelStructureGenerator::finalize() called");
+    CORE_DEBUG("ExcelStructureGenerator::finalize() called");
     
     // 生成共享字符串文件（如果启用）
     // 这必须在所有工作表生成之后进行，因为工作表生成时会填充共享字符串表
     bool should_generate = workbook_->shouldGenerateSharedStrings();
-    LOG_DEBUG("workbook_->shouldGenerateSharedStrings() = {}", should_generate);
+    CORE_DEBUG("workbook_->shouldGenerateSharedStrings() = {}", should_generate);
     
     if (should_generate) {
-        LOG_DEBUG("Generating shared strings XML via orchestrator");
+        CORE_DEBUG("Generating shared strings XML via orchestrator");
 
         auto xml_generator = xml::UnifiedXMLGenerator::fromWorkbook(workbook_);
         if (!xml_generator) {
-            LOG_ERROR("Failed to create UnifiedXMLGenerator for shared strings");
+            CORE_ERROR("Failed to create UnifiedXMLGenerator for shared strings");
             return false;
         }
         if (!xml_generator->generateParts(*writer_, {"xl/sharedStrings.xml"})) {
-            LOG_ERROR("Failed to write shared strings file via orchestrator");
+            CORE_ERROR("Failed to write shared strings file via orchestrator");
             return false;
         }
-        LOG_DEBUG("Shared strings XML generated successfully");
+        CORE_DEBUG("Shared strings XML generated successfully");
     } else {
-        LOG_DEBUG("Skipping SharedStrings generation");
+        CORE_DEBUG("Skipping SharedStrings generation");
     }
     
     // 对于批量模式，需要调用flush
     if (auto batch_writer = dynamic_cast<BatchFileWriter*>(writer_.get())) {
-        LOG_DEBUG("Flushing batch writer");
+        CORE_DEBUG("Flushing batch writer");
         return batch_writer->flush();
     }
     
     // 流式模式不需要特殊的最终化操作
-    LOG_DEBUG("Finalization completed for streaming writer");
+    CORE_DEBUG("Finalization completed for streaming writer");
     return true;
 }
 void ExcelStructureGenerator::reportProgress(const std::string& stage, int current, int total) {

@@ -1,3 +1,4 @@
+#include "fastexcel/utils/ModuleLoggers.hpp"
 /**
  * @file 03_reader_example.cpp
  * @brief FastExcel读取功能示例
@@ -18,33 +19,33 @@ int main() {
         
         // 打开文件
         if (!reader.open()) {
-            LOG_ERROR("无法打开Excel文件");
+            EXAMPLE_ERROR("无法打开Excel文件");
             return -1;
         }
         
-        LOG_INFO("=== FastExcel读取功能演示 ===");
+        EXAMPLE_INFO("=== FastExcel读取功能演示 ===");
         
         // 获取工作表名称列表
         auto worksheet_names = reader.getWorksheetNames();
-        LOG_INFO("发现 {} 个工作表:", worksheet_names.size());
+        EXAMPLE_INFO("发现 {} 个工作表:", worksheet_names.size());
         for (size_t i = 0; i < worksheet_names.size(); ++i) {
-            LOG_INFO("  {}. {}", (i + 1), worksheet_names[i]);
+            EXAMPLE_INFO("  {}. {}", (i + 1), worksheet_names[i]);
         }
         
         // 获取文档元数据
         auto metadata = reader.getMetadata();
-        LOG_INFO("=== 文档元数据 ===");
+        EXAMPLE_INFO("=== 文档元数据 ===");
         if (!metadata.title.empty()) {
-            LOG_INFO("标题: {}", metadata.title);
+            EXAMPLE_INFO("标题: {}", metadata.title);
         }
         if (!metadata.author.empty()) {
-            LOG_INFO("作者: {}", metadata.author);
+            EXAMPLE_INFO("作者: {}", metadata.author);
         }
         if (!metadata.subject.empty()) {
-            LOG_INFO("主题: {}", metadata.subject);
+            EXAMPLE_INFO("主题: {}", metadata.subject);
         }
         if (!metadata.company.empty()) {
-            LOG_INFO("公司: {}", metadata.company);
+            EXAMPLE_INFO("公司: {}", metadata.company);
         }
         
         // 获取定义名称

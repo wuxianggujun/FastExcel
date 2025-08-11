@@ -1,3 +1,4 @@
+#include "fastexcel/utils/ModuleLoggers.hpp"
 #include "fastexcel/archive/ZipReader.hpp"
 #include "fastexcel/archive/ZipArchive.hpp"  // 为了使用ZipError枚举
 #include "fastexcel/utils/Logger.hpp"
@@ -190,7 +191,7 @@ ZipError ZipReader::extractFile(std::string_view internal_path, std::vector<uint
 ZipError ZipReader::extractFileInternal(std::string_view internal_path, 
                                         std::vector<uint8_t>& data) const {
     if (!is_open_ || !unzip_handle_) {
-        LOG_ERROR("Zip archive not opened for reading");
+        ARCHIVE_ERROR("Zip archive not opened for reading");
         return ZipError::NotOpen;
     }
     
@@ -225,12 +226,12 @@ ZipError ZipReader::extractFileInternal(std::string_view internal_path,
     } while (mz_zip_reader_goto_next_entry(unzip_handle_) == MZ_OK);
     
     if (!found) {
-        LOG_ERROR("File {} not found in zip archive", internal_path);
+        ARCHIVE_ERROR("File {} not found in zip archive", internal_path);
         return ZipError::FileNotFound;
     }
     
     data.swap(latest);
-    LOG_DEBUG("Extracted file {} from zip, size: {} bytes", internal_path, data.size());
+    ARCHIVE_DEBUG("Extracted file {} from zip, size: {} bytes", internal_path, data.size());
     return ZipError::Ok;
 }
 
@@ -238,7 +239,7 @@ ZipError ZipReader::extractFileToStream(std::string_view internal_path, std::ost
     std::lock_guard<std::mutex> lock(mutex_);
     
     if (!is_open_ || !unzip_handle_) {
-        LOG_ERROR("Zip archive not opened for reading");
+        ARCHIVE_ERROR("Zip archive not opened for reading");
         return ZipError::NotOpen;
     }
     
@@ -270,7 +271,7 @@ ZipError ZipReader::extractFileToStream(std::string_view internal_path, std::ost
                     if (bytes_read > 0) {
                         output.write(reinterpret_cast<const char*>(buffer.data()), bytes_read);
                         if (!output) {
-                            LOG_ERROR("Failed to write to output stream for file {}", internal_path);
+                            ARCHIVE_ERROR("Failed to write to output stream for file {}", internal_path);
                             mz_zip_reader_entry_close(unzip_handle_);
                             return ZipError::IoFail;
                         }
@@ -282,19 +283,19 @@ ZipError ZipReader::extractFileToStream(std::string_view internal_path, std::ost
                 
                 // 验证是否读取了完整的数据
                 if (total_read != static_cast<int64_t>(info->uncompressed_size)) {
-                    LOG_ERROR("Incomplete read for file {}, expected: {} bytes, read: {} bytes",
+                    ARCHIVE_ERROR("Incomplete read for file {}, expected: {} bytes, read: {} bytes",
                              internal_path, info->uncompressed_size, total_read);
                     return ZipError::IoFail;
                 }
                 
-                LOG_DEBUG("Extracted file {} to stream, size: {} bytes", internal_path, total_read);
+                ARCHIVE_DEBUG("Extracted file {} to stream, size: {} bytes", internal_path, total_read);
                 break;
             }
         }
     } while (mz_zip_reader_goto_next_entry(unzip_handle_) == MZ_OK);
     
     if (!found) {
-        LOG_ERROR("File {} not found in zip archive", internal_path);
+        ARCHIVE_ERROR("File {} not found in zip archive", internal_path);
         return ZipError::FileNotFound;
     }
     
@@ -343,7 +344,7 @@ ZipError ZipReader::streamFile(std::string_view internal_path,
     
     // 打开条目
     if (mz_zip_reader_entry_open(unzip_handle_) != MZ_OK) {
-        LOG_ERROR("Failed to open entry: {}", internal_path);
+        ARCHIVE_ERROR("Failed to open entry: {}", internal_path);
         return ZipError::IoFail;
     }
     
@@ -404,20 +405,20 @@ ZipReader::Stats ZipReader::getStats() const {
 bool ZipReader::initializeReader() {
     unzip_handle_ = mz_zip_reader_create();
     if (!unzip_handle_) {
-        LOG_ERROR("Failed to create zip reader");
+        ARCHIVE_ERROR("Failed to create zip reader");
         return false;
     }
     
     int32_t result = mz_zip_reader_open_file(unzip_handle_, filepath_.c_str());
     if (result != MZ_OK) {
-        LOG_ERROR("Failed to open zip file for reading: {}, error: {}", filename_, result);
+        ARCHIVE_ERROR("Failed to open zip file for reading: {}, error: {}", filename_, result);
         mz_zip_reader_delete(&unzip_handle_);
         unzip_handle_ = nullptr;
         return false;
     }
     
     is_open_ = true;
-    LOG_DEBUG("Zip archive opened for reading: {}", filename_);
+    ARCHIVE_DEBUG("Zip archive opened for reading: {}", filename_);
     
     // 初始化条目缓存
     buildEntryCache();
@@ -470,7 +471,7 @@ void ZipReader::buildEntryCache() const {
     } while (mz_zip_reader_goto_next_entry(unzip_handle_) == MZ_OK);
     
     cache_initialized_ = true;
-    LOG_DEBUG("Built entry cache with {} entries", entry_cache_.size());
+    ARCHIVE_DEBUG("Built entry cache with {} entries", entry_cache_.size());
 }
 
 bool ZipReader::locateEntry(std::string_view path) const {

@@ -1,3 +1,4 @@
+#include "fastexcel/utils/ModuleLoggers.hpp"
 /**
  * @file 04_formatting_example.cpp
  * @brief FastExcel格式化示例
@@ -17,7 +18,7 @@ int main() {
         // 创建工作簿
         auto workbook = fastexcel::core::Workbook::create("formatting_example.xlsx");
         if (!workbook) {
-            LOG_ERROR("无法创建工作簿");
+            EXAMPLE_ERROR("无法创建工作簿");
             return -1;
         }
         
@@ -161,17 +162,17 @@ int main() {
         
         // 保存文件
         if (!workbook->save()) {
-            LOG_ERROR("保存文件失败");
+            EXAMPLE_ERROR("保存文件失败");
             return -1;
         }
         
-        LOG_INFO("格式化Excel文件创建成功: formatting_example.xlsx");
+        EXAMPLE_INFO("格式化Excel文件创建成功: formatting_example.xlsx");
         
         // 清理资源
         fastexcel::cleanup();
         
     } catch (const std::exception& e) {
-        LOG_ERROR("发生错误: {}", e.what());
+        EXAMPLE_ERROR("发生错误: {}", e.what());
         return -1;
     }
     

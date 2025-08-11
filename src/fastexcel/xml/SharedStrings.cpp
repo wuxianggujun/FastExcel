@@ -1,3 +1,4 @@
+#include "fastexcel/utils/ModuleLoggers.hpp"
 #include "fastexcel/xml/SharedStrings.hpp"
 
 namespace fastexcel {

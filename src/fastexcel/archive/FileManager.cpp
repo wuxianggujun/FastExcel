@@ -1,3 +1,4 @@
+#include "fastexcel/utils/ModuleLoggers.hpp"
 #include "fastexcel/archive/FileManager.hpp"
 #include "fastexcel/utils/Logger.hpp"
 #include "fastexcel/xml/ContentTypes.hpp"
@@ -25,7 +26,7 @@ bool FileManager::open(bool create) {
     
     archive_ = std::make_unique<ZipArchive>(filepath_);
     if (!archive_->open(create)) {
-        LOG_ERROR("Failed to open archive: {}", filename_);
+        ARCHIVE_ERROR("Failed to open archive: {}", filename_);
         return false;
     }
     
@@ -43,7 +44,7 @@ bool FileManager::close() {
 
 bool FileManager::writeFile(const std::string& internal_path, const std::string& content) {
     if (!isOpen()) {
-        LOG_ERROR("Archive not open");
+        ARCHIVE_ERROR("Archive not open");
         return false;
     }
     
@@ -52,7 +53,7 @@ bool FileManager::writeFile(const std::string& internal_path, const std::string&
 
 bool FileManager::writeFile(const std::string& internal_path, const std::vector<uint8_t>& data) {
     if (!isOpen()) {
-        LOG_ERROR("Archive not open");
+        ARCHIVE_ERROR("Archive not open");
         return false;
     }
     
@@ -61,7 +62,7 @@ bool FileManager::writeFile(const std::string& internal_path, const std::vector<
 
 bool FileManager::writeFiles(const std::vector<std::pair<std::string, std::string>>& files) {
     if (!isOpen()) {
-        LOG_ERROR("Archive not open");
+        ARCHIVE_ERROR("Archive not open");
         return false;
     }
     
@@ -77,13 +78,13 @@ bool FileManager::writeFiles(const std::vector<std::pair<std::string, std::strin
         zip_files.emplace_back(path, content);
     }
     
-    LOG_INFO("Writing {} files in batch mode", files.size());
+    ARCHIVE_INFO("Writing {} files in batch mode", files.size());
     return archive_->addFiles(zip_files) == ZipError::Ok;
 }
 
 bool FileManager::writeFiles(std::vector<std::pair<std::string, std::string>>&& files) {
     if (!isOpen()) {
-        LOG_ERROR("Archive not open");
+        ARCHIVE_ERROR("Archive not open");
         return false;
     }
     
@@ -99,13 +100,13 @@ bool FileManager::writeFiles(std::vector<std::pair<std::string, std::string>>&& 
         zip_files.emplace_back(std::move(path), std::move(content));
     }
     
-    LOG_INFO("Writing {} files in batch mode (move semantics)", zip_files.size());
+    ARCHIVE_INFO("Writing {} files in batch mode (move semantics)", zip_files.size());
     return archive_->addFiles(std::move(zip_files)) == ZipError::Ok;
 }
 
 bool FileManager::readFile(const std::string& internal_path, std::string& content) {
     if (!isOpen()) {
-        LOG_ERROR("Archive not open");
+        ARCHIVE_ERROR("Archive not open");
         return false;
     }
     
@@ -114,7 +115,7 @@ bool FileManager::readFile(const std::string& internal_path, std::string& conten
 
 bool FileManager::readFile(const std::string& internal_path, std::vector<uint8_t>& data) {
     if (!isOpen()) {
-        LOG_ERROR("Archive not open");
+        ARCHIVE_ERROR("Archive not open");
         return false;
     }
     
@@ -140,26 +141,26 @@ std::vector<std::string> FileManager::listFiles() const {
 bool FileManager::createExcelStructure() {
     // 创建Excel文件所需的基本结构
     if (!addContentTypes()) {
-        LOG_ERROR("Failed to add content types");
+        ARCHIVE_ERROR("Failed to add content types");
         return false;
     }
     
     if (!addRootRels()) {
-        LOG_ERROR("Failed to add root relationships");
+        ARCHIVE_ERROR("Failed to add root relationships");
         return false;
     }
     
     if (!addDocProps()) {
-        LOG_ERROR("Failed to add document properties");
+        ARCHIVE_ERROR("Failed to add document properties");
         return false;
     }
     
     if (!addWorkbookRels()) {
-        LOG_ERROR("Failed to add workbook relationships");
+        ARCHIVE_ERROR("Failed to add workbook relationships");
         return false;
     }
     
-    LOG_INFO("Excel file structure created successfully");
+    ARCHIVE_INFO("Excel file structure created successfully");
     return true;
 }
 
@@ -230,7 +231,7 @@ bool FileManager::addDocProps() {
 
 bool FileManager::setCompressionLevel(int level) {
     if (!archive_) {
-        LOG_ERROR("Archive not initialized");
+        ARCHIVE_ERROR("Archive not initialized");
         return false;
     }
     
@@ -240,29 +241,29 @@ bool FileManager::setCompressionLevel(int level) {
 // 流式写入方法实现 - 极致性能模式
 bool FileManager::openStreamingFile(const std::string& internal_path) {
     if (!isOpen()) {
-        LOG_ERROR("Archive not open");
+        ARCHIVE_ERROR("Archive not open");
         return false;
     }
     
     ZipError result = archive_->openEntry(internal_path);
     if (result != ZipError::Ok) {
-        LOG_ERROR("Failed to open streaming entry: {}", internal_path);
+        ARCHIVE_ERROR("Failed to open streaming entry: {}", internal_path);
         return false;
     }
     
-    LOG_DEBUG("Opened streaming file: {}", internal_path);
+    ARCHIVE_DEBUG("Opened streaming file: {}", internal_path);
     return true;
 }
 
 bool FileManager::writeStreamingChunk(const void* data, size_t size) {
     if (!isOpen()) {
-        LOG_ERROR("Archive not open");
+        ARCHIVE_ERROR("Archive not open");
         return false;
     }
     
     ZipError result = archive_->writeChunk(data, size);
     if (result != ZipError::Ok) {
-        LOG_ERROR("Failed to write streaming chunk of size {}", size);
+        ARCHIVE_ERROR("Failed to write streaming chunk of size {}", size);
         return false;
     }
     
@@ -275,36 +276,36 @@ bool FileManager::writeStreamingChunk(const std::string& data) {
 
 bool FileManager::closeStreamingFile() {
     if (!isOpen()) {
-        LOG_ERROR("Archive not open");
+        ARCHIVE_ERROR("Archive not open");
         return false;
     }
     
     ZipError result = archive_->closeEntry();
     if (result != ZipError::Ok) {
-        LOG_ERROR("Failed to close streaming entry");
+        ARCHIVE_ERROR("Failed to close streaming entry");
         return false;
     }
     
-    LOG_DEBUG("Closed streaming file");
+    ARCHIVE_DEBUG("Closed streaming file");
     return true;
 }
 
 bool FileManager::copyFromExistingPackage(const core::Path& source_package,
                                           const std::vector<std::string>& skip_prefixes) {
     if (!isOpen()) {
-        LOG_ERROR("Archive not open for writing when copying from existing package");
+        ARCHIVE_ERROR("Archive not open for writing when copying from existing package");
         return false;
     }
 
     // 打开源包用于读取
     ZipArchive src(source_package);
     if (!src.open(false)) {
-        LOG_ERROR("Failed to open source package for copy: {}", source_package.string());
+        ARCHIVE_ERROR("Failed to open source package for copy: {}", source_package.string());
         return false;
     }
 
     auto paths = src.listFiles();
-    LOG_INFO("Copy-through existing entries: {} files to scan", paths.size());
+    ARCHIVE_INFO("Copy-through existing entries: {} files to scan", paths.size());
 
     for (const auto& p : paths) {
         bool skip = false;
@@ -315,24 +316,24 @@ bool FileManager::copyFromExistingPackage(const core::Path& source_package,
             }
         }
         if (skip) {
-            LOG_DEBUG("Skip passthrough: {}", p);
+            ARCHIVE_DEBUG("Skip passthrough: {}", p);
             continue;
         }
 
         std::vector<uint8_t> data;
         if (src.extractFile(p, data) == ZipError::Ok) {
             if (archive_->fileExists(p) == ZipError::Ok) {
-                LOG_DEBUG("Target already has {}, skipping overwrite", p);
+                ARCHIVE_DEBUG("Target already has {}, skipping overwrite", p);
                 continue;
             }
             if (archive_->addFile(p, data.data(), data.size()) != ZipError::Ok) {
-                LOG_ERROR("Failed to write passthrough entry: {}", p);
+                ARCHIVE_ERROR("Failed to write passthrough entry: {}", p);
                 src.close();
                 return false;
             }
-            LOG_DEBUG("Pass-through copied: {} ({} bytes)", p, data.size());
+            ARCHIVE_DEBUG("Pass-through copied: {} ({} bytes)", p, data.size());
         } else {
-            LOG_WARN("Failed to extract entry from source for passthrough: {}", p);
+            ARCHIVE_WARN("Failed to extract entry from source for passthrough: {}", p);
         }
     }
 

@@ -1,3 +1,4 @@
+#include "fastexcel/utils/ModuleLoggers.hpp"
 #include "fastexcel/core/ThreadPool.hpp"
 #include "fastexcel/utils/Logger.hpp"
 
@@ -12,7 +13,7 @@ ThreadPool::ThreadPool(size_t threads)
         if (threads == 0) threads = 4; // 默认4个线程
     }
     
-    LOG_INFO("Creating ThreadPool with {} threads", threads);
+    CORE_INFO("Creating ThreadPool with {} threads", threads);
     
     workers_.reserve(threads);
     
@@ -43,9 +44,9 @@ ThreadPool::ThreadPool(size_t threads)
                 try {
                     task();
                 } catch (const std::exception& e) {
-                    LOG_ERROR("ThreadPool task exception: {}", e.what());
+                    CORE_ERROR("ThreadPool task exception: {}", e.what());
                 } catch (...) {
-                    LOG_ERROR("ThreadPool task unknown exception");
+                    CORE_ERROR("ThreadPool task unknown exception");
                 }
                 
                 // 任务完成，更新计数器
@@ -60,11 +61,11 @@ ThreadPool::ThreadPool(size_t threads)
         });
     }
     
-    LOG_DEBUG("ThreadPool created successfully with {} worker threads", workers_.size());
+    CORE_DEBUG("ThreadPool created successfully with {} worker threads", workers_.size());
 }
 
 ThreadPool::~ThreadPool() {
-    LOG_DEBUG("Destroying ThreadPool...");
+    CORE_DEBUG("Destroying ThreadPool...");
     
     {
         std::unique_lock<std::mutex> lock(queue_mutex_);
@@ -79,7 +80,7 @@ ThreadPool::~ThreadPool() {
         }
     }
     
-    LOG_INFO("ThreadPool destroyed, {} threads joined", workers_.size());
+    CORE_INFO("ThreadPool destroyed, {} threads joined", workers_.size());
 }
 
 void ThreadPool::wait_for_all_tasks() {

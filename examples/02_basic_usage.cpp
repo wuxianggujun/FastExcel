@@ -1,3 +1,4 @@
+#include "fastexcel/utils/ModuleLoggers.hpp"
 /**
  * @file 02_basic_usage.cpp
  * @brief FastExcel基本使用示例
@@ -17,14 +18,14 @@ int main() {
         // 创建工作簿
         auto workbook = fastexcel::core::Workbook::create("basic_example.xlsx");
         if (!workbook) {
-            LOG_ERROR("无法创建工作簿");
+            EXAMPLE_ERROR("无法创建工作簿");
             return -1;
         }
         
         // 添加工作表
         auto worksheet = workbook->addWorksheet("数据表");
         if (!worksheet) {
-            LOG_ERROR("无法创建工作表");
+            EXAMPLE_ERROR("无法创建工作表");
             return -1;
         }
         
@@ -67,17 +68,17 @@ int main() {
         
         // 保存文件
         if (!workbook->save()) {
-            LOG_ERROR("保存文件失败");
+            EXAMPLE_ERROR("保存文件失败");
             return -1;
         }
         
-        LOG_INFO("Excel文件创建成功: basic_example.xlsx");
+        EXAMPLE_INFO("Excel文件创建成功: basic_example.xlsx");
         
         // 清理资源
         fastexcel::cleanup();
         
     } catch (const std::exception& e) {
-        LOG_ERROR("发生错误: {}", e.what());
+        EXAMPLE_ERROR("发生错误: {}", e.what());
         return -1;
     }
     

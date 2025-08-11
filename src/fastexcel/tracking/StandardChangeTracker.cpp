@@ -1,3 +1,4 @@
+#include "fastexcel/utils/ModuleLoggers.hpp"
 #include "fastexcel/tracking/StandardChangeTracker.hpp"
 #include "fastexcel/utils/Logger.hpp"
 #include <algorithm>
@@ -9,23 +10,23 @@ namespace tracking {
 
 void StandardChangeTracker::markPartDirty(const std::string& part) {
     if (part.empty()) {
-        LOG_WARN("StandardChangeTracker: attempt to mark empty part as dirty");
+        TRACKING_WARN("StandardChangeTracker: attempt to mark empty part as dirty");
         return;
     }
     
     dirty_parts_.insert(part);
     markRelatedDirty(part);  // 智能标记关联部件
-    LOG_DEBUG("Marked part as dirty: {}", part);
+    TRACKING_DEBUG("Marked part as dirty: {}", part);
 }
 
 void StandardChangeTracker::markPartClean(const std::string& part) {
     if (part.empty()) {
-        LOG_WARN("StandardChangeTracker: attempt to mark empty part as clean");
+        TRACKING_WARN("StandardChangeTracker: attempt to mark empty part as clean");
         return;
     }
     
     dirty_parts_.erase(part);
-    LOG_DEBUG("Marked part as clean: {}", part);
+    TRACKING_DEBUG("Marked part as clean: {}", part);
 }
 
 bool StandardChangeTracker::isPartDirty(const std::string& part) const {
@@ -39,7 +40,7 @@ std::vector<std::string> StandardChangeTracker::getDirtyParts() const {
 void StandardChangeTracker::clearAll() {
     size_t count = dirty_parts_.size();
     dirty_parts_.clear();
-    LOG_DEBUG("Cleared all dirty parts ({} total)", count);
+    TRACKING_DEBUG("Cleared all dirty parts ({} total)", count);
 }
 
 bool StandardChangeTracker::hasChanges() const {

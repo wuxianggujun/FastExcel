@@ -52,20 +52,20 @@ protected:
 
 // 测试1: 基本解析功能
 TEST_F(XMLStreamReaderTest, BasicParsing) {
-    LOG_INFO("Testing basic XML parsing");
+    FASTEXCEL_LOG_INFO("Testing basic XML parsing");
 
     std::vector<std::string> elements;
     std::vector<std::string> texts;
     
     reader_->setStartElementCallback([&](const std::string& name, const std::vector<XMLAttribute>& attributes, int depth) {
         elements.push_back(name);
-        LOG_DEBUG("Start element: {} at depth {}", name, depth);
+        FASTEXCEL_LOG_DEBUG("Start element: {} at depth {}", name, depth);
     });
     
     reader_->setTextCallback([&](const std::string& text, int depth) {
         if (!text.empty()) {
             texts.push_back(text);
-            LOG_DEBUG("Text content: '{}' at depth {}", text, depth);
+            FASTEXCEL_LOG_DEBUG("Text content: '{}' at depth {}", text, depth);
         }
     });
     
@@ -90,14 +90,14 @@ TEST_F(XMLStreamReaderTest, BasicParsing) {
 
 // 测试2: 属性解析
 TEST_F(XMLStreamReaderTest, AttributeParsing) {
-    LOG_INFO("Testing XML attribute parsing");
+    FASTEXCEL_LOG_INFO("Testing XML attribute parsing");
 
     std::unordered_map<std::string, std::string> found_attributes;
     
     reader_->setStartElementCallback([&](const std::string& name, const std::vector<XMLAttribute>& attributes, int depth) {
         for (const auto& attr : attributes) {
             found_attributes[attr.name] = attr.value;
-            LOG_DEBUG("Attribute: {}='{}' in element '{}'", attr.name, attr.value, name);
+            FASTEXCEL_LOG_DEBUG("Attribute: {}='{}' in element '{}'", attr.name, attr.value, name);
         }
     });
     
@@ -110,7 +110,7 @@ TEST_F(XMLStreamReaderTest, AttributeParsing) {
 
 // 测试3: 复杂XML解析（模拟Excel格式）
 TEST_F(XMLStreamReaderTest, ComplexXMLParsing) {
-    LOG_INFO("Testing complex XML parsing (Excel-like format)");
+    FASTEXCEL_LOG_INFO("Testing complex XML parsing (Excel-like format)");
 
     std::vector<std::pair<std::string, std::string>> sheets;
     
@@ -126,7 +126,7 @@ TEST_F(XMLStreamReaderTest, ComplexXMLParsing) {
             }
             if (!sheet_name.empty() && !sheet_id.empty()) {
                 sheets.emplace_back(sheet_name, sheet_id);
-                LOG_DEBUG("Found sheet: {} with ID {}", sheet_name, sheet_id);
+                FASTEXCEL_LOG_DEBUG("Found sheet: {} with ID {}", sheet_name, sheet_id);
             }
         }
     });
@@ -144,7 +144,7 @@ TEST_F(XMLStreamReaderTest, ComplexXMLParsing) {
 
 // 测试4: 流式解析
 TEST_F(XMLStreamReaderTest, StreamParsing) {
-    LOG_INFO("Testing stream-based XML parsing");
+    FASTEXCEL_LOG_INFO("Testing stream-based XML parsing");
 
     std::vector<std::string> elements;
     
@@ -175,7 +175,7 @@ TEST_F(XMLStreamReaderTest, StreamParsing) {
 
 // 测试5: DOM解析
 TEST_F(XMLStreamReaderTest, DOMParsing) {
-    LOG_INFO("Testing DOM-style XML parsing");
+    FASTEXCEL_LOG_INFO("Testing DOM-style XML parsing");
 
     auto root = reader_->parseToDOM(simple_xml_);
     ASSERT_NE(root, nullptr);
@@ -200,14 +200,14 @@ TEST_F(XMLStreamReaderTest, DOMParsing) {
 
 // 测试6: 错误处理
 TEST_F(XMLStreamReaderTest, ErrorHandling) {
-    LOG_INFO("Testing XML parsing error handling");
+    FASTEXCEL_LOG_INFO("Testing XML parsing error handling");
 
     std::string invalid_xml = "<?xml version=\"1.0\"?><root><unclosed>";
     
     bool error_callback_called = false;
     reader_->setErrorCallback([&](XMLParseError error, const std::string& message, int line, int column) {
         error_callback_called = true;
-        LOG_DEBUG("Parse error: {} at line {}, column {}: {}", static_cast<int>(error), line, column, message);
+        FASTEXCEL_LOG_DEBUG("Parse error: {} at line {}, column {}: {}", static_cast<int>(error), line, column, message);
     });
     
     XMLParseError result = reader_->parseFromString(invalid_xml);
@@ -217,7 +217,7 @@ TEST_F(XMLStreamReaderTest, ErrorHandling) {
 
 // 测试7: 大文件处理（模拟）
 TEST_F(XMLStreamReaderTest, LargeFileParsing) {
-    LOG_INFO("Testing large XML file parsing simulation");
+    FASTEXCEL_LOG_INFO("Testing large XML file parsing simulation");
 
     // 生成一个较大的XML文档
     std::ostringstream large_xml;
@@ -240,12 +240,12 @@ TEST_F(XMLStreamReaderTest, LargeFileParsing) {
     EXPECT_EQ(result, XMLParseError::Ok);
     EXPECT_EQ(element_count, 1001);  // root + 1000 items
     
-    LOG_DEBUG("Successfully parsed {} elements from large XML", element_count);
+    FASTEXCEL_LOG_DEBUG("Successfully parsed {} elements from large XML", element_count);
 }
 
 // 测试8: 编码处理
 TEST_F(XMLStreamReaderTest, EncodingHandling) {
-    LOG_INFO("Testing XML encoding handling");
+    FASTEXCEL_LOG_INFO("Testing XML encoding handling");
 
     std::string utf8_xml = R"(<?xml version="1.0" encoding="UTF-8"?>
 <root>
@@ -281,7 +281,7 @@ TEST_F(XMLStreamReaderTest, EncodingHandling) {
 
 // 测试9: 命名空间处理
 TEST_F(XMLStreamReaderTest, NamespaceHandling) {
-    LOG_INFO("Testing XML namespace handling");
+    FASTEXCEL_LOG_INFO("Testing XML namespace handling");
 
     std::string ns_xml = R"(<?xml version="1.0"?>
 <root xmlns:xl="http://www.w3.org/1999/xlink">
@@ -291,7 +291,7 @@ TEST_F(XMLStreamReaderTest, NamespaceHandling) {
     std::vector<std::string> elements;
     reader_->setStartElementCallback([&](const std::string& name, const std::vector<XMLAttribute>& attributes, int depth) {
         elements.push_back(name);
-        LOG_DEBUG("Element with namespace: {}", name);
+        FASTEXCEL_LOG_DEBUG("Element with namespace: {}", name);
     });
     
     reader_->setNamespaceAware(true);
@@ -311,7 +311,7 @@ TEST_F(XMLStreamReaderTest, NamespaceHandling) {
 
 // 测试10: 性能测试
 TEST_F(XMLStreamReaderTest, PerformanceTest) {
-    LOG_INFO("Testing XML parsing performance");
+    FASTEXCEL_LOG_INFO("Testing XML parsing performance");
 
     // 生成一个中等大小的XML文档
     std::ostringstream perf_xml;
@@ -333,7 +333,7 @@ TEST_F(XMLStreamReaderTest, PerformanceTest) {
     perf_xml << "</workbook>";
     
     std::string xml_content = perf_xml.str();
-    LOG_DEBUG("Generated XML content size: {} bytes", xml_content.size());
+    FASTEXCEL_LOG_DEBUG("Generated XML content size: {} bytes", xml_content.size());
     
     int element_count = 0;
     reader_->setStartElementCallback([&](const std::string& name, const std::vector<XMLAttribute>& attributes, int depth) {
@@ -347,7 +347,7 @@ TEST_F(XMLStreamReaderTest, PerformanceTest) {
     EXPECT_EQ(result, XMLParseError::Ok);
     
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
-    LOG_INFO("Parsed {} elements in {} ms", element_count, duration.count());
+    FASTEXCEL_LOG_INFO("Parsed {} elements in {} ms", element_count, duration.count());
     
     // 性能应该是合理的（这个测试主要是为了确保没有明显的性能问题）
     EXPECT_LT(duration.count(), 5000);  // 应该在5秒内完成

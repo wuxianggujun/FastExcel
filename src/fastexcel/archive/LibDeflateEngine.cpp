@@ -1,3 +1,4 @@
+#include "fastexcel/utils/ModuleLoggers.hpp"
 #include "LibDeflateEngine.hpp"
 
 #ifdef FASTEXCEL_HAS_LIBDEFLATE

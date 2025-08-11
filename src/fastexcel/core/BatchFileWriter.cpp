@@ -1,3 +1,4 @@
+#include "fastexcel/utils/ModuleLoggers.hpp"
 #include "fastexcel/core/BatchFileWriter.hpp"
 #include "fastexcel/utils/Logger.hpp"
 #include <algorithm>
@@ -14,7 +15,7 @@ BatchFileWriter::BatchFileWriter(archive::FileManager* file_manager)
 
 BatchFileWriter::~BatchFileWriter() {
     if (streaming_file_open_) {
-        LOG_WARN("BatchFileWriter destroyed with open streaming file: {}", current_path_);
+        CORE_WARN("BatchFileWriter destroyed with open streaming file: {}", current_path_);
         closeStreamingFile();
     }
 }
@@ -22,9 +23,9 @@ BatchFileWriter::~BatchFileWriter() {
 bool BatchFileWriter::writeFile(const std::string& path, const std::string& content) {
     // 🔧 关键修复：如果有流式文件打开，先关闭它
     if (streaming_file_open_) {
-        LOG_WARN("Auto-closing streaming file {} to write batch file {}", current_path_, path);
+        CORE_WARN("Auto-closing streaming file {} to write batch file {}", current_path_, path);
         if (!closeStreamingFile()) {
-            LOG_ERROR("Failed to close streaming file before writing batch file");
+            CORE_ERROR("Failed to close streaming file before writing batch file");
             return false;
         }
     }
@@ -33,13 +34,13 @@ bool BatchFileWriter::writeFile(const std::string& path, const std::string& cont
     stats_.batch_files++;
     stats_.total_bytes += content.size();
     
-    LOG_DEBUG("Collected file for batch write: {} ({} bytes)", path, content.size());
+    CORE_DEBUG("Collected file for batch write: {} ({} bytes)", path, content.size());
     return true;
 }
 
 bool BatchFileWriter::openStreamingFile(const std::string& path) {
     if (streaming_file_open_) {
-        LOG_ERROR("Streaming file already open: {}", current_path_);
+        CORE_ERROR("Streaming file already open: {}", current_path_);
         return false;
     }
     
@@ -47,13 +48,13 @@ bool BatchFileWriter::openStreamingFile(const std::string& path) {
     current_content_.clear();
     streaming_file_open_ = true;
     
-    LOG_DEBUG("Opened streaming file for batch collection: {}", path);
+    CORE_DEBUG("Opened streaming file for batch collection: {}", path);
     return true;
 }
 
 bool BatchFileWriter::writeStreamingChunk(const char* data, size_t size) {
     if (!streaming_file_open_) {
-        LOG_ERROR("No streaming file is open");
+        CORE_ERROR("No streaming file is open");
         return false;
     }
     
@@ -67,7 +68,7 @@ bool BatchFileWriter::writeStreamingChunk(const char* data, size_t size) {
 
 bool BatchFileWriter::closeStreamingFile() {
     if (!streaming_file_open_) {
-        LOG_ERROR("No streaming file is open");
+        CORE_ERROR("No streaming file is open");
         return false;
     }
     
@@ -77,7 +78,7 @@ bool BatchFileWriter::closeStreamingFile() {
     stats_.batch_files++; // 统计中也算作批量文件
     stats_.total_bytes += current_content_.size();
     
-    LOG_DEBUG("Closed streaming file and added to batch: {} ({} bytes)",
+    CORE_DEBUG("Closed streaming file and added to batch: {} ({} bytes)",
              current_path_, current_content_.size());
     
     // 清理状态
@@ -90,16 +91,16 @@ bool BatchFileWriter::closeStreamingFile() {
 
 bool BatchFileWriter::flush() {
     if (streaming_file_open_) {
-        LOG_WARN("Flushing with open streaming file, closing it first: {}", current_path_);
+        CORE_WARN("Flushing with open streaming file, closing it first: {}", current_path_);
         closeStreamingFile();
     }
     
     if (files_.empty()) {
-        LOG_DEBUG("No files to flush in batch mode");
+        CORE_DEBUG("No files to flush in batch mode");
         return true;
     }
     
-    LOG_INFO("Flushing {} files in batch mode (total: {} bytes)", 
+    CORE_INFO("Flushing {} files in batch mode (total: {} bytes)", 
              files_.size(), stats_.total_bytes);
     
     // 使用移动语义提高性能
@@ -107,9 +108,9 @@ bool BatchFileWriter::flush() {
     
     if (success) {
         stats_.files_written = files_.size();
-        LOG_INFO("Successfully flushed {} files in batch mode", stats_.files_written);
+        CORE_INFO("Successfully flushed {} files in batch mode", stats_.files_written);
     } else {
-        LOG_ERROR("Failed to flush files in batch mode");
+        CORE_ERROR("Failed to flush files in batch mode");
     }
     
     // 清空文件列表（无论成功与否）
@@ -135,7 +136,7 @@ size_t BatchFileWriter::getEstimatedMemoryUsage() const {
 
 void BatchFileWriter::clear() {
     if (streaming_file_open_) {
-        LOG_WARN("Clearing with open streaming file: {}", current_path_);
+        CORE_WARN("Clearing with open streaming file: {}", current_path_);
         streaming_file_open_ = false;
     }
     
@@ -144,12 +145,12 @@ void BatchFileWriter::clear() {
     current_content_.clear();
     stats_ = WriteStats{};
     
-    LOG_DEBUG("Cleared all collected files in batch writer");
+    CORE_DEBUG("Cleared all collected files in batch writer");
 }
 
 void BatchFileWriter::reserve(size_t expected_files) {
     files_.reserve(expected_files);
-    LOG_DEBUG("Reserved space for {} files in batch writer", expected_files);
+    CORE_DEBUG("Reserved space for {} files in batch writer", expected_files);
 }
 
 }} // namespace fastexcel::core

@@ -1,3 +1,4 @@
+#include "fastexcel/utils/ModuleLoggers.hpp"
 #include "ZlibEngine.hpp"
 #include <stdexcept>
 #include <algorithm>

@@ -1,3 +1,4 @@
+#include "fastexcel/utils/ModuleLoggers.hpp"
 #include "MinizipParallelWriter.hpp"
 #include <iostream>
 #include <chrono>

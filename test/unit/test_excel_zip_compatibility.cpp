@@ -44,7 +44,7 @@ protected:
             // 如果需要自动清理，取消下面的注释
             // std::filesystem::remove_all(test_dir_);
         } catch (const std::exception& e) {
-            LOG_WARN("Failed to clean up test directory: {}", e.what());
+            FASTEXCEL_LOG_WARN("Failed to clean up test directory: {}", e.what());
         }
         
         // 关闭日志系统
@@ -292,7 +292,7 @@ protected:
 
 // 测试1: 创建最小的Excel兼容文件
 TEST_F(ExcelZipCompatibilityTest, CreateMinimalExcelFile) {
-    LOG_INFO("Testing minimal Excel file creation");
+    FASTEXCEL_LOG_INFO("Testing minimal Excel file creation");
     
     std::string filename = test_file_prefix_ + "_minimal.xlsx";
     createMinimalExcelStructure(filename);
@@ -305,14 +305,14 @@ TEST_F(ExcelZipCompatibilityTest, CreateMinimalExcelFile) {
     EXPECT_GT(file_size, 1000); // 至少1KB
     EXPECT_LT(file_size, 100000); // 不超过100KB
     
-    LOG_INFO("Created minimal Excel file: {}", filename);
-    LOG_INFO("File size: {} bytes", file_size);
-    LOG_INFO("Please open this file in Excel to verify compatibility");
+    FASTEXCEL_LOG_INFO("Created minimal Excel file: {}", filename);
+    FASTEXCEL_LOG_INFO("File size: {} bytes", file_size);
+    FASTEXCEL_LOG_INFO("Please open this file in Excel to verify compatibility");
 }
 
 // 测试2: 使用FastExcel API创建文件
 TEST_F(ExcelZipCompatibilityTest, CreateWithFastExcelAPI) {
-    LOG_INFO("Testing Excel file creation with FastExcel API");
+    FASTEXCEL_LOG_INFO("Testing Excel file creation with FastExcel API");
     
     std::string filename = test_file_prefix_ + "_api.xlsx";
     
@@ -351,13 +351,13 @@ TEST_F(ExcelZipCompatibilityTest, CreateWithFastExcelAPI) {
     // 验证文件
     EXPECT_TRUE(std::filesystem::exists(filename));
     auto file_size = std::filesystem::file_size(filename);
-    LOG_INFO("Created Excel file with API: {}", filename);
-    LOG_INFO("File size: {} bytes", file_size);
+    FASTEXCEL_LOG_INFO("Created Excel file with API: {}", filename);
+    FASTEXCEL_LOG_INFO("File size: {} bytes", file_size);
 }
 
 // 测试3: 批量文件写入
 TEST_F(ExcelZipCompatibilityTest, BatchFileWriting) {
-    LOG_INFO("Testing batch file writing");
+    FASTEXCEL_LOG_INFO("Testing batch file writing");
     
     std::string filename = test_file_prefix_ + "_batch.xlsx";
     ZipArchive zip(filename);
@@ -387,12 +387,12 @@ TEST_F(ExcelZipCompatibilityTest, BatchFileWriting) {
     
     // 验证文件
     EXPECT_TRUE(std::filesystem::exists(filename));
-    LOG_INFO("Created Excel file with batch writing: {}", filename);
+    FASTEXCEL_LOG_INFO("Created Excel file with batch writing: {}", filename);
 }
 
 // 测试4: 流式写入
 TEST_F(ExcelZipCompatibilityTest, StreamingFileWriting) {
-    LOG_INFO("Testing streaming file writing");
+    FASTEXCEL_LOG_INFO("Testing streaming file writing");
     
     std::string filename = test_file_prefix_ + "_streaming.xlsx";
     ZipArchive zip(filename);
@@ -443,12 +443,12 @@ TEST_F(ExcelZipCompatibilityTest, StreamingFileWriting) {
     
     // 验证文件
     EXPECT_TRUE(std::filesystem::exists(filename));
-    LOG_INFO("Created Excel file with streaming: {}", filename);
+    FASTEXCEL_LOG_INFO("Created Excel file with streaming: {}", filename);
 }
 
 // 测试5: 验证修复后的设置
 TEST_F(ExcelZipCompatibilityTest, VerifyFixedSettings) {
-    LOG_INFO("Testing fixed ZIP settings");
+    FASTEXCEL_LOG_INFO("Testing fixed ZIP settings");
     
     std::string filename = test_file_prefix_ + "_verify.xlsx";
     
@@ -471,12 +471,12 @@ TEST_F(ExcelZipCompatibilityTest, VerifyFixedSettings) {
     
     zip.close();
     
-    LOG_INFO("ZIP settings verification completed");
-    LOG_INFO("File created: {}", filename);
+    FASTEXCEL_LOG_INFO("ZIP settings verification completed");
+    FASTEXCEL_LOG_INFO("File created: {}", filename);
     
     // 注意：实际的version_madeby和压缩方法验证需要使用外部工具
     // 如 7-Zip 或专门的ZIP分析工具
-    LOG_INFO("To verify ZIP metadata, use: 7z l -slt {}", filename);
+    FASTEXCEL_LOG_INFO("To verify ZIP metadata, use: 7z l -slt {}", filename);
 }
 
 }} // namespace fastexcel::archive

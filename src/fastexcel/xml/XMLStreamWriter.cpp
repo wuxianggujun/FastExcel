@@ -1,3 +1,4 @@
+#include "fastexcel/utils/ModuleLoggers.hpp"
 #include "fastexcel/xml/XMLStreamWriter.hpp"
 #include <algorithm>
 #include <cstdio>
@@ -31,7 +32,7 @@ XMLStreamWriter::XMLStreamWriter(const std::string& filename) : XMLStreamWriter(
     if (err == 0 && file) {
         setDirectFileMode(file, true);
     } else {
-        LOG_ERROR("Failed to open file for writing: {}", filename);
+        XML_ERROR("Failed to open file for writing: {}", filename);
     }
 }
 
@@ -40,7 +41,7 @@ XMLStreamWriter::~XMLStreamWriter() {
     if (buffer_pos_ > 0 && !direct_file_mode_ && !callback_mode_) {
         // 只有在数据量较大时才记录警告，避免正常使用时的噪音
         if (buffer_pos_ > 100) {
-            LOG_WARN("XMLStreamWriter destroyed with {} bytes in buffer", buffer_pos_);
+            XML_WARN("XMLStreamWriter destroyed with {} bytes in buffer", buffer_pos_);
         }
     }
     
@@ -58,7 +59,7 @@ void XMLStreamWriter::setDirectFileMode(FILE* file, bool take_ownership) {
     owns_file_ = take_ownership;
     direct_file_mode_ = true;
     
-    LOG_DEBUG("XMLStreamWriter switched to direct file mode");
+    XML_DEBUG("XMLStreamWriter switched to direct file mode");
 }
 
 // 已移除setBufferedMode()以获得极致性能
@@ -66,7 +67,7 @@ void XMLStreamWriter::setDirectFileMode(FILE* file, bool take_ownership) {
 
 void XMLStreamWriter::setCallbackMode(WriteCallback callback, bool auto_flush) {
     if (!callback) {
-        LOG_ERROR("Invalid callback provided to setCallbackMode");
+        XML_ERROR("Invalid callback provided to setCallbackMode");
         return;
     }
     
@@ -78,7 +79,7 @@ void XMLStreamWriter::setCallbackMode(WriteCallback callback, bool auto_flush) {
     write_callback_ = std::move(callback);
     auto_flush_ = auto_flush;
     
-    LOG_DEBUG("XMLStreamWriter switched to callback mode with auto_flush={}", auto_flush);
+    XML_DEBUG("XMLStreamWriter switched to callback mode with auto_flush={}", auto_flush);
 }
 
 void XMLStreamWriter::flushBuffer() {
@@ -133,7 +134,7 @@ void XMLStreamWriter::startElement(const char* name) {
 
 void XMLStreamWriter::endElement() {
     if (element_stack_.empty()) {
-        LOG_WARN("Attempted to end element when stack is empty");
+        XML_WARN("Attempted to end element when stack is empty");
         return;
     }
     
@@ -164,7 +165,7 @@ void XMLStreamWriter::writeEmptyElement(const char* name) {
 
 void XMLStreamWriter::writeAttribute(const char* name, const char* value) {
     if (!in_element_) {
-        LOG_WARN("Attempted to write attribute '{}' outside of element", name);
+        XML_WARN("Attempted to write attribute '{}' outside of element", name);
         return;
     }
     
@@ -189,7 +190,7 @@ void XMLStreamWriter::writeAttribute(const char* name, const char* value) {
 
 void XMLStreamWriter::writeAttribute(const char* name, int value) {
     if (!in_element_) {
-        LOG_WARN("Attempted to write attribute '{}' outside of element", name);
+        XML_WARN("Attempted to write attribute '{}' outside of element", name);
         return;
     }
     
@@ -205,7 +206,7 @@ void XMLStreamWriter::writeAttribute(const char* name, int value) {
 
 void XMLStreamWriter::writeAttribute(const char* name, double value) {
     if (!in_element_) {
-        LOG_WARN("Attempted to write attribute '{}' outside of element", name);
+        XML_WARN("Attempted to write attribute '{}' outside of element", name);
         return;
     }
     
@@ -270,7 +271,7 @@ bool XMLStreamWriter::writeToFile(const std::string& filename) {
     FILE* file = nullptr;
     errno_t err = fopen_s(&file, filename.c_str(), "wb");
     if (err != 0 || !file) {
-        LOG_ERROR("Failed to open file '{}' for writing", filename);
+        XML_ERROR("Failed to open file '{}' for writing", filename);
         return false;
     }
     
@@ -285,13 +286,13 @@ bool XMLStreamWriter::writeToFile(const std::string& filename) {
     owns_file_ = true;
     direct_file_mode_ = true;
     
-    LOG_INFO("XMLStreamWriter now writing to file '{}'", filename);
+    XML_INFO("XMLStreamWriter now writing to file '{}'", filename);
     return true;
 }
 
 bool XMLStreamWriter::setOutputFile(FILE* file, bool take_ownership) {
     if (!file) {
-        LOG_ERROR("Invalid file pointer provided");
+        XML_ERROR("Invalid file pointer provided");
         return false;
     }
     
@@ -306,7 +307,7 @@ bool XMLStreamWriter::setOutputFile(FILE* file, bool take_ownership) {
     owns_file_ = take_ownership;
     direct_file_mode_ = true;
     
-    LOG_DEBUG("XMLStreamWriter now writing to provided file stream");
+    XML_DEBUG("XMLStreamWriter now writing to provided file stream");
     return true;
 }
 
@@ -355,7 +356,7 @@ void XMLStreamWriter::writeRawToBuffer(const char* data, size_t length) {
             
             // 如果刷新后仍然没有可用空间，说明有问题
             if (available_space == 0) {
-                LOG_ERROR("Buffer flush failed, cannot write more data");
+                XML_ERROR("Buffer flush failed, cannot write more data");
                 return;
             }
         }
