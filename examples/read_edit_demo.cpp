@@ -83,37 +83,37 @@ int main() {
             
             // 写入数据
             worksheet->writeString(0, 0, "项目名称");
-            worksheet->getCell(0, 0).setFormat(workbook->getStyleRepository().getFormat(titleId));
+            worksheet->getCell(0, 0).setFormat(workbook->getStyles().getFormat(titleId));
             
             worksheet->writeString(0, 1, "数值");
-            worksheet->getCell(0, 1).setFormat(workbook->getStyleRepository().getFormat(titleId));
+            worksheet->getCell(0, 1).setFormat(workbook->getStyles().getFormat(titleId));
             
             worksheet->writeString(0, 2, "百分比");
-            worksheet->getCell(0, 2).setFormat(workbook->getStyleRepository().getFormat(titleId));
+            worksheet->getCell(0, 2).setFormat(workbook->getStyles().getFormat(titleId));
             
             worksheet->writeString(0, 3, "金额");
-            worksheet->getCell(0, 3).setFormat(workbook->getStyleRepository().getFormat(titleId));
+            worksheet->getCell(0, 3).setFormat(workbook->getStyles().getFormat(titleId));
             
             // 数据行
             worksheet->writeString(1, 0, "产品A");
             worksheet->writeNumber(1, 1, 123.456);
-            worksheet->getCell(1, 1).setFormat(workbook->getStyleRepository().getFormat(numberId));
+            worksheet->getCell(1, 1).setFormat(workbook->getStyles().getFormat(numberId));
             
             worksheet->writeNumber(1, 2, 0.85);
-            worksheet->getCell(1, 2).setFormat(workbook->getStyleRepository().getFormat(percentId));
+            worksheet->getCell(1, 2).setFormat(workbook->getStyles().getFormat(percentId));
             
             worksheet->writeNumber(1, 3, 1234.56);
-            worksheet->getCell(1, 3).setFormat(workbook->getStyleRepository().getFormat(currencyId));
+            worksheet->getCell(1, 3).setFormat(workbook->getStyles().getFormat(currencyId));
             
             worksheet->writeString(2, 0, "产品B");
             worksheet->writeNumber(2, 1, 987.654);
-            worksheet->getCell(2, 1).setFormat(workbook->getStyleRepository().getFormat(numberId));
+            worksheet->getCell(2, 1).setFormat(workbook->getStyles().getFormat(numberId));
             
             worksheet->writeNumber(2, 2, 0.92);
-            worksheet->getCell(2, 2).setFormat(workbook->getStyleRepository().getFormat(percentId));
+            worksheet->getCell(2, 2).setFormat(workbook->getStyles().getFormat(percentId));
             
             worksheet->writeNumber(2, 3, 2345.67);
-            worksheet->getCell(2, 3).setFormat(workbook->getStyleRepository().getFormat(currencyId));
+            worksheet->getCell(2, 3).setFormat(workbook->getStyles().getFormat(currencyId));
             
             workbook->save();
             workbook->close();
@@ -173,7 +173,7 @@ int main() {
         
         // 应用新样式到新数据
         auto& newCell = worksheet->getCell(3, 1);
-        newCell.setFormat(readWorkbook->getStyleRepository().getFormat(editStyleId));
+        newCell.setFormat(readWorkbook->getStyles().getFormat(editStyleId));
         
         // 修改现有单元格
         std::cout << "\n🔄 修改现有数据..." << std::endl;

@@ -26,8 +26,8 @@ WorksheetXMLGenerator::WorksheetXMLGenerator(const core::Worksheet* worksheet)
     if (worksheet_) {
         workbook_ = worksheet_->getParentWorkbook().get();
         if (workbook_) {
-            sst_ = workbook_->getSharedStringTable();
-            format_repo_ = &workbook_->getStyleRepository();
+            sst_ = workbook_->getSharedStrings();
+            format_repo_ = &workbook_->getStyles();
             
             // 根据工作簿模式自动设置生成模式
             auto workbook_mode = workbook_->getOptions().mode;

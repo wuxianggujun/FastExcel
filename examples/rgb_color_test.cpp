@@ -72,11 +72,11 @@ int main() {
         // 写入带自定义颜色的文本
         worksheet->writeString(0, 0, "红色文字 (255,0,0)");
         auto& cell1 = worksheet->getCell(0, 0);
-        cell1.setFormat(workbook->getStyleRepository().getFormat(redStyleId));
+        cell1.setFormat(workbook->getStyles().getFormat(redStyleId));
         
         worksheet->writeString(1, 0, "紫色文字橙色背景 (128,0,128) + (255,165,0)");
         auto& cell2 = worksheet->getCell(1, 0);
-        cell2.setFormat(workbook->getStyleRepository().getFormat(purpleStyleId));
+        cell2.setFormat(workbook->getStyles().getFormat(purpleStyleId));
         
         // 保存文件
         workbook->save();

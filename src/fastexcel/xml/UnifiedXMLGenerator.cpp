@@ -12,8 +12,8 @@ namespace xml {
 std::unique_ptr<UnifiedXMLGenerator> UnifiedXMLGenerator::fromWorkbook(const core::Workbook* workbook) {
     GenerationContext context;
     context.workbook = workbook;
-    context.format_repo = &workbook->getStyleRepository();
-    context.sst = workbook->getSharedStringTable(); // 获取SharedStringTable
+    context.format_repo = &workbook->getStyles();
+    context.sst = workbook->getSharedStrings(); // 获取SharedStringTable
     
     return std::make_unique<UnifiedXMLGenerator>(context);
 }
@@ -24,7 +24,7 @@ std::unique_ptr<UnifiedXMLGenerator> UnifiedXMLGenerator::fromWorksheet(const co
     if (worksheet) {
         context.workbook = worksheet->getParentWorkbook().get();
         if (context.workbook) {
-            context.format_repo = &context.workbook->getStyleRepository();
+            context.format_repo = &context.workbook->getStyles();
         }
     }
     

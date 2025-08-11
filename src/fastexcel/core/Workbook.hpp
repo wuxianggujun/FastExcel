@@ -611,7 +611,7 @@ public:
      * @brief 获取样式仓储（只读访问）
      * @return 样式仓储的常量引用
      */
-    const FormatRepository& getStyleRepository() const;
+    const FormatRepository& getStyles() const;
     
     /**
      * @brief 设置自定义主题XML
@@ -1066,7 +1066,7 @@ public:
      * @brief 获取共享字符串表
      * @return 共享字符串表指针（可能为nullptr）
      */
-    const SharedStringTable* getSharedStringTable() const;
+    const SharedStringTable* getSharedStrings() const;
 
     
     // ========== 工作簿编辑功能 ==========

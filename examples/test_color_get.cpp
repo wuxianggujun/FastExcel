@@ -47,11 +47,11 @@ int main() {
         // 写入带颜色的单元格
         worksheet->writeString(0, 0, "红色字体蓝色背景");
         auto& cell1 = worksheet->getCell(0, 0);
-        cell1.setFormat(workbook->getStyleRepository().getFormat(redStyleId));
+        cell1.setFormat(workbook->getStyles().getFormat(redStyleId));
         
         worksheet->writeString(1, 0, "绿色字体黄色背景"); 
         auto& cell2 = worksheet->getCell(1, 0);
-        cell2.setFormat(workbook->getStyleRepository().getFormat(greenStyleId));
+        cell2.setFormat(workbook->getStyles().getFormat(greenStyleId));
         
         worksheet->writeString(2, 0, "默认样式");
         

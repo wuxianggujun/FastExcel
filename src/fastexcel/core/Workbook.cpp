@@ -539,7 +539,7 @@ bool Workbook::isValidStyleId(int style_id) const {
     return format_repo_->isValidFormatId(style_id);
 }
 
-const FormatRepository& Workbook::getStyleRepository() const {
+const FormatRepository& Workbook::getStyles() const {
     return *format_repo_;
 }
 
@@ -840,7 +840,7 @@ int Workbook::getSharedStringIndex(const std::string& str) const {
     return static_cast<int>(shared_string_table_->getStringId(str));
 }
 
-const SharedStringTable* Workbook::getSharedStringTable() const {
+const SharedStringTable* Workbook::getSharedStrings() const {
     return shared_string_table_.get();
 }
 

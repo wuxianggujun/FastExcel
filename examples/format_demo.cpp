@@ -31,7 +31,7 @@ int main() {
         
         worksheet->writeString(0, 0, "这是一段很长的文本\\n会自动换行显示\\n支持多行内容");
         auto& cell1 = worksheet->getCell(0, 0);
-        cell1.setFormat(workbook->getStyleRepository().getFormat(wrapStyleId));
+        cell1.setFormat(workbook->getStyles().getFormat(wrapStyleId));
         
         std::cout << "   ✅ 设置单元格自动换行: .textWrap(true)" << std::endl;
         
@@ -97,7 +97,7 @@ int main() {
         worksheet->writeString(row, 0, "2位小数");
         worksheet->writeNumber(row, 1, 123.456789);
         worksheet->writeNumber(row, 2, 123.456789);
-        worksheet->getCell(row, 2).setFormat(workbook->getStyleRepository().getFormat(decimalStyleId));
+        worksheet->getCell(row, 2).setFormat(workbook->getStyles().getFormat(decimalStyleId));
         worksheet->writeString(row, 3, "0.00");
         std::cout << "   ✅ 2位小数格式: .numberFormat(\"0.00\")" << std::endl;
         row++;
@@ -106,7 +106,7 @@ int main() {
         worksheet->writeString(row, 0, "百分比");
         worksheet->writeNumber(row, 1, 0.85);
         worksheet->writeNumber(row, 2, 0.85);
-        worksheet->getCell(row, 2).setFormat(workbook->getStyleRepository().getFormat(percentStyleId));
+        worksheet->getCell(row, 2).setFormat(workbook->getStyles().getFormat(percentStyleId));
         worksheet->writeString(row, 3, "0.00%");
         std::cout << "   ✅ 百分比格式: .percentage()" << std::endl;
         row++;
@@ -115,7 +115,7 @@ int main() {
         worksheet->writeString(row, 0, "货币");
         worksheet->writeNumber(row, 1, 1234.56);
         worksheet->writeNumber(row, 2, 1234.56);
-        worksheet->getCell(row, 2).setFormat(workbook->getStyleRepository().getFormat(currencyStyleId));
+        worksheet->getCell(row, 2).setFormat(workbook->getStyles().getFormat(currencyStyleId));
         worksheet->writeString(row, 3, "¤#,##0.00");
         std::cout << "   ✅ 货币格式: .currency()" << std::endl;
         row++;
@@ -124,7 +124,7 @@ int main() {
         worksheet->writeString(row, 0, "科学计数法");
         worksheet->writeNumber(row, 1, 1234567.89);
         worksheet->writeNumber(row, 2, 1234567.89);
-        worksheet->getCell(row, 2).setFormat(workbook->getStyleRepository().getFormat(scientificStyleId));
+        worksheet->getCell(row, 2).setFormat(workbook->getStyles().getFormat(scientificStyleId));
         worksheet->writeString(row, 3, "0.00E+00");
         std::cout << "   ✅ 科学计数法: .scientific()" << std::endl;
         row++;
@@ -133,7 +133,7 @@ int main() {
         worksheet->writeString(row, 0, "千分位");
         worksheet->writeNumber(row, 1, 9876543);
         worksheet->writeNumber(row, 2, 9876543);
-        worksheet->getCell(row, 2).setFormat(workbook->getStyleRepository().getFormat(thousandStyleId));
+        worksheet->getCell(row, 2).setFormat(workbook->getStyles().getFormat(thousandStyleId));
         worksheet->writeString(row, 3, "#,##0");
         std::cout << "   ✅ 千分位格式: .numberFormat(\"#,##0\")" << std::endl;
         row++;
@@ -152,7 +152,7 @@ int main() {
         worksheet->writeString(row, 0, "条件颜色");
         worksheet->writeNumber(row, 1, -456.78);
         worksheet->writeNumber(row, 2, -456.78);
-        worksheet->getCell(row, 2).setFormat(workbook->getStyleRepository().getFormat(customStyleId));
+        worksheet->getCell(row, 2).setFormat(workbook->getStyles().getFormat(customStyleId));
         worksheet->writeString(row, 3, "[GREEN]0.00;[RED]-0.00");
         std::cout << "   ✅ 条件格式: .numberFormat(\"[GREEN]0.00;[RED]-0.00\")" << std::endl;
         

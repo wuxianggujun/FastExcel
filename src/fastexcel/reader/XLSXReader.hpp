@@ -48,7 +48,7 @@ public:
   core::ErrorCode close();
 
   core::ErrorCode loadWorksheet(const std::string& name, std::shared_ptr<core::Worksheet>& worksheet);
-  core::ErrorCode getWorksheetNames(std::vector<std::string>& names);
+  core::ErrorCode getSheetNames(std::vector<std::string>& names);
   
   core::ErrorCode getMetadata(WorkbookMetadata& metadata);
   core::ErrorCode getDefinedNames(std::vector<std::string>& names);

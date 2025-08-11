@@ -188,7 +188,7 @@ core::ErrorCode XLSXReader::loadWorkbook(std::unique_ptr<core::Workbook>& workbo
             READER_DEBUG("开始导入 {} 个FormatDescriptor样式到工作簿格式仓储", styles_.size());
             
             // 获取工作簿的格式仓储
-            auto& format_repo = const_cast<core::FormatRepository&>(workbook->getStyleRepository());
+            auto& format_repo = const_cast<core::FormatRepository&>(workbook->getStyles());
             
             // 清空之前的映射
             style_id_mapping_.clear();
@@ -325,9 +325,9 @@ core::ErrorCode XLSXReader::loadWorksheet(const std::string& name, std::shared_p
 }
 
 // 获取工作表名称列表 - 系统层高性能API
-core::ErrorCode XLSXReader::getWorksheetNames(std::vector<std::string>& names) {
+core::ErrorCode XLSXReader::getSheetNames(std::vector<std::string>& names) {
     if (!is_open_) {
-        FASTEXCEL_HANDLE_WARNING("文件未打开，无法获取工作表名称", "getWorksheetNames");
+        FASTEXCEL_HANDLE_WARNING("文件未打开，无法获取工作表名称", "getSheetNames");
         return core::ErrorCode::InvalidArgument;
     }
     
@@ -335,7 +335,7 @@ core::ErrorCode XLSXReader::getWorksheetNames(std::vector<std::string>& names) {
     if (worksheet_names_.empty()) {
         auto result = parseWorkbookXML();
         if (result != core::ErrorCode::Ok) {
-            FASTEXCEL_HANDLE_WARNING("解析工作簿结构失败", "getWorksheetNames");
+            FASTEXCEL_HANDLE_WARNING("解析工作簿结构失败", "getSheetNames");
             return result;
         }
     }
