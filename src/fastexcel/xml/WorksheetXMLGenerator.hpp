@@ -179,15 +179,6 @@ private:
      * @return XML字符串
      */
     /**
-     * @brief 生成单元格XML（字符串版本，用于向后兼容）
-     * @param row 行号
-     * @param col 列号
-     * @param cell 单元格对象
-     * @return XML字符串
-     */
-    std::string generateCellXML(int row, int col, const core::Cell& cell);
-    
-    /**
      * @brief 生成单元格XML（流式版本，性能更好）
      * @param writer XML写入器
      * @param row 行号
