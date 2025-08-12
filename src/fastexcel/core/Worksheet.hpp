@@ -346,25 +346,20 @@ public:
         getCell(row, col).setValue<T>(value);
     }
     
+    // 🚀 统一的智能格式设置 API - 极简优化！
+    
     /**
-     * @brief 模板化设置单元格格式（委托给Cell）
-     * @tparam Args 格式参数类型包
+     * @brief 设置单元格格式（智能优化版）
      * @param row 行号（0开始）
      * @param col 列号（0开始）
-     * @param args 格式参数包
+     * @param format 格式描述符
      * 
-     * @example
-     * // 设置单元格格式
-     * worksheet.setCellFormat(0, 0, format_descriptor);
-     * 
-     * // 支持完美转发，可以传递任意类型的格式参数
-     * auto format = std::make_shared<FormatDescriptor>(...);
-     * worksheet.setCellFormat(1, 1, std::move(format));
+     * @details 内部自动FormatRepository优化，提供最佳性能。
+     * @example worksheet.setFormat(0, 0, format);
      */
-    template<typename... Args>
-    void setCellFormat(int row, int col, Args&&... args) {
-        getCell(row, col).setFormat(std::forward<Args>(args)...);
-    }
+    void setFormat(int row, int col, const core::FormatDescriptor& format);
+    void setFormat(int row, int col, std::shared_ptr<const core::FormatDescriptor> format);
+    void setFormat(int row, int col, const core::StyleBuilder& builder);
     
     /**
      * @brief 安全获取单元格值（不抛异常）
