@@ -346,7 +346,7 @@ public:
         getCell(row, col).setValue<T>(value);
     }
     
-    // 🚀 统一的智能格式设置 API - 极简优化！
+    // 🚀 智能单元格格式设置 API - 语义明确！
     
     /**
      * @brief 设置单元格格式（智能优化版）
@@ -354,12 +354,13 @@ public:
      * @param col 列号（0开始）
      * @param format 格式描述符
      * 
-     * @details 内部自动FormatRepository优化，提供最佳性能。
-     * @example worksheet.setFormat(0, 0, format);
+     * @details 设置指定单元格的显示格式，内部自动FormatRepository优化。
+     *          格式可能被多个单元格共享以节省内存。
+     * @example worksheet.setCellFormat(0, 0, format);
      */
-    void setFormat(int row, int col, const core::FormatDescriptor& format);
-    void setFormat(int row, int col, std::shared_ptr<const core::FormatDescriptor> format);
-    void setFormat(int row, int col, const core::StyleBuilder& builder);
+    void setCellFormat(int row, int col, const core::FormatDescriptor& format);
+    void setCellFormat(int row, int col, std::shared_ptr<const core::FormatDescriptor> format);
+    void setCellFormat(int row, int col, const core::StyleBuilder& builder);
     
     /**
      * @brief 安全获取单元格值（不抛异常）

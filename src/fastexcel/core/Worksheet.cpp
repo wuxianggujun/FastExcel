@@ -920,9 +920,9 @@ void Worksheet::editCellValue(int row, int col, bool value, bool preserve_format
 
 // editCellFormat方法已移除，请使用FormatDescriptor架构
 
-// ========== 🚀 最新的极简智能格式设置方法（推荐使用！） ==========
+// ========== 🚀 智能单元格格式设置方法（语义明确） ==========
 
-void Worksheet::setFormat(int row, int col, const core::FormatDescriptor& format) {
+void Worksheet::setCellFormat(int row, int col, const core::FormatDescriptor& format) {
     validateCellPosition(row, col);
     
     if (!parent_workbook_) {
@@ -935,29 +935,29 @@ void Worksheet::setFormat(int row, int col, const core::FormatDescriptor& format
     // 获取FormatRepository中优化后的格式引用
     auto optimizedFormat = parent_workbook_->getStyle(styleId);
     
-    // 直接应用到单元格
+    // 直接应用到指定单元格
     getCell(row, col).setFormat(optimizedFormat);
 }
 
-void Worksheet::setFormat(int row, int col, std::shared_ptr<const core::FormatDescriptor> format) {
+void Worksheet::setCellFormat(int row, int col, std::shared_ptr<const core::FormatDescriptor> format) {
     if (!format) {
-        // 清除格式
+        // 清除单元格格式
         getCell(row, col).setFormat(nullptr);
         return;
     }
     
     // 委托给值版本
-    setFormat(row, col, *format);
+    setCellFormat(row, col, *format);
 }
 
-void Worksheet::setFormat(int row, int col, const core::StyleBuilder& builder) {
+void Worksheet::setCellFormat(int row, int col, const core::StyleBuilder& builder) {
     validateCellPosition(row, col);
     
     if (!parent_workbook_) {
         throw std::runtime_error("工作簿未初始化，无法进行智能格式优化");
     }
     
-    // 🎯 一步到位：构建、优化、应用
+    // 🎯 一步到位：构建、优化、应用到指定单元格
     int styleId = parent_workbook_->addStyle(builder);
     auto optimizedFormat = parent_workbook_->getStyle(styleId);
     getCell(row, col).setFormat(optimizedFormat);
