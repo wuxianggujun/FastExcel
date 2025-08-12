@@ -347,6 +347,26 @@ public:
     }
     
     /**
+     * @brief 模板化设置单元格格式（委托给Cell）
+     * @tparam Args 格式参数类型包
+     * @param row 行号（0开始）
+     * @param col 列号（0开始）
+     * @param args 格式参数包
+     * 
+     * @example
+     * // 设置单元格格式
+     * worksheet.setCellFormat(0, 0, format_descriptor);
+     * 
+     * // 支持完美转发，可以传递任意类型的格式参数
+     * auto format = std::make_shared<FormatDescriptor>(...);
+     * worksheet.setCellFormat(1, 1, std::move(format));
+     */
+    template<typename... Args>
+    void setCellFormat(int row, int col, Args&&... args) {
+        getCell(row, col).setFormat(std::forward<Args>(args)...);
+    }
+    
+    /**
      * @brief 安全获取单元格值（不抛异常）
      * @tparam T 返回值类型
      * @param row 行号（0开始）

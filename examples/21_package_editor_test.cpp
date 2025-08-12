@@ -23,7 +23,10 @@ using namespace fastexcel::core;
 int main() {
     try {
         // 初始化日志
-        fastexcel::initialize("logs/package_editor_test.log", true);
+        if (!fastexcel::initialize("logs/package_editor_test.log", true)) {
+            EXAMPLE_ERROR("无法初始化FastExcel库");
+            return -1;
+        }
         
         std::string source_file = "辅材处理-张玥 机房建设项目（2025-JW13-W1007）测试.xlsx";
         std::string output_file = "package_editor_result.xlsx";
@@ -49,16 +52,30 @@ int main() {
         // ========== 测试2：编辑操作 ==========
         EXAMPLE_INFO("2. 执行编辑操作");
         
-        // 修改单元格
-        editor->setCell("Sheet1", PackageEditor::CellRef(0, 0), 
-                       PackageEditor::CellValue::string("PackageEditor测试"));
-        editor->setCell("Sheet1", PackageEditor::CellRef(1, 0), 
-                       PackageEditor::CellValue::number(2024.12));
-        editor->setCell("Sheet1", PackageEditor::CellRef(2, 0), 
-                       PackageEditor::CellValue::formula("=A1&B1"));
+        // 获取工作簿进行编辑
+        auto workbook = editor->getWorkbook();
+        if (!workbook) {
+            EXAMPLE_ERROR("无法获取工作簿");
+            return -1;
+        }
+        
+        // 获取第一个工作表
+        auto worksheet = workbook->getSheet(0);
+        if (!worksheet) {
+            EXAMPLE_ERROR("无法获取工作表");
+            return -1;
+        }
+        
+        // 修改单元格（使用新的模板化API）
+        worksheet->setValue(0, 0, std::string("PackageEditor测试"));
+        worksheet->setValue(1, 0, 2024.12);
+        worksheet->getCell(2, 0).setFormula("A1&B1");
         
         // 添加新工作表
-        editor->addSheet("新增工作表");
+        workbook->addSheet("新增工作表");
+        
+        // 智能检测变更
+        editor->detectChanges();
         
         // 显示脏部件
         auto dirty_parts = editor->getDirtyParts();
@@ -102,9 +119,13 @@ int main() {
             }
             
             // 验证单元格值
-            auto cell_value = verify_editor->getCell("Sheet1", PackageEditor::CellRef(0, 0));
-            if (cell_value.type == PackageEditor::CellValue::String) {
-                EXAMPLE_INFO("   A1单元格值: \"{}\"", cell_value.str_value);
+            auto verify_workbook = verify_editor->getWorkbook();
+            if (verify_workbook) {
+                auto verify_worksheet = verify_workbook->getSheet(0);
+                if (verify_worksheet && verify_worksheet->hasCellAt(0, 0)) {
+                    auto cell_value = verify_worksheet->getValue<std::string>(0, 0);
+                    EXAMPLE_INFO("   A1单元格值: \"{}\"", cell_value);
+                }
             }
         } else {
             EXAMPLE_ERROR("   无法打开输出文件进行验证");
@@ -116,13 +137,18 @@ int main() {
         // 再次修改
         editor = PackageEditor::open(Path(output_file));
         if (editor) {
-            editor->setCell("Sheet1", PackageEditor::CellRef(3, 0), 
-                           PackageEditor::CellValue::string("覆盖保存测试"));
-            
-            if (editor->save()) {
-                EXAMPLE_INFO("   ✓ 成功覆盖保存到原文件");
-            } else {
-                EXAMPLE_ERROR("   覆盖保存失败");
+            auto wb = editor->getWorkbook();
+            if (wb) {
+                auto ws = wb->getSheet(0);
+                if (ws) {
+                    ws->setValue(3, 0, std::string("覆盖保存测试"));
+                    
+                    if (editor->save()) {
+                        EXAMPLE_INFO("   ✓ 成功覆盖保存到原文件");
+                    } else {
+                        EXAMPLE_ERROR("   覆盖保存失败");
+                    }
+                }
             }
         }
         
@@ -140,6 +166,9 @@ int main() {
         EXAMPLE_INFO("✓ 资源自动保留");
         EXAMPLE_INFO("✓ 脏数据精确追踪");
         EXAMPLE_INFO("✓ 避免了ZIP原地修改的坑");
+        
+        // 清理资源
+        fastexcel::cleanup();
         
         return 0;
         

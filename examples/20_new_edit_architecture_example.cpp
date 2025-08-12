@@ -10,17 +10,21 @@
  * - 支持大文件编辑
  */
 
-#include "fastexcel/core/EditableWorkbook.hpp"
+#include "fastexcel/opc/PackageEditor.hpp"
+#include "fastexcel/core/Path.hpp"
 #include "fastexcel/utils/Logger.hpp"
 #include <iostream>
 #include <chrono>
 
-using namespace fastexcel::core;
+using namespace fastexcel;
 
 int main() {
     try {
         // 初始化日志
-        fastexcel::initialize("logs/new_edit_test.log", true);
+        if (!fastexcel::initialize("logs/new_edit_test.log", true)) {
+            EXAMPLE_ERROR("无法初始化FastExcel库");
+            return -1;
+        }
         
         std::string source_file = "辅材处理-张玥 机房建设项目（2025-JW13-W1007）测试.xlsx";
         
@@ -30,11 +34,10 @@ int main() {
         // 测量开始时间
         auto start = std::chrono::high_resolution_clock::now();
         
-        // ========== 核心优势1：直接打开，不需要复制 ==========
-        EXAMPLE_INFO("1. 直接打开文件进行编辑（无需复制）");
-        auto workbook = EditableWorkbook::open(Path(source_file), 
-                                              EditableWorkbook::EditMode::IN_PLACE);
-        if (!workbook) {
+        // ========== 核心优势1：使用PackageEditor直接打开，不需要复制 ==========
+        EXAMPLE_INFO("1. 使用PackageEditor直接打开文件进行编辑（无需复制）");
+        auto editor = opc::PackageEditor::open(core::Path(source_file));
+        if (!editor) {
             EXAMPLE_ERROR("无法打开工作簿");
             return -1;
         }
@@ -45,7 +48,13 @@ int main() {
         
         // ========== 核心优势2：懒加载，只读需要的部分 ==========
         EXAMPLE_INFO("2. 懒加载工作表（只在需要时加载）");
-        auto worksheet = workbook->getWorksheet(0);
+        auto workbook = editor->getWorkbook();
+        if (!workbook) {
+            EXAMPLE_ERROR("无法获取工作簿");
+            return -1;
+        }
+        
+        auto worksheet = workbook->getSheet(0);
         if (!worksheet) {
             EXAMPLE_ERROR("无法获取工作表");
             return -1;
@@ -53,12 +62,15 @@ int main() {
         
         // ========== 核心优势3：精确的脏数据追踪 ==========
         EXAMPLE_INFO("3. 修改单元格（精确追踪修改）");
-        worksheet->setCellValue(0, 0, "新架构测试");
-        worksheet->setCellValue(1, 1, 123.45);
-        worksheet->setCellValue(2, 2, "=A1&B2");
+        worksheet->setValue(0, 0, std::string("新架构测试"));
+        worksheet->setValue(1, 1, 123.45);
+        worksheet->getCell(2, 2).setFormula("A1&B2");
+        
+        // 智能检测变更
+        editor->detectChanges();
         
         // 显示脏数据列表
-        auto dirty_parts = workbook->getDirtyParts();
+        auto dirty_parts = editor->getDirtyParts();
         EXAMPLE_INFO("   修改的部件数量: {}", dirty_parts.size());
         for (const auto& part : dirty_parts) {
             EXAMPLE_INFO("   - {}", part);
@@ -68,7 +80,7 @@ int main() {
         EXAMPLE_INFO("4. 原地保存（自动保留图片等资源）");
         auto save_start = std::chrono::high_resolution_clock::now();
         
-        if (workbook->save()) {
+        if (editor->save()) {
             auto save_time = std::chrono::high_resolution_clock::now();
             auto save_duration = std::chrono::duration_cast<std::chrono::milliseconds>(save_time - save_start);
             EXAMPLE_INFO("   保存成功，耗时: {} ms", save_duration.count());
@@ -86,10 +98,10 @@ int main() {
         std::string new_file = "新架构编辑结果.xlsx";
         
         // 再修改一些内容
-        worksheet->setCellValue(3, 3, "另存为测试");
+        worksheet->setValue(3, 3, std::string("另存为测试"));
         
         auto saveas_start = std::chrono::high_resolution_clock::now();
-        if (workbook->saveAs(Path(new_file))) {
+        if (editor->commit(core::Path(new_file))) {
             auto saveas_time = std::chrono::high_resolution_clock::now();
             auto saveas_duration = std::chrono::duration_cast<std::chrono::milliseconds>(saveas_time - saveas_start);
             EXAMPLE_INFO("   另存为成功: {}", new_file);
@@ -112,6 +124,9 @@ int main() {
         EXAMPLE_INFO("4. 自动保留所有未修改的资源");
         EXAMPLE_INFO("5. 支持原地更新和另存为");
         EXAMPLE_INFO("6. 适合处理包含大量图片的Excel文件");
+        
+        // 清理资源
+        fastexcel::cleanup();
         
         return 0;
         

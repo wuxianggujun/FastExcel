@@ -184,17 +184,29 @@ void testPackageEditorCreate() {
 }
 
 int main() {
-    // 设置日志级别 - 使用正确的 API
-    Logger::getInstance().setLevel(Logger::Level::DEBUG);
-    
-    std::cout << "开始测试 PackageEditor 功能...\n" << std::endl;
-    
-    // 运行所有测试
-    testPackageEditorValidation();
-    testPackageEditorFromWorkbook();
-    testPackageEditorCreate();
-    
-    std::cout << "\n测试完成！" << std::endl;
-    
-    return 0;
+    try {
+        // 初始化FastExcel库
+        if (!fastexcel::initialize("logs/test_package_editor.log", true)) {
+            std::cerr << "无法初始化FastExcel库" << std::endl;
+            return -1;
+        }
+        
+        std::cout << "开始测试 PackageEditor 功能...\n" << std::endl;
+        
+        // 运行所有测试
+        testPackageEditorValidation();
+        testPackageEditorFromWorkbook();
+        testPackageEditorCreate();
+        
+        std::cout << "\n测试完成！" << std::endl;
+        
+        // 清理资源
+        fastexcel::cleanup();
+        
+        return 0;
+        
+    } catch (const std::exception& e) {
+        std::cerr << "测试过程中发生异常: " << e.what() << std::endl;
+        return -1;
+    }
 }

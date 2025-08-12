@@ -6,7 +6,9 @@
  */
 
 #include "fastexcel/FastExcel.hpp"
-#include "fastexcel/reader/XLSXReader.hpp"
+#include "fastexcel/core/Path.hpp"
+#include "fastexcel/opc/PackageEditor.hpp"
+#include "fastexcel/utils/ModuleLoggers.hpp"
 #include <iostream>
 #include <vector>
 #include <chrono>
@@ -17,23 +19,23 @@ void demonstrateBasicReadWrite() {
     std::cout << "\n=== 基本读写功能演示 ===" << std::endl;
     
     try {
-        // 1. 创建新工作簿并写入数据
-        auto workbook = core::Workbook::create("sample_data.xlsx");
+        // 1. 创建新工作簿并写入数据（使用新API）
+        auto workbook = core::Workbook::create(core::Path("sample_data.xlsx"));
         if (!workbook) {
-            LOG_ERROR << "无法创建工作簿" << std::endl;
+            EXAMPLE_ERROR("无法创建工作簿");
             return;
         }
         
         auto worksheet = workbook->addSheet("员工数据");
         
-        // 写入表头
-        worksheet->writeString(0, 0, "姓名");
-        worksheet->writeString(0, 1, "年龄");
-        worksheet->writeString(0, 2, "部门");
-        worksheet->writeString(0, 3, "薪资");
-        worksheet->writeString(0, 4, "入职日期");
+        // 写入表头（使用新的模板化API）
+        worksheet->setValue(0, 0, std::string("姓名"));
+        worksheet->setValue(0, 1, std::string("年龄"));
+        worksheet->setValue(0, 2, std::string("部门"));
+        worksheet->setValue(0, 3, std::string("薪资"));
+        worksheet->setValue(0, 4, std::string("入职日期"));
         
-        // 写入数据
+        // 写入数据（使用新的模板化API）
         std::vector<std::vector<std::string>> employee_data = {
             {"张三", "28", "技术部", "12000", "2023-01-15"},
             {"李四", "32", "销售部", "10000", "2022-06-20"},
@@ -45,23 +47,27 @@ void demonstrateBasicReadWrite() {
         for (size_t i = 0; i < employee_data.size(); ++i) {
             for (size_t j = 0; j < employee_data[i].size(); ++j) {
                 if (j == 1 || j == 3) { // 年龄和薪资作为数字
-                    worksheet->writeNumber(static_cast<int>(i + 1), static_cast<int>(j), 
-                                         std::stod(employee_data[i][j]));
+                    worksheet->setValue(static_cast<int>(i + 1), static_cast<int>(j), 
+                                     std::stod(employee_data[i][j]));
                 } else {
-                    worksheet->writeString(static_cast<int>(i + 1), static_cast<int>(j), 
-                                         employee_data[i][j]);
+                    worksheet->setValue(static_cast<int>(i + 1), static_cast<int>(j), 
+                                     employee_data[i][j]);
                 }
             }
         }
         
         // 添加公式
-        worksheet->writeString(6, 0, "平均薪资");
-        worksheet->writeFormula(6, 3, "AVERAGE(D2:D6)");
+        worksheet->setValue(6, 0, std::string("平均薪资"));
+        worksheet->getCell(6, 3).setFormula("AVERAGE(D2:D6)");
         
-        // 设置文档属性
-        workbook->setTitle("员工信息管理系统");
-        workbook->setAuthor("FastExcel示例");
-        workbook->setSubject("员工数据演示");
+        // 设置文档属性（使用新API）
+        workbook->setDocumentProperties(
+            "员工信息管理系统",
+            "员工数据演示",
+            "FastExcel示例",
+            "FastExcel公司",
+            "演示基本读写功能"
+        );
         
         // 保存文件
         if (workbook->save()) {
@@ -79,31 +85,30 @@ void demonstrateFileReading() {
     std::cout << "\n=== 文件读取功能演示 ===" << std::endl;
     
     try {
-        // 读取刚才创建的文件
-        reader::XLSXReader reader("sample_data.xlsx");
-        
-        if (!reader.open()) {
+        // 读取刚才创建的文件（使用新API）
+        auto workbook = core::Workbook::openForReading(core::Path("sample_data.xlsx"));
+        if (!workbook) {
             std::cerr << "无法打开文件进行读取" << std::endl;
             return;
         }
         
         // 获取工作表名称
-        auto worksheet_names = reader.getWorksheetNames();
+        auto worksheet_names = workbook->getSheetNames();
         std::cout << "✓ 发现 " << worksheet_names.size() << " 个工作表:" << std::endl;
         for (const auto& name : worksheet_names) {
             std::cout << "  - " << name << std::endl;
         }
         
-        // 获取元数据
-        auto metadata = reader.getMetadata();
+        // 获取元数据（使用新API）
+        const auto& doc_props = workbook->getDocumentProperties();
         std::cout << "✓ 文档信息:" << std::endl;
-        std::cout << "  标题: " << metadata.title << std::endl;
-        std::cout << "  作者: " << metadata.author << std::endl;
-        std::cout << "  主题: " << metadata.subject << std::endl;
+        std::cout << "  标题: " << doc_props.title << std::endl;
+        std::cout << "  作者: " << doc_props.author << std::endl;
+        std::cout << "  主题: " << doc_props.subject << std::endl;
         
         // 读取第一个工作表
         if (!worksheet_names.empty()) {
-            auto worksheet = reader.loadWorksheet(worksheet_names[0]);
+            auto worksheet = workbook->getSheet(worksheet_names[0]);
             if (worksheet) {
                 std::cout << "✓ 成功读取工作表: " << worksheet_names[0] << std::endl;
                 std::cout << "  单元格数量: " << worksheet->getCellCount() << std::endl;
@@ -111,7 +116,7 @@ void demonstrateFileReading() {
                 auto [max_row, max_col] = worksheet->getUsedRange();
                 std::cout << "  使用范围: " << max_row + 1 << " 行 x " << max_col + 1 << " 列" << std::endl;
                 
-                // 显示前几行数据
+                // 显示前几行数据（使用新的模板化API）
                 std::cout << "  数据预览:" << std::endl;
                 for (int row = 0; row <= std::min(max_row, 3); ++row) {
                     std::cout << "    ";
@@ -119,9 +124,9 @@ void demonstrateFileReading() {
                         if (worksheet->hasCellAt(row, col)) {
                             const auto& cell = worksheet->getCell(row, col);
                             if (cell.isString()) {
-                                std::cout << cell.getStringValue() << "\t";
+                                std::cout << cell.getValue<std::string>() << "\t";
                             } else if (cell.isNumber()) {
-                                std::cout << cell.getNumberValue() << "\t";
+                                std::cout << cell.getValue<double>() << "\t";
                             } else {
                                 std::cout << "[其他]\t";
                             }
@@ -131,10 +136,27 @@ void demonstrateFileReading() {
                     }
                     std::cout << std::endl;
                 }
+                
+                // 演示新的范围读取功能
+                if (max_row >= 2 && max_col >= 2) {
+                    std::cout << "  范围读取演示 (A1:C3):" << std::endl;
+                    try {
+                        auto range_data = worksheet->getRange<std::string>(0, 0, 2, 2);
+                        for (const auto& row_data : range_data) {
+                            std::cout << "    ";
+                            for (const auto& cell_value : row_data) {
+                                std::cout << cell_value << "\t";
+                            }
+                            std::cout << std::endl;
+                        }
+                    } catch (const std::exception& e) {
+                        std::cout << "    范围读取失败: " << e.what() << std::endl;
+                    }
+                }
             }
         }
         
-        reader.close();
+        workbook->close();
         
     } catch (const std::exception& e) {
         std::cerr << "读取文件时发生错误: " << e.what() << std::endl;
@@ -145,60 +167,64 @@ void demonstrateEditingFeatures() {
     std::cout << "\n=== 编辑功能演示 ===" << std::endl;
     
     try {
-        // 加载现有文件进行编辑
-        auto workbook = core::Workbook::open("sample_data.xlsx");
-        if (!workbook) {
-            std::cerr << "无法加载文件进行编辑" << std::endl;
+        // 使用PackageEditor进行高效编辑
+        auto editor = opc::PackageEditor::open(core::Path("sample_data.xlsx"));
+        if (!editor) {
+            std::cerr << "无法创建PackageEditor" << std::endl;
             return;
         }
         
-        std::cout << "✓ 成功加载文件进行编辑" << std::endl;
+        std::cout << "✓ 成功创建PackageEditor进行编辑" << std::endl;
         
-        auto worksheet = workbook->getWorksheet("员工数据");
+        auto workbook = editor->getWorkbook();
+        if (!workbook) {
+            std::cerr << "无法获取工作簿" << std::endl;
+            return;
+        }
+        
+        auto worksheet = workbook->getSheet("员工数据");
         if (!worksheet) {
             std::cerr << "找不到工作表: 员工数据" << std::endl;
             return;
         }
         
-        // 1. 编辑单元格值
+        // 1. 编辑单元格值（使用新的模板化API）
         std::cout << "✓ 编辑单元格数据..." << std::endl;
-        worksheet->editCellValue(1, 3, 13000.0, true); // 修改张三的薪资，保留格式
-        worksheet->editCellValue(2, 2, "市场部", true);  // 修改李四的部门
+        worksheet->setValue(1, 3, 13000.0); // 修改张三的薪资
+        worksheet->setValue(2, 2, std::string("市场部")); // 修改李四的部门
         
         // 2. 查找并替换
         std::cout << "✓ 执行查找替换..." << std::endl;
         int replacements = worksheet->findAndReplace("技术部", "研发部", false, false);
         std::cout << "  替换了 " << replacements << " 处 '技术部' -> '研发部'" << std::endl;
         
-        // 3. 添加新数据
+        // 3. 添加新数据（使用新的便捷方法）
         std::cout << "✓ 添加新员工数据..." << std::endl;
-        worksheet->writeString(6, 0, "孙八");
-        worksheet->writeNumber(6, 1, 26);
-        worksheet->writeString(6, 2, "研发部");
-        worksheet->writeNumber(6, 3, 11000);
-        worksheet->writeString(6, 4, "2023-08-01");
+        std::vector<std::string> new_employee = {"孙八", "26", "研发部", "11000", "2023-08-01"};
+        int new_row = worksheet->appendRow(new_employee);
+        std::cout << "  新员工添加到第 " << new_row + 1 << " 行" << std::endl;
         
         // 4. 复制单元格
         std::cout << "✓ 复制单元格..." << std::endl;
-        worksheet->copyCell(6, 0, 7, 0, true); // 复制新员工姓名到下一行
-        worksheet->editCellValue(7, 0, "周九", true);
-        worksheet->copyRange(6, 1, 6, 4, 7, 1, true); // 复制其他信息
-        worksheet->editCellValue(7, 1, 24.0, true);   // 修改年龄
-        worksheet->editCellValue(7, 3, 9500.0, true); // 修改薪资
+        worksheet->copyCell(new_row, 0, new_row + 1, 0, true); // 复制新员工姓名到下一行
+        worksheet->setValue(new_row + 1, 0, std::string("周九"));
+        worksheet->copyRange(new_row, 1, new_row, 4, new_row + 1, 1, true); // 复制其他信息
+        worksheet->setValue(new_row + 1, 1, 24.0);   // 修改年龄
+        worksheet->setValue(new_row + 1, 3, 9500.0); // 修改薪资
         
         // 5. 排序数据
         std::cout << "✓ 按薪资排序..." << std::endl;
-        worksheet->sortRange(1, 0, 7, 4, 3, false, false); // 按薪资列降序排序
+        worksheet->sortRange(1, 0, new_row + 1, 4, 3, false, false); // 按薪资列降序排序
         
         // 6. 添加新工作表
         std::cout << "✓ 添加新工作表..." << std::endl;
         auto summary_sheet = workbook->addSheet("薪资统计");
-        summary_sheet->writeString(0, 0, "部门");
-        summary_sheet->writeString(0, 1, "平均薪资");
-        summary_sheet->writeString(1, 0, "研发部");
-        summary_sheet->writeFormula(1, 1, "AVERAGEIF(员工数据.C:C,\"研发部\",员工数据.D:D)");
-        summary_sheet->writeString(2, 0, "市场部");
-        summary_sheet->writeFormula(2, 1, "AVERAGEIF(员工数据.C:C,\"市场部\",员工数据.D:D)");
+        summary_sheet->setValue(0, 0, std::string("部门"));
+        summary_sheet->setValue(0, 1, std::string("平均薪资"));
+        summary_sheet->setValue(1, 0, std::string("研发部"));
+        summary_sheet->getCell(1, 1).setFormula("AVERAGEIF(员工数据.C:C,\"研发部\",员工数据.D:D)");
+        summary_sheet->setValue(2, 0, std::string("市场部"));
+        summary_sheet->getCell(2, 1).setFormula("AVERAGEIF(员工数据.C:C,\"市场部\",员工数据.D:D)");
         
         // 7. 全局查找
         std::cout << "✓ 执行全局查找..." << std::endl;
@@ -219,12 +245,16 @@ void demonstrateEditingFeatures() {
         std::cout << "  格式数量: " << stats.total_formats << std::endl;
         std::cout << "  内存使用: " << stats.memory_usage / 1024 << " KB" << std::endl;
         
-        // 保存编辑后的文件
-        if (workbook->saveAs("edited_sample_data.xlsx")) {
-            std::cout << "✓ 成功保存编辑后的文件: edited_sample_data.xlsx" << std::endl;
+        // 检查变更
+        if (editor->isDirty()) {
+            auto dirty_parts = editor->getDirtyParts();
+            std::cout << "✓ 检测到 " << dirty_parts.size() << " 个需要更新的部件" << std::endl;
         }
         
-        workbook->close();
+        // 保存编辑后的文件
+        if (editor->commit(core::Path("edited_sample_data.xlsx"))) {
+            std::cout << "✓ 成功保存编辑后的文件: edited_sample_data.xlsx" << std::endl;
+        }
         
     } catch (const std::exception& e) {
         std::cerr << "编辑文件时发生错误: " << e.what() << std::endl;
@@ -236,7 +266,7 @@ void demonstrateAdvancedFeatures() {
     
     try {
         // 创建一个复杂的工作簿
-        auto workbook = core::Workbook::create("advanced_example.xlsx");
+        auto workbook = core::Workbook::create(core::Path("advanced_example.xlsx"));
         if (!workbook) {
             std::cerr << "无法创建高级示例工作簿" << std::endl;
             return;
@@ -253,21 +283,21 @@ void demonstrateAdvancedFeatures() {
         
         // 在销售数据表中添加大量数据
         std::cout << "✓ 生成大量测试数据..." << std::endl;
-        sales_sheet->writeString(0, 0, "日期");
-        sales_sheet->writeString(0, 1, "产品");
-        sales_sheet->writeString(0, 2, "销量");
-        sales_sheet->writeString(0, 3, "单价");
-        sales_sheet->writeString(0, 4, "总额");
+        sales_sheet->setValue(0, 0, std::string("日期"));
+        sales_sheet->setValue(0, 1, std::string("产品"));
+        sales_sheet->setValue(0, 2, std::string("销量"));
+        sales_sheet->setValue(0, 3, std::string("单价"));
+        sales_sheet->setValue(0, 4, std::string("总额"));
         
         // 生成1000行测试数据
         auto start_time = std::chrono::high_resolution_clock::now();
         
         for (int i = 1; i <= 1000; ++i) {
-            sales_sheet->writeString(i, 0, "2023-" + std::to_string((i % 12) + 1) + "-" + std::to_string((i % 28) + 1));
-            sales_sheet->writeString(i, 1, "产品" + std::to_string((i % 10) + 1));
-            sales_sheet->writeNumber(i, 2, (i % 100) + 1);
-            sales_sheet->writeNumber(i, 3, 50.0 + (i % 200));
-            sales_sheet->writeFormula(i, 4, "C" + std::to_string(i + 1) + "*D" + std::to_string(i + 1));
+            sales_sheet->setValue(i, 0, std::string("2023-" + std::to_string((i % 12) + 1) + "-" + std::to_string((i % 28) + 1)));
+            sales_sheet->setValue(i, 1, std::string("产品" + std::to_string((i % 10) + 1)));
+            sales_sheet->setValue(i, 2, static_cast<double>((i % 100) + 1));
+            sales_sheet->setValue(i, 3, 50.0 + (i % 200));
+            sales_sheet->getCell(i, 4).setFormula("C" + std::to_string(i + 1) + "*D" + std::to_string(i + 1));
         }
         
         auto end_time = std::chrono::high_resolution_clock::now();
@@ -283,26 +313,26 @@ void demonstrateAdvancedFeatures() {
         std::cout << "✓ 冻结首行" << std::endl;
         
         // 在产品信息表中添加产品详情
-        product_sheet->writeString(0, 0, "产品编号");
-        product_sheet->writeString(0, 1, "产品名称");
-        product_sheet->writeString(0, 2, "类别");
-        product_sheet->writeString(0, 3, "成本");
+        product_sheet->setValue(0, 0, std::string("产品编号"));
+        product_sheet->setValue(0, 1, std::string("产品名称"));
+        product_sheet->setValue(0, 2, std::string("类别"));
+        product_sheet->setValue(0, 3, std::string("成本"));
         
         for (int i = 1; i <= 10; ++i) {
-            product_sheet->writeString(i, 0, "P" + std::to_string(i));
-            product_sheet->writeString(i, 1, "产品" + std::to_string(i));
-            product_sheet->writeString(i, 2, "类别" + std::to_string((i % 3) + 1));
-            product_sheet->writeNumber(i, 3, 20.0 + (i * 5));
+            product_sheet->setValue(i, 0, std::string("P" + std::to_string(i)));
+            product_sheet->setValue(i, 1, std::string("产品" + std::to_string(i)));
+            product_sheet->setValue(i, 2, std::string("类别" + std::to_string((i % 3) + 1)));
+            product_sheet->setValue(i, 3, 20.0 + (i * 5));
         }
         
         // 在分析表中添加汇总信息
-        analysis_sheet->writeString(0, 0, "数据分析报告");
-        analysis_sheet->writeString(2, 0, "总销售额");
-        analysis_sheet->writeFormula(2, 1, "SUM(销售数据.E:E)");
-        analysis_sheet->writeString(3, 0, "平均单价");
-        analysis_sheet->writeFormula(3, 1, "AVERAGE(销售数据.D:D)");
-        analysis_sheet->writeString(4, 0, "总销量");
-        analysis_sheet->writeFormula(4, 1, "SUM(销售数据.C:C)");
+        analysis_sheet->setValue(0, 0, std::string("数据分析报告"));
+        analysis_sheet->setValue(2, 0, std::string("总销售额"));
+        analysis_sheet->getCell(2, 1).setFormula("SUM(销售数据.E:E)");
+        analysis_sheet->setValue(3, 0, std::string("平均单价"));
+        analysis_sheet->getCell(3, 1).setFormula("AVERAGE(销售数据.D:D)");
+        analysis_sheet->setValue(4, 0, std::string("总销量"));
+        analysis_sheet->getCell(4, 1).setFormula("SUM(销售数据.C:C)");
         
         // 合并单元格
         analysis_sheet->mergeCells(0, 0, 0, 3);
@@ -313,11 +343,15 @@ void demonstrateAdvancedFeatures() {
         std::cout << "✓ 保护销售数据工作表" << std::endl;
         
         // 设置文档属性
-        workbook->setTitle("销售数据分析系统");
-        workbook->setAuthor("FastExcel高级示例");
-        workbook->setSubject("大数据处理演示");
-        workbook->setCustomProperty("版本", "1.0");
-        workbook->setCustomProperty("创建日期", "2023-08-04");
+        workbook->setDocumentProperties(
+            "销售数据分析系统",
+            "大数据处理演示",
+            "FastExcel高级示例",
+            "FastExcel公司",
+            "演示高级功能和大数据处理"
+        );
+        workbook->setProperty("版本", "1.0");
+        workbook->setProperty("创建日期", "2023-08-04");
         
         // 保存文件
         start_time = std::chrono::high_resolution_clock::now();
