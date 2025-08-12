@@ -1,6 +1,7 @@
 #include "fastexcel/utils/ModuleLoggers.hpp"
 #include "fastexcel/core/Worksheet.hpp"
 #include "fastexcel/core/WorksheetChain.hpp"  // 🚀 新增：链式调用支持
+#include "fastexcel/core/RangeFormatter.hpp"  // 🚀 新增：范围格式化支持
 #include "fastexcel/core/Workbook.hpp"
 #include "fastexcel/core/DirtyManager.hpp"
 #include "fastexcel/core/SharedStringTable.hpp"
@@ -961,6 +962,16 @@ void Worksheet::setCellFormat(int row, int col, const core::StyleBuilder& builde
     int styleId = parent_workbook_->addStyle(builder);
     auto optimizedFormat = parent_workbook_->getStyle(styleId);
     getCell(row, col).setFormat(optimizedFormat);
+}
+
+// ========== 🚀 范围格式化API方法 ==========
+
+RangeFormatter Worksheet::rangeFormatter(const std::string& range) {
+    return std::move(RangeFormatter(this).setRange(range));
+}
+
+RangeFormatter Worksheet::rangeFormatter(int start_row, int start_col, int end_row, int end_col) {
+    return std::move(RangeFormatter(this).setRange(start_row, start_col, end_row, end_col));
 }
 
 void Worksheet::copyCell(int src_row, int src_col, int dst_row, int dst_col, bool copy_format, bool copy_row_height) {

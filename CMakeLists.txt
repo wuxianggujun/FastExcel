@@ -72,6 +72,10 @@ set(FASTEXCEL_SOURCES
         src/fastexcel/core/BatchFileWriter.cpp
         src/fastexcel/core/StreamingFileWriter.cpp
         src/fastexcel/core/StyleBuilder.cpp
+        # Enhanced Format API (v2.1.0)
+        src/fastexcel/core/RangeFormatter.cpp
+        src/fastexcel/core/QuickFormat.cpp
+        src/fastexcel/core/FormatUtils.cpp
         src/fastexcel/reader/XLSXReader.cpp
         src/fastexcel/reader/StylesParser.cpp
         src/fastexcel/reader/SharedStringsParser.cpp

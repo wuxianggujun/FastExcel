@@ -118,6 +118,14 @@ public:
     // 友元类Builder可以访问私有构造函数
     friend class StyleBuilder;
     
+    // 拷贝和移动构造函数（由于const成员需要显式定义）
+    FormatDescriptor(const FormatDescriptor& other) = default;
+    FormatDescriptor(FormatDescriptor&& other) = default;
+    
+    // 赋值操作符无法实现（因为所有成员都是const的）
+    FormatDescriptor& operator=(const FormatDescriptor& other) = delete;
+    FormatDescriptor& operator=(FormatDescriptor&& other) = delete;
+    
     // 默认格式的静态创建方法
     static const FormatDescriptor& getDefault();
     

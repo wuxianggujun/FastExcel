@@ -32,6 +32,7 @@ class Workbook;
 class SharedStringTable;
 class FormatRepository;
 class SharedFormulaManager;
+class RangeFormatter;
 
 // WorksheetChain类在独立的头文件中定义
 class WorksheetChain;
@@ -346,6 +347,15 @@ public:
         getCell(row, col).setValue<T>(value);
     }
     
+    /**
+     * @brief setCellValue - setValue的语义化别名
+     * 为了API一致性，提供更明确的方法名
+     */
+    template<typename T>
+    void setCellValue(int row, int col, const T& value) {
+        setValue<T>(row, col, value);
+    }
+    
     // 🚀 智能单元格格式设置 API - 语义明确！
     
     /**
@@ -361,6 +371,31 @@ public:
     void setCellFormat(int row, int col, const core::FormatDescriptor& format);
     void setCellFormat(int row, int col, std::shared_ptr<const core::FormatDescriptor> format);
     void setCellFormat(int row, int col, const core::StyleBuilder& builder);
+    
+    // ========== 范围格式化API ==========
+    
+    /**
+     * @brief 创建范围格式化器
+     * @param range Excel地址字符串（如"A1:C10"）
+     * @return RangeFormatter对象，支持链式调用
+     * 
+     * @example 
+     * worksheet.rangeFormatter("A1:C10")
+     *     .backgroundColor(Color::YELLOW)
+     *     .allBorders()
+     *     .apply();
+     */
+    RangeFormatter rangeFormatter(const std::string& range);
+    
+    /**
+     * @brief 创建范围格式化器（坐标版本）
+     * @param start_row 起始行（0-based）
+     * @param start_col 起始列（0-based）
+     * @param end_row 结束行（0-based，包含）
+     * @param end_col 结束列（0-based，包含）
+     * @return RangeFormatter对象，支持链式调用
+     */
+    RangeFormatter rangeFormatter(int start_row, int start_col, int end_row, int end_col);
     
     /**
      * @brief 安全获取单元格值（不抛异常）
@@ -424,6 +459,14 @@ public:
     void setValue(const std::string& address, const T& value) {
         auto [sheet, row, col] = utils::AddressParser::parseAddress(address);
         setValue<T>(row, col, value);
+    }
+    
+    /**
+     * @brief setCellValue - setValue的语义化别名（字符串地址版本）
+     */
+    template<typename T>
+    void setCellValue(const std::string& address, const T& value) {
+        setValue<T>(address, value);
     }
     
     /**
