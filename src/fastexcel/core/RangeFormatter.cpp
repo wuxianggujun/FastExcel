@@ -213,21 +213,30 @@ int RangeFormatter::apply() {
     validateRange();
     
     int processed_cells = 0;
+    int total_cells = (end_row_ - start_row_ + 1) * (end_col_ - start_col_ + 1);
     
     // 1. 应用基础格式
     if (pending_format_) {
         applyFormatToRange();
-        processed_cells += (end_row_ - start_row_ + 1) * (end_col_ - start_col_ + 1);
+        processed_cells = total_cells;
     }
     
     // 2. 应用边框
     if (border_target_ != BorderTarget::None) {
         applyBordersToRange();
+        // 如果还没有计数，边框操作也算作处理的单元格
+        if (processed_cells == 0) {
+            processed_cells = total_cells;
+        }
     }
     
     // 3. 应用表格样式
     if (!table_style_name_.empty()) {
         applyTableStyle();
+        // 如果还没有计数，表格样式操作也算作处理的单元格
+        if (processed_cells == 0) {
+            processed_cells = total_cells;
+        }
     }
     
     return processed_cells;

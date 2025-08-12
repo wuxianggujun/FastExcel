@@ -13,6 +13,18 @@ void Relationships::addRelationship(const std::string& id, const std::string& ty
     relationships_.push_back({id, type, target, target_mode});
 }
 
+std::string Relationships::addAutoRelationship(const std::string& type, const std::string& target) {
+    std::string id = generateId();
+    addRelationship(id, type, target, "Internal");
+    return id;
+}
+
+std::string Relationships::addAutoRelationship(const std::string& type, const std::string& target, const std::string& target_mode) {
+    std::string id = generateId();
+    addRelationship(id, type, target, target_mode);
+    return id;
+}
+
 void Relationships::generate(const std::function<void(const char*, size_t)>& callback) const {
     XMLStreamWriter writer(callback);
     writer.startDocument();

@@ -25,6 +25,10 @@ public:
     void addRelationship(const std::string& id, const std::string& type, const std::string& target);
     void addRelationship(const std::string& id, const std::string& type, const std::string& target, const std::string& target_mode);
     
+    // 添加关系（自动生成ID）
+    std::string addAutoRelationship(const std::string& type, const std::string& target);
+    std::string addAutoRelationship(const std::string& type, const std::string& target, const std::string& target_mode);
+    
     // 生成XML内容到回调函数（流式写入）
     void generate(const std::function<void(const char*, size_t)>& callback) const;
     

@@ -10,6 +10,7 @@
 #include "fastexcel/core/SharedFormula.hpp"
 #include "fastexcel/xml/XMLStreamWriter.hpp"
 #include "fastexcel/xml/WorksheetXMLGenerator.hpp"
+#include "fastexcel/xml/Relationships.hpp"
 #include "fastexcel/xml/SharedStrings.hpp"
 #include "fastexcel/utils/Logger.hpp"
 #include "fastexcel/utils/LogConfig.hpp"
@@ -504,26 +505,19 @@ void Worksheet::generateRelsXML(const std::function<void(const char*, size_t)>& 
     // 使用专用的Relationships类生成XML
     xml::Relationships relationships;
     
-    // 检查是否有超链接
-    bool has_hyperlinks = false;
-    int rel_id = 1;
-    
+    // 添加超链接关系
     for (const auto& [pos, cell] : cells_) {
         if (cell.hasHyperlink()) {
-            has_hyperlinks = true;
-            std::string id = "rId" + std::to_string(rel_id);
-            relationships.addRelationship(
-                id,
+            relationships.addAutoRelationship(
                 "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink",
                 cell.getHyperlink(),
                 "External"
             );
-            rel_id++;
         }
     }
     
     // 如果没有关系，不生成任何内容
-    if (!has_hyperlinks) {
+    if (relationships.size() == 0) {
         return;
     }
     
@@ -535,26 +529,19 @@ void Worksheet::generateRelsXMLToFile(const std::string& filename) const {
     // 使用专用的Relationships类生成XML
     xml::Relationships relationships;
     
-    // 检查是否有超链接
-    bool has_hyperlinks = false;
-    int rel_id = 1;
-    
+    // 添加超链接关系
     for (const auto& [pos, cell] : cells_) {
         if (cell.hasHyperlink()) {
-            has_hyperlinks = true;
-            std::string id = "rId" + std::to_string(rel_id);
-            relationships.addRelationship(
-                id,
+            relationships.addAutoRelationship(
                 "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink",
                 cell.getHyperlink(),
                 "External"
             );
-            rel_id++;
         }
     }
     
     // 如果没有关系，不生成文件
-    if (!has_hyperlinks) {
+    if (relationships.size() == 0) {
         return;
     }
     
