@@ -8,6 +8,7 @@
 #include "fastexcel/utils/CommonUtils.hpp"
 #include "fastexcel/utils/AddressParser.hpp"  // 🚀 新增：Excel地址解析支持
 #include "fastexcel/xml/XMLStreamWriter.hpp"
+#include "fastexcel/xml/Relationships.hpp"
 #include <string>
 #include <vector>
 #include <map>

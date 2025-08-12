@@ -501,79 +501,65 @@ void Worksheet::generateXMLStreaming(const std::function<void(const char*, size_
 }
 
 void Worksheet::generateRelsXML(const std::function<void(const char*, size_t)>& callback) const {
-    // 关键修复：只有在有超链接时才生成关系XML
+    // 使用专用的Relationships类生成XML
+    xml::Relationships relationships;
+    
+    // 检查是否有超链接
     bool has_hyperlinks = false;
+    int rel_id = 1;
+    
     for (const auto& [pos, cell] : cells_) {
         if (cell.hasHyperlink()) {
             has_hyperlinks = true;
-            break;
-        }
-    }
-    
-    // 如果没有超链接，不生成任何内容
-    if (!has_hyperlinks) {
-        return;
-    }
-    
-    // 生成工作表关系XML（如果有超链接等）
-    xml::XMLStreamWriter writer(callback);
-    writer.startDocument();
-    writer.startElement("Relationships");
-    writer.writeAttribute("xmlns", "http://schemas.openxmlformats.org/package/2006/relationships");
-    
-    int rel_id = 1;
-    for (const auto& [pos, cell] : cells_) {
-        if (cell.hasHyperlink()) {
-            writer.startElement("Relationship");
-            writer.writeAttribute("Id", ("rId" + std::to_string(rel_id)).c_str());
-            writer.writeAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink");
-            writer.writeAttribute("Target", cell.getHyperlink().c_str());
-            writer.writeAttribute("TargetMode", "External");
-            writer.endElement(); // Relationship
+            std::string id = "rId" + std::to_string(rel_id);
+            relationships.addRelationship(
+                id,
+                "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink",
+                cell.getHyperlink(),
+                "External"
+            );
             rel_id++;
         }
     }
     
-    writer.endElement(); // Relationships
-    writer.endDocument();
+    // 如果没有关系，不生成任何内容
+    if (!has_hyperlinks) {
+        return;
+    }
+    
+    // 使用Relationships类生成XML到回调
+    relationships.generate(callback);
 }
 
 void Worksheet::generateRelsXMLToFile(const std::string& filename) const {
-    // 关键修复：只有在有超链接时才生成关系XML文件
+    // 使用专用的Relationships类生成XML
+    xml::Relationships relationships;
+    
+    // 检查是否有超链接
     bool has_hyperlinks = false;
+    int rel_id = 1;
+    
     for (const auto& [pos, cell] : cells_) {
         if (cell.hasHyperlink()) {
             has_hyperlinks = true;
-            break;
-        }
-    }
-    
-    // 如果没有超链接，不生成文件
-    if (!has_hyperlinks) {
-        return;
-    }
-    
-    // 生成工作表关系XML（如果有超链接等）
-    xml::XMLStreamWriter writer(filename);
-    writer.startDocument();
-    writer.startElement("Relationships");
-    writer.writeAttribute("xmlns", "http://schemas.openxmlformats.org/package/2006/relationships");
-    
-    int rel_id = 1;
-    for (const auto& [pos, cell] : cells_) {
-        if (cell.hasHyperlink()) {
-            writer.startElement("Relationship");
-            writer.writeAttribute("Id", ("rId" + std::to_string(rel_id)).c_str());
-            writer.writeAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink");
-            writer.writeAttribute("Target", cell.getHyperlink().c_str());
-            writer.writeAttribute("TargetMode", "External");
-            writer.endElement(); // Relationship
+            std::string id = "rId" + std::to_string(rel_id);
+            relationships.addRelationship(
+                id,
+                "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink",
+                cell.getHyperlink(),
+                "External"
+            );
             rel_id++;
         }
     }
     
-    writer.endElement(); // Relationships
-    writer.endDocument();
+    // 如果没有关系，不生成文件
+    if (!has_hyperlinks) {
+        return;
+    }
+    
+    // 使用Relationships类生成XML文件
+    relationships.generateToFile(filename);
 }
 
 // ========== 工具方法 ==========
