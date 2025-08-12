@@ -50,9 +50,9 @@ RangeFormatter& RangeFormatter::setRow(int row, int start_col, int end_col) {
     start_col_ = std::max(0, start_col);
     
     if (end_col == -1) {
-        // 自动确定结束列（使用工作表的最大列）
-        end_col_ = 1023; // Excel最大列数XFD（1024列，0-based是1023）
-        // TODO: 可以优化为获取工作表实际使用的最大列
+        // 自动确定结束列（使用工作表实际使用的最大列）
+        auto [max_row, max_col] = worksheet_->getUsedRange();
+        end_col_ = (max_col >= 0) ? max_col : 1023; // 如果没有数据，使用Excel最大列数
     } else {
         end_col_ = end_col;
     }
@@ -69,9 +69,9 @@ RangeFormatter& RangeFormatter::setColumn(int col, int start_row, int end_row) {
     start_row_ = std::max(0, start_row);
     
     if (end_row == -1) {
-        // 自动确定结束行（使用Excel最大行数）
-        end_row_ = 1048575; // Excel最大行数（1048576行，0-based是1048575）
-        // TODO: 可以优化为获取工作表实际使用的最大行
+        // 自动确定结束行（使用工作表实际使用的最大行）
+        auto [max_row, max_col] = worksheet_->getUsedRange();
+        end_row_ = (max_row >= 0) ? max_row : 1048575; // 如果没有数据，使用Excel最大行数
     } else {
         end_row_ = end_row;
     }
@@ -347,7 +347,10 @@ void RangeFormatter::applyBordersToRange() {
             StyleBuilder builder;
             
             // 获取当前单元格格式作为基础
-            // TODO: 实现获取当前格式的方法
+            auto current_format = getCellFormatDescriptor(row, col);
+            if (current_format) {
+                builder = StyleBuilder(*current_format);
+            }
             
             switch (border_target_) {
                 case BorderTarget::All:
@@ -426,6 +429,16 @@ int RangeFormatter::columnLetterToNumber(const std::string& col_str) {
         }
     }
     return result - 1; // 转换为0-based
+}
+
+// 获取当前单元格格式
+std::shared_ptr<const FormatDescriptor> RangeFormatter::getCellFormatDescriptor(int row, int col) const {
+    if (!worksheet_ || !worksheet_->hasCellAt(row, col)) {
+        return nullptr;
+    }
+    
+    const auto& cell = worksheet_->getCell(row, col);
+    return cell.getFormatDescriptor();
 }
 
 }} // namespace fastexcel::core

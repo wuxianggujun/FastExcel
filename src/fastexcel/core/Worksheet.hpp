@@ -399,6 +399,69 @@ public:
     RangeFormatter rangeFormatter(int start_row, int start_col, int end_row, int end_col);
     
     /**
+     * @brief 安全获取单元格格式
+     * @param row 行号（0开始）
+     * @param col 列号（0开始）
+     * @return 格式描述符的可选值，失败时返回std::nullopt
+     */
+    std::optional<std::shared_ptr<const FormatDescriptor>> tryGetCellFormat(int row, int col) const noexcept {
+        try {
+            if (!hasCellAt(row, col)) {
+                return std::nullopt;
+            }
+            const auto& cell = getCell(row, col);
+            auto format = cell.getFormatDescriptor();
+            return format ? std::make_optional(format) : std::nullopt;
+        } catch (...) {
+            return std::nullopt;
+        }
+    }
+    
+    /**
+     * @brief 安全获取列宽
+     * @param col 列号（0开始）
+     * @return 列宽的可选值，失败时返回std::nullopt
+     */
+    std::optional<double> tryGetColumnWidth(int col) const noexcept {
+        try {
+            if (col < 0) return std::nullopt;
+            return std::make_optional(getColumnWidth(col));
+        } catch (...) {
+            return std::nullopt;
+        }
+    }
+    
+    /**
+     * @brief 安全获取行高
+     * @param row 行号（0开始）
+     * @return 行高的可选值，失败时返回std::nullopt
+     */
+    std::optional<double> tryGetRowHeight(int row) const noexcept {
+        try {
+            if (row < 0) return std::nullopt;
+            return std::make_optional(getRowHeight(row));
+        } catch (...) {
+            return std::nullopt;
+        }
+    }
+    
+    /**
+     * @brief 安全获取使用范围
+     * @return 使用范围的可选值 (最大行, 最大列)，失败或无数据时返回std::nullopt
+     */
+    std::optional<std::pair<int, int>> tryGetUsedRange() const noexcept {
+        try {
+            auto range = getUsedRange();
+            if (range.first == -1 || range.second == -1) {
+                return std::nullopt;
+            }
+            return std::make_optional(range);
+        } catch (...) {
+            return std::nullopt;
+        }
+    }
+    
+    /**
      * @brief 安全获取单元格值（不抛异常）
      * @tparam T 返回值类型
      * @param row 行号（0开始）

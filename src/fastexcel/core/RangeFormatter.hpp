@@ -63,6 +63,9 @@ private:
     void applyBordersToRange();
     void applyTableStyle();
     
+    // 获取当前单元格格式
+    std::shared_ptr<const FormatDescriptor> getCellFormatDescriptor(int row, int col) const;
+    
     // Excel地址转换辅助函数
     static int columnLetterToNumber(const std::string& col_str);
 

@@ -600,6 +600,103 @@ public:
         worksheet->setValue<T>(row, col, value);
     }
     
+    // 🚀 新API：安全版本的跨工作表访问方法（不抛异常）
+    /**
+     * @brief 安全获取工作表指针
+     * @param name 工作表名称
+     * @return 工作表指针的可选值，失败时返回std::nullopt
+     */
+    std::optional<std::shared_ptr<Worksheet>> tryGetSheet(const std::string& name) noexcept {
+        try {
+            auto sheet = findSheet(name);
+            return sheet ? std::make_optional(sheet) : std::nullopt;
+        } catch (...) {
+            return std::nullopt;
+        }
+    }
+    
+    /**
+     * @brief 安全获取工作表指针（索引版本）
+     * @param index 工作表索引
+     * @return 工作表指针的可选值，失败时返回std::nullopt
+     */
+    std::optional<std::shared_ptr<Worksheet>> tryGetSheet(size_t index) noexcept {
+        try {
+            auto sheet = getSheet(index);
+            return sheet ? std::make_optional(sheet) : std::nullopt;
+        } catch (...) {
+            return std::nullopt;
+        }
+    }
+    
+    /**
+     * @brief 安全获取单元格值（通过工作表名称）
+     * @tparam T 返回值类型
+     * @param sheet_name 工作表名称
+     * @param row 行号
+     * @param col 列号
+     * @return 可选值，失败时返回std::nullopt
+     */
+    template<typename T>
+    std::optional<T> tryGetValue(const std::string& sheet_name, int row, int col) const noexcept {
+        try {
+            auto worksheet = findSheet(sheet_name);
+            if (!worksheet) {
+                return std::nullopt;
+            }
+            return worksheet->tryGetValue<T>(row, col);
+        } catch (...) {
+            return std::nullopt;
+        }
+    }
+    
+    /**
+     * @brief 安全获取单元格值（通过工作表索引）
+     * @tparam T 返回值类型
+     * @param sheet_index 工作表索引
+     * @param row 行号
+     * @param col 列号
+     * @return 可选值，失败时返回std::nullopt
+     */
+    template<typename T>
+    std::optional<T> tryGetValue(size_t sheet_index, int row, int col) const noexcept {
+        try {
+            if (sheet_index >= worksheets_.size()) {
+                return std::nullopt;
+            }
+            auto worksheet = worksheets_[sheet_index];
+            if (!worksheet) {
+                return std::nullopt;
+            }
+            return worksheet->tryGetValue<T>(row, col);
+        } catch (...) {
+            return std::nullopt;
+        }
+    }
+    
+    /**
+     * @brief 安全设置单元格值（通过工作表名称）
+     * @tparam T 值类型
+     * @param sheet_name 工作表名称
+     * @param row 行号
+     * @param col 列号
+     * @param value 要设置的值
+     * @return 是否成功设置
+     */
+    template<typename T>
+    bool trySetValue(const std::string& sheet_name, int row, int col, const T& value) noexcept {
+        try {
+            auto worksheet = findSheet(sheet_name);
+            if (!worksheet) {
+                return false;
+            }
+            worksheet->setValue<T>(row, col, value);
+            return true;
+        } catch (...) {
+            return false;
+        }
+    }
+    
     /**
      * @brief 通过完整地址字符串访问单元格（支持跨工作表）
      * @tparam T 返回值类型
