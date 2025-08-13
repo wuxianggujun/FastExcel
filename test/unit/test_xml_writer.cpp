@@ -367,6 +367,8 @@ TEST_F(XMLStreamWriterTest, ErrorHandling) {
         xml += data;
     });
     
+    // 注意：下面这行代码会故意触发一个警告，这是测试错误处理的正常行为
+    // 预期警告："Attempted to write attribute 'attr' outside of element"
     // 在没有开始元素的情况下写入属性应该被忽略或处理
     writer->writeAttribute("attr", "value");
     

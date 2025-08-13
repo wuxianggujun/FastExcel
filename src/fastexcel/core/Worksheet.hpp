@@ -5,10 +5,12 @@
 #include "fastexcel/core/FormatRepository.hpp"
 #include "fastexcel/core/CellRangeManager.hpp"
 #include "fastexcel/core/SharedFormula.hpp"
+#include "fastexcel/core/RangeFormatter.hpp"  // 🚀 新增：范围格式化器支持
 #include "fastexcel/core/Image.hpp"  // 🚀 新增：图片支持
 #include "fastexcel/core/CSVProcessor.hpp"  // 🚀 新增：CSV处理支持
 #include "fastexcel/utils/CommonUtils.hpp"
 #include "fastexcel/utils/AddressParser.hpp"  // 🚀 新增：Excel地址解析支持
+#include "fastexcel/core/CellAddress.hpp"     // 🚀 新增：Excel地址类支持
 #include "fastexcel/xml/XMLStreamWriter.hpp"
 #include "fastexcel/xml/Relationships.hpp"
 #include <string>
@@ -318,6 +320,26 @@ public:
      */
     Cell& getCell(int row, int col);
     const Cell& getCell(int row, int col) const;
+    
+    /**
+     * @brief 获取单元格（支持多种地址格式）
+     * @param address 单元格地址（支持隐式转换）
+     *   - 字符串: "A1", "B2", "Sheet1!C3"
+     *   - 坐标: Address(0, 0), Address{1, 2}
+     * @return 单元格引用
+     * 
+     * @example
+     * auto& cell1 = worksheet.getCell("A1");        // 字符串地址
+     * auto& cell2 = worksheet.getCell({0, 1});      // 坐标地址
+     * auto value = worksheet.getCell("B2").getValue<std::string>();
+     */
+    Cell& getCell(const core::Address& address) {
+        return getCell(address.getRow(), address.getCol());
+    }
+    
+    const Cell& getCell(const core::Address& address) const {
+        return getCell(address.getRow(), address.getCol());
+    }
     
     // 🚀 新API：模板化的单元格值获取和设置
     /**
@@ -806,6 +828,22 @@ public:
     void mergeCells(int first_row, int first_col, int last_row, int last_col);
     
     /**
+     * @brief 合并单元格（支持多种范围格式）
+     * @param range 单元格范围（支持隐式转换）
+     *   - 字符串范围: "A1:C3", "Sheet1!A1:C3"
+     *   - 坐标范围: CellRange(0, 0, 2, 2), CellRange{0, 0, 2, 2}
+     *   - 单个地址: Address("A1") -> 1x1范围
+     * 
+     * @example
+     * worksheet.mergeCells("A1:C3");           // 字符串范围
+     * worksheet.mergeCells({0, 0, 2, 2});      // 坐标范围
+     * worksheet.mergeCells(Address("B2"));     // 单个地址转为1x1范围
+     */
+    void mergeCells(const core::CellRange& range) {
+        mergeCells(range.getStartRow(), range.getStartCol(), range.getEndRow(), range.getEndCol());
+    }
+    
+    /**
      * @brief 合并单元格并写入内容
      * @param first_row 起始行
      * @param first_col 起始列
@@ -826,6 +864,20 @@ public:
     void setAutoFilter(int first_row, int first_col, int last_row, int last_col);
     
     /**
+     * @brief 设置自动筛选（支持多种范围格式）
+     * @param range 筛选范围（支持隐式转换）
+     *   - 字符串范围: "A1:D10", "Sheet1!A1:D10"
+     *   - 坐标范围: CellRange(0, 0, 9, 3), CellRange{0, 0, 9, 3}
+     * 
+     * @example
+     * worksheet.setAutoFilter("A1:D10");       // 字符串范围
+     * worksheet.setAutoFilter({0, 0, 9, 3});   // 坐标范围
+     */
+    void setAutoFilter(const core::CellRange& range) {
+        setAutoFilter(range.getStartRow(), range.getStartCol(), range.getEndRow(), range.getEndCol());
+    }
+    
+    /**
      * @brief 移除自动筛选
      */
     void removeAutoFilter();
@@ -838,6 +890,21 @@ public:
      * @param col 冻结列位置
      */
     void freezePanes(int row, int col);
+    
+    /**
+     * @brief 冻结窗格（支持多种地址格式）
+     * @param address 冻结位置（支持隐式转换）
+     *   - 字符串: "B2", "C3", "Sheet1!D4"
+     *   - 坐标: Address(1, 1), Address{2, 2}
+     * 
+     * @example
+     * worksheet.freezePanes("B2");             // 字符串地址，冻结在B2
+     * worksheet.freezePanes({1, 2});           // 坐标地址，冻结在第2行第3列
+     * worksheet.freezePanes("A3");             // 冻结前2行
+     */
+    void freezePanes(const core::Address& address) {
+        freezePanes(address.getRow(), address.getCol());
+    }
     
     /**
      * @brief 冻结窗格（指定左上角单元格）
@@ -865,6 +932,20 @@ public:
      * @param last_col 结束列
      */
     void setPrintArea(int first_row, int first_col, int last_row, int last_col);
+    
+    /**
+     * @brief 设置打印区域（支持多种范围格式）
+     * @param range 打印范围（支持隐式转换）
+     *   - 字符串范围: "A1:F20", "Sheet1!A1:F20"
+     *   - 坐标范围: CellRange(0, 0, 19, 5), CellRange{0, 0, 19, 5}
+     * 
+     * @example
+     * worksheet.setPrintArea("A1:F20");        // 字符串范围
+     * worksheet.setPrintArea({0, 0, 19, 5});   // 坐标范围
+     */
+    void setPrintArea(const core::CellRange& range) {
+        setPrintArea(range.getStartRow(), range.getStartCol(), range.getEndRow(), range.getEndCol());
+    }
     
     /**
      * @brief 设置重复打印行
@@ -999,6 +1080,20 @@ public:
     void setActiveCell(int row, int col);
     
     /**
+     * @brief 设置活动单元格（支持多种地址格式）
+     * @param address 活动单元格地址（支持隐式转换）
+     *   - 字符串: "B2", "C3", "Sheet1!D4"
+     *   - 坐标: Address(1, 1), Address{2, 2}
+     * 
+     * @example
+     * worksheet.setActiveCell("B2");           // 字符串地址
+     * worksheet.setActiveCell({1, 1});         // 坐标地址
+     */
+    void setActiveCell(const core::Address& address) {
+        setActiveCell(address.getRow(), address.getCol());
+    }
+    
+    /**
      * @brief 设置选中范围
      * @param first_row 起始行
      * @param first_col 起始列
@@ -1006,6 +1101,22 @@ public:
      * @param last_col 结束列
      */
     void setSelection(int first_row, int first_col, int last_row, int last_col);
+    
+    /**
+     * @brief 设置选中范围（支持多种范围格式）
+     * @param range 选中范围（支持隐式转换）
+     *   - 字符串范围: "A1:C5", "Sheet1!A1:C5"
+     *   - 坐标范围: CellRange(0, 0, 4, 2), CellRange{0, 0, 4, 2}
+     *   - 单个地址: Address("B2") -> 1x1范围
+     * 
+     * @example
+     * worksheet.setSelection("A1:C5");         // 字符串范围
+     * worksheet.setSelection({0, 0, 4, 2});    // 坐标范围
+     * worksheet.setSelection(Address("B2"));   // 单个地址
+     */
+    void setSelection(const core::CellRange& range) {
+        setSelection(range.getStartRow(), range.getStartCol(), range.getEndRow(), range.getEndCol());
+    }
     
     // ========== 获取信息 ==========
     
@@ -1102,6 +1213,25 @@ public:
      * @return 是否存在
      */
     bool hasCellAt(int row, int col) const;
+    
+    /**
+     * @brief 检查指定地址是否存在单元格（支持多种地址格式）
+     * @param address 单元格地址（支持隐式转换）
+     *   - 字符串: "A1", "B2", "Sheet1!C3"
+     *   - 坐标: Address(0, 0), Address{1, 2}
+     * @return 是否存在
+     * 
+     * @example
+     * if (worksheet.hasCellAt("A1")) {         // 字符串地址
+     *     auto value = worksheet.getCell("A1").getValue<std::string>();
+     * }
+     * if (worksheet.hasCellAt({0, 1})) {       // 坐标地址
+     *     // 处理B1单元格
+     * }
+     */
+    bool hasCellAt(const core::Address& address) const {
+        return hasCellAt(address.getRow(), address.getCol());
+    }
     
     /**
      * @brief 获取列宽

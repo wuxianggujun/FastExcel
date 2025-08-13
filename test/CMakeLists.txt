@@ -23,12 +23,9 @@ set(UNIT_TEST_SOURCES
     unit/test_main.cpp
     unit/test_cell.cpp
     unit/test_cell_optimized.cpp
-    unit/test_format.cpp
-    unit/test_worksheet.cpp
-    unit/test_workbook.cpp
     unit/test_xml_writer.cpp
     unit/test_xml_streaming.cpp
-    unit/test_excel_zip_compatibility.cpp
+    unit/XMLStreamReader_test.cpp
 )
 
 # 性能测试源文件

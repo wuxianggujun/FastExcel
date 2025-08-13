@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 #include "fastexcel/core/Cell.hpp"
-#include "fastexcel/core/Format.hpp"
+#include "fastexcel/core/FormatDescriptor.hpp"
+#include "fastexcel/core/StyleBuilder.hpp"
 #include <memory>
 #include <chrono>
 #include <iostream>
@@ -25,12 +26,12 @@ TEST_F(CellOptimizedTest, BasicFunctionality) {
     // 测试数字
     cell->setValue(42.5);
     EXPECT_TRUE(cell->isNumber());
-    EXPECT_EQ(cell->getNumberValue(), 42.5);
+    EXPECT_EQ(cell->getValue<double>(), 42.5);
     
     // 测试布尔值
     cell->setValue(true);
     EXPECT_TRUE(cell->isBoolean());
-    EXPECT_TRUE(cell->getBooleanValue());
+    EXPECT_TRUE(cell->getValue<bool>());
     
     // 测试清空
     cell->clear();
@@ -44,7 +45,7 @@ TEST_F(CellOptimizedTest, InlineStringOptimization) {
     cell->setValue(short_str);
     
     EXPECT_TRUE(cell->isString());
-    EXPECT_EQ(cell->getStringValue(), short_str);
+    EXPECT_EQ(cell->getValue<std::string>(), short_str);
     EXPECT_EQ(cell->getInternalType(), CellType::InlineString);
     
     // 验证内存使用（应该很小）
@@ -59,7 +60,7 @@ TEST_F(CellOptimizedTest, LongStringStorage) {
     cell->setValue(long_str);
     
     EXPECT_TRUE(cell->isString());
-    EXPECT_EQ(cell->getStringValue(), long_str);
+    EXPECT_EQ(cell->getValue<std::string>(), long_str);
     EXPECT_EQ(cell->getType(), CellType::String);
     
     // 验证内存使用（应该包含ExtendedData）
@@ -74,24 +75,18 @@ TEST_F(CellOptimizedTest, FormulaFunctionality) {
     EXPECT_TRUE(cell->isFormula());
     EXPECT_EQ(cell->getFormula(), "=A1+B1");
     EXPECT_EQ(cell->getFormulaResult(), 10.5);
-    EXPECT_EQ(cell->getNumberValue(), 10.5);  // 应该返回公式结果
+    EXPECT_EQ(cell->getValue<double>(), 10.5);  // 应该返回公式结果
 }
 
 // 测试格式设置
 TEST_F(CellOptimizedTest, FormatHandling) {
-    auto format = std::make_shared<Format>();
+    auto format = std::make_shared<FormatDescriptor>(StyleBuilder().bold().build());
     
     // 测试shared_ptr版本
     cell->setFormat(format);
     EXPECT_TRUE(cell->hasFormat());
-    EXPECT_EQ(cell->getFormat(), format);
-    EXPECT_EQ(cell->getFormatPtr(), format.get());
-    
-    // 测试原始指针版本
-    Format* raw_format = format.get();
-    cell->setFormat(raw_format);
-    EXPECT_TRUE(cell->hasFormat());
-    EXPECT_EQ(cell->getFormatPtr(), raw_format);
+    EXPECT_EQ(cell->getFormatDescriptor(), format);
+    // 只测试shared_ptr版本，删除了原始指针相关的测试
 }
 
 // 测试超链接功能
@@ -135,13 +130,13 @@ TEST_F(CellOptimizedTest, CopySemantics) {
     // 拷贝构造
     Cell copied_cell(*cell);
     EXPECT_TRUE(copied_cell.isString());
-    EXPECT_EQ(copied_cell.getStringValue(), "Test String");
+    EXPECT_EQ(copied_cell.getValue<std::string>(), "Test String");
     EXPECT_TRUE(copied_cell.hasHyperlink());
     EXPECT_EQ(copied_cell.getHyperlink(), "https://example.com");
     
     // 原对象应该保持不变
     EXPECT_TRUE(cell->isString());
-    EXPECT_EQ(cell->getStringValue(), "Test String");
+    EXPECT_EQ(cell->getValue<std::string>(), "Test String");
 }
 
 // 测试内存使用优化

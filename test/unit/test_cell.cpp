@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 #include "fastexcel/core/Cell.hpp"
-#include "fastexcel/core/Format.hpp"
+#include "fastexcel/core/FormatDescriptor.hpp"
+#include "fastexcel/core/StyleBuilder.hpp"
 #include <memory>
 
 using namespace fastexcel::core;
@@ -39,7 +40,7 @@ TEST_F(CellTest, StringValue) {
     EXPECT_EQ(cell.getType(), CellType::String);
     EXPECT_TRUE(cell.isString());
     EXPECT_FALSE(cell.isEmpty());
-    EXPECT_EQ(cell.getStringValue(), test_value);
+    EXPECT_EQ(cell.getValue<std::string>(), test_value);
 }
 
 // 测试数字值设置和获取
@@ -52,7 +53,7 @@ TEST_F(CellTest, NumberValue) {
     EXPECT_EQ(cell.getType(), CellType::Number);
     EXPECT_TRUE(cell.isNumber());
     EXPECT_FALSE(cell.isEmpty());
-    EXPECT_DOUBLE_EQ(cell.getNumberValue(), test_value);
+    EXPECT_DOUBLE_EQ(cell.getValue<double>(), test_value);
 }
 
 // 测试整数值设置
@@ -64,7 +65,7 @@ TEST_F(CellTest, IntegerValue) {
     
     EXPECT_EQ(cell.getType(), CellType::Number);
     EXPECT_TRUE(cell.isNumber());
-    EXPECT_DOUBLE_EQ(cell.getNumberValue(), static_cast<double>(test_value));
+    EXPECT_DOUBLE_EQ(cell.getValue<double>(), static_cast<double>(test_value));
 }
 
 // 测试布尔值设置和获取
@@ -75,13 +76,13 @@ TEST_F(CellTest, BooleanValue) {
     cell.setValue(true);
     EXPECT_EQ(cell.getType(), CellType::Boolean);
     EXPECT_TRUE(cell.isBoolean());
-    EXPECT_TRUE(cell.getBooleanValue());
+    EXPECT_TRUE(cell.getValue<bool>());
     
     // 测试 false
     cell.setValue(false);
     EXPECT_EQ(cell.getType(), CellType::Boolean);
     EXPECT_TRUE(cell.isBoolean());
-    EXPECT_FALSE(cell.getBooleanValue());
+    EXPECT_FALSE(cell.getValue<bool>());
 }
 
 // 测试公式设置和获取
@@ -115,20 +116,20 @@ TEST_F(CellTest, Hyperlink) {
 // 测试格式设置和获取
 TEST_F(CellTest, Format) {
     Cell cell;
-    auto format = std::make_shared<Format>();
+    auto format = std::make_shared<FormatDescriptor>(StyleBuilder().bold().build());
     
     // 初始状态没有格式
-    EXPECT_EQ(cell.getFormat(), nullptr);
+    EXPECT_EQ(cell.getFormatDescriptor(), nullptr);
     
     // 设置格式
     cell.setFormat(format);
-    EXPECT_EQ(cell.getFormat(), format);
+    EXPECT_EQ(cell.getFormatDescriptor(), format);
 }
 
 // 测试清空单元格
 TEST_F(CellTest, Clear) {
     Cell cell;
-    auto format = std::make_shared<Format>();
+    auto format = std::make_shared<FormatDescriptor>(StyleBuilder().bold().build());
     
     // 设置各种数据
     cell.setValue("test");
@@ -138,7 +139,7 @@ TEST_F(CellTest, Clear) {
     // 验证数据已设置
     EXPECT_FALSE(cell.isEmpty());
     EXPECT_TRUE(cell.hasHyperlink());
-    EXPECT_NE(cell.getFormat(), nullptr);
+    EXPECT_NE(cell.getFormatDescriptor(), nullptr);
     
     // 清空单元格
     cell.clear();
@@ -147,13 +148,13 @@ TEST_F(CellTest, Clear) {
     EXPECT_TRUE(cell.isEmpty());
     EXPECT_EQ(cell.getType(), CellType::Empty);
     EXPECT_FALSE(cell.hasHyperlink());
-    EXPECT_EQ(cell.getFormat(), nullptr);
+    EXPECT_EQ(cell.getFormatDescriptor(), nullptr);
 }
 
 // 测试拷贝构造函数
 TEST_F(CellTest, CopyConstructor) {
     Cell original;
-    auto format = std::make_shared<Format>();
+    auto format = std::make_shared<FormatDescriptor>(StyleBuilder().bold().build());
     
     // 设置原始单元格
     original.setValue("test value");
@@ -165,8 +166,8 @@ TEST_F(CellTest, CopyConstructor) {
     
     // 验证拷贝结果
     EXPECT_EQ(copy.getType(), original.getType());
-    EXPECT_EQ(copy.getStringValue(), original.getStringValue());
-    EXPECT_EQ(copy.getFormat(), original.getFormat());
+    EXPECT_EQ(copy.getValue<std::string>(), original.getValue<std::string>());
+    EXPECT_EQ(copy.getFormatDescriptor(), original.getFormatDescriptor());
     EXPECT_EQ(copy.getHyperlink(), original.getHyperlink());
 }
 
@@ -174,7 +175,7 @@ TEST_F(CellTest, CopyConstructor) {
 TEST_F(CellTest, AssignmentOperator) {
     Cell original;
     Cell assigned;
-    auto format = std::make_shared<Format>();
+    auto format = std::make_shared<FormatDescriptor>(StyleBuilder().bold().build());
     
     // 设置原始单元格
     original.setValue(42.0);
@@ -186,15 +187,15 @@ TEST_F(CellTest, AssignmentOperator) {
     
     // 验证赋值结果
     EXPECT_EQ(assigned.getType(), original.getType());
-    EXPECT_DOUBLE_EQ(assigned.getNumberValue(), original.getNumberValue());
-    EXPECT_EQ(assigned.getFormat(), original.getFormat());
+    EXPECT_DOUBLE_EQ(assigned.getValue<double>(), original.getValue<double>());
+    EXPECT_EQ(assigned.getFormatDescriptor(), original.getFormatDescriptor());
     EXPECT_EQ(assigned.getHyperlink(), original.getHyperlink());
 }
 
 // 测试自赋值
 TEST_F(CellTest, SelfAssignment) {
     Cell cell;
-    auto format = std::make_shared<Format>();
+    auto format = std::make_shared<FormatDescriptor>(StyleBuilder().bold().build());
     
     cell.setValue("test");
     cell.setFormat(format);
@@ -203,14 +204,14 @@ TEST_F(CellTest, SelfAssignment) {
     cell = cell;
     
     // 验证数据未损坏
-    EXPECT_EQ(cell.getStringValue(), "test");
-    EXPECT_EQ(cell.getFormat(), format);
+    EXPECT_EQ(cell.getValue<std::string>(), "test");
+    EXPECT_EQ(cell.getFormatDescriptor(), format);
 }
 
 // 测试移动语义
 TEST_F(CellTest, MoveSemantics) {
     Cell original;
-    auto format = std::make_shared<Format>();
+    auto format = std::make_shared<FormatDescriptor>(StyleBuilder().bold().build());
     
     original.setValue("test value");
     original.setFormat(format);
@@ -220,8 +221,8 @@ TEST_F(CellTest, MoveSemantics) {
     Cell moved(std::move(original));
     
     // 验证移动结果
-    EXPECT_EQ(moved.getStringValue(), "test value");
-    EXPECT_EQ(moved.getFormat(), format);
+    EXPECT_EQ(moved.getValue<std::string>(), "test value");
+    EXPECT_EQ(moved.getFormatDescriptor(), format);
     EXPECT_EQ(moved.getHyperlink(), "https://example.com");
     
     // 注意：移动后原对象的状态是未定义的，不应该测试原对象
@@ -232,16 +233,16 @@ TEST_F(CellTest, TypeConversionEdgeCases) {
     Cell cell;
     
     // 空单元格的各种获取方法应该返回默认值
-    EXPECT_EQ(cell.getStringValue(), "");
-    EXPECT_DOUBLE_EQ(cell.getNumberValue(), 0.0);
-    EXPECT_FALSE(cell.getBooleanValue());
+    EXPECT_EQ(cell.getValue<std::string>(), "");
+    EXPECT_DOUBLE_EQ(cell.getValue<double>(), 0.0);
+    EXPECT_FALSE(cell.getValue<bool>());
     EXPECT_EQ(cell.getFormula(), "");
     
     // 设置字符串后，其他类型应该返回默认值
     cell.setValue("hello");
-    EXPECT_EQ(cell.getStringValue(), "hello");
-    EXPECT_DOUBLE_EQ(cell.getNumberValue(), 0.0);
-    EXPECT_FALSE(cell.getBooleanValue());
+    EXPECT_EQ(cell.getValue<std::string>(), "hello");
+    EXPECT_DOUBLE_EQ(cell.getValue<double>(), 0.0);
+    EXPECT_FALSE(cell.getValue<bool>());
 }
 
 // 测试空字符串和空值
@@ -252,13 +253,13 @@ TEST_F(CellTest, EmptyStringAndValues) {
     cell.setValue("");
     EXPECT_EQ(cell.getType(), CellType::String);
     EXPECT_TRUE(cell.isString());
-    EXPECT_EQ(cell.getStringValue(), "");
+    EXPECT_EQ(cell.getValue<std::string>(), "");
     
     // 设置零值
     cell.setValue(0.0);
     EXPECT_EQ(cell.getType(), CellType::Number);
     EXPECT_TRUE(cell.isNumber());
-    EXPECT_DOUBLE_EQ(cell.getNumberValue(), 0.0);
+    EXPECT_DOUBLE_EQ(cell.getValue<double>(), 0.0);
 }
 
 // 测试特殊数值
@@ -267,13 +268,13 @@ TEST_F(CellTest, SpecialNumbers) {
     
     // 测试负数
     cell.setValue(-123.456);
-    EXPECT_DOUBLE_EQ(cell.getNumberValue(), -123.456);
+    EXPECT_DOUBLE_EQ(cell.getValue<double>(), -123.456);
     
     // 测试很大的数
     cell.setValue(1e10);
-    EXPECT_DOUBLE_EQ(cell.getNumberValue(), 1e10);
+    EXPECT_DOUBLE_EQ(cell.getValue<double>(), 1e10);
     
     // 测试很小的数
     cell.setValue(1e-10);
-    EXPECT_DOUBLE_EQ(cell.getNumberValue(), 1e-10);
+    EXPECT_DOUBLE_EQ(cell.getValue<double>(), 1e-10);
 }
