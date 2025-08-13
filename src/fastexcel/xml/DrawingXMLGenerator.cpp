@@ -25,8 +25,9 @@ DrawingXMLGenerator::DrawingXMLGenerator(const std::vector<std::unique_ptr<core:
     : images_(images), drawing_id_(drawing_id) {
 }
 
-void DrawingXMLGenerator::generateDrawingXML(const std::function<void(const char*, size_t)>& callback) const {
-    if (!hasImages()) {
+void DrawingXMLGenerator::generateDrawingXML(const std::function<void(const char*, size_t)>& callback, 
+                                             bool forceGenerate) const {
+    if (!forceGenerate && !hasImages()) {
         FASTEXCEL_LOG_DEBUG("No images to generate drawing XML");
         return;
     }
@@ -40,16 +41,22 @@ void DrawingXMLGenerator::generateDrawingXML(const std::function<void(const char
     writer.startElement("xdr:wsDr");
     writer.writeAttribute("xmlns:xdr", "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing");
     writer.writeAttribute("xmlns:a", "http://schemas.openxmlformats.org/drawingml/2006/main");
+    writer.writeAttribute("xmlns:r", "http://schemas.openxmlformats.org/officeDocument/2006/relationships");
     
     // 生成每个图片的XML
     int image_index = 0;
-    for (const auto& image : *images_) {
-        if (image && image->isValid()) {
-            generateImageXML(writer, *image, image_index++);
+    if (images_) {
+        for (const auto& image : *images_) {
+            if (image && image->isValid()) {
+                generateImageXML(writer, *image, image_index++);
+            }
         }
     }
     
     writer.endElement(); // xdr:wsDr
+    
+    // 🔧 关键修复：保证XML数据被完整写入
+    writer.flushBuffer();
     
     FASTEXCEL_LOG_DEBUG("Generated drawing XML with {} images", image_index);
 }

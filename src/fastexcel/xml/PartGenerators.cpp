@@ -56,6 +56,8 @@ public:
             w.startElement("Default"); w.writeAttribute("Extension", "png"); w.writeAttribute("ContentType", "image/png"); w.endElement();
             w.startElement("Default"); w.writeAttribute("Extension", "jpg"); w.writeAttribute("ContentType", "image/jpeg"); w.endElement();
             w.startElement("Default"); w.writeAttribute("Extension", "jpeg"); w.writeAttribute("ContentType", "image/jpeg"); w.endElement();
+            w.startElement("Default"); w.writeAttribute("Extension", "gif"); w.writeAttribute("ContentType", "image/gif"); w.endElement();
+            w.startElement("Default"); w.writeAttribute("Extension", "bmp"); w.writeAttribute("ContentType", "image/bmp"); w.endElement();
             // 🔧 关键修复：添加 docProps 的内容类型声明
             w.startElement("Override"); w.writeAttribute("PartName", "/docProps/core.xml"); w.writeAttribute("ContentType", "application/vnd.openxmlformats-package.core-properties+xml"); w.endElement();
             w.startElement("Override"); w.writeAttribute("PartName", "/docProps/app.xml"); w.writeAttribute("ContentType", "application/vnd.openxmlformats-officedocument.extended-properties+xml"); w.endElement();
@@ -367,136 +369,17 @@ public:
         
         auto ws = ctx.workbook->getSheet(static_cast<size_t>(idx));
         if (!ws || ws->getImages().empty()) {
-            XML_ERROR("No worksheet or no images for drawing index {}", idx);
+            XML_DEBUG("No worksheet or no images for drawing index {}", idx);
             return false;
         }
         
-        // 🔧 关键修复：直接生成XML，不检查hasImages（因为已经检查过了）
+        // 🔧 关键修复：使用DrawingXMLGenerator而非硬编码XML
         const auto& images = ws->getImages();
-        XML_DEBUG("Generating drawing XML for {} images", images.size());
+        DrawingXMLGenerator gen(&images, idx + 1);
+        XML_DEBUG("Generating drawing XML for {} images using DrawingXMLGenerator", images.size());
         
-        // 直接写入XML内容，避免DrawingXMLGenerator的hasImages检查
-        return writeWithCallback(writer, part, [&images, idx](auto& cb){
-            XMLStreamWriter w(cb);
-            w.startDocument();
-            
-            // 根元素
-            w.startElement("xdr:wsDr");
-            w.writeAttribute("xmlns:xdr", "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing");
-            w.writeAttribute("xmlns:a", "http://schemas.openxmlformats.org/drawingml/2006/main");
-            w.writeAttribute("xmlns:r", "http://schemas.openxmlformats.org/officeDocument/2006/relationships");
-            
-            // 生成每个图片的XML
-            int image_index = 0;
-            for (const auto& image : images) {
-                if (image) {
-                    const auto& anchor = image->getAnchor();
-                    
-                    // 使用twoCellAnchor以固定图片位置
-                    w.startElement("xdr:twoCellAnchor");
-                    w.writeAttribute("editAs", "oneCell"); // 固定图片，不允许移动和调整大小
-                    
-                    // 起始位置
-                    w.startElement("xdr:from");
-                    w.startElement("xdr:col");
-                    w.writeText(std::to_string(anchor.from_col));
-                    w.endElement();
-                    w.startElement("xdr:colOff");
-                    w.writeText("0");
-                    w.endElement();
-                    w.startElement("xdr:row");
-                    w.writeText(std::to_string(anchor.from_row));
-                    w.endElement();
-                    w.startElement("xdr:rowOff");
-                    w.writeText("0");
-                    w.endElement();
-                    w.endElement(); // xdr:from
-                    
-                    // 结束位置（根据图片大小计算）
-                    // 默认每列宽度64像素，每行高度20像素
-                    int to_col = anchor.from_col + static_cast<int>(std::max(100.0, anchor.width) / 64.0) + 1;
-                    int to_row = anchor.from_row + static_cast<int>(std::max(100.0, anchor.height) / 20.0) + 1;
-                    
-                    w.startElement("xdr:to");
-                    w.startElement("xdr:col");
-                    w.writeText(std::to_string(to_col));
-                    w.endElement();
-                    w.startElement("xdr:colOff");
-                    w.writeText("0");
-                    w.endElement();
-                    w.startElement("xdr:row");
-                    w.writeText(std::to_string(to_row));
-                    w.endElement();
-                    w.startElement("xdr:rowOff");
-                    w.writeText("0");
-                    w.endElement();
-                    w.endElement(); // xdr:to
-                    
-                    // 图片
-                    w.startElement("xdr:pic");
-                    
-                    // 非可视属性
-                    w.startElement("xdr:nvPicPr");
-                    w.startElement("xdr:cNvPr");
-                    w.writeAttribute("id", std::to_string(image_index + 2));
-                    w.writeAttribute("name", image->getName().empty() ? ("Picture " + std::to_string(image_index + 1)) : image->getName());
-                    w.endElement(); // xdr:cNvPr
-                    w.startElement("xdr:cNvPicPr");
-                    w.startElement("a:picLocks");
-                    w.writeAttribute("noChangeAspect", "1");
-                    w.endElement();
-                    w.endElement(); // xdr:cNvPicPr
-                    w.endElement(); // xdr:nvPicPr
-                    
-                    // 图片填充
-                    w.startElement("xdr:blipFill");
-                    w.startElement("a:blip");
-                    w.writeAttribute("r:embed", "rId" + std::to_string(image_index + 1));
-                    w.endElement(); // a:blip
-                    w.startElement("a:stretch");
-                    w.startElement("a:fillRect");
-                    w.endElement();
-                    w.endElement(); // a:stretch
-                    w.endElement(); // xdr:blipFill
-                    
-                    // 形状属性
-                    w.startElement("xdr:spPr");
-                    w.startElement("a:xfrm");
-                    w.startElement("a:off");
-                    w.writeAttribute("x", "0");
-                    w.writeAttribute("y", "0");
-                    w.endElement();
-                    w.startElement("a:ext");
-                    // 确保最小尺寸为100x100像素，转换为EMU（1像素 = 9525 EMU）
-                    int64_t width_emu = static_cast<int64_t>(std::max(100.0, anchor.width) * 9525);
-                    int64_t height_emu = static_cast<int64_t>(std::max(100.0, anchor.height) * 9525);
-                    w.writeAttribute("cx", std::to_string(width_emu));
-                    w.writeAttribute("cy", std::to_string(height_emu));
-                    w.endElement();
-                    w.endElement(); // a:xfrm
-                    w.startElement("a:prstGeom");
-                    w.writeAttribute("prst", "rect");
-                    w.startElement("a:avLst");
-                    w.endElement();
-                    w.endElement(); // a:prstGeom
-                    w.endElement(); // xdr:spPr
-                    
-                    w.endElement(); // xdr:pic
-                    
-                    // 客户端数据
-                    w.startElement("xdr:clientData");
-                    w.endElement();
-                    
-                    w.endElement(); // xdr:twoCellAnchor
-                    
-                    image_index++;
-                }
-            }
-            
-            w.endElement(); // xdr:wsDr
-            w.flushBuffer();
-            
-            XML_DEBUG("Generated drawing XML with {} images", image_index);
+        return writeWithCallback(writer, part, [&gen](auto& cb){
+            gen.generateDrawingXML(cb, true); // 强制生成，因为已经检查过图片存在
         });
     }
 };
@@ -556,8 +439,18 @@ public:
                 w.startElement("Relationship");
                 w.writeAttribute("Id", ("rId" + std::to_string(i + 1)).c_str());
                 w.writeAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image");
-                w.writeAttribute("Target", ("../media/image" + std::to_string(i + 1) + ".png").c_str());
+                
+                // 🔧 关键修复：使用动态扩展名而非硬编码.png
+                std::string ext = images[i]->getFileExtension();
+                if (ext.empty()) {
+                    XML_ERROR("Image {} has unknown format, using png as fallback", i + 1);
+                    ext = "png";
+                }
+                std::string target = "../media/image" + std::to_string(i + 1) + "." + ext;
+                w.writeAttribute("Target", target.c_str());
                 w.endElement();
+                
+                XML_DEBUG("Added drawing relationship: rId{} -> {}", i + 1, target);
             }
             
             w.endElement();
@@ -581,12 +474,14 @@ public:
             if (ws) {
                 const auto& images = ws->getImages();
                 for (const auto& image : images) {
-                    std::string ext = ".png"; // 默认扩展名
-                    if (image->getFormat() == core::ImageFormat::JPEG) {
-                        ext = ".jpg";
-                    }
-                    parts.emplace_back("xl/media/image" + std::to_string(image_counter++) + ext);
+                // 🔧 关键修复：使用动态扩展名
+                std::string ext = image->getFileExtension();
+                if (ext.empty()) {
+                        XML_ERROR("Image has unknown format, skipping: {}", image->getId());
+                    continue;
                 }
+                parts.emplace_back("xl/media/image" + std::to_string(image_counter++) + "." + ext);
+            }
             }
         }
         return parts;

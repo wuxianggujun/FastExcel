@@ -48,8 +48,10 @@ public:
     /**
      * @brief 生成绘图XML内容
      * @param callback 数据写入回调函数
+     * @param forceGenerate 强制生成XML（即使hasImages()返回false）
      */
-    void generateDrawingXML(const std::function<void(const char*, size_t)>& callback) const;
+    void generateDrawingXML(const std::function<void(const char*, size_t)>& callback, 
+                           bool forceGenerate = false) const;
     
     /**
      * @brief 生成绘图XML文件
