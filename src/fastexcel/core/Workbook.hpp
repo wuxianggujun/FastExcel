@@ -187,6 +187,13 @@ public:
     static std::unique_ptr<Workbook> create(const Path& path);
     
     /**
+     * @brief 创建工作簿（字符串重载版本）
+     * @param filepath 文件路径字符串
+     * @return 工作簿智能指针，失败返回nullptr
+     */
+    static std::unique_ptr<Workbook> create(const std::string& filepath);
+    
+    /**
      * @brief 只读方式打开Excel文件（新API - 推荐）
      * @param path 文件路径
      * @return 工作簿智能指针，失败返回nullptr
@@ -205,6 +212,13 @@ public:
     static std::unique_ptr<Workbook> openForReading(const Path& path);
     
     /**
+     * @brief 只读方式打开Excel文件（字符串重载版本）
+     * @param filepath 文件路径字符串
+     * @return 工作簿智能指针，失败返回nullptr
+     */
+    static std::unique_ptr<Workbook> openForReading(const std::string& filepath);
+    
+    /**
      * @brief 编辑方式打开Excel文件（新API - 推荐）
      * @param path 文件路径
      * @return 工作簿智能指针，失败返回nullptr
@@ -220,6 +234,13 @@ public:
      * - 需要保存更改的场景
      */
     static std::unique_ptr<Workbook> openForEditing(const Path& path);
+    
+    /**
+     * @brief 编辑方式打开Excel文件（字符串重载版本）
+     * @param filepath 文件路径字符串
+     * @return 工作簿智能指针，失败返回nullptr
+     */
+    static std::unique_ptr<Workbook> openForEditing(const std::string& filepath);
     
 
     
@@ -1325,6 +1346,13 @@ public:
      * @return 工作簿智能指针，失败返回nullptr
      */
     static std::unique_ptr<Workbook> open(const Path& path);
+    
+    /**
+     * @brief 打开现有文件进行编辑（字符串重载版本）
+     * @param filepath 文件路径字符串
+     * @return 工作簿智能指针，失败返回nullptr
+     */
+    static std::unique_ptr<Workbook> open(const std::string& filepath);
     
     /**
      * @brief 刷新工作簿（重新读取文件内容）

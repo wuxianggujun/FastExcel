@@ -63,6 +63,10 @@ std::unique_ptr<Workbook> Workbook::create(const Path& path) {
     return workbook;
 }
 
+std::unique_ptr<Workbook> Workbook::create(const std::string& filepath) {
+    return create(Path(filepath));
+}
+
 Workbook::Workbook(const Path& path) : filename_(path.string()) {
     // 检查是否为内存模式（任何以::memory::开头的路径）
     if (path.string().find("::memory::") == 0) {
@@ -1182,6 +1186,10 @@ std::unique_ptr<Workbook> Workbook::open(const Path& path) {
     }
 }
 
+std::unique_ptr<Workbook> Workbook::open(const std::string& filepath) {
+    return open(Path(filepath));
+}
+
 // ========== 新的语义化API实现 ==========
 
 std::unique_ptr<Workbook> Workbook::openForReading(const Path& path) {
@@ -1233,6 +1241,10 @@ std::unique_ptr<Workbook> Workbook::openForReading(const Path& path) {
     }
 }
 
+std::unique_ptr<Workbook> Workbook::openForReading(const std::string& filepath) {
+    return openForReading(Path(filepath));
+}
+
 std::unique_ptr<Workbook> Workbook::openForEditing(const Path& path) {
     // 编辑模式就是原有的open方法实现
     try {
@@ -1279,6 +1291,10 @@ std::unique_ptr<Workbook> Workbook::openForEditing(const Path& path) {
         CORE_ERROR("Exception while loading workbook for editing: {}, error: {}", path.string(), e.what());
         return nullptr;
     }
+}
+
+std::unique_ptr<Workbook> Workbook::openForEditing(const std::string& filepath) {
+    return openForEditing(Path(filepath));
 }
 
 bool Workbook::refresh() {

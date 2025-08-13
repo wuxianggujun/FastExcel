@@ -1,18 +1,13 @@
 # FastExcel
 
-一个功能完整的现代 C++17 Excel 文件处理库，采用双架构设计，支持新旧API共存，专为高性能、大规模数据处理和完整Excel格式支持而设计。
+一个功能完整的现代 C++17 Excel 文件处理库，采用高性能架构设计，支持完整Excel格式和CSV处理，专为高性能、大规模数据处理而设计。
 
 [![C++](https://img.shields.io/badge/C%2B%2B-17-blue.svg)](https://en.wikipedia.org/wiki/C%2B%2B17)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)](https://github.com/example/FastExcel)
-[![Architecture](https://img.shields.io/badge/architecture-modern%20dual-orange.svg)](#architecture)
+[![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)](https://github.com/wuxianggujun/FastExcel)
+[![Architecture](https://img.shields.io/badge/architecture-modern-orange.svg)](#architecture)
 
 ## 🚀 核心特性
-
-### 🎯 双架构设计 - 完美平衡新旧需求
-- **新架构 2.0**：现代C++设计，不可变值对象，线程安全，性能优化
-- **旧架构兼容**：向后兼容API，平滑迁移路径
-- **智能模式选择**：AUTO/BATCH/STREAMING三种模式，根据数据规模自动优化
 
 ### 📊 完整的Excel格式支持
 
@@ -37,20 +32,24 @@
 - **工作表保护**：密码保护，选择性保护选项
 - **视图设置**：缩放、网格线、行列标题、从右到左显示
 
+### 🖼️ 图片和媒体支持
+- **图片插入**：支持 PNG、JPEG、GIF、BMP 等主流图片格式
+- **多种锚点类型**：绝对定位、单元格锚定、双单元格锚定
+- **图片属性控制**：位置、大小、旋转、透明度调整
+- **高性能处理**：自动优化图片尺寸和压缩
+
+### 📄 CSV数据处理
+- **智能解析**：自动检测分隔符、编码、数据类型
+- **多种分隔符支持**：逗号、分号、制表符、自定义分隔符
+- **数据类型推断**：自动识别数字、布尔值、日期、字符串
+- **编码处理**：完美支持UTF-8、GBK等中文编码，解决乱码问题
+- **大文件支持**：流式处理，支持超大CSV文件读取
+- **灵活配置**：丰富的解析选项和错误处理策略
+
 ### 🏗️ 现代架构设计
 
-#### 新样式架构 (2.0)
+#### 高性能样式系统
 ```cpp
-// 不可变格式描述符 - 线程安全的值对象
-class FormatDescriptor {
-    // 所有字段都是const，创建后无法修改
-    const std::string font_name_;
-    const double font_size_;
-    const bool bold_;
-    // ... 预计算的哈希值用于快速比较
-    const size_t hash_value_;
-};
-
 // 流畅样式构建器
 auto style = workbook->createStyleBuilder()
     .font().name("Arial").size(12).bold(true).color(Color::BLUE)
@@ -63,32 +62,30 @@ auto style = workbook->createStyleBuilder()
 #### 智能存储策略
 - **样式去重**：`FormatRepository` 自动检测和合并相同样式
 - **共享字符串**：`SharedStringTable` 优化重复字符串存储
-- **内存池管理**：`MemoryPool` 减少内存分配开销
-- **LRU缓存**：`CacheSystem` 智能缓存热点数据
+- **内存池管理**：减少内存分配开销
+- **智能缓存**：LRU缓存热点数据
 
 ### 📈 高性能优化
 
-#### 内存优化 🆕
+#### 内存优化 ✨
 - **智能指针架构**：全面使用 `std::unique_ptr` 替代 raw pointers，消除内存泄漏
 - **RAII内存管理**：ExtendedData 结构采用 RAII 原则，自动资源管理
 - **紧凑Cell结构**：24字节/Cell（vs 传统64字节+）
 - **内联字符串**：16字节以下字符串直接内联存储
 - **位域压缩**：使用位域减少标志位空间占用
-- **常量内存模式**：处理超大文件时保持恒定内存使用
 
-#### 处理速度优化 🆕  
+#### 处理速度优化 ✨  
 - **高性能XML流写**：完全基于 `XMLStreamWriter`，消除字符串拼接开销
 - **统一XML转义**：`XMLUtils::escapeXML()` 提供优化的文本转义处理
 - **批量操作**：`writeRange` 支持批量数据写入
-- **并行处理**：`ThreadPool` 支持多线程加速  
-- **流式XML生成**：`UnifiedXMLGenerator` 统一批量和流式XML生成
-- **智能压缩**：多种压缩引擎支持（zlib-ng, libdeflate）
+- **并行处理**：多线程支持加速处理
+- **流式处理**：常量内存，大文件支持
 
 ### 🔄 OPC包编辑技术
-- **增量编辑**：`PackageEditor` 支持修改现有Excel文件而不重新生成
-- **保真写回**：`ZipRepackWriter` 保留未修改部分的原始格式
+- **增量编辑**：支持修改现有Excel文件而不重新生成
+- **保真写回**：保留未修改部分的原始格式
 - **变更跟踪**：`DirtyManager` 精确跟踪修改部分
-- **部件图管理**：`PartGraph` 管理OPC包的复杂依赖关系
+- **部件管理**：智能管理OPC包的复杂依赖关系
 
 ## 📦 快速开始
 
@@ -101,7 +98,7 @@ auto style = workbook->createStyleBuilder()
 
 ```bash
 # 克隆仓库
-git clone https://github.com/your-repo/FastExcel.git
+git clone https://github.com/wuxianggujun/FastExcel.git
 cd FastExcel
 
 # 配置构建
@@ -118,60 +115,40 @@ cd cmake-build-debug/bin/examples
 ./sheet_copy_with_format_example
 ```
 
-### 构建选项
-
-```bash
-# 启用高性能压缩
-cmake -B build -S . -DFASTEXCEL_USE_LIBDEFLATE=ON
-
-# 构建共享库
-cmake -B build -S . -DFASTEXCEL_BUILD_SHARED_LIBS=ON
-
-# 完整开发环境（包含示例和测试）
-cmake -B build -S . \
-  -DFASTEXCEL_BUILD_EXAMPLES=ON \
-  -DFASTEXCEL_BUILD_TESTS=ON \
-  -DFASTEXCEL_BUILD_UNIT_TESTS=ON
-```
-
 ## 💡 使用指南
 
-### 创建Excel文件（新架构推荐）
+### 创建Excel文件
 
 ```cpp
-#include "fastexcel/FastExcel.hpp"
+#include "src/fastexcel/core/Workbook.hpp"
+#include "src/fastexcel/core/Worksheet.hpp"
+#include "src/fastexcel/core/Path.hpp"
 
-using namespace fastexcel;
 using namespace fastexcel::core;
 
 int main() {
-    // 初始化库
-    fastexcel::initialize();
-
     // 创建工作簿
-    auto workbook = Workbook::create(Path("demo.xlsx"));
+    auto workbook = Workbook::create("demo.xlsx");
     
     // 添加工作表
-    auto worksheet = workbook->addWorksheet("销售数据");
+    auto worksheet = workbook->addSheet("销售数据");
     
     // 写入表头
-    worksheet->writeString(0, 0, "产品名称");
-    worksheet->writeString(0, 1, "数量");
-    worksheet->writeString(0, 2, "单价");
-    worksheet->writeString(0, 3, "总价");
+    worksheet->setValue(0, 0, std::string("产品名称"));
+    worksheet->setValue(0, 1, std::string("数量"));
+    worksheet->setValue(0, 2, std::string("单价"));
+    worksheet->setValue(0, 3, std::string("总价"));
     
     // 写入数据
-    worksheet->writeString(1, 0, "笔记本电脑");
-    worksheet->writeNumber(1, 1, 10);
-    worksheet->writeNumber(1, 2, 5999.99);
+    worksheet->setValue(1, 0, std::string("笔记本电脑"));
+    worksheet->setValue(1, 1, 10);
+    worksheet->setValue(1, 2, 5999.99);
     
     // 写入公式
-    worksheet->writeFormula(1, 3, "B2*C2");
+    worksheet->setFormula(1, 3, "B2*C2");
     
     // 保存文件
     workbook->save();
-    
-    fastexcel::cleanup();
     return 0;
 }
 ```
@@ -179,13 +156,14 @@ int main() {
 ### 高级样式设置
 
 ```cpp
-#include "fastexcel/FastExcel.hpp"
+#include "src/fastexcel/core/Workbook.hpp"
+#include "src/fastexcel/core/StyleBuilder.hpp"
 
 using namespace fastexcel::core;
 
 int main() {
-    auto workbook = Workbook::create(Path("styled_report.xlsx"));
-    auto worksheet = workbook->addWorksheet("财务报表");
+    auto workbook = Workbook::create("styled_report.xlsx");
+    auto worksheet = workbook->addSheet("财务报表");
     
     // 创建标题样式
     auto titleStyle = workbook->createStyleBuilder()
@@ -195,63 +173,86 @@ int main() {
         .alignment().horizontal(HorizontalAlign::Center).vertical(VerticalAlign::Center)
         .build();
     
-    // 创建数据样式
-    auto dataStyle = workbook->createStyleBuilder()
-        .font().name("Calibri").size(11)
-        .border().all(BorderStyle::Thin, Color::GRAY)
-        .numberFormat("#,##0.00")
-        .build();
-    
     // 应用样式
     int titleStyleId = workbook->addStyle(titleStyle);
-    int dataStyleId = workbook->addStyle(dataStyle);
     
-    // 写入标题并设置样式
-    worksheet->writeString(0, 0, "2024年度财务报表");
-    worksheet->mergeCells(0, 0, 0, 3);
-    
-    // 写入数据
-    worksheet->writeNumber(2, 0, 1000000.50);
-    worksheet->writeNumber(2, 1, 850000.75);
+    // 写入数据并设置样式
+    worksheet->setValue(0, 0, std::string("2024年度财务报表"));
+    worksheet->setCellStyle(0, 0, titleStyleId);
     
     workbook->save();
     return 0;
 }
 ```
 
-### 共享公式优化
+### 图片插入功能
 
 ```cpp
-#include "fastexcel/FastExcel.hpp"
+#include "src/fastexcel/core/Workbook.hpp"
+#include "src/fastexcel/core/Image.hpp"
 
 using namespace fastexcel::core;
 
 int main() {
-    auto workbook = Workbook::create(Path("formulas.xlsx"));
-    auto worksheet = workbook->addWorksheet("计算表");
+    auto workbook = Workbook::create("image_report.xlsx");
+    auto worksheet = workbook->addSheet("图片演示");
     
-    // 准备基础数据
-    for (int i = 0; i < 1000; ++i) {
-        worksheet->writeNumber(i, 0, i + 1);      // A列：序号
-        worksheet->writeNumber(i, 1, (i + 1) * 2); // B列：数值
-    }
+    // 插入图片 - 绝对定位
+    auto image1 = std::make_unique<Image>("logo.png");
+    image1->setPosition(100, 100);  // 设置位置
+    image1->setSize(200, 150);      // 设置大小
+    worksheet->insertImage(std::move(image1), AnchorType::Absolute);
     
-    // 创建共享公式（A1*B1, A2*B2, A3*B3...）
-    int sharedFormulaId = worksheet->createSharedFormula(
-        0, 2,    // 起始位置：C1
-        999, 2,  // 结束位置：C1000
-        "A1*B1"  // 基础公式
-    );
+    // 插入图片 - 单元格锚定
+    auto image2 = std::make_unique<Image>("chart.jpg");
+    worksheet->insertImage(std::move(image2), AnchorType::OneCell, 2, 1); // 锚定到C2单元格
     
-    // 自动优化现有公式为共享公式
-    int optimizedCount = worksheet->optimizeFormulas();
-    
-    // 获取优化报告
-    auto report = worksheet->analyzeFormulaOptimization();
-    std::cout << "优化了 " << optimizedCount << " 个公式" << std::endl;
-    std::cout << "节省内存: " << report.estimated_memory_savings << " 字节" << std::endl;
+    // 插入图片 - 双单元格锚定（图片会随单元格调整）
+    auto image3 = std::make_unique<Image>("graph.png");
+    worksheet->insertImage(std::move(image3), AnchorType::TwoCell, 5, 1, 8, 4); // 从F2到E9
     
     workbook->save();
+    return 0;
+}
+```
+
+### CSV数据处理
+
+```cpp
+#include "src/fastexcel/core/Workbook.hpp"
+#include "src/fastexcel/core/CSVProcessor.hpp"
+
+using namespace fastexcel::core;
+
+int main() {
+    // 从CSV文件创建Excel工作簿
+    auto workbook = Workbook::create("data_analysis.xlsx");
+    
+    // 配置CSV解析选项
+    CSVOptions options = CSVOptions::standard();
+    options.has_header = true;           // 包含标题行
+    options.auto_detect_delimiter = true; // 自动检测分隔符
+    options.auto_detect_types = true;     // 自动推断数据类型
+    options.encoding = "UTF-8";           // UTF-8编码支持中文
+    
+    // 从CSV文件加载数据
+    auto worksheet = workbook->loadCSV("sales_data.csv", "销售数据", options);
+    
+    if (worksheet) {
+        std::cout << "CSV数据加载成功！" << std::endl;
+        
+        // 获取数据范围
+        auto [min_row, max_row, min_col, max_col] = worksheet->getUsedRangeFull();
+        std::cout << "数据范围: " << max_row + 1 << " 行, " << max_col + 1 << " 列" << std::endl;
+        
+        // 导出为不同格式的CSV
+        CSVOptions exportOptions = CSVOptions::europeanStyle(); // 欧洲格式（分号分隔）
+        worksheet->saveAsCSV("sales_data_eu.csv", exportOptions);
+        
+        // 保存Excel文件
+        workbook->save();
+    }
+    
     return 0;
 }
 ```
@@ -259,214 +260,81 @@ int main() {
 ### 读取Excel文件
 
 ```cpp
-#include "fastexcel/reader/XLSXReader.hpp"
-#include "fastexcel/FastExcel.hpp"
+#include "src/fastexcel/core/Workbook.hpp"
 
 using namespace fastexcel::core;
-using namespace fastexcel::reader;
 
 int main() {
-    XLSXReader reader("input.xlsx");
+    // 打开现有Excel文件
+    auto workbook = Workbook::open("input.xlsx");
     
-    if (reader.open() == ErrorCode::Ok) {
-        // 获取工作表名称
-        std::vector<std::string> sheetNames;
-        reader.getWorksheetNames(sheetNames);
+    if (workbook) {
+        // 获取第一个工作表
+        auto worksheet = workbook->getSheet(0);
         
-        // 读取第一个工作表
-        if (!sheetNames.empty()) {
-            std::shared_ptr<Worksheet> worksheet;
-            if (reader.loadWorksheet(sheetNames[0], worksheet) == ErrorCode::Ok) {
-                auto [maxRow, maxCol] = worksheet->getUsedRange();
-                
-                // 遍历所有数据
-                for (int row = 0; row <= maxRow; ++row) {
-                    for (int col = 0; col <= maxCol; ++col) {
-                        if (worksheet->hasCellAt(row, col)) {
-                            const auto& cell = worksheet->getCell(row, col);
-                            
-                            // 根据单元格类型处理数据
-                            switch (cell.getType()) {
-                                case CellType::Number:
-                                    std::cout << "数字: " << cell.getNumber() << std::endl;
-                                    break;
-                                case CellType::String:
-                                    std::cout << "文本: " << cell.getString() << std::endl;
-                                    break;
-                                case CellType::Formula:
-                                    std::cout << "公式: " << cell.getFormula() << std::endl;
-                                    break;
-                                // ... 处理其他类型
-                            }
-                        }
+        if (worksheet) {
+            auto [max_row, max_col] = worksheet->getUsedRange();
+            
+            // 遍历所有数据
+            for (int row = 0; row <= max_row; ++row) {
+                for (int col = 0; col <= max_col; ++col) {
+                    if (worksheet->hasCellAt(row, col)) {
+                        // 获取单元格显示值（自动处理各种数据类型）
+                        std::string displayValue = worksheet->getCellDisplayValue(row, col);
+                        std::cout << "(" << row << "," << col << "): " << displayValue << std::endl;
                     }
                 }
             }
         }
         
-        // 获取文档元数据
-        WorkbookMetadata metadata;
-        if (reader.getMetadata(metadata) == ErrorCode::Ok) {
-            std::cout << "标题: " << metadata.title << std::endl;
-            std::cout << "作者: " << metadata.author << std::endl;
-        }
-    }
-    
-    reader.close();
-    return 0;
-}
-```
-
-### OPC包高性能编辑
-
-```cpp
-#include "fastexcel/opc/PackageEditor.hpp"
-
-using namespace fastexcel::opc;
-
-int main() {
-    // 打开现有Excel文件进行增量编辑
-    auto editor = PackageEditor::open(Path("existing_report.xlsx"));
-    if (!editor) {
-        std::cerr << "无法打开文件" << std::endl;
-        return 1;
-    }
-    
-    // 获取工作簿进行修改
-    auto* workbook = editor->getWorkbook();
-    auto worksheet = workbook->getWorksheet("数据表");
-    
-    if (worksheet) {
-        // 仅修改特定单元格
-        worksheet->writeNumber(5, 3, 99999.99);
-        worksheet->writeString(6, 3, "已更新");
-        
-        // 更新公式
-        worksheet->writeFormula(7, 3, "SUM(D1:D6)");
-    }
-    
-    // 增量保存（只更新修改的部分）
-    if (editor->save()) {
-        std::cout << "文件更新完成，保持了原始格式和未修改部分" << std::endl;
+        // 将指定工作表导出为CSV
+        workbook->exportSheetAsCSV(0, "exported_data.csv");
     }
     
     return 0;
 }
 ```
 
-### 工作簿模式和性能优化
+### 高性能批处理
 
 ```cpp
-#include "fastexcel/FastExcel.hpp"
+#include "src/fastexcel/core/Workbook.hpp"
 
 using namespace fastexcel::core;
 
 int main() {
     // 配置高性能选项
-    auto workbook = Workbook::create(Path("big_data.xlsx"));
+    auto workbook = Workbook::create("big_data.xlsx");
     
     // 启用高性能模式
     workbook->setHighPerformanceMode(true);
-    
-    // 设置自动模式阈值
-    workbook->setAutoModeThresholds(
-        1000000,              // 100万单元格阈值
-        100 * 1024 * 1024     // 100MB内存阈值
-    );
     
     // 设置优化参数
     workbook->setRowBufferSize(10000);          // 大行缓冲
     workbook->setCompressionLevel(6);           // 平衡压缩
     workbook->setXMLBufferSize(8 * 1024 * 1024); // 8MB XML缓冲
     
-    auto worksheet = workbook->addWorksheet("大数据表");
+    auto worksheet = workbook->addSheet("大数据表");
     
     // 批量写入大量数据
-    std::vector<std::vector<double>> bigData(10000, std::vector<double>(50));
-    for (int i = 0; i < 10000; ++i) {
-        for (int j = 0; j < 50; ++j) {
-            bigData[i][j] = i * j + 0.5;
+    for (int i = 0; i < 100000; ++i) {
+        worksheet->setValue(i, 0, i + 1);          // 序号
+        worksheet->setValue(i, 1, "数据" + std::to_string(i)); // 文本
+        worksheet->setValue(i, 2, i * 1.5);        // 计算值
+        
+        if (i % 10000 == 0) {
+            std::cout << "已处理 " << i << " 行数据" << std::endl;
         }
     }
     
-    // 使用批量写入API
-    worksheet->writeRange(0, 0, bigData);
-    
     // 获取性能统计
-    auto stats = worksheet->getPerformanceStats();
-    std::cout << "内存使用: " << stats.memory_usage << " 字节" << std::endl;
-    std::cout << "共享字符串压缩比: " << stats.sst_compression_ratio << std::endl;
+    auto stats = workbook->getStatistics();
+    std::cout << "内存使用: " << stats.memory_usage / (1024*1024) << " MB" << std::endl;
+    std::cout << "单元格总数: " << stats.total_cells << std::endl;
     
     workbook->save();
     return 0;
 }
-```
-
-## 🏗️ 架构特色
-
-### 双架构并存设计
-
-```cpp
-// 新架构（推荐）- 现代C++，线程安全
-namespace fastexcel::core {
-    class FormatDescriptor;    // 不可变格式描述符
-    class FormatRepository;    // 样式仓储
-    class StyleBuilder;        // 流畅构建器
-}
-
-// 旧架构（兼容）- 传统API
-namespace fastexcel {
-    class Format;              // 传统格式类
-    class Cell;                // 传统单元格类
-    class Worksheet;           // 传统工作表类
-}
-```
-
-### 智能Cell结构
-
-```cpp
-class Cell {
-private:
-    // 位域标志（1字节）
-    struct {
-        CellType type : 4;           // 单元格类型
-        bool has_format : 1;         // 是否有格式
-        bool has_hyperlink : 1;      // 是否有超链接
-        bool has_formula_result : 1; // 公式缓存结果
-        uint8_t reserved : 1;        // 保留位
-    } flags_;
-    
-    // 联合体优化内存
-    union CellValue {
-        double number;               // 数字值 (8字节)
-        int32_t string_id;          // 共享字符串ID
-        bool boolean;               // 布尔值
-        uint32_t error_code;        // 错误代码
-        char inline_string[16];     // 内联短字符串优化
-    } value_;
-    
-    uint32_t format_id_ = 0;        // 格式ID
-    // 总大小：约24字节 vs 传统64字节+
-};
-```
-
-### 策略模式文件写入
-
-```cpp
-// 根据数据规模智能选择写入策略
-class ExcelStructureGenerator {
-    std::unique_ptr<IFileWriter> writer_;
-    
-public:
-    ExcelStructureGenerator(Workbook* workbook) {
-        // 根据数据量自动选择策略
-        if (workbook->getTotalCellCount() > AUTO_THRESHOLD) {
-            writer_ = std::make_unique<StreamingFileWriter>();  // 流式写入
-        } else {
-            writer_ = std::make_unique<BatchFileWriter>();      // 批量写入
-        }
-    }
-};
 ```
 
 ## 📊 性能指标
@@ -511,6 +379,20 @@ public:
 - ✅ **数字格式**：内置格式、自定义格式代码
 - ✅ **保护**：锁定、隐藏属性
 
+### 🖼️ 图片和媒体
+- ✅ **图片格式**：PNG、JPEG、GIF、BMP、TIFF
+- ✅ **锚点类型**：绝对定位、单元格锚定、双单元格锚定
+- ✅ **图片操作**：位置调整、大小缩放、旋转变换
+- ✅ **性能优化**：自动压缩、格式转换、内存管理
+
+### 📄 CSV数据处理
+- ✅ **智能解析**：自动检测分隔符（逗号、分号、制表符）
+- ✅ **编码支持**：UTF-8、GBK、ASCII，自动检测和转换
+- ✅ **类型推断**：数字、布尔值、日期、字符串自动识别
+- ✅ **大文件支持**：流式处理，支持GB级CSV文件
+- ✅ **错误处理**：完善的错误报告和恢复机制
+- ✅ **双向转换**：Excel ↔ CSV 无缝转换
+
 ### 📊 工作表功能
 - ✅ **基本操作**：添加、删除、重命名、移动、复制
 - ✅ **合并单元格**：合并、拆分、范围管理
@@ -541,30 +423,28 @@ public:
 项目提供了完整的示例程序集：
 
 ### 基础功能
-- `01_basic_usage.cpp` - 基本读写操作
-- `02_cell_types_example.cpp` - 各种数据类型
-- `03_batch_operations.cpp` - 批量操作
+- `examples/basic_usage.cpp` - 基本读写操作
+- `examples/cell_types_example.cpp` - 各种数据类型
+- `examples/batch_operations.cpp` - 批量操作
 
 ### 样式和格式
-- `04_formatting_example.cpp` - 完整样式演示
-- `05_style_builder_example.cpp` - 新架构样式构建器
-- `06_theme_colors_example.cpp` - 主题颜色系统
+- `examples/formatting_example.cpp` - 完整样式演示
+- `examples/style_builder_example.cpp` - 样式构建器
+- `examples/theme_colors_example.cpp` - 主题颜色系统
+
+### 图片处理
+- `examples/image_insertion_demo.cpp` - 图片插入完整演示
+- `examples/quick_image_example.cpp` - 快速图片插入示例
+- `examples/test_image_fix.cpp` - 图片处理测试
+
+### CSV数据处理
+- `examples/test_csv_functionality.cpp` - CSV功能完整测试
+- `test_csv_edge_cases.cpp` - CSV边界情况测试
 
 ### 高级功能
-- `07_formulas_and_shared.cpp` - 公式和共享公式
-- `08_sheet_copy_with_format_example.cpp` - 带格式复制
-- `09_high_performance_edit_example.cpp` - 高性能编辑
-- `10_merge_and_filter.cpp` - 合并单元格和筛选
-
-### 架构演示
-- `20_new_edit_architecture_example.cpp` - 新架构完整演示
-- `21_package_editor_test.cpp` - OPC包编辑器
-- `22_performance_comparison.cpp` - 性能对比测试
-
-### 性能测试
-- `test/performance/benchmark_shared_formula.cpp` - 共享公式性能
-- `test/performance/benchmark_xml_generation.cpp` - XML生成性能
-- `test/performance/benchmark_style_system.cpp` - 样式系统性能
+- `examples/formulas_and_shared.cpp` - 公式和共享公式
+- `examples/sheet_copy_with_format_example.cpp` - 带格式复制
+- `examples/high_performance_edit_example.cpp` - 高性能编辑
 
 ## 🔍 调试和诊断
 
@@ -597,26 +477,22 @@ std::cout << "内存使用: " << stats.memory_usage << " 字节" << std::endl;
 // 样式去重统计
 auto deduplicationStats = workbook->getStyleStats();
 std::cout << "样式去重比率: " << deduplicationStats.deduplication_ratio << std::endl;
-
-// 共享公式优化报告
-auto formulaReport = worksheet->analyzeFormulaOptimization();
-std::cout << "可优化公式: " << formulaReport.optimizable_formulas << std::endl;
-std::cout << "预估内存节省: " << formulaReport.estimated_memory_savings << " 字节" << std::endl;
 ```
 
 ## 📚 完整文档
 
 ### 核心文档
 - 📖 [快速入门指南](docs/quick-start.md) - 5分钟上手教程
-- 🏗️ [架构设计文档](docs/architecture-design.md) - 深入理解双架构设计
+- 🏗️ [架构设计文档](docs/architecture-design.md) - 深入理解架构设计
 - ⚡ [性能优化指南](docs/performance-guide.md) - 性能调优最佳实践
 - 🔧 [API参考手册](docs/api-reference.md) - 完整API文档
 
 ### 专题文档
-- 💡 [新旧架构迁移指南](docs/migration-guide.md) - 平滑迁移策略
 - 🎨 [样式系统详解](docs/style-system.md) - 样式系统完整说明
 - 📊 [公式优化技术](docs/formula-optimization.md) - 共享公式优化
 - 🔄 [OPC包编辑详解](docs/opc-editing.md) - 增量编辑技术
+- 🖼️ [图片处理指南](docs/IMAGE_INSERTION.md) - 图片插入完整说明
+- 📄 [CSV数据处理指南](docs/CSV_FUNCTIONALITY_GUIDE.md) - CSV处理完整说明
 
 ### 实战教程
 - 🎯 [大数据处理实践](docs/big-data-tutorial.md) - 处理百万级数据
@@ -638,7 +514,6 @@ cmake -B build -S . \
   -DFASTEXCEL_BUILD_EXAMPLES=ON \
   -DFASTEXCEL_BUILD_TESTS=ON \
   -DFASTEXCEL_BUILD_UNIT_TESTS=ON \
-  -DFASTEXCEL_BUILD_PERFORMANCE_TESTS=ON \
   -DCMAKE_BUILD_TYPE=Debug
 
 # 构建并运行测试
@@ -646,18 +521,13 @@ cmake --build build --parallel 4
 cd build && ctest -V --parallel 4
 ```
 
-### 技术支持
-- 📧 **邮件支持**: support@fastexcel.dev
-- 💬 **QQ交流群**: 123456789
-- 📱 **微信群**: 扫描二维码加入
-- 🌐 **官方网站**: https://fastexcel.dev
-
 ## 🎯 路线图
 
 ### 已完成 ✅
-- [x] 双架构设计与实现
 - [x] 完整Excel格式支持
 - [x] 高性能内存管理
+- [x] 图片插入功能
+- [x] CSV数据处理
 - [x] OPC包编辑技术
 - [x] 共享公式优化
 - [x] 主题系统支持
@@ -680,17 +550,6 @@ cd build && ctest -V --parallel 4
 
 FastExcel 采用 **MIT许可证**，允许商业和开源使用。详细信息请查看 [LICENSE](LICENSE) 文件。
 
-### 版权声明
-```
-Copyright (c) 2024 FastExcel Contributors
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software...
-```
-
 ## 🙏 致谢和依赖
 
 FastExcel基于以下优秀的开源项目构建：
@@ -700,11 +559,6 @@ FastExcel基于以下优秀的开源项目构建：
 - **[libexpat](https://github.com/libexpat/libexpat)** - 快速XML解析器
 - **[fmt](https://github.com/fmtlib/fmt)** - 现代C++字符串格式化
 - **[spdlog](https://github.com/gabime/spdlog)** - 高性能日志库
-
-### 可选依赖
-- **[zlib-ng](https://github.com/zlib-ng/zlib-ng)** - 高性能压缩库
-- **[libdeflate](https://github.com/ebiggers/libdeflate)** - 极速压缩库
-- **[utf8cpp](https://github.com/nemtrif/utfcpp)** - UTF-8处理库
 
 ### 特别感谢
 - Microsoft Office Open XML 规范团队
