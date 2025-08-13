@@ -8,6 +8,7 @@
 #include "fastexcel/core/FormatRepository.hpp"
 #include "fastexcel/core/CellRangeManager.hpp"
 #include "fastexcel/core/SharedFormula.hpp"
+#include "fastexcel/core/Image.hpp"  // 🚀 新增：图片支持
 #include "fastexcel/xml/XMLStreamWriter.hpp"
 #include "fastexcel/xml/WorksheetXMLGenerator.hpp"
 #include "fastexcel/xml/Relationships.hpp"
@@ -16,6 +17,7 @@
 #include "fastexcel/utils/LogConfig.hpp"
 #include "fastexcel/utils/TimeUtils.hpp"
 #include "fastexcel/utils/CommonUtils.hpp"
+#include "fastexcel/utils/AddressParser.hpp"  // 🚀 新增：地址解析支持
 #include "fastexcel/core/Exception.hpp"
 #include <sstream>
 #include <stdexcept>
@@ -572,6 +574,15 @@ void Worksheet::generateRelsXML(const std::function<void(const char*, size_t)>& 
         }
     }
     
+    // 🔧 关键修复：添加drawing关系（如果有图片）
+    if (!images_.empty()) {
+        std::string drawing_target = "../drawings/drawing" + std::to_string(sheet_id_) + ".xml";
+        relationships.addAutoRelationship(
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing",
+            drawing_target
+        );
+    }
+    
     // 如果没有关系，不生成任何内容
     if (relationships.size() == 0) {
         return;
@@ -620,6 +631,9 @@ void Worksheet::clear() {
     protection_password_.clear();
     selection_ = "A1";
     active_cell_ = "A1";
+    
+    // 🚀 新增：清空图片
+    images_.clear();
 }
 
 void Worksheet::clearRange(int first_row, int first_col, int last_row, int last_col) {
@@ -1450,6 +1464,250 @@ void Worksheet::clearAll() {
 // 🚀 新API：链式调用方法实现
 WorksheetChain Worksheet::chain() {
     return WorksheetChain(*this);
+}
+
+// ========== 图片插入功能实现 ==========
+
+std::string Worksheet::insertImage(int row, int col, const std::string& image_path) {
+    FASTEXCEL_LOG_DEBUG("Inserting image from file: {} at cell ({}, {})", image_path, row, col);
+    
+    auto image = Image::fromFile(image_path);
+    if (!image) {
+        FASTEXCEL_LOG_ERROR("Failed to load image from file: {}", image_path);
+        return "";
+    }
+    
+    return insertImage(row, col, std::move(image));
+}
+
+std::string Worksheet::insertImage(int row, int col, std::unique_ptr<Image> image) {
+    if (!image) {
+        FASTEXCEL_LOG_ERROR("Cannot insert null image");
+        return "";
+    }
+    
+    validateCellPosition(row, col);
+    
+    // 设置单元格锚定
+    image->setCellAnchor(row, col, image->getAnchor().width, image->getAnchor().height);
+    
+    // 生成唯一ID
+    std::string image_id = "img" + std::to_string(next_image_id_++);
+    image->setId(image_id);
+    
+    // 添加到图片列表
+    images_.push_back(std::move(image));
+    
+    // 标记工作表为脏数据
+    if (parent_workbook_ && parent_workbook_->getDirtyManager()) {
+        std::string sheet_path = "xl/worksheets/sheet" + std::to_string(sheet_id_) + ".xml";
+        std::string drawing_path = "xl/drawings/drawing" + std::to_string(sheet_id_) + ".xml";
+        parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::CONTENT);
+        parent_workbook_->getDirtyManager()->markDirty(drawing_path, DirtyManager::DirtyLevel::CONTENT);
+    }
+    
+    FASTEXCEL_LOG_INFO("Successfully inserted image: {} at cell ({}, {})", image_id, row, col);
+    return image_id;
+}
+
+std::string Worksheet::insertImage(int from_row, int from_col, int to_row, int to_col,
+                                  const std::string& image_path) {
+    FASTEXCEL_LOG_DEBUG("Inserting image from file: {} in range ({},{}) to ({},{})",
+                       image_path, from_row, from_col, to_row, to_col);
+    
+    auto image = Image::fromFile(image_path);
+    if (!image) {
+        FASTEXCEL_LOG_ERROR("Failed to load image from file: {}", image_path);
+        return "";
+    }
+    
+    return insertImage(from_row, from_col, to_row, to_col, std::move(image));
+}
+
+std::string Worksheet::insertImage(int from_row, int from_col, int to_row, int to_col,
+                                  std::unique_ptr<Image> image) {
+    if (!image) {
+        FASTEXCEL_LOG_ERROR("Cannot insert null image");
+        return "";
+    }
+    
+    validateRange(from_row, from_col, to_row, to_col);
+    
+    // 设置双单元格锚定
+    image->setRangeAnchor(from_row, from_col, to_row, to_col);
+    
+    // 生成唯一ID
+    std::string image_id = "img" + std::to_string(next_image_id_++);
+    image->setId(image_id);
+    
+    // 添加到图片列表
+    images_.push_back(std::move(image));
+    
+    // 标记工作表为脏数据
+    if (parent_workbook_ && parent_workbook_->getDirtyManager()) {
+        std::string sheet_path = "xl/worksheets/sheet" + std::to_string(sheet_id_) + ".xml";
+        std::string drawing_path = "xl/drawings/drawing" + std::to_string(sheet_id_) + ".xml";
+        parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::CONTENT);
+        parent_workbook_->getDirtyManager()->markDirty(drawing_path, DirtyManager::DirtyLevel::CONTENT);
+    }
+    
+    FASTEXCEL_LOG_INFO("Successfully inserted image: {} in range ({},{}) to ({},{})",
+                      image_id, from_row, from_col, to_row, to_col);
+    return image_id;
+}
+
+std::string Worksheet::insertImageAt(double x, double y, double width, double height,
+                                    const std::string& image_path) {
+    FASTEXCEL_LOG_DEBUG("Inserting image from file: {} at absolute position ({}, {}) with size {}x{}",
+                       image_path, x, y, width, height);
+    
+    auto image = Image::fromFile(image_path);
+    if (!image) {
+        FASTEXCEL_LOG_ERROR("Failed to load image from file: {}", image_path);
+        return "";
+    }
+    
+    return insertImageAt(x, y, width, height, std::move(image));
+}
+
+std::string Worksheet::insertImageAt(double x, double y, double width, double height,
+                                    std::unique_ptr<Image> image) {
+    if (!image) {
+        FASTEXCEL_LOG_ERROR("Cannot insert null image");
+        return "";
+    }
+    
+    // 设置绝对定位
+    image->setAbsoluteAnchor(x, y, width, height);
+    
+    // 生成唯一ID
+    std::string image_id = "img" + std::to_string(next_image_id_++);
+    image->setId(image_id);
+    
+    // 添加到图片列表
+    images_.push_back(std::move(image));
+    
+    // 标记工作表为脏数据
+    if (parent_workbook_ && parent_workbook_->getDirtyManager()) {
+        std::string sheet_path = "xl/worksheets/sheet" + std::to_string(sheet_id_) + ".xml";
+        std::string drawing_path = "xl/drawings/drawing" + std::to_string(sheet_id_) + ".xml";
+        parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::CONTENT);
+        parent_workbook_->getDirtyManager()->markDirty(drawing_path, DirtyManager::DirtyLevel::CONTENT);
+    }
+    
+    FASTEXCEL_LOG_INFO("Successfully inserted image: {} at absolute position ({}, {}) with size {}x{}",
+                      image_id, x, y, width, height);
+    return image_id;
+}
+
+std::string Worksheet::insertImage(const std::string& address, const std::string& image_path) {
+    try {
+        auto [sheet, row, col] = utils::AddressParser::parseAddress(address);
+        return insertImage(row, col, image_path);
+    } catch (const std::exception& e) {
+        FASTEXCEL_LOG_ERROR("Failed to parse address '{}': {}", address, e.what());
+        return "";
+    }
+}
+
+std::string Worksheet::insertImage(const std::string& address, std::unique_ptr<Image> image) {
+    try {
+        auto [sheet, row, col] = utils::AddressParser::parseAddress(address);
+        return insertImage(row, col, std::move(image));
+    } catch (const std::exception& e) {
+        FASTEXCEL_LOG_ERROR("Failed to parse address '{}': {}", address, e.what());
+        return "";
+    }
+}
+
+std::string Worksheet::insertImageRange(const std::string& range, const std::string& image_path) {
+    try {
+        auto [sheet, start_row, start_col, end_row, end_col] = utils::AddressParser::parseRange(range);
+        return insertImage(start_row, start_col, end_row, end_col, image_path);
+    } catch (const std::exception& e) {
+        FASTEXCEL_LOG_ERROR("Failed to parse range '{}': {}", range, e.what());
+        return "";
+    }
+}
+
+std::string Worksheet::insertImageRange(const std::string& range, std::unique_ptr<Image> image) {
+    try {
+        auto [sheet, start_row, start_col, end_row, end_col] = utils::AddressParser::parseRange(range);
+        return insertImage(start_row, start_col, end_row, end_col, std::move(image));
+    } catch (const std::exception& e) {
+        FASTEXCEL_LOG_ERROR("Failed to parse range '{}': {}", range, e.what());
+        return "";
+    }
+}
+
+// ========== 图片管理功能实现 ==========
+
+const Image* Worksheet::findImage(const std::string& image_id) const {
+    auto it = std::find_if(images_.begin(), images_.end(),
+                          [&image_id](const std::unique_ptr<Image>& img) {
+                              return img && img->getId() == image_id;
+                          });
+    return (it != images_.end()) ? it->get() : nullptr;
+}
+
+Image* Worksheet::findImage(const std::string& image_id) {
+    auto it = std::find_if(images_.begin(), images_.end(),
+                          [&image_id](const std::unique_ptr<Image>& img) {
+                              return img && img->getId() == image_id;
+                          });
+    return (it != images_.end()) ? it->get() : nullptr;
+}
+
+bool Worksheet::removeImage(const std::string& image_id) {
+    auto it = std::find_if(images_.begin(), images_.end(),
+                          [&image_id](const std::unique_ptr<Image>& img) {
+                              return img && img->getId() == image_id;
+                          });
+    
+    if (it != images_.end()) {
+        FASTEXCEL_LOG_INFO("Removed image: {}", image_id);
+        images_.erase(it);
+        
+        // 标记工作表为脏数据
+        if (parent_workbook_ && parent_workbook_->getDirtyManager()) {
+            std::string sheet_path = "xl/worksheets/sheet" + std::to_string(sheet_id_) + ".xml";
+            std::string drawing_path = "xl/drawings/drawing" + std::to_string(sheet_id_) + ".xml";
+            parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::CONTENT);
+            parent_workbook_->getDirtyManager()->markDirty(drawing_path, DirtyManager::DirtyLevel::CONTENT);
+        }
+        
+        return true;
+    }
+    
+    FASTEXCEL_LOG_WARN("Image not found for removal: {}", image_id);
+    return false;
+}
+
+void Worksheet::clearImages() {
+    if (!images_.empty()) {
+        size_t count = images_.size();
+        images_.clear();
+        
+        // 标记工作表为脏数据
+        if (parent_workbook_ && parent_workbook_->getDirtyManager()) {
+            std::string sheet_path = "xl/worksheets/sheet" + std::to_string(sheet_id_) + ".xml";
+            std::string drawing_path = "xl/drawings/drawing" + std::to_string(sheet_id_) + ".xml";
+            parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::CONTENT);
+            parent_workbook_->getDirtyManager()->markDirty(drawing_path, DirtyManager::DirtyLevel::CONTENT);
+        }
+        
+        FASTEXCEL_LOG_INFO("Cleared {} images from worksheet", count);
+    }
+}
+
+size_t Worksheet::getImagesMemoryUsage() const {
+    size_t total_memory = 0;
+    for (const auto& image : images_) {
+        if (image) {
+            total_memory += image->getMemoryUsage();
+        }
+    }
+    return total_memory;
 }
 
 } // namespace core

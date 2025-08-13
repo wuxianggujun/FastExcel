@@ -3,6 +3,7 @@
 
 #include "fastexcel/archive/ZipArchive.hpp"
 #include "fastexcel/core/Path.hpp"
+#include "fastexcel/core/Image.hpp"  // 🚀 新增：图片支持
 #include <string>
 #include <memory>
 #include <unordered_map>
@@ -64,6 +65,90 @@ public:
     // skip_prefixes: 以这些前缀开头的路径将被跳过，不复制（因为将由新的生成逻辑覆盖）
     bool copyFromExistingPackage(const core::Path& source_package,
                                  const std::vector<std::string>& skip_prefixes);
+    
+    // ========== 图片文件管理 ==========
+    
+    /**
+     * @brief 添加图片文件到媒体目录
+     * @param image_id 图片ID
+     * @param image_data 图片二进制数据
+     * @param format 图片格式
+     * @return 是否成功添加
+     */
+    bool addImageFile(const std::string& image_id,
+                     const std::vector<uint8_t>& image_data,
+                     core::ImageFormat format);
+    
+    /**
+     * @brief 添加图片文件到媒体目录（移动语义）
+     * @param image_id 图片ID
+     * @param image_data 图片二进制数据
+     * @param format 图片格式
+     * @return 是否成功添加
+     */
+    bool addImageFile(const std::string& image_id,
+                     std::vector<uint8_t>&& image_data,
+                     core::ImageFormat format);
+    
+    /**
+     * @brief 从Image对象添加图片文件
+     * @param image 图片对象
+     * @return 是否成功添加
+     */
+    bool addImageFile(const core::Image& image);
+    
+    /**
+     * @brief 批量添加图片文件
+     * @param images 图片列表
+     * @return 成功添加的图片数量
+     */
+    int addImageFiles(const std::vector<std::unique_ptr<core::Image>>& images);
+    
+    /**
+     * @brief 添加绘图XML文件
+     * @param drawing_id 绘图ID
+     * @param xml_content XML内容
+     * @return 是否成功添加
+     */
+    bool addDrawingXML(int drawing_id, const std::string& xml_content);
+    
+    /**
+     * @brief 添加绘图关系XML文件
+     * @param drawing_id 绘图ID
+     * @param xml_content XML内容
+     * @return 是否成功添加
+     */
+    bool addDrawingRelsXML(int drawing_id, const std::string& xml_content);
+    
+    /**
+     * @brief 检查媒体目录中是否存在指定图片
+     * @param image_id 图片ID
+     * @param format 图片格式
+     * @return 是否存在
+     */
+    bool imageExists(const std::string& image_id, core::ImageFormat format) const;
+    
+    /**
+     * @brief 获取图片文件的内部路径
+     * @param image_id 图片ID
+     * @param format 图片格式
+     * @return 内部路径
+     */
+    static std::string getImagePath(const std::string& image_id, core::ImageFormat format);
+    
+    /**
+     * @brief 获取绘图XML文件的内部路径
+     * @param drawing_id 绘图ID
+     * @return 内部路径
+     */
+    static std::string getDrawingPath(int drawing_id);
+    
+    /**
+     * @brief 获取绘图关系XML文件的内部路径
+     * @param drawing_id 绘图ID
+     * @return 内部路径
+     */
+    static std::string getDrawingRelsPath(int drawing_id);
     
 private:
     bool createExcelStructure();

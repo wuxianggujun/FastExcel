@@ -5,6 +5,7 @@
 #include "fastexcel/core/FormatRepository.hpp"
 #include "fastexcel/core/CellRangeManager.hpp"
 #include "fastexcel/core/SharedFormula.hpp"
+#include "fastexcel/core/Image.hpp"  // 🚀 新增：图片支持
 #include "fastexcel/utils/CommonUtils.hpp"
 #include "fastexcel/utils/AddressParser.hpp"  // 🚀 新增：Excel地址解析支持
 #include "fastexcel/xml/XMLStreamWriter.hpp"
@@ -239,6 +240,10 @@ private:
     
     // 活动单元格
     std::string active_cell_ = "A1";
+    
+    // 🚀 新增：图片管理
+    std::vector<std::unique_ptr<Image>> images_;
+    int next_image_id_ = 1;
 
 public:
     explicit Worksheet(const std::string& name, std::shared_ptr<Workbook> workbook, int sheet_id = 1);
@@ -1605,6 +1610,158 @@ public:
             setValue(start_row + static_cast<int>(i), col, data[i]);
         }
     }
+    
+    // ========== 图片插入功能 ==========
+    
+    /**
+     * @brief 插入图片到指定单元格
+     * @param row 行号（0-based）
+     * @param col 列号（0-based）
+     * @param image_path 图片文件路径
+     * @return 图片ID，失败时返回空字符串
+     */
+    std::string insertImage(int row, int col, const std::string& image_path);
+    
+    /**
+     * @brief 插入图片到指定单元格（使用Image对象）
+     * @param row 行号（0-based）
+     * @param col 列号（0-based）
+     * @param image 图片对象
+     * @return 图片ID，失败时返回空字符串
+     */
+    std::string insertImage(int row, int col, std::unique_ptr<Image> image);
+    
+    /**
+     * @brief 插入图片到指定范围
+     * @param from_row 起始行号
+     * @param from_col 起始列号
+     * @param to_row 结束行号
+     * @param to_col 结束列号
+     * @param image_path 图片文件路径
+     * @return 图片ID，失败时返回空字符串
+     */
+    std::string insertImage(int from_row, int from_col, int to_row, int to_col,
+                           const std::string& image_path);
+    
+    /**
+     * @brief 插入图片到指定范围（使用Image对象）
+     * @param from_row 起始行号
+     * @param from_col 起始列号
+     * @param to_row 结束行号
+     * @param to_col 结束列号
+     * @param image 图片对象
+     * @return 图片ID，失败时返回空字符串
+     */
+    std::string insertImage(int from_row, int from_col, int to_row, int to_col,
+                           std::unique_ptr<Image> image);
+    
+    /**
+     * @brief 插入图片到绝对位置
+     * @param x 绝对X坐标（像素）
+     * @param y 绝对Y坐标（像素）
+     * @param width 图片宽度（像素）
+     * @param height 图片高度（像素）
+     * @param image_path 图片文件路径
+     * @return 图片ID，失败时返回空字符串
+     */
+    std::string insertImageAt(double x, double y, double width, double height,
+                             const std::string& image_path);
+    
+    /**
+     * @brief 插入图片到绝对位置（使用Image对象）
+     * @param x 绝对X坐标（像素）
+     * @param y 绝对Y坐标（像素）
+     * @param width 图片宽度（像素）
+     * @param height 图片高度（像素）
+     * @param image 图片对象
+     * @return 图片ID，失败时返回空字符串
+     */
+    std::string insertImageAt(double x, double y, double width, double height,
+                             std::unique_ptr<Image> image);
+    
+    /**
+     * @brief 通过Excel地址插入图片
+     * @param address Excel地址（如"A1", "B2"）
+     * @param image_path 图片文件路径
+     * @return 图片ID，失败时返回空字符串
+     */
+    std::string insertImage(const std::string& address, const std::string& image_path);
+    
+    /**
+     * @brief 通过Excel地址插入图片（使用Image对象）
+     * @param address Excel地址（如"A1", "B2"）
+     * @param image 图片对象
+     * @return 图片ID，失败时返回空字符串
+     */
+    std::string insertImage(const std::string& address, std::unique_ptr<Image> image);
+    
+    /**
+     * @brief 通过Excel范围插入图片
+     * @param range Excel范围（如"A1:C3"）
+     * @param image_path 图片文件路径
+     * @return 图片ID，失败时返回空字符串
+     */
+    std::string insertImageRange(const std::string& range, const std::string& image_path);
+    
+    /**
+     * @brief 通过Excel范围插入图片（使用Image对象）
+     * @param range Excel范围（如"A1:C3"）
+     * @param image 图片对象
+     * @return 图片ID，失败时返回空字符串
+     */
+    std::string insertImageRange(const std::string& range, std::unique_ptr<Image> image);
+    
+    // ========== 图片管理功能 ==========
+    
+    /**
+     * @brief 获取所有图片
+     * @return 图片列表的常量引用
+     */
+    const std::vector<std::unique_ptr<Image>>& getImages() const { return images_; }
+    
+    /**
+     * @brief 获取图片数量
+     * @return 图片数量
+     */
+    size_t getImageCount() const { return images_.size(); }
+    
+    /**
+     * @brief 根据ID查找图片
+     * @param image_id 图片ID
+     * @return 图片指针，未找到时返回nullptr
+     */
+    const Image* findImage(const std::string& image_id) const;
+    
+    /**
+     * @brief 根据ID查找图片（非常量版本）
+     * @param image_id 图片ID
+     * @return 图片指针，未找到时返回nullptr
+     */
+    Image* findImage(const std::string& image_id);
+    
+    /**
+     * @brief 删除指定ID的图片
+     * @param image_id 图片ID
+     * @return 是否成功删除
+     */
+    bool removeImage(const std::string& image_id);
+    
+    /**
+     * @brief 清空所有图片
+     */
+    void clearImages();
+    
+    /**
+     * @brief 检查是否包含图片
+     * @return 是否包含图片
+     */
+    bool hasImages() const { return !images_.empty(); }
+    
+    /**
+     * @brief 获取图片占用的内存大小
+     * @return 内存大小（字节）
+     */
+    size_t getImagesMemoryUsage() const;
 
 private:
     // 内部辅助方法

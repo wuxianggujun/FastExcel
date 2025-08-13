@@ -60,6 +60,7 @@ set(FASTEXCEL_SOURCES
         src/fastexcel/core/Workbook.cpp
         src/fastexcel/core/Worksheet.cpp
         src/fastexcel/core/WorksheetChain.cpp  # 🚀 新增：链式调用助手类
+        src/fastexcel/core/Image.cpp  # 🚀 新增：图片支持
         src/fastexcel/core/SharedStringTable.cpp
         src/fastexcel/core/SharedFormula.cpp
         src/fastexcel/core/FormatRepository.cpp
@@ -93,6 +94,7 @@ set(FASTEXCEL_SOURCES
         src/fastexcel/xml/PartGenerators.cpp
         src/fastexcel/xml/WorksheetXMLGenerator.cpp
         src/fastexcel/xml/DocPropsXMLGenerator.cpp
+        src/fastexcel/xml/DrawingXMLGenerator.cpp  # 🚀 新增：绘图XML生成器
          src/fastexcel/theme/Theme.cpp
          src/fastexcel/theme/ThemeParser.cpp
         # OPC Repack Architecture (New)
@@ -154,6 +156,7 @@ target_include_directories(fastexcel PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/third_party/libexpat/expat/lib
         ${CMAKE_CURRENT_SOURCE_DIR}/third_party/fmt/include
         ${CMAKE_CURRENT_SOURCE_DIR}/third_party/minizip-ng
+        ${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb  # 🚀 新增：stb_image头文件路径
 )
 
 # =============================================================================
@@ -186,6 +189,10 @@ if(FASTEXCEL_USE_LIBDEFLATE AND FASTEXCEL_HAS_LIBDEFLATE)
     target_compile_definitions(fastexcel PRIVATE FASTEXCEL_HAS_LIBDEFLATE=1)
     message(STATUS "FastExcel: FASTEXCEL_HAS_LIBDEFLATE macro defined")
 endif()
+
+# 🚀 新增：图片支持宏定义
+target_compile_definitions(fastexcel PRIVATE FASTEXCEL_HAS_IMAGE_SUPPORT=1)
+message(STATUS "FastExcel: FASTEXCEL_HAS_IMAGE_SUPPORT macro defined")
 
 
 # =============================================================================

@@ -148,6 +148,12 @@ private:
      */
     void generatePageMargins(XMLStreamWriter& writer);
     
+    /**
+     * @brief 生成图片绘图引用
+     * @param writer XML写入器
+     */
+    void generateDrawing(XMLStreamWriter& writer);
+    
     // ========== 流式模式生成方法 ==========
     
     /**

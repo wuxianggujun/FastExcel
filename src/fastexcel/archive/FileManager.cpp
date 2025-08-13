@@ -8,6 +8,7 @@
 #include <iomanip>
 #include <sstream>
 #include <algorithm>
+#include <fstream>
 
 namespace fastexcel {
 namespace archive {
@@ -339,6 +340,160 @@ bool FileManager::copyFromExistingPackage(const core::Path& source_package,
 
     src.close();
     return true;
+}
+
+// ========== 图片文件管理实现 ==========
+
+bool FileManager::addImageFile(const std::string& image_id,
+                               const std::vector<uint8_t>& image_data,
+                               core::ImageFormat format) {
+    if (!isOpen()) {
+        ARCHIVE_ERROR("Archive not open");
+        return false;
+    }
+    
+    if (image_data.empty()) {
+        ARCHIVE_ERROR("Image data is empty for image: {}", image_id);
+        return false;
+    }
+    
+    std::string internal_path = getImagePath(image_id, format);
+    
+    bool success = writeFile(internal_path, image_data);
+    if (success) {
+        ARCHIVE_INFO("Added image file: {} ({} bytes)", internal_path, image_data.size());
+    } else {
+        ARCHIVE_ERROR("Failed to add image file: {}", internal_path);
+    }
+    
+    return success;
+}
+
+bool FileManager::addImageFile(const std::string& image_id,
+                               std::vector<uint8_t>&& image_data,
+                               core::ImageFormat format) {
+    if (!isOpen()) {
+        ARCHIVE_ERROR("Archive not open");
+        return false;
+    }
+    
+    if (image_data.empty()) {
+        ARCHIVE_ERROR("Image data is empty for image: {}", image_id);
+        return false;
+    }
+    
+    std::string internal_path = getImagePath(image_id, format);
+    size_t data_size = image_data.size();
+    
+    bool success = writeFile(internal_path, image_data);
+    if (success) {
+        ARCHIVE_INFO("Added image file: {} ({} bytes)", internal_path, data_size);
+    } else {
+        ARCHIVE_ERROR("Failed to add image file: {}", internal_path);
+    }
+    
+    return success;
+}
+
+bool FileManager::addImageFile(const core::Image& image) {
+    if (!image.isValid()) {
+        ARCHIVE_ERROR("Invalid image object");
+        return false;
+    }
+    
+    return addImageFile(image.getId(), image.getData(), image.getFormat());
+}
+
+int FileManager::addImageFiles(const std::vector<std::unique_ptr<core::Image>>& images) {
+    if (!isOpen()) {
+        ARCHIVE_ERROR("Archive not open");
+        return 0;
+    }
+    
+    int success_count = 0;
+    
+    for (const auto& image : images) {
+        if (image && image->isValid()) {
+            if (addImageFile(*image)) {
+                success_count++;
+            }
+        }
+    }
+    
+    ARCHIVE_INFO("Added {} out of {} image files", success_count, images.size());
+    return success_count;
+}
+
+bool FileManager::addDrawingXML(int drawing_id, const std::string& xml_content) {
+    if (!isOpen()) {
+        ARCHIVE_ERROR("Archive not open");
+        return false;
+    }
+    
+    if (xml_content.empty()) {
+        ARCHIVE_ERROR("Drawing XML content is empty for drawing: {}", drawing_id);
+        return false;
+    }
+    
+    std::string internal_path = getDrawingPath(drawing_id);
+    
+    bool success = writeFile(internal_path, xml_content);
+    if (success) {
+        ARCHIVE_INFO("Added drawing XML: {} ({} bytes)", internal_path, xml_content.size());
+    } else {
+        ARCHIVE_ERROR("Failed to add drawing XML: {}", internal_path);
+    }
+    
+    return success;
+}
+
+bool FileManager::addDrawingRelsXML(int drawing_id, const std::string& xml_content) {
+    if (!isOpen()) {
+        ARCHIVE_ERROR("Archive not open");
+        return false;
+    }
+    
+    if (xml_content.empty()) {
+        ARCHIVE_ERROR("Drawing relationships XML content is empty for drawing: {}", drawing_id);
+        return false;
+    }
+    
+    std::string internal_path = getDrawingRelsPath(drawing_id);
+    
+    bool success = writeFile(internal_path, xml_content);
+    if (success) {
+        ARCHIVE_INFO("Added drawing relationships XML: {} ({} bytes)", internal_path, xml_content.size());
+    } else {
+        ARCHIVE_ERROR("Failed to add drawing relationships XML: {}", internal_path);
+    }
+    
+    return success;
+}
+
+bool FileManager::imageExists(const std::string& image_id, core::ImageFormat format) const {
+    std::string internal_path = getImagePath(image_id, format);
+    return fileExists(internal_path);
+}
+
+std::string FileManager::getImagePath(const std::string& image_id, core::ImageFormat format) {
+    std::string extension;
+    switch (format) {
+        case core::ImageFormat::PNG:  extension = "png"; break;
+        case core::ImageFormat::JPEG: extension = "jpg"; break;
+        case core::ImageFormat::GIF:  extension = "gif"; break;
+        case core::ImageFormat::BMP:  extension = "bmp"; break;
+        default: extension = "bin"; break;
+    }
+    
+    return "xl/media/" + image_id + "." + extension;
+}
+
+std::string FileManager::getDrawingPath(int drawing_id) {
+    return "xl/drawings/drawing" + std::to_string(drawing_id) + ".xml";
+}
+
+std::string FileManager::getDrawingRelsPath(int drawing_id) {
+    return "xl/drawings/_rels/drawing" + std::to_string(drawing_id) + ".xml.rels";
 }
 
 }} // namespace fastexcel::archive

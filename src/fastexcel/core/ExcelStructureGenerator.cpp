@@ -196,9 +196,65 @@ bool ExcelStructureGenerator::generateWorksheets() {
             }
         }
         
+        // 🔧 关键修复：如果工作表包含图片，生成drawing和相关文件
+        if (worksheet && !worksheet->getImages().empty()) {
+            CORE_DEBUG("Worksheet {} contains {} images, generating drawing files", i + 1, worksheet->getImages().size());
+            
+            // 生成drawing XML文件
+            std::string drawing_path = "xl/drawings/drawing" + std::to_string(i + 1) + ".xml";
+            if (!xml_generator->generateParts(*writer_, {drawing_path})) {
+                CORE_ERROR("Failed to generate drawing file: {}", drawing_path);
+                return false;
+            }
+            
+            // 生成drawing关系文件
+            std::string drawing_rels_path = "xl/drawings/_rels/drawing" + std::to_string(i + 1) + ".xml.rels";
+            if (!xml_generator->generateParts(*writer_, {drawing_rels_path})) {
+                CORE_ERROR("Failed to generate drawing relations file: {}", drawing_rels_path);
+                return false;
+            }
+        }
+        
         // 报告进度
         int progress = 50 + static_cast<int>((i + 1) * 40 / worksheet_count);
         reportProgress("Generating worksheets", progress, 100);
+    }
+    
+    // 🔧 关键修复：在所有工作表处理完后，生成所有媒体文件
+    // 收集所有工作表的图片并生成媒体文件
+    bool has_images = false;
+    for (size_t i = 0; i < worksheet_count; ++i) {
+        auto worksheet = workbook_->getSheet(i);
+        if (worksheet && !worksheet->getImages().empty()) {
+            has_images = true;
+            break;
+        }
+    }
+    
+    if (has_images) {
+        CORE_DEBUG("Generating media files for all images");
+        
+        // 生成所有媒体文件
+        // MediaFilesGenerator会遍历所有工作表并生成对应的图片文件
+        size_t image_counter = 1;
+        for (size_t i = 0; i < worksheet_count; ++i) {
+            auto worksheet = workbook_->getSheet(i);
+            if (worksheet) {
+                const auto& images = worksheet->getImages();
+                for (size_t j = 0; j < images.size(); ++j) {
+                    std::string ext = ".png"; // 默认扩展名
+                    if (images[j]->getFormat() == core::ImageFormat::JPEG) {
+                        ext = ".jpg";
+                    }
+                    std::string media_path = "xl/media/image" + std::to_string(image_counter++) + ext;
+                    
+                    if (!xml_generator->generateParts(*writer_, {media_path})) {
+                        CORE_ERROR("Failed to generate media file: {}", media_path);
+                        return false;
+                    }
+                }
+            }
+        }
     }
     
     CORE_DEBUG("Successfully generated all worksheets");

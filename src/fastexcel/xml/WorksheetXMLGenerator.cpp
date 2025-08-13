@@ -160,6 +160,9 @@ void WorksheetXMLGenerator::generateBatch(const std::function<void(const char*, 
     // 生成页面边距
     generatePageMargins(writer);
     
+    // 🚀 新增：生成图片绘图引用
+    generateDrawing(writer);
+    
     writer.endElement(); // worksheet
     writer.endDocument();
 }
@@ -510,6 +513,35 @@ void WorksheetXMLGenerator::generatePageMargins(XMLStreamWriter& writer) {
     writer.endElement(); // pageMargins
 }
 
+void WorksheetXMLGenerator::generateDrawing(XMLStreamWriter& writer) {
+    // 检查工作表是否有图片
+    if (!worksheet_->hasImages()) {
+        return;
+    }
+    
+    // 生成drawing引用
+    writer.startElement("drawing");
+    // 🔧 关键修复：drawing关系应该是worksheet关系文件中的最后一个rId
+    // 通常超链接占用前面的rId，drawing应该在最后
+    int hyperlink_count = 0;
+    auto [max_row, max_col] = worksheet_->getUsedRange();
+    for (int row = 0; row <= max_row; ++row) {
+        for (int col = 0; col <= max_col; ++col) {
+            if (worksheet_->hasCellAt(row, col)) {
+                const auto& cell = worksheet_->getCell(row, col);
+                if (cell.hasHyperlink()) {
+                    hyperlink_count++;
+                }
+            }
+        }
+    }
+    
+    // drawing的rId应该是超链接数量+1
+    std::string drawing_rel = "rId" + std::to_string(hyperlink_count + 1);
+    writer.writeAttribute("r:id", drawing_rel.c_str());
+    writer.endElement(); // drawing
+}
+
 // ========== 流式模式生成方法 ==========
 
 void WorksheetXMLGenerator::generateStreaming(const std::function<void(const char*, size_t)>& callback) {
@@ -601,6 +633,9 @@ void WorksheetXMLGenerator::generateStreaming(const std::function<void(const cha
     writer.writeAttribute("header", "0.3");
     writer.writeAttribute("footer", "0.3");
     writer.endElement(); // pageMargins
+    
+    // 🚀 新增：生成图片绘图引用（流式模式）
+    generateDrawing(writer);
     
     writer.endElement(); // worksheet
     writer.endDocument();
