@@ -10,6 +10,7 @@
 #include "fastexcel/core/ErrorCode.hpp"
 #include "fastexcel/archive/ZipArchive.hpp"
 #include "fastexcel/theme/Theme.hpp"
+#include "fastexcel/xml/XMLStreamReader.hpp"  // 添加XMLStreamReader头文件
 #include <memory>
 #include <unordered_map>
 #include <vector>
@@ -100,10 +101,40 @@ private:
     std::string getCellValue(const std::string& cell_xml, core::CellType& type);
     std::shared_ptr<core::FormatDescriptor> getStyleByIndex(int index);
     
-    // 新增的XML解析辅助方法
+    // 字符串解析辅助方法
     std::string extractAttribute(const std::string& xml, const std::string& attr_name);
     bool parseWorkbookRelationships(std::unordered_map<std::string, std::string>& relationships);
     bool parseDefinedNames(const std::string& xml_content);
+    
+    // XML解析辅助方法 - 使用XMLStreamReader
+    core::ErrorCode parseWorkbookRelationshipsWithXMLReader(std::unordered_map<std::string, std::string>& relationships);
+    core::ErrorCode parseDefinedNamesWithXMLReader(const std::string& xml_content);
+    core::ErrorCode parseStylesWithXMLReader();
+    core::ErrorCode parseSharedStringsWithXMLReader();
+
+private:
+    // XMLStreamReader 实例用于高效解析
+    std::unique_ptr<xml::XMLStreamReader> xml_reader_;
+    
+    // 解析状态跟踪
+    struct ParseContext {
+        std::unordered_map<std::string, std::string>* relationships = nullptr;
+        std::vector<std::string>* defined_names = nullptr;
+        std::unordered_map<int, std::string>* shared_strings = nullptr;
+        std::unordered_map<int, std::shared_ptr<core::FormatDescriptor>>* styles = nullptr;
+        int current_string_index = 0;
+        int current_style_index = 0;
+        std::string current_text_content;
+        bool in_target_element = false;
+        std::string target_element_name;
+    };
+    ParseContext parse_context_;
+    
+    // XMLStreamReader 回调方法
+    void onStartElement(const std::string& name, const std::vector<xml::XMLAttribute>& attributes, int depth);
+    void onEndElement(const std::string& name, int depth);
+    void onTextContent(const std::string& text, int depth);
+    void onParseError(xml::XMLParseError error, const std::string& message, int line, int column);
 };
 } // namespace reader
 } // namespace fastexcel

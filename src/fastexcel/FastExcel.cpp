@@ -17,16 +17,7 @@ bool initialize(const std::string& log_file_path, bool enable_console) {
     }
 }
 
-void initialize() {
-    // 初始化日志系统（使用默认设置）
-    try {
-        fastexcel::Logger::getInstance().initialize("fastexcel.log",
-                                                   fastexcel::Logger::Level::INFO,
-                                                   true);
-    } catch (...) {
-        // 忽略日志初始化错误
-    }
-}
+// 注意：简化版本的 initialize() 现在是 inline 函数，在头文件中定义
 
 void cleanup() {
     // 清理内存池

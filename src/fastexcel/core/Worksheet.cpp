@@ -423,9 +423,65 @@ double Worksheet::getRowHeight(int row) const {
     return default_row_height_;
 }
 
-// getColumnFormat方法已移除，请使用FormatDescriptor架构
+// ========== 新的统一样式API实现 ==========
 
-// getRowFormat方法已移除，请使用FormatDescriptor架构
+void Worksheet::setColumnFormat(int col, const FormatDescriptor& format) {
+    validateCellPosition(0, col);
+    
+    if (!parent_workbook_) {
+        throw std::runtime_error("工作簿未初始化，无法进行智能格式优化");
+    }
+    
+    // 🎯 核心优化：自动添加到FormatRepository（去重）
+    int styleId = parent_workbook_->addStyle(format);
+    
+    // 设置列格式ID
+    column_info_[col].format_id = styleId;
+    
+    if (parent_workbook_ && parent_workbook_->getDirtyManager()) {
+        std::string sheet_path = "xl/worksheets/sheet" + std::to_string(sheet_id_) + ".xml";
+        parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::METADATA);
+    }
+}
+
+void Worksheet::setRowFormat(int row, const FormatDescriptor& format) {
+    validateCellPosition(row, 0);
+    
+    if (!parent_workbook_) {
+        throw std::runtime_error("工作簿未初始化，无法进行智能格式优化");
+    }
+    
+    // 🎯 核心优化：自动添加到FormatRepository（去重）
+    int styleId = parent_workbook_->addStyle(format);
+    
+    // 设置行格式ID
+    row_info_[row].format_id = styleId;
+    
+    if (parent_workbook_ && parent_workbook_->getDirtyManager()) {
+        std::string sheet_path = "xl/worksheets/sheet" + std::to_string(sheet_id_) + ".xml";
+        parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::METADATA);
+    }
+}
+
+std::shared_ptr<const FormatDescriptor> Worksheet::getColumnFormat(int col) const {
+    auto it = column_info_.find(col);
+    if (it != column_info_.end() && it->second.format_id >= 0) {
+        if (parent_workbook_) {
+            return parent_workbook_->getStyle(it->second.format_id);
+        }
+    }
+    return nullptr;
+}
+
+std::shared_ptr<const FormatDescriptor> Worksheet::getRowFormat(int row) const {
+    auto it = row_info_.find(row);
+    if (it != row_info_.end() && it->second.format_id >= 0) {
+        if (parent_workbook_) {
+            return parent_workbook_->getStyle(it->second.format_id);
+        }
+    }
+    return nullptr;
+}
 
 bool Worksheet::isColumnHidden(int col) const {
     auto it = column_info_.find(col);

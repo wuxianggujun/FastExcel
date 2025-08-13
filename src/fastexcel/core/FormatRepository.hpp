@@ -124,37 +124,62 @@ public:
     void importFormats(const FormatRepository& source_repo, 
                       std::unordered_map<int, int>& id_mapping);
     
-    // ========== 迭代器支持 ==========
+    // ========== 线程安全的迭代器支持 ==========
     
-    class const_iterator {
+    /**
+     * @brief 格式快照 - 用于安全遍历
+     *
+     * 提供不可变的格式快照，避免遍历期间的并发修改问题
+     */
+    class FormatSnapshot {
     private:
-        std::vector<std::shared_ptr<const FormatDescriptor>>::const_iterator iter_;
-        int id_;
+        std::vector<std::pair<int, std::shared_ptr<const FormatDescriptor>>> snapshot_;
         
     public:
-        const_iterator(const std::vector<std::shared_ptr<const FormatDescriptor>>::const_iterator& iter, int id)
-            : iter_(iter), id_(id) {}
+        explicit FormatSnapshot(const std::vector<std::shared_ptr<const FormatDescriptor>>& formats) {
+            snapshot_.reserve(formats.size());
+            for (size_t i = 0; i < formats.size(); ++i) {
+                snapshot_.emplace_back(static_cast<int>(i), formats[i]);
+            }
+        }
         
-        const_iterator& operator++() { ++iter_; ++id_; return *this; }
-        bool operator!=(const const_iterator& other) const { return iter_ != other.iter_; }
-        
-        struct value_type {
-            int id;
-            std::shared_ptr<const FormatDescriptor> format;
+        class const_iterator {
+        private:
+            std::vector<std::pair<int, std::shared_ptr<const FormatDescriptor>>>::const_iterator iter_;
+            
+        public:
+            explicit const_iterator(const std::vector<std::pair<int, std::shared_ptr<const FormatDescriptor>>>::const_iterator& iter)
+                : iter_(iter) {}
+            
+            const_iterator& operator++() { ++iter_; return *this; }
+            bool operator!=(const const_iterator& other) const { return iter_ != other.iter_; }
+            
+            const std::pair<int, std::shared_ptr<const FormatDescriptor>>& operator*() const { return *iter_; }
         };
         
-        value_type operator*() const { return {id_, *iter_}; }
+        const_iterator begin() const { return const_iterator(snapshot_.begin()); }
+        const_iterator end() const { return const_iterator(snapshot_.end()); }
+        size_t size() const { return snapshot_.size(); }
+        bool empty() const { return snapshot_.empty(); }
     };
     
-    const_iterator begin() const {
+    /**
+     * @brief 创建格式快照用于安全遍历
+     * @return 格式快照对象
+     *
+     * @note 此方法创建当前格式的不可变快照，可以安全地在多线程环境中遍历
+     * @example
+     * auto snapshot = repo.createSnapshot();
+     * for (const auto& [id, format] : snapshot) {
+     *     // 安全遍历，不受并发修改影响
+     * }
+     */
+    FormatSnapshot createSnapshot() const {
         std::shared_lock lock(mutex_);
-        return const_iterator(formats_.begin(), 0);
+        return FormatSnapshot(formats_);
     }
     
-    const_iterator end() const {
-        std::shared_lock lock(mutex_);
-        return const_iterator(formats_.end(), static_cast<int>(formats_.size()));
-    }
+    // 旧的不安全迭代器已移除，请使用 createSnapshot() 进行线程安全遍历
 
 private:
     /**

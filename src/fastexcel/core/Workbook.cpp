@@ -1357,9 +1357,10 @@ bool Workbook::mergeWorkbook(const std::unique_ptr<Workbook>& other_workbook, co
         // 合并格式
         if (options.merge_formats) {
             // 将其他工作簿的格式仓储合并到当前格式仓储
-            // 遍历其他工作簿的所有格式并添加到当前仓储中（自动去重）
-            for (const auto& format_item : *other_workbook->format_repo_) {
-                format_repo_->addFormat(*format_item.format);
+            // 使用线程安全的快照方式遍历其他工作簿的所有格式并添加到当前仓储中（自动去重）
+            auto format_snapshot = other_workbook->format_repo_->createSnapshot();
+            for (const auto& format_item : format_snapshot) {
+                format_repo_->addFormat(*format_item.second);
             }
             CORE_DEBUG("Merged formats from other workbook");
         }

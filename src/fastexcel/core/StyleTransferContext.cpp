@@ -223,17 +223,19 @@ StyleDifference compareRepositories(
     std::unordered_map<size_t, std::vector<int>> hash_to_ids2;
     
     // 收集仓储1的格式
-    for (const auto& format_pair : repo1) {
-        int id = format_pair.id;
-        const auto& format = format_pair.format;
+    auto snapshot1 = repo1.createSnapshot();
+    for (const auto& format_pair : snapshot1) {
+        int id = format_pair.first;
+        const auto& format = format_pair.second;
         size_t hash = format->hash();
         hash_to_ids1[hash].push_back(id);
     }
     
     // 收集仓储2的格式
-    for (const auto& format_pair : repo2) {
-        int id = format_pair.id;
-        const auto& format = format_pair.format;
+    auto snapshot2 = repo2.createSnapshot();
+    for (const auto& format_pair : snapshot2) {
+        int id = format_pair.first;
+        const auto& format = format_pair.second;
         size_t hash = format->hash();
         hash_to_ids2[hash].push_back(id);
     }

@@ -71,7 +71,7 @@ struct ColumnInfo {
 // 行信息结构
 struct RowInfo {
     double height = -1.0;          // 行高，-1表示默认
-    // format字段已移除，请使用FormatDescriptor架构
+    int format_id = -1;            // FormatRepository中的格式ID，-1表示无格式
     bool hidden = false;           // 是否隐藏
     bool collapsed = false;        // 是否折叠
     uint8_t outline_level = 0;     // 大纲级别
@@ -733,17 +733,19 @@ public:
     /**
      * @brief 设置列格式
      * @param col 列号
-     * @param format 格式
+     * @param format 格式描述符
      */
-    void setColumnFormat(int col, std::shared_ptr<Format> format);
+    void setColumnFormat(int col, const core::FormatDescriptor& format);
+    void setColumnFormat(int col, std::shared_ptr<const core::FormatDescriptor> format);
     
     /**
      * @brief 设置列格式范围
      * @param first_col 起始列
      * @param last_col 结束列
-     * @param format 格式
+     * @param format 格式描述符
      */
-    void setColumnFormat(int first_col, int last_col, std::shared_ptr<Format> format);
+    void setColumnFormat(int first_col, int last_col, const core::FormatDescriptor& format);
+    void setColumnFormat(int first_col, int last_col, std::shared_ptr<const core::FormatDescriptor> format);
     
     /**
      * @brief 隐藏列
@@ -768,9 +770,10 @@ public:
     /**
      * @brief 设置行格式
      * @param row 行号
-     * @param format 格式
+     * @param format 格式描述符
      */
-    void setRowFormat(int row, std::shared_ptr<Format> format);
+    void setRowFormat(int row, const core::FormatDescriptor& format);
+    void setRowFormat(int row, std::shared_ptr<const core::FormatDescriptor> format);
     
     /**
      * @brief 隐藏行
@@ -1105,16 +1108,16 @@ public:
     /**
      * @brief 获取列格式
      * @param col 列号
-     * @return 列格式
+     * @return 列格式描述符
      */
-    std::shared_ptr<Format> getColumnFormat(int col) const;
+    std::shared_ptr<const core::FormatDescriptor> getColumnFormat(int col) const;
     
     /**
      * @brief 获取行格式
      * @param row 行号
-     * @return 行格式
+     * @return 行格式描述符
      */
-    std::shared_ptr<Format> getRowFormat(int row) const;
+    std::shared_ptr<const core::FormatDescriptor> getRowFormat(int row) const;
     
     /**
      * @brief 获取列格式ID
@@ -1368,11 +1371,22 @@ public:
     void editCellValue(int row, int col, bool value, bool preserve_format = true);
     
     /**
-     * @brief 修改单元格格式
+     * @brief 修改单元格格式（新架构 - 推荐）
+     * @param row 行号
+     * @param col 列号
+     * @param format 新格式描述符
+     */
+    void editCellFormat(int row, int col, const core::FormatDescriptor& format);
+    void editCellFormat(int row, int col, std::shared_ptr<const core::FormatDescriptor> format);
+    
+    /**
+     * @deprecated 使用 FormatDescriptor 版本替代
+     * @brief 修改单元格格式（旧架构 - 兼容性保留）
      * @param row 行号
      * @param col 列号
      * @param format 新格式
      */
+    [[deprecated("Use FormatDescriptor version instead")]]
     void editCellFormat(int row, int col, std::shared_ptr<Format> format);
     
     /**

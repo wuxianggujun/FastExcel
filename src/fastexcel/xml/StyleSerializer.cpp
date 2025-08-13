@@ -185,10 +185,11 @@ void StyleSerializer::writeCellXfs(const core::FormatRepository& repository,
     writer.startElement("cellXfs");
     writer.writeAttribute("count", std::to_string(repository.getFormatCount()));
     
-    // 遍历所有格式
-    for (const auto& format_pair : repository) {
-        int format_id = format_pair.id;
-        const auto& format = format_pair.format;
+    // 使用线程安全的快照方式遍历所有格式
+    auto format_snapshot = repository.createSnapshot();
+    for (const auto& format_pair : format_snapshot) {
+        int format_id = format_pair.first;
+        const auto& format = format_pair.second;
         
         int font_id = font_mapping[format_id];
         int fill_id = fill_mapping[format_id];
@@ -587,8 +588,9 @@ void StyleSerializer::collectUniqueFonts(
     unique_fonts.reserve(std::min(repository.getFormatCount(), size_t(1000)));
     font_hash_to_id.reserve(std::min(repository.getFormatCount(), size_t(1000)));
     
-    for (const auto& format_pair : repository) {
-        const auto& format = format_pair.format;
+    auto format_snapshot = repository.createSnapshot();
+    for (const auto& format_pair : format_snapshot) {
+        const auto& format = format_pair.second;
         
         // 使用哈希表实现O(1)查找
         std::string font_key = createFontHashKey(*format);
@@ -620,8 +622,9 @@ void StyleSerializer::collectUniqueFills(
     unique_fills.reserve(std::min(repository.getFormatCount(), size_t(1000)));
     fill_hash_to_id.reserve(std::min(repository.getFormatCount(), size_t(1000)));
     
-    for (const auto& format_pair : repository) {
-        const auto& format = format_pair.format;
+    auto format_snapshot = repository.createSnapshot();
+    for (const auto& format_pair : format_snapshot) {
+        const auto& format = format_pair.second;
         
         // 特殊处理：None模式映射到fillId=0
         if (format->getPattern() == core::PatternType::None) {
@@ -665,8 +668,9 @@ void StyleSerializer::collectUniqueBorders(
     unique_borders.reserve(std::min(repository.getFormatCount(), size_t(1000)));
     border_hash_to_id.reserve(std::min(repository.getFormatCount(), size_t(1000)));
     
-    for (const auto& format_pair : repository) {
-        const auto& format = format_pair.format;
+    auto format_snapshot = repository.createSnapshot();
+    for (const auto& format_pair : format_snapshot) {
+        const auto& format = format_pair.second;
         
         // 使用哈希表实现O(1)查找
         std::string border_key = createBorderHashKey(*format);
@@ -692,8 +696,9 @@ void StyleSerializer::collectUniqueNumberFormats(
     
     std::unordered_set<std::string> seen;
     
-    for (const auto& format_pair : repository) {
-        const auto& format = format_pair.format;
+    auto format_snapshot = repository.createSnapshot();
+    for (const auto& format_pair : format_snapshot) {
+        const auto& format = format_pair.second;
         const std::string& numfmt = format->getNumberFormat();
         
         if (!numfmt.empty() && seen.find(numfmt) == seen.end()) {

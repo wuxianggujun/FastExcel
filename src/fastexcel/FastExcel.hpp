@@ -34,7 +34,7 @@
 #include "archive/ZipArchive.hpp"
 
 // 工具层
-#include "utils/Logger.hpp"
+#include "utils/Logger.hpp"  // 直接包含日志头文件，用户无需手动包含
 
 // 版本信息
 #define FASTEXCEL_VERSION_MAJOR 2
@@ -60,29 +60,10 @@ inline std::string getVersion() {
     return FASTEXCEL_VERSION_STRING;
 }
 
-/**
- * @brief 初始化FastExcel库
- * 
- * 初始化日志系统、内存池、全局资源等
- * 在使用FastExcel任何功能前调用
- */
-void initialize();
+// 初始化和清理函数已移至下方统一声明，此处不再重复声明
 
-/**
- * @brief 清理FastExcel库
- * 
- * 清理全局资源、日志系统等
- * 程序结束前调用
- */
-void cleanup();
-
-// 日志便捷宏定义
-#define FASTEXCEL_LOG_TRACE(...)    fastexcel::Logger::getInstance().trace(__VA_ARGS__)
-#define FASTEXCEL_LOG_DEBUG(...)    fastexcel::Logger::getInstance().debug(__VA_ARGS__)
-#define FASTEXCEL_LOG_INFO(...)     fastexcel::Logger::getInstance().info(__VA_ARGS__)
-#define FASTEXCEL_LOG_WARN(...)     fastexcel::Logger::getInstance().warn(__VA_ARGS__)
-#define FASTEXCEL_LOG_ERROR(...)    fastexcel::Logger::getInstance().error(__VA_ARGS__)
-#define FASTEXCEL_LOG_CRITICAL(...) fastexcel::Logger::getInstance().critical(__VA_ARGS__)
+// 日志宏现在统一在 utils/Logger.hpp 中定义
+// FastExcel.hpp 已自动包含 Logger.hpp，用户可直接使用日志宏
 
 } // namespace fastexcel
 
@@ -136,16 +117,29 @@ void cleanup();
 namespace fastexcel {
 
 /**
- * @brief 初始化FastExcel库
- * @param log_file_path 日志文件路径
- * @param enable_console 是否启用控制台日志
+ * @brief 初始化FastExcel库（统一接口）
+ * @param log_file_path 日志文件路径（默认："logs/fastexcel.log"）
+ * @param enable_console 是否启用控制台日志（默认：true）
  * @return 初始化是否成功
+ *
+ * @note 此函数是幂等的，多次调用是安全的
  */
-FASTEXCEL_API bool initialize(const std::string& log_file_path = "logs/fastexcel.log", 
+FASTEXCEL_API bool initialize(const std::string& log_file_path = "logs/fastexcel.log",
                              bool enable_console = true);
 
 /**
+ * @brief 初始化FastExcel库（简化版本）
+ * 使用默认参数初始化
+ */
+FASTEXCEL_API inline void initialize() {
+    initialize("logs/fastexcel.log", true);
+}
+
+/**
  * @brief 清理FastExcel库资源
+ *
+ * 清理全局资源、日志系统等
+ * 程序结束前调用，幂等操作
  */
 FASTEXCEL_API void cleanup();
 
