@@ -1804,4 +1804,118 @@ StyleBuilder Workbook::createStyleBuilder() const {
     return StyleBuilder();
 }
 
+// ========== CSV功能实现 ==========
+
+std::shared_ptr<Worksheet> Workbook::loadCSV(const std::string& filepath, 
+                                            const std::string& sheet_name,
+                                            const CSVOptions& options) {
+    CORE_INFO("Loading CSV file: {} into workbook", filepath);
+    
+    // 确定工作表名称
+    std::string final_sheet_name = sheet_name;
+    if (final_sheet_name.empty()) {
+        // 从文件名提取工作表名称
+        size_t pos = filepath.find_last_of("/\\");
+        std::string filename = (pos != std::string::npos) ? filepath.substr(pos + 1) : filepath;
+        size_t dot_pos = filename.find_last_of('.');
+        final_sheet_name = (dot_pos != std::string::npos) ? filename.substr(0, dot_pos) : filename;
+        
+        // 确保名称唯一
+        if (hasSheet(final_sheet_name)) {
+            int counter = 1;
+            std::string base_name = final_sheet_name;
+            do {
+                final_sheet_name = base_name + "_" + std::to_string(counter++);
+            } while (hasSheet(final_sheet_name));
+        }
+    }
+    
+    // 创建新工作表
+    auto worksheet = addSheet(final_sheet_name);
+    if (!worksheet) {
+        CORE_ERROR("Failed to create worksheet: {}", final_sheet_name);
+        return nullptr;
+    }
+    
+    // 加载CSV数据
+    auto parse_info = worksheet->loadFromCSV(filepath, options);
+    if (!parse_info.isSuccess()) {
+        CORE_ERROR("Failed to load CSV data from: {}, errors: {}", filepath, parse_info.errors.size());
+        for (const auto& error : parse_info.errors) {
+            CORE_ERROR("CSV Parse Error: {}", error);
+        }
+        
+        // 移除创建的工作表
+        removeSheet(final_sheet_name);
+        return nullptr;
+    }
+    
+    CORE_INFO("Successfully loaded CSV: {} rows, {} columns", 
+             parse_info.rows_processed, parse_info.columns_detected);
+    
+    return worksheet;
+}
+
+std::shared_ptr<Worksheet> Workbook::loadCSVString(const std::string& csv_content,
+                                                  const std::string& sheet_name,
+                                                  const CSVOptions& options) {
+    CORE_INFO("Loading CSV from string into workbook, length: {}", csv_content.length());
+    
+    // 创建新工作表
+    auto worksheet = addSheet(sheet_name);
+    if (!worksheet) {
+        CORE_ERROR("Failed to create worksheet: {}", sheet_name);
+        return nullptr;
+    }
+    
+    // 加载CSV数据
+    auto parse_info = worksheet->loadFromCSVString(csv_content, options);
+    if (!parse_info.isSuccess()) {
+        CORE_ERROR("Failed to load CSV data from string, errors: {}", parse_info.errors.size());
+        for (const auto& error : parse_info.errors) {
+            CORE_ERROR("CSV Parse Error: {}", error);
+        }
+        
+        // 移除创建的工作表
+        removeSheet(sheet_name);
+        return nullptr;
+    }
+    
+    CORE_INFO("Successfully loaded CSV string: {} rows, {} columns", 
+             parse_info.rows_processed, parse_info.columns_detected);
+    
+    return worksheet;
+}
+
+bool Workbook::exportSheetAsCSV(size_t sheet_index, const std::string& filepath,
+                               const CSVOptions& options) const {
+    if (sheet_index >= worksheets_.size()) {
+        CORE_ERROR("Sheet index {} out of range (total: {})", sheet_index, worksheets_.size());
+        return false;
+    }
+    
+    auto worksheet = worksheets_[sheet_index];
+    
+    CORE_INFO("Exporting sheet '{}' (index {}) to CSV: {}", worksheet->getName(), sheet_index, filepath);
+    
+    return worksheet->saveAsCSV(filepath, options);
+}
+
+bool Workbook::exportSheetAsCSV(const std::string& sheet_name, const std::string& filepath,
+                               const CSVOptions& options) const {
+    auto worksheet = getSheet(sheet_name);
+    if (!worksheet) {
+        CORE_ERROR("Sheet not found: {}", sheet_name);
+        return false;
+    }
+    
+    CORE_INFO("Exporting sheet '{}' to CSV: {}", sheet_name, filepath);
+    
+    return worksheet->saveAsCSV(filepath, options);
+}
+
+bool Workbook::isCSVFile(const std::string& filepath) {
+    return CSVUtils::isCSVFile(filepath);
+}
+
 }} // namespace fastexcel::core

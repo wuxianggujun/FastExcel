@@ -6,6 +6,7 @@
 #include "fastexcel/core/CellRangeManager.hpp"
 #include "fastexcel/core/SharedFormula.hpp"
 #include "fastexcel/core/Image.hpp"  // 🚀 新增：图片支持
+#include "fastexcel/core/CSVProcessor.hpp"  // 🚀 新增：CSV处理支持
 #include "fastexcel/utils/CommonUtils.hpp"
 #include "fastexcel/utils/AddressParser.hpp"  // 🚀 新增：Excel地址解析支持
 #include "fastexcel/xml/XMLStreamWriter.hpp"
@@ -1039,6 +1040,12 @@ public:
     std::pair<int, int> getUsedRange() const;
     
     /**
+     * @brief 获取完整的使用范围
+     * @return (最小行, 最大行, 最小列, 最大列)
+     */
+    std::tuple<int, int, int, int> getUsedRangeFull() const;
+    
+    /**
      * @brief 获取单元格数量
      * @return 单元格数量
      */
@@ -1762,6 +1769,85 @@ public:
      * @return 内存大小（字节）
      */
     size_t getImagesMemoryUsage() const;
+
+    // ========== CSV功能 ==========
+    
+    /**
+     * @brief 从CSV文件加载数据到当前工作表
+     * @param filepath CSV文件路径
+     * @param options CSV解析选项
+     * @return 解析结果信息
+     */
+    CSVParseInfo loadFromCSV(const std::string& filepath, 
+                            const CSVOptions& options = CSVOptions::standard());
+    
+    /**
+     * @brief 从CSV字符串加载数据到当前工作表
+     * @param csv_content CSV内容字符串
+     * @param options CSV解析选项
+     * @return 解析结果信息
+     */
+    CSVParseInfo loadFromCSVString(const std::string& csv_content,
+                                  const CSVOptions& options = CSVOptions::standard());
+    
+    /**
+     * @brief 将当前工作表导出为CSV文件
+     * @param filepath 目标文件路径
+     * @param options CSV导出选项
+     * @return 是否成功
+     */
+    bool saveAsCSV(const std::string& filepath,
+                   const CSVOptions& options = CSVOptions::standard()) const;
+    
+    /**
+     * @brief 将当前工作表转换为CSV字符串
+     * @param options CSV导出选项
+     * @return CSV内容字符串
+     */
+    std::string toCSVString(const CSVOptions& options = CSVOptions::standard()) const;
+    
+    /**
+     * @brief 将指定范围导出为CSV字符串
+     * @param start_row 起始行（0-based）
+     * @param start_col 起始列（0-based）
+     * @param end_row 结束行（0-based）
+     * @param end_col 结束列（0-based）
+     * @param options CSV导出选项
+     * @return CSV内容字符串
+     */
+    std::string rangeToCSVString(int start_row, int start_col, int end_row, int end_col,
+                               const CSVOptions& options = CSVOptions::standard()) const;
+    
+    /**
+     * @brief 预览CSV文件的结构（不加载数据）
+     * @param filepath CSV文件路径
+     * @param options CSV解析选项
+     * @return 文件结构信息
+     */
+    static CSVParseInfo previewCSV(const std::string& filepath,
+                                  const CSVOptions& options = CSVOptions::standard());
+    
+    /**
+     * @brief 自动检测CSV文件的最佳解析选项
+     * @param filepath CSV文件路径
+     * @return 推荐的解析选项
+     */
+    static CSVOptions detectCSVOptions(const std::string& filepath);
+    
+    /**
+     * @brief 检查文件是否为CSV格式
+     * @param filepath 文件路径
+     * @return 是否为CSV文件
+     */
+    static bool isCSVFile(const std::string& filepath);
+    
+    /**
+     * @brief 获取单元格的显示值（用于CSV导出）
+     * @param row 行号（0-based）
+     * @param col 列号（0-based）
+     * @return 单元格的字符串表示
+     */
+    std::string getCellDisplayValue(int row, int col) const;
 
 private:
     // 内部辅助方法

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "fastexcel/core/Worksheet.hpp"
+#include "fastexcel/core/CSVProcessor.hpp"  // 🚀 新增：CSV处理支持
 #include "fastexcel/core/WorkbookModeSelector.hpp"
 #include "fastexcel/core/Path.hpp"
 #include "fastexcel/core/CustomPropertyManager.hpp"
@@ -255,6 +256,57 @@ public:
      * @return 是否成功
      */
     bool saveAs(const std::string& filename);
+    
+    // ========== CSV功能 ==========
+    
+    /**
+     * @brief 从CSV文件创建新的工作表
+     * @param filepath CSV文件路径
+     * @param sheet_name 工作表名称（可选）
+     * @param options CSV解析选项
+     * @return 新建的工作表指针，失败时返回nullptr
+     */
+    std::shared_ptr<Worksheet> loadCSV(const std::string& filepath, 
+                                      const std::string& sheet_name = "",
+                                      const CSVOptions& options = CSVOptions::standard());
+    
+    /**
+     * @brief 从CSV字符串创建新的工作表
+     * @param csv_content CSV内容字符串
+     * @param sheet_name 工作表名称（可选）
+     * @param options CSV解析选项
+     * @return 新建的工作表指针，失败时返回nullptr
+     */
+    std::shared_ptr<Worksheet> loadCSVString(const std::string& csv_content,
+                                            const std::string& sheet_name = "Sheet1",
+                                            const CSVOptions& options = CSVOptions::standard());
+    
+    /**
+     * @brief 将工作簿的指定工作表导出为CSV
+     * @param sheet_index 工作表索引（0-based）
+     * @param filepath 目标文件路径
+     * @param options CSV导出选项
+     * @return 是否成功
+     */
+    bool exportSheetAsCSV(size_t sheet_index, const std::string& filepath,
+                         const CSVOptions& options = CSVOptions::standard()) const;
+    
+    /**
+     * @brief 将工作簿的指定工作表导出为CSV（按名称）
+     * @param sheet_name 工作表名称
+     * @param filepath 目标文件路径
+     * @param options CSV导出选项
+     * @return 是否成功
+     */
+    bool exportSheetAsCSV(const std::string& sheet_name, const std::string& filepath,
+                         const CSVOptions& options = CSVOptions::standard()) const;
+    
+    /**
+     * @brief 检查文件是否为CSV格式
+     * @param filepath 文件路径
+     * @return 是否为CSV文件
+     */
+    static bool isCSVFile(const std::string& filepath);
     
     /**
      * @brief 检查工作簿是否已打开

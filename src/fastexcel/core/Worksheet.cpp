@@ -8,6 +8,9 @@
 #include "fastexcel/core/FormatRepository.hpp"
 #include "fastexcel/core/CellRangeManager.hpp"
 #include "fastexcel/core/SharedFormula.hpp"
+#include <iomanip>
+#include <sstream>
+#include <cmath>
 #include "fastexcel/core/Image.hpp"  // 🚀 新增：图片支持
 #include "fastexcel/xml/XMLStreamWriter.hpp"
 #include "fastexcel/xml/WorksheetXMLGenerator.hpp"
@@ -391,6 +394,10 @@ std::pair<int, int> Worksheet::getUsedRange() const {
     return range_manager_.getUsedRowRange().first != -1 ? 
            std::make_pair(range_manager_.getUsedRowRange().second, range_manager_.getUsedColRange().second) :
            std::make_pair(-1, -1);
+}
+
+std::tuple<int, int, int, int> Worksheet::getUsedRangeFull() const {
+    return range_manager_.getUsedRange();
 }
 
 bool Worksheet::hasCellAt(int row, int col) const {
@@ -1708,6 +1715,127 @@ size_t Worksheet::getImagesMemoryUsage() const {
         }
     }
     return total_memory;
+}
+
+// ========== CSV功能实现 ==========
+
+CSVParseInfo Worksheet::loadFromCSV(const std::string& filepath, const CSVOptions& options) {
+    FASTEXCEL_LOG_INFO("Loading CSV from file: {} into worksheet: {}", filepath, name_);
+    return CSVReader::loadFromFile(filepath, *this, options);
+}
+
+CSVParseInfo Worksheet::loadFromCSVString(const std::string& csv_content, const CSVOptions& options) {
+    FASTEXCEL_LOG_DEBUG("Loading CSV from string into worksheet: {}, content length: {}", name_, csv_content.length());
+    return CSVReader::loadFromString(csv_content, *this, options);
+}
+
+bool Worksheet::saveAsCSV(const std::string& filepath, const CSVOptions& options) const {
+    FASTEXCEL_LOG_INFO("Saving worksheet: {} as CSV to file: {}", name_, filepath);
+    return CSVWriter::saveToFile(*this, filepath, options);
+}
+
+std::string Worksheet::toCSVString(const CSVOptions& options) const {
+    FASTEXCEL_LOG_DEBUG("Converting worksheet: {} to CSV string", name_);
+    return CSVWriter::saveToString(*this, options);
+}
+
+std::string Worksheet::rangeToCSVString(int start_row, int start_col, int end_row, int end_col,
+                                       const CSVOptions& options) const {
+    FASTEXCEL_LOG_DEBUG("Converting range ({},{}) to ({},{}) of worksheet: {} to CSV string", 
+                       start_row, start_col, end_row, end_col, name_);
+    return CSVWriter::saveRangeToString(*this, start_row, start_col, end_row, end_col, options);
+}
+
+CSVParseInfo Worksheet::previewCSV(const std::string& filepath, const CSVOptions& options) {
+    return CSVReader::previewFile(filepath, options);
+}
+
+CSVOptions Worksheet::detectCSVOptions(const std::string& filepath) {
+    return CSVReader::detectOptions(filepath);
+}
+
+bool Worksheet::isCSVFile(const std::string& filepath) {
+    return CSVUtils::isCSVFile(filepath);
+}
+
+std::string Worksheet::getCellDisplayValue(int row, int col) const {
+    try {
+        // 检查范围
+        if (row < 0 || col < 0) {
+            return "";
+        }
+        
+        // 获取单元格
+        const auto& cell = getCell(row, col);
+        
+        // 根据单元格类型返回适当的字符串表示
+        switch (cell.getType()) {
+            case CellType::Empty:
+                return "";
+                
+            case CellType::Number:
+                {
+                    double value = cell.getValue<double>();
+                    // 检查是否为整数
+                    if (value == std::floor(value) && std::abs(value) < 1e15) {
+                        return std::to_string(static_cast<long long>(value));
+                    } else {
+                        // 使用高精度浮点数输出
+                        std::ostringstream oss;
+                        oss << std::fixed << std::setprecision(10) << value;
+                        std::string result = oss.str();
+                        // 移除末尾的零
+                        result.erase(result.find_last_not_of('0') + 1, std::string::npos);
+                        result.erase(result.find_last_not_of('.') + 1, std::string::npos);
+                        return result;
+                    }
+                }
+                
+            case CellType::String:
+                return cell.getValue<std::string>();
+                
+            case CellType::Boolean:
+                return cell.getValue<bool>() ? "TRUE" : "FALSE";
+                
+            case CellType::Formula:
+                // 对于公式，优先返回计算结果，如果无法获取则返回公式文本
+                try {
+                    // 首先尝试获取公式的计算结果
+                    double result = cell.getFormulaResult();
+                    // 检查是否为整数
+                    if (result == std::floor(result) && std::abs(result) < 1e15) {
+                        return std::to_string(static_cast<long long>(result));
+                    } else {
+                        // 使用高精度浮点数输出
+                        std::ostringstream oss;
+                        oss << std::fixed << std::setprecision(10) << result;
+                        std::string result_str = oss.str();
+                        // 移除末尾的零
+                        result_str.erase(result_str.find_last_not_of('0') + 1, std::string::npos);
+                        result_str.erase(result_str.find_last_not_of('.') + 1, std::string::npos);
+                        return result_str;
+                    }
+                } catch (...) {
+                    // 如果无法获取计算结果，尝试返回公式文本
+                    try {
+                        std::string formula = cell.getFormula();
+                        return formula.empty() ? "=" : "=" + formula;
+                    } catch (...) {
+                        return "#FORMULA_ERROR";
+                    }
+                }
+                
+            case CellType::Error:
+                return "#ERROR";
+                
+            default:
+                return "";
+        }
+        
+    } catch (const std::exception& e) {
+        // 如果发生错误（例如单元格不存在），返回空字符串
+        return "";
+    }
 }
 
 } // namespace core

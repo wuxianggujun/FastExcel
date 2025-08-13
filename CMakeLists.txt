@@ -61,6 +61,7 @@ set(FASTEXCEL_SOURCES
         src/fastexcel/core/Worksheet.cpp
         src/fastexcel/core/WorksheetChain.cpp  # 🚀 新增：链式调用助手类
         src/fastexcel/core/Image.cpp  # 🚀 新增：图片支持
+        src/fastexcel/core/CSVProcessor.cpp  # 🚀 新增：CSV处理支持
         src/fastexcel/core/SharedStringTable.cpp
         src/fastexcel/core/SharedFormula.cpp
         src/fastexcel/core/FormatRepository.cpp
