@@ -44,6 +44,11 @@ struct CSVOptions {
         "%Y-%m-%d %H:%M:%S", "%Y/%m/%d %H:%M:%S"
     };
     
+    // === 性能和内存配置 ===
+    size_t buffer_size = 8192;         // 读取缓冲区大小
+    bool use_streaming = false;        // 是否使用流式读取（大文件）
+    size_t streaming_threshold = 50 * 1024 * 1024; // 超过50MB使用流式读取
+    
     // === 错误处理配置 ===
     bool strict_mode = false;          // 严格模式（遇到错误立即停止）
     bool log_warnings = true;          // 记录警告信息

@@ -10,6 +10,7 @@
 #include <locale>
 #include <codecvt>
 #include <iomanip>
+#include <climits>  // 🚀 新增：INT_MIN, INT_MAX 支持
 
 namespace fastexcel {
 namespace core {
@@ -315,8 +316,8 @@ std::vector<std::string> CSVReader::parseLine(const std::string& line, const CSV
             // 字段结束
             if (options.trim_whitespace && !quote_started) {
                 // 去除前后空白（只有非引号字段）
-                size_t start = current_field.find_first_not_of(" \\t");
-                size_t end = current_field.find_last_not_of(" \\t");
+                size_t start = current_field.find_first_not_of(" \t");
+                size_t end = current_field.find_last_not_of(" \t");
                 if (start != std::string::npos) {
                     current_field = current_field.substr(start, end - start + 1);
                 } else {
@@ -333,8 +334,8 @@ std::vector<std::string> CSVReader::parseLine(const std::string& line, const CSV
     
     // 添加最后一个字段
     if (options.trim_whitespace && !quote_started) {
-        size_t start = current_field.find_first_not_of(" \\t");
-        size_t end = current_field.find_last_not_of(" \\t");
+        size_t start = current_field.find_first_not_of(" \t");
+        size_t end = current_field.find_last_not_of(" \t");
         if (start != std::string::npos) {
             current_field = current_field.substr(start, end - start + 1);
         } else {
@@ -361,15 +362,40 @@ void CSVReader::setCellValue(Worksheet& worksheet, int row, int col,
     // 尝试解析数字
     if (options.parse_numbers) {
         try {
-            // 检查是否为整数
-            if (value.find('.') == std::string::npos && value.find('e') == std::string::npos && 
-                value.find('E') == std::string::npos) {
-                long long int_val = std::stoll(value);
-                worksheet.setValue(row, col, static_cast<int>(int_val));
-                return;
-            } else {
-                // 尝试解析浮点数
-                double double_val = std::stod(value);
+            // 改进的数字检测逻辑
+            std::string trimmed_value = value;
+            
+            // 去除前后空白
+            trimmed_value.erase(0, trimmed_value.find_first_not_of(" \t"));
+            trimmed_value.erase(trimmed_value.find_last_not_of(" \t") + 1);
+            
+            // 检查是否为有效数字格式
+            if (!trimmed_value.empty()) {
+                bool is_negative = false;
+                size_t start_pos = 0;
+                
+                // 处理负号
+                if (trimmed_value[0] == '-') {
+                    is_negative = true;
+                    start_pos = 1;
+                }
+                
+                // 检查是否包含小数点或科学记数法
+                bool has_decimal = trimmed_value.find('.', start_pos) != std::string::npos;
+                bool has_scientific = trimmed_value.find_first_of("eE", start_pos) != std::string::npos;
+                
+                if (!has_decimal && !has_scientific) {
+                    // 尝试解析为整数
+                    long long int_val = std::stoll(trimmed_value);
+                    // 检查是否在int范围内
+                    if (int_val >= INT_MIN && int_val <= INT_MAX) {
+                        worksheet.setValue(row, col, static_cast<int>(int_val));
+                        return;
+                    }
+                }
+                
+                // 尝试解析为浮点数
+                double double_val = std::stod(trimmed_value);
                 worksheet.setValue(row, col, double_val);
                 return;
             }
@@ -380,13 +406,26 @@ void CSVReader::setCellValue(Worksheet& worksheet, int row, int col,
     
     // 尝试解析日期（简化实现）
     if (options.parse_dates) {
-        // 这里可以添加更复杂的日期解析逻辑
-        std::regex date_pattern(R"(\\d{4}[-/]\\d{1,2}[-/]\\d{1,2})");
+        // 修复正则表达式 - 移除多余的转义符
+        std::regex date_pattern(R"(\d{4}[-/]\d{1,2}[-/]\d{1,2})");
         if (std::regex_match(value, date_pattern)) {
             // 简单的日期格式，这里可以扩展
             worksheet.setValue(row, col, value); // 暂时作为字符串处理
             return;
         }
+    }
+    
+    // 尝试解析布尔值
+    std::string lower_value = value;
+    std::transform(lower_value.begin(), lower_value.end(), lower_value.begin(), 
+                  [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    
+    if (lower_value == "true" || lower_value == "1" || lower_value == "yes" || lower_value == "y") {
+        worksheet.setValue(row, col, true);
+        return;
+    } else if (lower_value == "false" || lower_value == "0" || lower_value == "no" || lower_value == "n") {
+        worksheet.setValue(row, col, false);
+        return;
     }
     
     // 默认作为字符串处理
