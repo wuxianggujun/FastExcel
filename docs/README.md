@@ -1,6 +1,8 @@
 # FastExcel 项目文档
 
-FastExcel 是一个功能完整的现代 C++17 Excel 文件处理库，采用双架构设计，支持新旧API共存，专为高性能、大规模数据处理和完整Excel格式支持而设计。
+FastExcel 是一个功能完整的现代 C++17 Excel 文件处理库，采用统一架构设计，专为高性能、大规模数据处理和完整Excel格式支持而设计。
+
+**🎉 最新更新（2025-08-13）：P0 优先级架构修复全部完成！**
 
 ## 📚 文档目录
 
@@ -16,9 +18,13 @@ FastExcel 是一个功能完整的现代 C++17 Excel 文件处理库，采用双
 - **[主题实现指南](theme-implementation-guide.md)** - Excel 主题功能的实现指南
 - **[共享公式优化路线图](shared-formula-optimization-roadmap.md)** - 共享公式系统的优化策略
 
+### 迁移指南
+- **[P0 迁移指南](P0-Migration-Guide.md)** - P0 架构修复的完整迁移指南
+- **[代码改进路线图](code-improvements-and-roadmap.md)** - 项目改进计划和实施状态
+
 ## 🚀 快速开始
 
-### 基本使用（新架构推荐）
+### 基本使用（统一架构）
 ```cpp
 #include "fastexcel/FastExcel.hpp"
 
@@ -36,19 +42,20 @@ int main() {
     auto worksheet = workbook->addWorksheet("数据表");
     
     // 写入各种数据类型
-    worksheet->writeString(0, 0, "产品名称");
-    worksheet->writeNumber(0, 1, 123.45);
-    worksheet->writeBoolean(0, 2, true);
-    worksheet->writeFormula(0, 3, "B1*2");
+    worksheet->setValue(0, 0, std::string("产品名称"));
+    worksheet->setValue(0, 1, 123.45);
+    worksheet->setValue(0, 2, true);
+    worksheet->setFormula(0, 3, "B1*2");
     
-    // 创建样式
-    auto style = workbook->createStyleBuilder()
+    // 创建样式（新统一架构）
+    auto format = FormatDescriptor::builder()
         .font().name("微软雅黑").size(12).bold(true).color(Color::BLUE)
         .fill().pattern(PatternType::Solid).fgColor(Color::LIGHT_GRAY)
         .border().all(BorderStyle::Thin, Color::BLACK)
         .build();
     
-    int styleId = workbook->addStyle(style);
+    // 应用样式
+    worksheet->setCellFormat(0, 0, format);
     
     // 保存文件
     workbook->save();
@@ -57,6 +64,44 @@ int main() {
     fastexcel::cleanup();
     return 0;
 }
+```
+
+### ✅ P0 架构修复亮点
+
+#### 统一样式系统
+```cpp
+// ✅ 新架构：统一的 FormatDescriptor
+auto format = FormatDescriptor::builder()
+    .font().name("Arial").size(12).bold(true)
+    .fill().backgroundColor(Color::YELLOW)
+    .build();
+
+// 线程安全的格式仓储
+int formatId = workbook->getFormatRepository()->addFormat(format);
+worksheet->setCellFormat(0, 0, format);
+
+// 行列格式设置
+worksheet->setColumnFormat(0, format);
+worksheet->setRowFormat(0, format);
+```
+
+#### 线程安全的格式遍历
+```cpp
+// ✅ 安全的快照机制
+auto snapshot = workbook->getFormatRepository()->createSnapshot();
+for (const auto& [id, format] : snapshot) {
+    // 安全遍历，无并发风险
+    std::cout << "Format ID: " << id << std::endl;
+}
+```
+
+#### 高性能XML解析
+```cpp
+// ✅ 统一使用 XMLStreamReader
+auto reader = XLSXReader::create();
+reader->open("input.xlsx");
+auto workbook = reader->readWorkbook();
+// 高性能、内存安全的解析
 ```
 
 ### 高级功能示例
@@ -82,7 +127,7 @@ auto report = worksheet->analyzeFormulaOptimization();
 // 增量编辑现有Excel文件
 auto editor = PackageEditor::open(Path("existing.xlsx"));
 auto worksheet = editor->getWorkbook()->getWorksheet("Sheet1");
-worksheet->writeNumber(5, 3, 99999.99);
+worksheet->setValue(5, 3, 99999.99);
 editor->save(); // 只更新修改部分
 ```
 
@@ -90,7 +135,7 @@ editor->save(); // 只更新修改部分
 ```cpp
 // 批量写入大数据集
 std::vector<std::vector<double>> bigData(10000, std::vector<double>(50));
-worksheet->writeRange(0, 0, bigData);
+worksheet->setRange(0, 0, bigData);
 
 // 设置高性能模式
 workbook->setHighPerformanceMode(true);
@@ -99,26 +144,28 @@ workbook->setAutoModeThresholds(1000000, 100*1024*1024); // 100万单元格，10
 
 ## 🏗️ 项目架构
 
-FastExcel 采用现代 C++17 设计，具有双架构并存的创新设计：
+FastExcel 采用现代 C++17 设计，具有统一架构的创新设计：
 
-### 🎯 双架构系统
+### 🎯 统一架构系统
 - **新架构 2.0**：现代C++设计，不可变值对象，线程安全
-- **旧架构兼容**：向后兼容API，支持平滑迁移
+- **完全统一**：移除旧架构，消除双轨制复杂性
+- **向后兼容**：提供完整迁移指南，平滑升级路径
 
 ### 📦 主要组件
 
 #### 核心模块 (Core)
 - **Workbook** - 工作簿管理，文档属性，VBA项目支持
-- **Worksheet** - 工作表功能，1100+行完整API
+- **Worksheet** - 工作表功能，1100+行完整API，统一样式接口
 - **Cell** 🆕 - 智能指针优化的24字节单元格结构，RAII内存管理，支持7种数据类型
 - **SharedFormula** - 智能公式优化，内存节省50-80%
-- **FormatDescriptor** - 不可变格式描述符，线程安全
-- **StyleBuilder** - 流畅样式构建器，链式调用API
+- **FormatDescriptor** - 不可变格式描述符，线程安全，统一样式架构
+- **FormatRepository** 🆕 - 线程安全格式仓储，快照机制，消除并发风险
 
 #### XML处理系统 (XML) 🆕
 - **UnifiedXMLGenerator** - 统一XML生成架构，高性能流式处理
 - **WorksheetXMLGenerator** - 工作表XML生成器，完全消除字符串拼接
-- **StyleSerializer** - 样式序列化器，支持完整Excel格式
+- **StyleSerializer** - 样式序列化器，支持完整Excel格式，线程安全
+- **XMLStreamReader** - 高性能SAX解析器，统一XML解析方式
 - **XMLUtils** - 统一XML转义处理，优化文本处理性能
 
 #### 存储引擎 (Archive) 
@@ -127,7 +174,7 @@ FastExcel 采用现代 C++17 设计，具有双架构并存的创新设计：
 - **CompressionEngine** - 多种压缩算法支持
 
 #### 读取系统 (Reader)
-- **XLSXReader** - 完整XLSX文件解析器
+- **XLSXReader** - 完整XLSX文件解析器，统一XML解析
 - **StylesParser** - 样式解析，支持特殊图案如gray125
 - **WorksheetParser** - 工作表数据解析
 
@@ -152,6 +199,7 @@ FastExcel 采用现代 C++17 设计，具有双架构并存的创新设计：
 - **样式去重**: 自动合并相同样式，节省50-80%存储
 - **智能缓存**: LRU缓存系统，10x性能提升
 - **并行处理**: 多线程支持，3-5x速度提升
+- **线程安全**: 快照机制，零锁竞争遍历
 
 ### 📈 智能模式选择
 - **AUTO模式**: 根据数据规模自动选择最优策略
@@ -163,6 +211,7 @@ FastExcel 采用现代 C++17 设计，具有双架构并存的创新设计：
 - **内存池**: 减少内存分配开销
 - **零缓存流式**: 流式模式真正的常量内存
 - **压缩优化**: 支持zlib-ng、libdeflate高性能压缩
+- **XML优化**: 统一XMLStreamReader，消除字符串解析
 
 ## 🔧 完整功能支持
 
@@ -182,6 +231,7 @@ FastExcel 采用现代 C++17 设计，具有双架构并存的创新设计：
 - ✅ **对齐**: 水平、垂直、换行、旋转、缩进
 - ✅ **数字格式**: 内置格式、自定义格式代码
 - ✅ **主题支持**: 完整Excel主题系统
+- ✅ **统一架构**: FormatDescriptor统一样式管理
 
 ### 📊 工作表功能
 - ✅ **基本操作**: 添加、删除、重命名、移动、复制
@@ -190,6 +240,7 @@ FastExcel 采用现代 C++17 设计，具有双架构并存的创新设计：
 - ✅ **冻结窗格**: 行列冻结、分割窗格
 - ✅ **打印设置**: 打印区域、重复行列、页面设置
 - ✅ **工作表保护**: 密码保护、选择性保护
+- ✅ **行列格式**: 统一的行列格式设置API
 
 ### 🏢 工作簿管理
 - ✅ **文档属性**: 标题、作者、公司、自定义属性
@@ -217,6 +268,7 @@ cmake --build cmake-build-debug -j 4
 
 # 运行示例
 cd cmake-build-debug/bin/examples
+./p0_improvements_demo  # P0修复演示
 ./sheet_copy_with_format_example
 ```
 
@@ -244,6 +296,7 @@ cmake -B build -S . \
 ### 格式和样式
 - `04_formatting_example.cpp` - 完整样式演示
 - `08_sheet_copy_with_format_example.cpp` - 带格式复制
+- `p0_improvements_demo.cpp` 🆕 - P0架构修复演示
 
 ### 高级功能
 - `09_high_performance_edit_example.cpp` - 高性能编辑
@@ -275,7 +328,14 @@ cd cmake-build-debug && ctest -V
 
 ## 📈 版本历史
 
-- **v3.6** (当前) - 完整功能实现，双架构设计，性能全面优化
+- **v3.7** (当前) - P0架构修复完成，统一样式系统，线程安全增强
+  - ✅ 完全统一样式架构，移除双轨制
+  - ✅ 线程安全的FormatRepository快照机制
+  - ✅ 统一XML解析，高性能XMLStreamReader
+  - ✅ 完整的行列格式设置API
+  - ✅ 日志系统统一，接口清理
+  
+- **v3.6** - 完整功能实现，双架构设计，性能全面优化
   - ✅ 双架构并存设计完成
   - ✅ 共享公式优化系统
   - ✅ OPC包增量编辑
@@ -328,12 +388,22 @@ cd build && ctest -V --parallel 4
 - [主题实现指南](theme-implementation-guide.md) - Excel主题功能实现
 - [共享公式优化路线图](shared-formula-optimization-roadmap.md) - 公式优化策略
 
+### 迁移指南
+- [P0迁移指南](P0-Migration-Guide.md) - P0架构修复的完整迁移指南
+- [代码改进路线图](code-improvements-and-roadmap.md) - 项目改进计划和实施状态
+
 ## 📋 当前开发状态
 
-FastExcel 已完成完整的企业级功能实现：
+FastExcel 已完成P0优先级架构修复，实现了企业级功能：
+
+### ✅ P0 架构修复完成（2025-08-13）
+- **统一样式系统** - 完全移除双轨制，统一FormatDescriptor架构
+- **线程安全增强** - FormatRepository快照机制，消除并发风险
+- **XML解析优化** - 统一XMLStreamReader，提升解析性能
+- **接口清理** - 移除重复声明，统一日志系统
+- **完整API** - 行列格式设置，样式管理完整化
 
 ### ✅ 已完成功能
-- **双架构设计** - 新旧API完美并存
 - **完整Excel支持** - 所有数据类型、样式、功能
 - **高性能优化** - 内存、速度、压缩全面优化
 - **共享公式系统** - 智能公式优化，大幅节省内存
@@ -342,17 +412,17 @@ FastExcel 已完成完整的企业级功能实现：
 - **变更跟踪** - 精确跟踪修改部分
 
 ### 🚧 持续改进
+- **P1性能优化** - RangeFormatter复用，XML增量生成
 - **文档完善** - API参考手册生成
 - **示例扩充** - 更多实战场景演示
-- **性能调优** - 针对特定场景的进一步优化
 
 ### 🔮 未来规划
+- **P2功能增强** - 数据验证、条件格式、图表支持
 - **Web Assembly支持** - 浏览器环境运行
 - **Python绑定** - Python语言接口
-- **图表支持** - Excel图表和绘图对象
 
 ---
 
-**FastExcel** - 企业级Excel处理解决方案，让数据处理更快、更简单、更专业！
+**FastExcel** - 企业级Excel处理解决方案，统一架构，线程安全，让数据处理更快、更简单、更专业！
 
-*最后更新: 2025-08-10*
+*最后更新: 2025-08-13*
