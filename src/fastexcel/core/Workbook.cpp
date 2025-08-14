@@ -285,6 +285,12 @@ std::shared_ptr<Worksheet> Workbook::addSheet(const std::string& name) {
     }
     
     auto worksheet = std::make_shared<Worksheet>(sheet_name, std::shared_ptr<Workbook>(this, [](Workbook*){}), next_sheet_id_++);
+    
+    // 🔧 关键修复：设置FormatRepository，启用列宽管理功能
+    if (format_repo_) {
+        worksheet->setFormatRepository(format_repo_.get());
+    }
+    
     worksheets_.push_back(worksheet);
     
     // 🚀 新增：如果这是第一个工作表，自动设置为激活状态
@@ -315,6 +321,12 @@ std::shared_ptr<Worksheet> Workbook::insertSheet(size_t index, const std::string
     }
     
     auto worksheet = std::make_shared<Worksheet>(sheet_name, std::shared_ptr<Workbook>(this, [](Workbook*){}), next_sheet_id_++);
+    
+    // 🔧 关键修复：设置FormatRepository，启用列宽管理功能
+    if (format_repo_) {
+        worksheet->setFormatRepository(format_repo_.get());
+    }
+    
     worksheets_.insert(worksheets_.begin() + index, worksheet);
     
     CORE_DEBUG("Inserted worksheet: {} at index {}", sheet_name, index);

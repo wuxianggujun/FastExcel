@@ -267,7 +267,7 @@ bool WorksheetParser::parseCell(const std::string& cell_xml,
                 } else {
                     worksheet->setValue(row, col, number_value);
                 }
-            } catch (const std::exception& e) {
+            } catch (const std::exception& /*e*/) {
                 // 如果不能转换为数字，当作字符串处理
                 std::string decoded_value = decodeXMLEntities(cell_value);
                 worksheet->setValue(row, col, decoded_value);
@@ -580,7 +580,10 @@ bool WorksheetParser::parseColumns(const std::string& xml_content,
             
             // 设置列宽（保留Excel默认列宽，即使没有customWidth属性）
             if (width > 0) {
-                worksheet->setColumnWidth(first_col, last_col, width);
+                // 使用新的智能列宽设置，逐列处理
+                for (int col = first_col; col <= last_col; ++col) {
+                    worksheet->setColumnWidth(col, width);
+                }
                 READER_DEBUG("设置列宽：列 {}-{} 宽度 {} custom_width={}", first_col, last_col, width, custom_width);
             }
             

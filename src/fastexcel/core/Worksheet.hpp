@@ -8,8 +8,10 @@
 #include "fastexcel/core/RangeFormatter.hpp"  // 🚀 新增：范围格式化器支持
 #include "fastexcel/core/Image.hpp"  // 🚀 新增：图片支持
 #include "fastexcel/core/CSVProcessor.hpp"  // 🚀 新增：CSV处理支持
+#include "fastexcel/core/ColumnWidthManager.hpp"  // 🚀 新架构：列宽管理器
 #include "fastexcel/utils/CommonUtils.hpp"
 #include "fastexcel/utils/AddressParser.hpp"  // 🚀 新增：Excel地址解析支持
+#include "fastexcel/utils/ColumnWidthCalculator.hpp"  // 🚀 新增：列宽计算器支持
 #include "fastexcel/core/CellAddress.hpp"     // 🚀 新增：Excel地址类支持
 #include "fastexcel/xml/XMLStreamWriter.hpp"
 #include "fastexcel/xml/Relationships.hpp"
@@ -49,6 +51,7 @@ struct ColumnInfo {
     bool hidden = false;           // 是否隐藏
     bool collapsed = false;        // 是否折叠
     uint8_t outline_level = 0;     // 大纲级别
+    bool precise_width = false;    // 🚀 新增：是否使用精确宽度计算
     
     // 🔧 关键修复：添加比较操作符以支持排序
     bool operator==(const ColumnInfo& other) const {
@@ -56,7 +59,8 @@ struct ColumnInfo {
                format_id == other.format_id &&
                hidden == other.hidden &&
                collapsed == other.collapsed &&
-               outline_level == other.outline_level;
+               outline_level == other.outline_level &&
+               precise_width == other.precise_width;
     }
     
     bool operator!=(const ColumnInfo& other) const {
@@ -68,6 +72,7 @@ struct ColumnInfo {
         if (width != other.width) return width < other.width;
         if (hidden != other.hidden) return hidden < other.hidden;
         if (collapsed != other.collapsed) return collapsed < other.collapsed;
+        if (precise_width != other.precise_width) return precise_width < other.precise_width;
         return outline_level < other.outline_level;
     }
 };
@@ -247,6 +252,13 @@ private:
     // 🚀 新增：图片管理
     std::vector<std::unique_ptr<Image>> images_;
     int next_image_id_ = 1;
+    
+    // 🚀 新增：列宽管理器
+    std::unique_ptr<ColumnWidthManager> column_width_manager_;
+    
+    // 🚀 新增：字体信息获取辅助方法
+    std::string getWorkbookDefaultFont() const;
+    double getWorkbookDefaultFontSize() const;
 
 public:
     explicit Worksheet(const std::string& name, std::shared_ptr<Workbook> workbook, int sheet_id = 1);
@@ -272,7 +284,14 @@ public:
      * @brief 设置格式仓储
      * @param format_repo 格式仓储指针
      */
-    void setFormatRepository(FormatRepository* format_repo) { format_repo_ = format_repo; }
+    void setFormatRepository(FormatRepository* format_repo) { 
+        format_repo_ = format_repo;
+        
+        // 🚀 初始化列宽管理器
+        if (format_repo_ && !column_width_manager_) {
+            column_width_manager_ = std::make_unique<ColumnWidthManager>(format_repo_);
+        }
+    }
     
     /**
      * @brief 启用/禁用优化模式
@@ -729,19 +748,83 @@ public:
     // ========== 行列操作 ==========
     
     /**
-     * @brief 设置列宽
+     * @brief 🚀 新架构：智能列宽设置（完美字体协调）
      * @param col 列号
-     * @param width 宽度
+     * @param target_width 目标列宽
+     * @param font_name 字体名称（空则自动检测）
+     * @param font_size 字体大小（0则自动检测）
+     * @param strategy 列宽策略（默认ADAPTIVE自适应）
+     * @return 实际设置的列宽和格式ID
+     * 
+     * @details 使用ColumnWidthManager进行智能列宽管理：
+     * - EXACT: 精确匹配，根据指定字体计算最优MDW
+     * - ADAPTIVE: 自适应，根据目标宽度和内容推测最佳字体
+     * - CONTENT_AWARE: 内容感知，分析列内容分布选择最佳字体
+     * - LEGACY: 兼容模式，使用传统单一MDW计算
+     * 
+     * @example
+     * // 自适应模式（推荐）
+     * worksheet.setColumnWidth(0, 4.0);
+     * 
+     * // 精确模式，指定微软雅黑字体
+     * worksheet.setColumnWidth(0, 4.0, "微软雅黑", 12, ColumnWidthManager::WidthStrategy::EXACT);
+     * 
+     * // 内容感知模式，自动分析单元格内容选择字体
+     * std::vector<std::string> contents = {"Hello", "世界", "Mixed内容"};
+     * worksheet.setColumnWidth(0, 5.0, "", 0, ColumnWidthManager::WidthStrategy::CONTENT_AWARE, contents);
      */
-    void setColumnWidth(int col, double width);
+    std::pair<double, int> setColumnWidth(int col, double target_width,
+                                          const std::string& font_name = "",
+                                          double font_size = 0,
+                                          ColumnWidthManager::WidthStrategy strategy = ColumnWidthManager::WidthStrategy::ADAPTIVE,
+                                          const std::vector<std::string>& cell_contents = {});
     
     /**
-     * @brief 设置列宽范围
-     * @param first_col 起始列
-     * @param last_col 结束列
-     * @param width 宽度
+     * @brief 🚀 新架构：批量智能列宽设置（高性能）
+     * @param configs 列宽配置映射 (列号 -> 配置)
+     * @return 实际设置结果 (列号 -> (宽度, 格式ID))
+     * 
+     * @details 高性能批量操作，内部按字体分组处理以提高效率
+     * 
+     * @example
+     * std::unordered_map<int, ColumnWidthManager::ColumnWidthConfig> configs;
+     * configs[0] = {4.0, "微软雅黑", 11, ColumnWidthManager::WidthStrategy::EXACT};
+     * configs[1] = {5.0, "Calibri", 11, ColumnWidthManager::WidthStrategy::EXACT};
+     * configs[2] = {6.0, "", 0, ColumnWidthManager::WidthStrategy::ADAPTIVE};
+     * 
+     * auto results = worksheet.setColumnWidthsBatch(configs);
      */
-    void setColumnWidth(int first_col, int last_col, double width);
+    std::unordered_map<int, std::pair<double, int>> setColumnWidthsBatch(
+        const std::unordered_map<int, ColumnWidthManager::ColumnWidthConfig>& configs);
+    
+    /**
+     * @brief 🚀 新架构：预计算列宽（不实际设置）
+     * @param target_width 目标宽度
+     * @param font_name 字体名称
+     * @param font_size 字体大小
+     * @return 优化后的实际列宽值
+     */
+    double calculateOptimalWidth(double target_width, const std::string& font_name, double font_size) const;
+    
+    /**
+     * @brief 🚀 获取列宽管理器的缓存统计（性能监控）
+     * @return 缓存统计信息
+     */
+    ColumnWidthManager::CacheStats getColumnWidthCacheStats() const {
+        if (column_width_manager_) {
+            return column_width_manager_->getCacheStats();
+        }
+        return {0, 0, 0};
+    }
+    
+    /**
+     * @brief 🚀 清理列宽管理器缓存（内存优化）
+     */
+    void clearColumnWidthCache() {
+        if (column_width_manager_) {
+            column_width_manager_->clearCache();
+        }
+    }
     
     /**
      * @brief 设置列格式
@@ -1623,6 +1706,41 @@ public:
      * @return 共享索引，失败返回-1
      */
     int createSharedFormula(int first_row, int first_col, int last_row, int last_col, const std::string& formula);
+    
+    // 🚀 新API：便捷的公式设置方法（使用地址类）
+    /**
+     * @brief 设置单元格公式 - 支持地址类
+     * @param address 单元格地址（支持 Address("A1") 或 Address(0, 0)）
+     * @param formula 公式字符串
+     * @param result 公式计算结果（可选，默认0.0）
+     * 
+     * @example
+     * worksheet->setFormula("A1", "SUM(B1:B10)");           // 字符串地址
+     * worksheet->setFormula(Address(0, 0), "B1*C1");        // 地址对象
+     * worksheet->setFormula({0, 0}, "AVERAGE(D:D)", 100.5); // 列表初始化 + 结果
+     */
+    void setFormula(const Address& address, const std::string& formula, double result = 0.0);
+    
+    /**
+     * @brief 设置单元格公式 - 传统坐标方式（兼容性）
+     * @param row 行号（0基索引）
+     * @param col 列号（0基索引） 
+     * @param formula 公式字符串
+     * @param result 公式计算结果（可选，默认0.0）
+     */
+    void setFormula(int row, int col, const std::string& formula, double result = 0.0);
+    
+    /**
+     * @brief 创建共享公式 - 支持地址范围类
+     * @param range 范围地址（支持 CellRange("A1:C3") 或坐标）
+     * @param formula 基础公式
+     * @return 共享索引，失败返回-1
+     * 
+     * @example
+     * worksheet->createSharedFormula("A1:A10", "B{row}*C{row}");
+     * worksheet->createSharedFormula(CellRange(0, 0, 9, 0), "B{row}*C{row}");
+     */
+    int createSharedFormula(const CellRange& range, const std::string& formula);
     
     /**
      * @brief 获取共享公式管理器

@@ -35,6 +35,9 @@ Worksheet::Worksheet(const std::string& name, std::shared_ptr<Workbook> workbook
     : name_(name), parent_workbook_(workbook), sheet_id_(sheet_id) {
     // 初始化共享公式管理器
     shared_formula_manager_ = std::make_unique<SharedFormulaManager>();
+    
+    // 🚀 初始化列宽管理器（延迟初始化，等待 format_repo_ 设置）
+    // column_width_manager_ 将在 setFormatRepository 中初始化
 }
 
 // ========== 基本单元格操作 ==========
@@ -89,26 +92,128 @@ void Worksheet::writeUrl(int row, int col, const std::string& url, const std::st
 
 // 旧的writeRange方法已移除，请使用新的模板化API setRange方法
 
-// ========== 行列操作 ==========
+// ========== 🚀 新架构：智能列宽管理方法 ==========
 
-void Worksheet::setColumnWidth(int col, double width) {
+std::pair<double, int> Worksheet::setColumnWidth(int col, double target_width,
+                                                 const std::string& font_name,
+                                                 double font_size,
+                                                 ColumnWidthManager::WidthStrategy strategy,
+                                                 const std::vector<std::string>& cell_contents) {
+    validateCellPosition(0, col);
+    
     if (parent_workbook_ && parent_workbook_->getDirtyManager()) {
         std::string sheet_path = "xl/worksheets/sheet" + std::to_string(sheet_id_) + ".xml";
         parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::METADATA);
     }
-    validateCellPosition(0, col);
-    column_info_[col].width = width;
+    
+    // 确保列宽管理器已初始化
+    if (!column_width_manager_) {
+        if (!format_repo_) {
+            throw std::runtime_error("FormatRepository未设置，无法使用智能列宽功能");
+        }
+        column_width_manager_ = std::make_unique<ColumnWidthManager>(format_repo_);
+    }
+    
+    // 构建配置
+    ColumnWidthManager::ColumnWidthConfig config(target_width, font_name, font_size, strategy);
+    
+    // 使用内容感知模式时，传递单元格内容
+    std::pair<double, int> result;
+    if (strategy == ColumnWidthManager::WidthStrategy::CONTENT_AWARE && !cell_contents.empty()) {
+        result = column_width_manager_->setSmartColumnWidth(col, target_width, cell_contents);
+    } else {
+        result = column_width_manager_->setColumnWidth(col, config);
+    }
+    
+    // 更新列信息
+    column_info_[col].width = result.first;
+    column_info_[col].precise_width = true;
+    if (result.second >= 0) {
+        column_info_[col].format_id = result.second;
+    }
+    
+    return result;
 }
 
-void Worksheet::setColumnWidth(int first_col, int last_col, double width) {
+std::unordered_map<int, std::pair<double, int>> Worksheet::setColumnWidthsBatch(
+    const std::unordered_map<int, ColumnWidthManager::ColumnWidthConfig>& configs) {
+    
     if (parent_workbook_ && parent_workbook_->getDirtyManager()) {
         std::string sheet_path = "xl/worksheets/sheet" + std::to_string(sheet_id_) + ".xml";
         parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::METADATA);
     }
-    validateRange(0, first_col, 0, last_col);
-    for (int col = first_col; col <= last_col; ++col) {
-        column_info_[col].width = width;
+    
+    // 确保列宽管理器已初始化
+    if (!column_width_manager_) {
+        if (!format_repo_) {
+            throw std::runtime_error("FormatRepository未设置，无法使用批量列宽功能");
+        }
+        column_width_manager_ = std::make_unique<ColumnWidthManager>(format_repo_);
     }
+    
+    // 验证所有列位置
+    for (const auto& [col, config] : configs) {
+        validateCellPosition(0, col);
+    }
+    
+    // 批量处理
+    auto results = column_width_manager_->setColumnWidths(configs);
+    
+    // 更新列信息
+    for (const auto& [col, result] : results) {
+        column_info_[col].width = result.first;
+        column_info_[col].precise_width = true;
+        if (result.second >= 0) {
+            column_info_[col].format_id = result.second;
+        }
+    }
+    
+    return results;
+}
+
+double Worksheet::calculateOptimalWidth(double target_width, const std::string& font_name, double font_size) const {
+    // 确保列宽管理器已初始化
+    if (!column_width_manager_) {
+        if (!format_repo_) {
+            throw std::runtime_error("FormatRepository未设置，无法进行列宽计算");
+        }
+        
+        // 临时创建管理器进行计算
+        auto temp_manager = std::make_unique<ColumnWidthManager>(format_repo_);
+        return temp_manager->calculateOptimalWidth(target_width, font_name, font_size);
+    }
+    
+    return column_width_manager_->calculateOptimalWidth(target_width, font_name, font_size);
+}
+
+// ========== 行列操作 ==========
+
+// 🚀 旧的列宽方法已完全移除，请使用新的 ColumnWidthManager 架构：
+// - setColumnWidth() 单列智能设置
+// - setColumnWidthsBatch() 批量高性能设置
+// - calculateOptimalWidth() 预计算
+
+// 获取工作簿默认字体信息的辅助方法
+std::string Worksheet::getWorkbookDefaultFont() const {
+    if (parent_workbook_) {
+        // 尝试从工作簿的格式仓储获取默认字体
+        if (format_repo_) {
+            const auto& default_format = core::FormatDescriptor::getDefault();
+            return default_format.getFontName();
+        }
+    }
+    return "Calibri";  // 默认字体
+}
+
+double Worksheet::getWorkbookDefaultFontSize() const {
+    if (parent_workbook_) {
+        // 尝试从工作簿的格式仓储获取默认字体大小
+        if (format_repo_) {
+            const auto& default_format = core::FormatDescriptor::getDefault();
+            return default_format.getFontSize();
+        }
+    }
+    return 11.0;  // 默认字体大小
 }
 
 void Worksheet::setColumnFormatId(int col, int format_id) {
@@ -1386,6 +1491,21 @@ int Worksheet::createSharedFormula(int first_row, int first_col, int last_row, i
     return shared_index;
 }
 
+// 🚀 新API：便捷的公式设置方法实现
+void Worksheet::setFormula(const Address& address, const std::string& formula, double result) {
+    setFormula(address.getRow(), address.getCol(), formula, result);
+}
+
+void Worksheet::setFormula(int row, int col, const std::string& formula, double result) {
+    Cell& cell = getCell(row, col);
+    cell.setFormula(formula, result);
+}
+
+int Worksheet::createSharedFormula(const CellRange& range, const std::string& formula) {
+    return createSharedFormula(range.getStartRow(), range.getStartCol(), 
+                              range.getEndRow(), range.getEndCol(), formula);
+}
+
 // 公式优化方法已移除，请使用新的架构
 
 // 🚀 新API：便捷的工作表状态检查方法实现
@@ -1832,7 +1952,7 @@ std::string Worksheet::getCellDisplayValue(int row, int col) const {
                 return "";
         }
         
-    } catch (const std::exception& e) {
+    } catch (const std::exception& /*e*/) {
         // 如果发生错误（例如单元格不存在），返回空字符串
         return "";
     }
