@@ -31,6 +31,7 @@ WorksheetChain& WorksheetChain::setRange(const std::string& range, const std::ve
 
 // 非模板方法的实现
 WorksheetChain& WorksheetChain::setColumnWidth(int col, double width) {
+    // 直接调用简化版本，现在没有重载歧义
     worksheet_.setColumnWidth(col, width);
     return *this;
 }

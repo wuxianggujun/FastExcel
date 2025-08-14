@@ -752,36 +752,64 @@ public:
     // ========== 行列操作 ==========
     
     /**
-     * @brief 🚀 新架构：智能列宽设置（完美字体协调）
+     * @brief 设置列宽（简化版本）
      * @param col 列号
-     * @param target_width 目标列宽
-     * @param font_name 字体名称（空则自动检测）
-     * @param font_size 字体大小（0则自动检测）
-     * @param strategy 列宽策略（默认ADAPTIVE自适应）
-     * @return 实际设置的列宽和格式ID
+     * @param width 列宽值
+     * @return 实际设置的列宽
      * 
-     * @details 使用ColumnWidthManager进行智能列宽管理：
-     * - EXACT: 精确匹配，根据指定字体计算最优MDW
-     * - ADAPTIVE: 自适应，根据目标宽度和内容推测最佳字体
-     * - CONTENT_AWARE: 内容感知，分析列内容分布选择最佳字体
-     * - LEGACY: 兼容模式，使用传统单一MDW计算
+     * @details 简单直接的列宽设置，不涉及格式系统，无需FormatRepository。
+     *          适合纯列宽调整场景，性能高效。
      * 
      * @example
-     * // 自适应模式（推荐）
-     * worksheet.setColumnWidth(0, 4.0);
-     * 
-     * // 精确模式，指定微软雅黑字体
-     * worksheet.setColumnWidth(0, 4.0, "微软雅黑", 12, ColumnWidthManager::WidthStrategy::EXACT);
-     * 
-     * // 内容感知模式，自动分析单元格内容选择字体
-     * std::vector<std::string> contents = {"Hello", "世界", "Mixed内容"};
-     * worksheet.setColumnWidth(0, 5.0, "", 0, ColumnWidthManager::WidthStrategy::CONTENT_AWARE, contents);
+     * worksheet.setColumnWidth(0, 4.5);  // 设置第1列宽度为4.5
+     * worksheet.setColumnWidth(1, 10.0); // 设置第2列宽度为10.0
      */
-    std::pair<double, int> setColumnWidth(int col, double target_width,
-                                          const std::string& font_name = "",
-                                          double font_size = 0,
-                                          ColumnWidthManager::WidthStrategy strategy = ColumnWidthManager::WidthStrategy::ADAPTIVE,
-                                          const std::vector<std::string>& cell_contents = {});
+    double setColumnWidth(int col, double width);
+    
+    /**
+     * @brief 设置列宽同时绑定字体格式（高级版本）
+     * @param col 列号
+     * @param width 列宽值
+     * @param font_name 字体名称
+     * @param font_size 字体大小
+     * @return 实际设置的列宽和格式ID
+     * 
+     * @details 高级功能，同时设置列宽和字体格式。需要FormatRepository。
+     * 
+     * @example
+     * auto [width, format_id] = worksheet.setColumnWidthWithFont(0, 4.5, "微软雅黑", 11);
+     */
+    std::pair<double, int> setColumnWidthWithFont(int col, double width, 
+                                                  const std::string& font_name, 
+                                                  double font_size = 11.0);
+    
+    /**
+     * @brief 🚀 智能列宽设置（专家版本）
+     * @param col 列号
+     * @param target_width 目标列宽
+     * @param font_name 字体名称
+     * @param font_size 字体大小
+     * @param strategy 列宽策略
+     * @param cell_contents 单元格内容（可选）
+     * @return 实际设置的列宽和格式ID
+     * 
+     * @details 专家级功能，提供完整的智能列宽管理。
+     * 
+     * @example
+     * auto result = worksheet.setColumnWidthAdvanced(0, 4.0, "微软雅黑", 12, 
+     *                                               ColumnWidthManager::WidthStrategy::EXACT);
+     * 
+     * // 内容感知模式
+     * std::vector<std::string> contents = {"Hello", "世界", "Mixed内容"};
+     * auto result = worksheet.setColumnWidthAdvanced(0, 5.0, "", 0, 
+     *                                               ColumnWidthManager::WidthStrategy::CONTENT_AWARE,
+     *                                               contents);
+     */
+    std::pair<double, int> setColumnWidthAdvanced(int col, double target_width,
+                                                  const std::string& font_name,
+                                                  double font_size,
+                                                  ColumnWidthManager::WidthStrategy strategy,
+                                                  const std::vector<std::string>& cell_contents = {});
     
     /**
      * @brief 🚀 新架构：批量智能列宽设置（高性能）

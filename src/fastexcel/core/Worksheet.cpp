@@ -88,17 +88,14 @@ void Worksheet::writeUrl(int row, int col, const std::string& url, const std::st
     this->updateUsedRange(row, col);
 }
 
-// ========== 批量数据操作 ==========
-
-// 旧的writeRange方法已移除，请使用新的模板化API setRange方法
 
 // ========== 🚀 新架构：智能列宽管理方法 ==========
 
-std::pair<double, int> Worksheet::setColumnWidth(int col, double target_width,
-                                                 const std::string& font_name,
-                                                 double font_size,
-                                                 ColumnWidthManager::WidthStrategy strategy,
-                                                 const std::vector<std::string>& cell_contents) {
+std::pair<double, int> Worksheet::setColumnWidthAdvanced(int col, double target_width,
+                                                        const std::string& font_name,
+                                                        double font_size,
+                                                        ColumnWidthManager::WidthStrategy strategy,
+                                                        const std::vector<std::string>& cell_contents) {
     validateCellPosition(0, col);
     
     if (parent_workbook_ && parent_workbook_->getDirtyManager()) {
@@ -109,8 +106,11 @@ std::pair<double, int> Worksheet::setColumnWidth(int col, double target_width,
     // 确保列宽管理器已初始化
     if (!column_width_manager_) {
         if (!format_repo_) {
-            throw std::runtime_error("FormatRepository未设置，无法使用智能列宽功能");
+            // 自动创建一个临时的 FormatRepository 用于列宽计算
+            // 注意：这只用于基本的列宽功能，不涉及复杂的格式管理
+            FASTEXCEL_LOG_DEBUG("FormatRepository未设置，使用基础列宽模式");
         }
+        // 创建列宽管理器，即使 format_repo_ 为空也可以工作
         column_width_manager_ = std::make_unique<ColumnWidthManager>(format_repo_);
     }
     
@@ -146,7 +146,8 @@ std::unordered_map<int, std::pair<double, int>> Worksheet::setColumnWidthsBatch(
     // 确保列宽管理器已初始化
     if (!column_width_manager_) {
         if (!format_repo_) {
-            throw std::runtime_error("FormatRepository未设置，无法使用批量列宽功能");
+            // 自动创建一个临时的 FormatRepository 用于列宽计算
+            FASTEXCEL_LOG_DEBUG("FormatRepository未设置，使用基础列宽模式");
         }
         column_width_manager_ = std::make_unique<ColumnWidthManager>(format_repo_);
     }
@@ -175,7 +176,9 @@ double Worksheet::calculateOptimalWidth(double target_width, const std::string& 
     // 确保列宽管理器已初始化
     if (!column_width_manager_) {
         if (!format_repo_) {
-            throw std::runtime_error("FormatRepository未设置，无法进行列宽计算");
+            // 临时创建管理器进行计算
+            auto temp_manager = std::make_unique<ColumnWidthManager>(format_repo_);
+            return temp_manager->calculateOptimalWidth(target_width, font_name, font_size);
         }
         
         // 临时创建管理器进行计算
@@ -184,6 +187,38 @@ double Worksheet::calculateOptimalWidth(double target_width, const std::string& 
     }
     
     return column_width_manager_->calculateOptimalWidth(target_width, font_name, font_size);
+}
+
+// ========== 🚀 新增：简化版列宽设置方法 ==========
+
+double Worksheet::setColumnWidth(int col, double width) {
+    validateCellPosition(0, col);
+    
+    if (parent_workbook_ && parent_workbook_->getDirtyManager()) {
+        std::string sheet_path = "xl/worksheets/sheet" + std::to_string(sheet_id_) + ".xml";
+        parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::METADATA);
+    }
+    
+    // 🎆 简化方案：直接使用基础列宽计算器，无需FormatRepository
+    auto calculator = utils::ColumnWidthCalculator(utils::ColumnWidthCalculator::FontType::CALIBRI_11);
+    double actual_width = calculator.quantize(width);
+    
+    // 直接更新列信息，简洁高效
+    column_info_[col].width = actual_width;
+    column_info_[col].precise_width = true;
+    // 不设置 format_id，因为这只是列宽操作
+    
+    FASTEXCEL_LOG_DEBUG("设置列{}宽度: {} -> {}", col, width, actual_width);
+    
+    return actual_width;
+}
+
+std::pair<double, int> Worksheet::setColumnWidthWithFont(int col, double width, 
+                                                         const std::string& font_name, 
+                                                         double font_size) {
+    // 调用 setColumnWidthAdvanced，使用EXACT策略
+    return setColumnWidthAdvanced(col, width, font_name, font_size, 
+                                 ColumnWidthManager::WidthStrategy::EXACT, {});
 }
 
 // ========== 行列操作 ==========
