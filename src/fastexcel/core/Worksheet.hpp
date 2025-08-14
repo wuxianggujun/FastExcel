@@ -290,6 +290,10 @@ public:
         // 🚀 初始化列宽管理器
         if (format_repo_ && !column_width_manager_) {
             column_width_manager_ = std::make_unique<ColumnWidthManager>(format_repo_);
+            // 同步工作簿Normal字体的MDW，按默认格式估算（与Excel对齐）
+            const auto& def = core::FormatDescriptor::getDefault();
+            int mdw = utils::ColumnWidthCalculator::estimateMDW(def.getFontName(), def.getFontSize());
+            column_width_manager_->setWorkbookNormalMDW(mdw);
         }
     }
     

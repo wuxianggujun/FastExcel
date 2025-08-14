@@ -131,9 +131,16 @@ void WorksheetXMLGenerator::generateBatch(const std::function<void(const char*, 
     // 生成工作表视图
     generateSheetViews(writer);
     
-    // 工作表格式信息
+    // 工作表格式信息：补充 baseColWidth 与 defaultColWidth 以贴近Excel行为
     writer.startElement("sheetFormatPr");
+    // 基础列宽字符数（通常Excel为10，对应Calibri 11的最大数字字符宽度计数）
+    writer.writeAttribute("baseColWidth", "10");
     writer.writeAttribute("defaultRowHeight", "15");
+    // 使用工作表的默认列宽（Worksheet为friend，可直接访问）
+    {
+        std::string def_col_w = std::to_string(worksheet_->default_col_width_);
+        writer.writeAttribute("defaultColWidth", def_col_w.c_str());
+    }
     writer.endElement(); // sheetFormatPr
     
     // 生成列信息
@@ -575,9 +582,14 @@ void WorksheetXMLGenerator::generateStreaming(const std::function<void(const cha
     writer.endElement(); // sheetView
     writer.endElement(); // sheetViews
     
-    // 工作表格式信息
+    // 工作表格式信息（流式）：同样补充 baseColWidth 与 defaultColWidth
     writer.startElement("sheetFormatPr");
+    writer.writeAttribute("baseColWidth", "10");
     writer.writeAttribute("defaultRowHeight", "15");
+    {
+        std::string def_col_w = std::to_string(worksheet_->default_col_width_);
+        writer.writeAttribute("defaultColWidth", def_col_w.c_str());
+    }
     writer.endElement(); // sheetFormatPr
     
     // 列信息（使用XMLStreamWriter优化）
