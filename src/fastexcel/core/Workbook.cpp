@@ -123,35 +123,114 @@ bool Workbook::save() {
     // 运行时检查：只读模式不能保存
     ensureEditable("save");
     
+    // 🔧 新增：检查关键组件是否存在
+    if (!file_manager_) {
+        CORE_ERROR("Cannot save: FileManager is null");
+        return false;
+    }
+    
     try {
         // 使用 TimeUtils 更新修改时间
         doc_properties_.modified_time = utils::TimeUtils::getCurrentTime();
         
-        // 设置ZIP压缩级别
-        if (file_manager_->isOpen()) {
+        // 设置ZIP压缩级别 (添加空指针检查)
+        if (file_manager_ && file_manager_->isOpen()) {
             if (!file_manager_->setCompressionLevel(options_.compression_level)) {
                 CORE_WARN("Failed to set compression level to {}", options_.compression_level);
             } else {
                 FASTEXCEL_LOG_ZIP_DEBUG("Set ZIP compression level to {}", options_.compression_level);
             }
+        } else {
+            CORE_ERROR("Cannot save: FileManager is not open");
+            return false;
         }
         
-        // 🔧 修复SharedStrings生成逻辑：移除手动收集，依赖工作表XML生成时自动添加
-        // 清空共享字符串列表，让工作表XML生成时自动填充
+        // 🔧 修复SharedStrings生成逻辑：预先收集所有字符串，避免动态修改
         if (options_.use_shared_strings) {
-            CORE_DEBUG("SharedStrings enabled - SST will be populated during worksheet XML generation");
-            if (shared_string_table_) shared_string_table_->clear();
+            CORE_DEBUG("SharedStrings enabled - pre-collecting all strings from worksheets");
+            collectSharedStrings();  // 预先收集所有字符串
+            CORE_DEBUG("Collected {} unique strings in SharedStringTable", 
+                      shared_string_table_ ? shared_string_table_->getStringCount() : 0);
         } else {
             CORE_DEBUG("SharedStrings disabled for performance");
             if (shared_string_table_) shared_string_table_->clear();
         }
         
         // 编辑模式下，先将原包中未被我们生成的条目拷贝过来（绘图、图片、打印设置等）
+        // 🔧 修复：检查是否是保存到同一文件，避免文件锁定问题
         if (isPassThroughEditMode() && !original_package_path_.empty() && file_manager_ && file_manager_->isOpen()) {
-            // 我们将跳过这些前缀（由生成逻辑负责写入/覆盖）
-            // 透传阶段：不跳过任何前缀，先复制全部条目；后续生成阶段会覆盖我们需要更新的部件
-            std::vector<std::string> skip_prefixes = { };
-            file_manager_->copyFromExistingPackage(core::Path(original_package_path_), skip_prefixes);
+            // 检查是否保存到同一文件
+            bool is_same_file = (original_package_path_ == filename_);
+            
+            if (is_same_file) {
+                // 保存到同一文件：先关闭当前FileManager，复制原文件到临时位置
+                CORE_DEBUG("Saving to same file, creating temporary backup for resource preservation");
+                
+                std::string temp_backup = original_package_path_ + ".tmp_backup_" + std::to_string(std::time(nullptr));
+                core::Path source_path(original_package_path_);
+                core::Path temp_path(temp_backup);
+                
+                try {
+                    // 关闭当前FileManager以释放文件锁定
+                    file_manager_->close();
+                    
+                    // 复制原文件到临时位置
+                    if (temp_path.exists()) {
+                        temp_path.remove();
+                    }
+                    source_path.copyTo(temp_path);
+                    
+                    // 重新打开FileManager用于写入
+                    if (!file_manager_->open(true)) {
+                        CORE_ERROR("Failed to reopen FileManager after backup creation");
+                        // 清理临时文件
+                        if (temp_path.exists()) temp_path.remove();
+                        return false;
+                    }
+                    
+                    // 从临时文件复制内容，跳过核心部件（将被重新生成）
+                    std::vector<std::string> skip_prefixes = {
+                        "[Content_Types].xml",
+                        "_rels/",
+                        "xl/workbook.xml",
+                        "xl/_rels/",
+                        "xl/styles.xml",
+                        "xl/sharedStrings.xml",
+                        "xl/worksheets/",
+                        "xl/theme/",
+                        "docProps/"  // 文档属性也重新生成
+                    };
+                    file_manager_->copyFromExistingPackage(temp_path, skip_prefixes);
+                    
+                    // 清理临时文件
+                    if (temp_path.exists()) {
+                        temp_path.remove();
+                        CORE_DEBUG("Removed temporary backup: {}", temp_backup);
+                    }
+                    
+                } catch (const std::exception& e) {
+                    CORE_ERROR("Failed to handle same-file save: {}", e.what());
+                    // 清理临时文件
+                    if (temp_path.exists()) temp_path.remove();
+                    // 尝试重新打开FileManager
+                    file_manager_->open(true);
+                    // 继续执行，不复制原内容
+                }
+            } else {
+                // 保存到不同文件：正常复制，但跳过核心部件
+                std::vector<std::string> skip_prefixes = {
+                    "[Content_Types].xml",
+                    "_rels/",
+                    "xl/workbook.xml",
+                    "xl/_rels/",
+                    "xl/styles.xml",
+                    "xl/sharedStrings.xml",
+                    "xl/worksheets/",
+                    "xl/theme/",
+                    "docProps/"  // 文档属性也重新生成
+                };
+                file_manager_->copyFromExistingPackage(core::Path(original_package_path_), skip_prefixes);
+            }
         }
 
         // 生成Excel文件结构（会覆盖我们管理的核心部件）
@@ -1289,11 +1368,18 @@ std::unique_ptr<Workbook> Workbook::openForEditing(const Path& path) {
             loaded_workbook->transitionToState(WorkbookState::EDITING, "openForEditing()");
             loaded_workbook->original_package_path_ = path.string();
             
-            // 🎯 API修复：为保存功能准备FileManager
-            if (!loaded_workbook->open()) {
-                CORE_ERROR("Failed to prepare FileManager for workbook: {}", path.string());
+            // 🎯 关键修复：为编辑模式准备FileManager
+            loaded_workbook->filename_ = path.string();
+            loaded_workbook->file_manager_ = std::make_unique<archive::FileManager>(path);
+            
+            // 打开FileManager用于后续的保存操作
+            // 使用create=true允许覆盖原文件
+            if (!loaded_workbook->file_manager_->open(true)) {
+                CORE_ERROR("Failed to open FileManager for editing: {}", path.string());
                 return nullptr;
             }
+            
+            CORE_INFO("Prepared workbook for editing: {}", path.string());
         }
         
         CORE_INFO("Successfully loaded workbook for editing: {}", path.string());
@@ -1690,6 +1776,33 @@ size_t Workbook::getTotalCellCount() const {
     }
     
     return total_cells;
+}
+
+size_t Workbook::getEstimatedSize() const {
+    // 估计文件大小：基础大小 + 工作表大小 + 样式大小 + 共享字符串大小
+    size_t estimated = 10 * 1024; // 基础XML文件大約10KB
+    
+    // 每个工作表的估计大小
+    for (const auto& sheet : worksheets_) {
+        if (sheet) {
+            // 每个单元格平均约50字节（XML格式）
+            estimated += sheet->getCellCount() * 50;
+            // 每个工作表的基础结构约5KB
+            estimated += 5 * 1024;
+        }
+    }
+    
+    // 样式大小估计
+    if (format_repo_) {
+        estimated += format_repo_->getFormatCount() * 200; // 每个样式约200字节
+    }
+    
+    // 共享字符串大小估计
+    if (shared_string_table_) {
+        estimated += shared_string_table_->getStringCount() * 30; // 每个字符串平均30字节
+    }
+    
+    return estimated;
 }
 
 std::unique_ptr<StyleTransferContext> Workbook::copyStylesFrom(const Workbook& source_workbook) {

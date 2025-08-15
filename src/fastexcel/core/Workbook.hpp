@@ -7,6 +7,10 @@
 #include "fastexcel/core/CustomPropertyManager.hpp"
 #include "fastexcel/core/DefinedNameManager.hpp"
 #include "fastexcel/core/DirtyManager.hpp"
+#include "fastexcel/core/WorkbookCoordinator.hpp"  // 🔧 新架构：协调器
+#include "fastexcel/core/WorksheetManager.hpp"     // 🔧 新架构：工作表管理器
+#include "fastexcel/core/ResourceManager.hpp"      // 🔧 新架构：资源管理器
+#include "fastexcel/core/SharedStringCollector.hpp" // 🔧 新架构：字符串收集器
 #include "fastexcel/archive/FileManager.hpp"
 #include "fastexcel/utils/CommonUtils.hpp"
 #include "fastexcel/utils/AddressParser.hpp"  // 🚀 新增：Excel地址解析支持
@@ -125,58 +129,51 @@ class Workbook {
     friend class ::fastexcel::reader::XLSXReader;  // 让XLSXReader能访问私有open方法
     friend class ::fastexcel::xml::DocPropsXMLGenerator;  // 让XML生成器能访问私有方法
 private:
+    // ========== 核心架构组件（重构后） ==========
     std::string filename_;
-    std::vector<std::shared_ptr<Worksheet>> worksheets_;
-    std::unique_ptr<archive::FileManager> file_manager_;
+    std::unique_ptr<WorkbookCoordinator> coordinator_;      // 🔧 新架构：协调器
+    std::unique_ptr<WorksheetManager> worksheet_manager_;   // 🔧 新架构：工作表管理器
+    std::unique_ptr<ResourceManager> resource_manager_;     // 🔧 新架构：资源管理器
     
-    // 格式管理 - 新样式架构
+    // ========== 样式和格式管理 ==========
     std::unique_ptr<FormatRepository> format_repo_;
+    std::unique_ptr<SharedStringTable> shared_string_table_;
+    std::unique_ptr<SharedStringCollector> string_collector_; // 🔧 新架构：字符串收集器
     
-    // 主题管理
-    std::string theme_xml_; // 自定义主题XML内容（编辑或外部设置）
-    std::string theme_xml_original_; // 从文件读取的原始主题XML（用于未编辑时的保真写回）
-    bool theme_dirty_ = false; // 主题是否被编辑
-    std::unique_ptr<theme::Theme> theme_; // 结构化主题对象（优先用于生成）
+    // ========== 主题管理 ==========
+    std::unique_ptr<theme::Theme> theme_;
+    std::string theme_xml_;
+    std::string theme_xml_original_;
+    bool theme_dirty_ = false;
     
-    // ID管理
-    int next_sheet_id_ = 1;
+    // ========== 状态管理 ==========
+    WorkbookState state_ = WorkbookState::CLOSED;
+    FileSource file_source_ = FileSource::NEW_FILE;
+    std::string original_package_path_;
     
-    // 🔧 统一的状态管理系统（重构后）
-    WorkbookState state_ = WorkbookState::CLOSED;        // 当前工作簿状态
-    FileSource file_source_ = FileSource::NEW_FILE;     // 文件来源类型
-    std::string original_package_path_;                  // 原始文件路径（用于保留未修改部件）
-    
-    // 文档属性
+    // ========== 文档属性和元数据 ==========
     DocumentProperties doc_properties_;
     std::unique_ptr<CustomPropertyManager> custom_property_manager_;
-    
-    // 定义名称管理
     std::unique_ptr<DefinedNameManager> defined_name_manager_;
+    std::unique_ptr<DirtyManager> dirty_manager_;
     
-    // 工作簿选项
+    // ========== 配置选项 ==========
     WorkbookOptions options_;
+    bool preserve_unknown_parts_ = true;
     
-    // 共享字符串表
-    std::unique_ptr<SharedStringTable> shared_string_table_;
-    
-    // VBA项目
+    // ========== VBA和保护 ==========
     std::string vba_project_path_;
     bool has_vba_ = false;
-    
-    // 工作簿保护
     bool protected_ = false;
     std::string protection_password_;
     bool lock_structure_ = false;
     bool lock_windows_ = false;
-
-    // 新的智能脏数据管理器
-    std::unique_ptr<DirtyManager> dirty_manager_;
     
-    // 工作簿选项（包含保留未修改部件的设置）
-    bool preserve_unknown_parts_ = true; // 保留未修改的Excel部件（如绘图、打印设置等）
-
-    // 活动工作表管理
-    size_t active_worksheet_index_ = 0;  // 当前活动工作表的索引
+    // ========== 兼容性保留 ==========
+    std::vector<std::shared_ptr<Worksheet>> worksheets_;    // 暂时保留以兼容
+    std::unique_ptr<archive::FileManager> file_manager_;    // 暂时保留以兼容
+    int next_sheet_id_ = 1;                                // 迁移到WorksheetManager
+    size_t active_worksheet_index_ = 0;                    // 迁移到WorksheetManager
 
 public:
     /**
@@ -1336,6 +1333,31 @@ public:
      * @return 共享字符串表指针（可能为nullptr）
      */
     const SharedStringTable* getSharedStrings() const;
+    
+    /**
+     * @brief 获取共享字符串表（新架构方法）
+     * @return 共享字符串表指针
+     */
+    SharedStringTable* getSharedStringTable() { return shared_string_table_.get(); }
+    const SharedStringTable* getSharedStringTable() const { return shared_string_table_.get(); }
+    
+    /**
+     * @brief 检查是否处于编辑模式
+     * @return 是否处于编辑模式
+     */
+    bool isEditMode() const { return state_ == WorkbookState::EDITING; }
+    
+    /**
+     * @brief 获取原始包路径（用于编辑模式）
+     * @return 原始文件路径
+     */
+    const std::string& getOriginalPackagePath() const { return original_package_path_; }
+    
+    /**
+     * @brief 获取估计大小（用于决定是否使用流式写入）
+     * @return 估计的文件大小（字节）
+     */
+    size_t getEstimatedSize() const;
 
     
     // ========== 工作簿编辑功能 ==========

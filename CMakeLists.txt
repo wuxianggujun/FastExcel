@@ -107,6 +107,11 @@ set(FASTEXCEL_SOURCES
         src/fastexcel/opc/PartGraph.cpp
         # Tracking services
         src/fastexcel/tracking/StandardChangeTracker.cpp
+        # New Architecture Components (Refactoring)
+        src/fastexcel/core/ResourceManager.cpp
+        src/fastexcel/core/WorkbookCoordinator.cpp
+        src/fastexcel/core/WorksheetManager.cpp
+        src/fastexcel/core/SharedStringCollector.cpp
         
 )
 
