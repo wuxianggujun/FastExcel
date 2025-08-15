@@ -4,6 +4,7 @@
  */
 
 #include "Exception.hpp"
+#include "fastexcel/utils/CommonUtils.hpp"
 #include <sstream>
 #include <iostream>
 #include <mutex>
@@ -141,14 +142,8 @@ std::string CellException::getCellReference() const {
         return "Unknown";
     }
     
-    std::string col_str;
-    int col_num = col_;
-    while (col_num >= 0) {
-        col_str = char('A' + (col_num % 26)) + col_str;
-        col_num = col_num / 26 - 1;
-    }
-    
-    return col_str + std::to_string(row_ + 1);
+    // 使用工具类方法，避免重复实现
+    return utils::CommonUtils::cellReference(row_, col_);
 }
 
 // XMLException 实现

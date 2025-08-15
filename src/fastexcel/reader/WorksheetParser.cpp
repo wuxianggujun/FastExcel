@@ -8,6 +8,7 @@
 #include "fastexcel/utils/Logger.hpp"
 #include "fastexcel/core/Workbook.hpp"
 #include "fastexcel/core/SharedFormula.hpp"
+#include "fastexcel/utils/CommonUtils.hpp"
 
 #include <algorithm>
 #include "fastexcel/utils/TimeUtils.hpp"
@@ -253,28 +254,26 @@ bool WorksheetParser::parseCell(const std::string& cell_xml,
         std::string decoded_value = decodeXMLEntities(cell_value);
         worksheet->setValue(row, col, decoded_value);
     } else {
-        // 数字或默认类型
+        // 数字或默认类型 - Excel中没有t属性的单元格默认是数字！
         if (!cell_value.empty()) {
             try {
-                // 尝试解析为数字
+                // 解析为数字 - 这是最常见的情况，应该优先处理
                 double number_value = std::stod(cell_value);
                 
-                // 检查是否为日期数字格式
-                if (isDateFormat(style_index, styles)) {
-                    // 将Excel日期数字转换为可读格式
-                    std::string date_str = convertExcelDateToString(number_value);
-                    worksheet->setValue(row, col, date_str);
-                } else {
-                    worksheet->setValue(row, col, number_value);
-                }
+                // 重要：日期在Excel中也是数字，不要转换为字符串！
+                // 日期格式应该由样式来控制显示，而不是改变数据类型
+                worksheet->setValue(row, col, number_value);
+                
             } catch (const std::exception& /*e*/) {
-                // 如果不能转换为数字，当作字符串处理
-                std::string decoded_value = decodeXMLEntities(cell_value);
-                worksheet->setValue(row, col, decoded_value);
+                // 极少数情况：如果真的不能解析为数字（可能是Excel文件损坏）
+                // 记录警告并跳过该单元格，而不是错误地转换为字符串
+                READER_WARN("单元格{}无法解析为数字，值='{}'", 
+                           utils::CommonUtils::cellReference(row, col), cell_value);
+                // 不设置任何值，保持单元格为空
             }
         } else if (!formula.empty()) {
             // 只有公式没有值的情况
-            worksheet->setValue(row, col, "=" + formula);
+            worksheet->setFormula(row, col, formula);
         }
     }
     
