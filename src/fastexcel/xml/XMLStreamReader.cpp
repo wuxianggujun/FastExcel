@@ -4,6 +4,7 @@
 #include <cstring>
 #include <fstream>
 #include <sstream>
+#include "fastexcel/core/Path.hpp"
 
 namespace fastexcel {
 namespace xml {
@@ -109,14 +110,15 @@ void XMLStreamReader::setEncoding(const std::string& encoding) {
 }
 
 XMLParseError XMLStreamReader::parseFromFile(const std::string& filename) {
-    FILE* file = nullptr;
-    errno_t err = fopen_s(&file, filename.c_str(), "rb");
-    if (err != 0 || !file) {
+    // 统一通过 Path 进行跨平台文件打开
+    fastexcel::core::Path path(filename);
+    FILE* file = path.openForRead(true);
+    if (!file) {
         std::string error_msg = "Failed to open file: " + filename;
         handleError(XMLParseError::IoError, error_msg);
         return XMLParseError::IoError;
     }
-    
+
     XMLParseError result = parseFromFile(file);
     fclose(file);
     return result;

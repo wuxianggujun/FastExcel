@@ -9,8 +9,8 @@
 #include <unordered_map>
 #include <cstdio>
 #include <expat.h>
-#include "../core/Expected.hpp"
-#include "../core/ErrorCode.hpp"
+#include "fastexcel/core/Expected.hpp"
+#include "fastexcel/core/ErrorCode.hpp"
 
 // 项目日志头文件
 #include "fastexcel/utils/Logger.hpp"

@@ -26,10 +26,10 @@ XMLStreamWriter::XMLStreamWriter(const std::function<void(const char*, size_t)>&
 }
 
 XMLStreamWriter::XMLStreamWriter(const std::string& filename) : XMLStreamWriter() {
-    // 设置直接文件模式
-    FILE* file = nullptr;
-    errno_t err = fopen_s(&file, filename.c_str(), "wb");
-    if (err == 0 && file) {
+    // 设置直接文件模式（统一通过 Path 处理跨平台打开）
+    fastexcel::core::Path path(filename);
+    FILE* file = path.openForWrite(true);
+    if (file) {
         setDirectFileMode(file, true);
     } else {
         XML_ERROR("Failed to open file for writing: {}", filename);
@@ -128,7 +128,8 @@ void XMLStreamWriter::startElement(const char* name) {
     writeRawDirect("<", 1);
     size_t name_len = strlen(name);
     writeRawDirect(name, name_len);
-    element_stack_.push(name);
+    // 存储副本，避免外部传入临时 c_str 悬空
+    element_stack_.push(std::string(name, name_len));
     in_element_ = true;
 }
 
@@ -138,7 +139,7 @@ void XMLStreamWriter::endElement() {
         return;
     }
     
-    const char* name = element_stack_.top();
+    const std::string& name = element_stack_.top();
     element_stack_.pop();
     
     if (in_element_) {
@@ -146,7 +147,7 @@ void XMLStreamWriter::endElement() {
         in_element_ = false;
     } else {
         writeRawDirect("</", 2);
-        writeRawDirect(name, strlen(name));
+        writeRawDirect(name.c_str(), name.size());
         writeRawDirect(">", 1);
     }
 }
@@ -268,9 +269,9 @@ void XMLStreamWriter::clear() {
 }
 
 bool XMLStreamWriter::writeToFile(const std::string& filename) {
-    FILE* file = nullptr;
-    errno_t err = fopen_s(&file, filename.c_str(), "wb");
-    if (err != 0 || !file) {
+    fastexcel::core::Path path(filename);
+    FILE* file = path.openForWrite(true);
+    if (!file) {
         XML_ERROR("Failed to open file '{}' for writing", filename);
         return false;
     }

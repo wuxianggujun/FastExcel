@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 #include "fastexcel/xml/XMLStreamWriter.hpp"
+#include "fastexcel/core/Path.hpp"
 #include <sstream>
 #include <fstream>
 #include <filesystem>
@@ -242,9 +243,8 @@ TEST_F(XMLStreamWriterTest, BufferedMode) {
 
 // 测试文件写入模式
 TEST_F(XMLStreamWriterTest, FileMode) {
-    FILE* file = nullptr;
-    errno_t err = fopen_s(&file, test_filename.c_str(), "wb");
-    ASSERT_EQ(err, 0);
+    fastexcel::core::Path p(test_filename);
+    FILE* file = p.openForWrite(true);
     ASSERT_NE(file, nullptr);
     
     writer->setDirectFileMode(file, true); // 让writer拥有文件

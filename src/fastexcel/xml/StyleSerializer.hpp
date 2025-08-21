@@ -1,7 +1,7 @@
 #include "fastexcel/utils/ModuleLoggers.hpp"
 #pragma once
 
-#include "../core/FormatRepository.hpp"
+#include "fastexcel/core/FormatRepository.hpp"
 #include "XMLStreamWriter.hpp"
 #include <string>
 #include <functional>

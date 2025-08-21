@@ -11,6 +11,8 @@
 
 // 项目日志头文件
 #include "fastexcel/utils/Logger.hpp"
+// 需要使用 Path 进行跨平台文件打开
+#include "fastexcel/core/Path.hpp"
 
 namespace fastexcel {
 namespace xml {
@@ -59,8 +61,8 @@ private:
     char buffer_[BUFFER_SIZE];
     size_t buffer_pos_ = 0;
     
-    // 元素栈用于跟踪嵌套的XML元素
-    std::stack<const char*> element_stack_;
+    // 元素栈用于跟踪嵌套的XML元素（拷贝名称，避免悬空指针）
+    std::stack<std::string> element_stack_;
     bool in_element_ = false;
     
     // 输出模式支持

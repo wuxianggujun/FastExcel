@@ -16,24 +16,24 @@
 // === 旧架构组件 (向后兼容) ===
 
 // 核心组件
-#include "core/Color.hpp"
-#include "core/Cell.hpp"
-#include "core/Workbook.hpp"
-#include "core/Worksheet.hpp"
-#include "core/ThreadPool.hpp"
+#include "fastexcel/core/Color.hpp"
+#include "fastexcel/core/Cell.hpp"
+#include "fastexcel/core/Workbook.hpp"
+#include "fastexcel/core/Worksheet.hpp"
+#include "fastexcel/core/ThreadPool.hpp"
 
 // XML处理层
-#include "xml/ContentTypes.hpp"
-#include "xml/Relationships.hpp"
-#include "xml/SharedStrings.hpp"
-#include "xml/XMLStreamWriter.hpp"
+#include "fastexcel/xml/ContentTypes.hpp"
+#include "fastexcel/xml/Relationships.hpp"
+#include "fastexcel/xml/SharedStrings.hpp"
+#include "fastexcel/xml/XMLStreamWriter.hpp"
 
 // 压缩归档层
-#include "archive/FileManager.hpp"
-#include "archive/ZipArchive.hpp"
+#include "fastexcel/archive/FileManager.hpp"
+#include "fastexcel/archive/ZipArchive.hpp"
 
 // 工具层
-#include "utils/Logger.hpp"  // 直接包含日志头文件，用户无需手动包含
+#include "fastexcel/utils/Logger.hpp"  // 直接包含日志头文件，用户无需手动包含
 
 // 版本信息
 #define FASTEXCEL_VERSION_MAJOR 2
@@ -72,7 +72,7 @@ inline std::string getVersion() {
     #ifndef NOMINMAX
         #define NOMINMAX
     #endif
-    #include <windows.h>
+    // 避免在公共头直接引入 <windows.h> 以减少命名污染和编译开销
 #endif
 
 #ifdef __linux__

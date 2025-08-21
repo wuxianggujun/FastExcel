@@ -161,20 +161,17 @@ target_include_directories(fastexcel PUBLIC
         $<INSTALL_INTERFACE:include>
 )
 
-target_include_directories(fastexcel PRIVATE
-        ${FASTEXCEL_THIRD_PARTY_INCLUDE_DIRS}
-)
+target_include_directories(fastexcel PRIVATE ${FASTEXCEL_THIRD_PARTY_INCLUDE_DIRS})
 
 # UTF8-CPP需要作为INTERFACE包含，因为Path.hpp是公共头文件并包含utf8.h
 target_include_directories(fastexcel INTERFACE
         ${CMAKE_CURRENT_SOURCE_DIR}/third_party/utfcpp/source
 )
 
-# 确保第三方库的头文件能被找到
+# 确保第三方库的头文件能被找到（通过已配置的变量与目标暴露）
 target_include_directories(fastexcel PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/third_party/libexpat/expat/lib
         ${CMAKE_CURRENT_SOURCE_DIR}/third_party/fmt/include
-        ${CMAKE_CURRENT_SOURCE_DIR}/third_party/minizip-ng
         ${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb  # 🚀 新增：stb_image头文件路径
 )
 

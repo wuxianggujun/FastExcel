@@ -5,8 +5,8 @@
 #include <string>
 #include <vector>
 #include <cstdint>
-#include "../core/Expected.hpp"
-#include "../core/ErrorCode.hpp"
+#include "fastexcel/core/Expected.hpp"
+#include "fastexcel/core/ErrorCode.hpp"
 
 namespace fastexcel {
 namespace archive {
