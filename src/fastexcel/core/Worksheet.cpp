@@ -1,7 +1,7 @@
 #include "fastexcel/utils/ModuleLoggers.hpp"
 #include "fastexcel/core/Worksheet.hpp"
-#include "fastexcel/core/WorksheetChain.hpp"  // 🚀 新增：链式调用支持
-#include "fastexcel/core/RangeFormatter.hpp"  // 🚀 新增：范围格式化支持
+#include "fastexcel/core/WorksheetChain.hpp"
+#include "fastexcel/core/RangeFormatter.hpp"
 #include "fastexcel/core/Workbook.hpp"
 #include "fastexcel/core/DirtyManager.hpp"
 #include "fastexcel/core/SharedStringTable.hpp"
@@ -11,7 +11,7 @@
 #include <iomanip>
 #include <sstream>
 #include <cmath>
-#include "fastexcel/core/Image.hpp"  // 🚀 新增：图片支持
+#include "fastexcel/core/Image.hpp"
 #include "fastexcel/xml/XMLStreamWriter.hpp"
 #include "fastexcel/xml/WorksheetXMLGenerator.hpp"
 #include "fastexcel/xml/Relationships.hpp"
@@ -20,7 +20,7 @@
 #include "fastexcel/utils/LogConfig.hpp"
 #include "fastexcel/utils/TimeUtils.hpp"
 #include "fastexcel/utils/CommonUtils.hpp"
-#include "fastexcel/utils/AddressParser.hpp"  // 🚀 新增：地址解析支持
+#include "fastexcel/utils/AddressParser.hpp"
 #include "fastexcel/core/Exception.hpp"
 #include <sstream>
 #include <stdexcept>
@@ -36,35 +36,32 @@ Worksheet::Worksheet(const std::string& name, std::shared_ptr<Workbook> workbook
     // 初始化共享公式管理器
     shared_formula_manager_ = std::make_unique<SharedFormulaManager>();
     
-    // 🔧 新架构：初始化单元格数据处理器
+    // 初始化单元格数据处理器
     cell_processor_ = std::make_unique<CellDataProcessor>(cells_, range_manager_, parent_workbook_, sheet_id_);
     
-    // 🔧 新架构：初始化布局管理器
+    // 初始化布局管理器
     layout_manager_ = std::make_unique<WorksheetLayoutManager>();
     
-    // 🔧 新架构：初始化图片管理器
+    // 初始化图片管理器
     image_manager_ = std::make_unique<WorksheetImageManager>();
     
-    // 🔧 新架构：初始化CSV处理器
+    // 初始化CSV处理器
     csv_handler_ = std::make_unique<WorksheetCSVHandler>(*this);
     
-    // 🚀 初始化列宽管理器（延迟初始化，等待 format_repo_ 设置）
-    // column_width_manager_ 将在 setFormatRepository 中初始化
+    // 列宽管理器延迟初始化，待 setFormatRepository 设置
 }
 
-// ========== 基本单元格操作 ==========
+// 基本单元格操作
 
 Cell& Worksheet::getCell(int row, int col) {
-    // 🔧 委托给cell_processor_处理
     return cell_processor_->getCell(row, col);
 }
 
 const Cell& Worksheet::getCell(int row, int col) const {
-    // 🔧 委托给cell_processor_处理
     return cell_processor_->getCell(row, col);
 }
 
-// ========== 基本写入方法（已移除旧API） ==========
+// 基本写入方法
 
 void Worksheet::writeDateTime(int row, int col, const std::tm& datetime) {
     if (parent_workbook_ && parent_workbook_->getDirtyManager()) {
@@ -79,12 +76,11 @@ void Worksheet::writeDateTime(int row, int col, const std::tm& datetime) {
 }
 
 void Worksheet::writeUrl(int row, int col, const std::string& url, const std::string& string) {
-    // 🔧 委托给cell_processor_处理超链接设置
     cell_processor_->setHyperlink(row, col, url, string);
 }
 
 
-// ========== 🚀 新架构：智能列宽管理方法 ==========
+// 智能列宽管理方法
 
 std::pair<double, int> Worksheet::setColumnWidthAdvanced(int col, double target_width,
                                                         const std::string& font_name,
@@ -98,7 +94,6 @@ std::pair<double, int> Worksheet::setColumnWidthAdvanced(int col, double target_
         parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::METADATA);
     }
     
-    // 🔧 委托给layout_manager_处理高级列宽设置
     auto result = layout_manager_->setColumnWidthAdvanced(col, target_width, font_name, font_size, strategy, cell_contents);
     
     // 同步更新本地column_info_（保持兼容性）
@@ -124,7 +119,6 @@ std::unordered_map<int, std::pair<double, int>> Worksheet::setColumnWidthsBatch(
         validateCellPosition(0, col);
     }
     
-    // 🔧 委托给layout_manager_处理批量列宽设置
     auto results = layout_manager_->setColumnWidthsBatch(configs);
     
     // 同步更新本地column_info_（保持兼容性）
@@ -140,11 +134,10 @@ std::unordered_map<int, std::pair<double, int>> Worksheet::setColumnWidthsBatch(
 }
 
 double Worksheet::calculateOptimalWidth(double target_width, const std::string& font_name, double font_size) const {
-    // 🔧 委托给layout_manager_处理列宽计算
     return layout_manager_->calculateOptimalWidth(target_width, font_name, font_size);
 }
 
-// ========== 🚀 新增：简化版列宽设置方法 ==========
+// 简化版列宽设置方法
 
 double Worksheet::setColumnWidth(int col, double width) {
     validateCellPosition(0, col);
@@ -154,7 +147,6 @@ double Worksheet::setColumnWidth(int col, double width) {
         parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::METADATA);
     }
     
-    // 🔧 委托给layout_manager_处理列宽设置
     double actual_width = layout_manager_->setColumnWidth(col, width);
     
     // 同步更新本地column_info_（保持兼容性）
@@ -174,9 +166,9 @@ std::pair<double, int> Worksheet::setColumnWidthWithFont(int col, double width,
                                  ColumnWidthManager::WidthStrategy::EXACT, {});
 }
 
-// ========== 行列操作 ==========
+// 行列操作
 
-// 🚀 旧的列宽方法已完全移除，请使用新的 ColumnWidthManager 架构：
+// 旧的列宽方法已移除，请使用 ColumnWidthManager 架构：
 // - setColumnWidth() 单列智能设置
 // - setColumnWidthsBatch() 批量高性能设置
 // - calculateOptimalWidth() 预计算
@@ -210,7 +202,6 @@ void Worksheet::setColumnFormatId(int col, int format_id) {
         parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::METADATA);
     }
     
-    // 🔧 委托给layout_manager_处理列格式设置
     layout_manager_->setColumnFormatId(col, format_id);
     
     // 同步更新本地column_info_（保持兼容性）
@@ -224,7 +215,6 @@ void Worksheet::setColumnFormatId(int first_col, int last_col, int format_id) {
         parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::METADATA);
     }
     
-    // 🔧 委托给layout_manager_处理列格式设置
     layout_manager_->setColumnFormatId(first_col, last_col, format_id);
     
     // 同步更新本地column_info_（保持兼容性）
@@ -234,9 +224,9 @@ void Worksheet::setColumnFormatId(int first_col, int last_col, int format_id) {
     }
 }
 
-// setColumnFormat方法已移除，请使用FormatDescriptor架构
+// setColumnFormat方法已移除（请使用FormatDescriptor架构）
 
-// setColumnFormat范围方法已移除，请使用FormatDescriptor架构
+// setColumnFormat范围方法已移除（请使用FormatDescriptor架构）
 
 void Worksheet::hideColumn(int col) {
     if (parent_workbook_ && parent_workbook_->getDirtyManager()) {
@@ -244,7 +234,6 @@ void Worksheet::hideColumn(int col) {
         parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::METADATA);
     }
     
-    // 🔧 委托给layout_manager_处理列隐藏
     layout_manager_->hideColumn(col);
     
     // 同步更新本地column_info_（保持兼容性）
@@ -258,7 +247,6 @@ void Worksheet::hideColumn(int first_col, int last_col) {
         parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::METADATA);
     }
     
-    // 🔧 委托给layout_manager_处理列隐藏
     layout_manager_->hideColumn(first_col, last_col);
     
     // 同步更新本地column_info_（保持兼容性）
@@ -274,7 +262,6 @@ void Worksheet::setRowHeight(int row, double height) {
         parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::METADATA);
     }
     
-    // 🔧 委托给layout_manager_处理行高设置
     layout_manager_->setRowHeight(row, height);
     
     // 同步更新本地row_info_（保持兼容性）
@@ -282,7 +269,7 @@ void Worksheet::setRowHeight(int row, double height) {
     row_info_[row].height = height;
 }
 
-// setRowFormat方法已移除，请使用FormatDescriptor架构
+// setRowFormat方法已移除（请使用FormatDescriptor架构）
 
 void Worksheet::hideRow(int row) {
     if (parent_workbook_ && parent_workbook_->getDirtyManager()) {
@@ -290,7 +277,6 @@ void Worksheet::hideRow(int row) {
         parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::METADATA);
     }
     
-    // 🔧 委托给layout_manager_处理行隐藏
     layout_manager_->hideRow(row);
     
     // 同步更新本地row_info_（保持兼容性）
@@ -304,7 +290,6 @@ void Worksheet::hideRow(int first_row, int last_row) {
         parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::METADATA);
     }
     
-    // 🔧 委托给layout_manager_处理行隐藏
     layout_manager_->hideRow(first_row, last_row);
     
     // 同步更新本地row_info_（保持兼容性）
@@ -314,7 +299,7 @@ void Worksheet::hideRow(int first_row, int last_row) {
     }
 }
 
-// ========== 合并单元格 ==========
+// 合并单元格
 
 void Worksheet::mergeCells(int first_row, int first_col, int last_row, int last_col) {
     if (parent_workbook_ && parent_workbook_->getDirtyManager()) {
@@ -322,7 +307,6 @@ void Worksheet::mergeCells(int first_row, int first_col, int last_row, int last_
         parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::METADATA);
     }
     
-    // 🔧 委托给layout_manager_处理合并单元格
     layout_manager_->mergeCells(first_row, first_col, last_row, last_col);
     
     // 同步更新本地merge_ranges_（保持兼容性）
@@ -330,7 +314,7 @@ void Worksheet::mergeCells(int first_row, int first_col, int last_row, int last_
     merge_ranges_.emplace_back(first_row, first_col, last_row, last_col);
 }
 
-// ========== 自动筛选 ==========
+// 自动筛选
 
 void Worksheet::setAutoFilter(int first_row, int first_col, int last_row, int last_col) {
     if (parent_workbook_ && parent_workbook_->getDirtyManager()) {
@@ -338,7 +322,6 @@ void Worksheet::setAutoFilter(int first_row, int first_col, int last_row, int la
         parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::METADATA);
     }
     
-    // 🔧 委托给layout_manager_处理自动筛选
     layout_manager_->setAutoFilter(first_row, first_col, last_row, last_col);
     
     // 同步更新本地autofilter_（保持兼容性）
@@ -352,14 +335,13 @@ void Worksheet::removeAutoFilter() {
         parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::METADATA);
     }
     
-    // 🔧 委托给layout_manager_处理自动筛选移除
     layout_manager_->removeAutoFilter();
     
     // 同步更新本地autofilter_（保持兼容性）
     autofilter_.reset();
 }
 
-// ========== 冻结窗格 ==========
+// 冻结窗格
 
 void Worksheet::freezePanes(int row, int col) {
     if (parent_workbook_ && parent_workbook_->getDirtyManager()) {
@@ -367,7 +349,6 @@ void Worksheet::freezePanes(int row, int col) {
         parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::METADATA);
     }
     
-    // 🔧 委托给layout_manager_处理冻结窗格
     layout_manager_->freezePanes(row, col);
     
     // 同步更新本地freeze_panes_（保持兼容性）
@@ -381,7 +362,6 @@ void Worksheet::freezePanes(int row, int col, int top_left_row, int top_left_col
         parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::METADATA);
     }
     
-    // 🔧 委托给layout_manager_处理带左上角的冻结窗格
     layout_manager_->freezePanes(row, col, top_left_row, top_left_col);
     
     // 同步更新本地freeze_panes_（保持兼容性）
@@ -396,7 +376,6 @@ void Worksheet::splitPanes(int row, int col) {
         parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::METADATA);
     }
     
-    // 🔧 委托给layout_manager_处理分割窗格
     layout_manager_->splitPanes(row, col);
     
     // 同步更新本地freeze_panes_（保持兼容性）
@@ -405,7 +384,7 @@ void Worksheet::splitPanes(int row, int col) {
     freeze_panes_ = std::make_unique<FreezePanes>(row, col);
 }
 
-// ========== 打印设置 ==========
+// 打印设置
 
 void Worksheet::setPrintArea(int first_row, int first_col, int last_row, int last_col) {
     if (parent_workbook_ && parent_workbook_->getDirtyManager()) {
@@ -498,7 +477,7 @@ void Worksheet::setCenterOnPage(bool horizontal, bool vertical) {
     print_settings_.center_vertically = vertical;
 }
 
-// ========== 工作表保护 ==========
+// 工作表保护
 
 void Worksheet::protect(const std::string& password) {
     protected_ = true;
@@ -510,7 +489,7 @@ void Worksheet::unprotect() {
     protection_password_.clear();
 }
 
-// ========== 视图设置 ==========
+// 视图设置
 
 void Worksheet::setZoom(int scale) {
     sheet_view_.zoom_scale = std::max(10, std::min(400, scale));
@@ -546,24 +525,21 @@ void Worksheet::setSelection(int first_row, int first_col, int last_row, int las
     }
 }
 
-// ========== 获取信息 ==========
+// 获取信息
 
 std::pair<int, int> Worksheet::getUsedRange() const {
-    // 🔧 委托给cell_processor_处理
     return cell_processor_->getUsedRange();
 }
 
 std::tuple<int, int, int, int> Worksheet::getUsedRangeFull() const {
-    // 🔧 委托给cell_processor_处理
     return cell_processor_->getUsedRangeFull();
 }
 
 bool Worksheet::hasCellAt(int row, int col) const {
-    // 🔧 委托给cell_processor_处理
     return cell_processor_->hasCellAt(row, col);
 }
 
-// ========== 获取方法实现 ==========
+// 获取方法实现
 
 double Worksheet::getColumnWidth(int col) const {
     auto it = column_info_.find(col);
@@ -589,7 +565,7 @@ double Worksheet::getRowHeight(int row) const {
     return default_row_height_;
 }
 
-// ========== 新的统一样式API实现 ==========
+// 统一样式API实现
 
 void Worksheet::setColumnFormat(int col, const FormatDescriptor& format) {
     validateCellPosition(0, col);
@@ -703,7 +679,7 @@ std::pair<int, int> Worksheet::getFitToPages() const {
     return {print_settings_.fit_to_pages_wide, print_settings_.fit_to_pages_tall};
 }
 
-// ========== XML生成 ==========
+// XML生成
 
 void Worksheet::generateXML(const std::function<void(const char*, size_t)>& callback) const {
     // 使用独立的WorksheetXMLGenerator生成XML
@@ -712,13 +688,11 @@ void Worksheet::generateXML(const std::function<void(const char*, size_t)>& call
 }
 
 void Worksheet::generateXMLBatch(const std::function<void(const char*, size_t)>& callback) const {
-    // 委托给WorksheetXMLGenerator
     auto generator = xml::WorksheetXMLGeneratorFactory::createBatch(this);
     generator->generate(callback);
 }
 
 void Worksheet::generateXMLStreaming(const std::function<void(const char*, size_t)>& callback) const {
-    // 委托给WorksheetXMLGenerator
     auto generator = xml::WorksheetXMLGeneratorFactory::createStreaming(this);
     generator->generate(callback);
 }
@@ -738,7 +712,6 @@ void Worksheet::generateRelsXML(const std::function<void(const char*, size_t)>& 
         }
     }
     
-    // 🔧 关键修复：添加drawing关系（如果有图片）
     if (!images_.empty()) {
         std::string drawing_target = "../drawings/drawing" + std::to_string(sheet_id_) + ".xml";
         relationships.addAutoRelationship(
@@ -780,7 +753,7 @@ void Worksheet::generateRelsXMLToFile(const std::string& filename) const {
     relationships.generateToFile(filename);
 }
 
-// ========== 工具方法 ==========
+// 工具方法
 
 void Worksheet::clear() {
     cells_.clear();
@@ -796,7 +769,7 @@ void Worksheet::clear() {
     selection_ = "A1";
     active_cell_ = "A1";
     
-    // 🚀 新增：清空图片
+    // 清空图片
     images_.clear();
 }
 
@@ -833,7 +806,7 @@ void Worksheet::deleteColumns(int col, int count) {
     shiftCellsForColumnDeletion(col, count);
 }
 
-// ========== 内部辅助方法 ==========
+// 内部辅助方法
 
 
 void Worksheet::validateCellPosition(int row, int col) const {
@@ -843,7 +816,7 @@ void Worksheet::validateCellPosition(int row, int col) const {
 void Worksheet::validateRange(int first_row, int first_col, int last_row, int last_col) const {
     FASTEXCEL_VALIDATE_RANGE(first_row, first_col, last_row, last_col);
 }
-// ========== 内部状态管理 ==========
+// 内部状态管理
 
 void Worksheet::updateUsedRange(int row, int col) {
     range_manager_.updateRange(row, col);
@@ -965,7 +938,7 @@ void Worksheet::shiftCellsForColumnDeletion(int col, int count) {
     }
 }
 
-// ========== 优化功能实现 ==========
+// 优化功能实现
 
 void Worksheet::setOptimizeMode(bool enable) {
     if (optimize_mode_ == enable) {
@@ -1002,7 +975,7 @@ void Worksheet::flushCurrentRow() {
         if (current_row_->height > 0) {
             row_info.height = current_row_->height;
         }
-        // format字段已移除，请使用FormatDescriptor架构
+        // 行格式由 FormatDescriptor 管理
         if (current_row_->hidden) {
             row_info.hidden = current_row_->hidden;
         }
@@ -1095,7 +1068,7 @@ void Worksheet::updateUsedRangeOptimized(int row, int col) {
     range_manager_.updateRange(row, col);
 }
 
-// ========== 单元格编辑功能实现 ==========
+// 单元格编辑功能实现
 
 // 私有辅助方法：通用的单元格编辑逻辑
 template<typename T>
@@ -1126,9 +1099,9 @@ void Worksheet::editCellValue(int row, int col, bool value, bool preserve_format
     editCellValueImpl(row, col, value, preserve_format);
 }
 
-// editCellFormat方法已移除，请使用FormatDescriptor架构
+// editCellFormat方法已移除（请使用FormatDescriptor架构）
 
-// ========== 🚀 智能单元格格式设置方法（语义明确） ==========
+// 智能单元格格式设置方法
 
 void Worksheet::setCellFormat(int row, int col, const core::FormatDescriptor& format) {
     validateCellPosition(row, col);
@@ -1171,7 +1144,7 @@ void Worksheet::setCellFormat(int row, int col, const core::StyleBuilder& builde
     getCell(row, col).setFormat(optimizedFormat);
 }
 
-// ========== 🚀 范围格式化API方法 ==========
+// 范围格式化API方法
 
 RangeFormatter Worksheet::rangeFormatter(const std::string& range) {
     return std::move(RangeFormatter(this).setRange(range));
@@ -1182,10 +1155,8 @@ RangeFormatter Worksheet::rangeFormatter(int start_row, int start_col, int end_r
 }
 
 void Worksheet::copyCell(int src_row, int src_col, int dst_row, int dst_col, bool copy_format, bool copy_row_height) {
-    // 🔧 委托给cell_processor_处理单元格复制
     cell_processor_->copyCell(src_row, src_col, dst_row, dst_col, copy_format);
     
-    // 🔧 新增功能：复制行高
     if (copy_row_height && src_row != dst_row) {
         double src_row_height = getRowHeight(src_row);
         if (src_row_height != getRowHeight(dst_row)) {
@@ -1195,42 +1166,36 @@ void Worksheet::copyCell(int src_row, int src_col, int dst_row, int dst_col, boo
 }
 
 void Worksheet::moveCell(int src_row, int src_col, int dst_row, int dst_col) {
-    // 🔧 委托给cell_processor_处理单元格移动
     cell_processor_->moveCell(src_row, src_col, dst_row, dst_col);
 }
 
 void Worksheet::copyRange(int src_first_row, int src_first_col, int src_last_row, int src_last_col,
                          int dst_row, int dst_col, bool copy_format) {
-    // 🔧 委托给cell_processor_处理范围复制
     cell_processor_->copyRange(src_first_row, src_first_col, src_last_row, src_last_col, dst_row, dst_col, copy_format);
 }
 
 void Worksheet::moveRange(int src_first_row, int src_first_col, int src_last_row, int src_last_col,
                          int dst_row, int dst_col) {
-    // 🔧 委托给cell_processor_处理范围移动
     cell_processor_->moveRange(src_first_row, src_first_col, src_last_row, src_last_col, dst_row, dst_col);
 }
 
 int Worksheet::findAndReplace(const std::string& find_text, const std::string& replace_text,
                              bool match_case, bool match_entire_cell) {
-    // 🔧 委托给cell_processor_处理查找替换
     return cell_processor_->findAndReplace(find_text, replace_text, match_case, match_entire_cell);
 }
 
 std::vector<std::pair<int, int>> Worksheet::findCells(const std::string& search_text,
                                                       bool match_case,
                                                       bool match_entire_cell) const {
-    // 🔧 委托给cell_processor_处理查找单元格
     return cell_processor_->findCells(search_text, match_case, match_entire_cell);
 }
 
 void Worksheet::sortRange(int first_row, int first_col, int last_row, int last_col,
                          int sort_column, bool ascending, bool has_header) {
-    // 🔧 委托给cell_processor_处理排序
     cell_processor_->sortRange(first_row, first_col, last_row, last_col, sort_column, ascending, has_header);
 }
 
-// ========== 共享公式管理 ==========
+// 共享公式管理
 
 int Worksheet::createSharedFormula(int first_row, int first_col, int last_row, int last_col, const std::string& formula) {
     if (!shared_formula_manager_) {
@@ -1276,7 +1241,7 @@ int Worksheet::createSharedFormula(int first_row, int first_col, int last_row, i
     return shared_index;
 }
 
-// 🚀 新API：便捷的公式设置方法实现
+// 便捷的公式设置方法实现
 void Worksheet::setFormula(const Address& address, const std::string& formula, double result) {
     setFormula(address.getRow(), address.getCol(), formula, result);
 }
@@ -1291,9 +1256,9 @@ int Worksheet::createSharedFormula(const CellRange& range, const std::string& fo
                               range.getEndRow(), range.getEndCol(), formula);
 }
 
-// 公式优化方法已移除，请使用新的架构
+// 公式优化方法已移除（请使用新的架构）
 
-// 🚀 新API：便捷的工作表状态检查方法实现
+// 便捷的工作表状态检查方法实现
 int Worksheet::getRowCount() const {
     if (cells_.empty()) {
         return 0;
@@ -1321,44 +1286,38 @@ int Worksheet::getColumnCount() const {
 }
 
 int Worksheet::getCellCountInRow(int row) const {
-    // 🔧 委托给cell_processor_处理
     return cell_processor_->getCellCountInRow(row);
 }
 
 int Worksheet::getCellCountInColumn(int col) const {
-    // 🔧 委托给cell_processor_处理
     return cell_processor_->getCellCountInColumn(col);
 }
 
 // 注意：这些方法与头文件中的声明重复，已在头文件的实现中定义
 
 void Worksheet::clearRow(int row) {
-    // 🔧 委托给cell_processor_处理
     cell_processor_->clearRow(row);
 }
 
 void Worksheet::clearColumn(int col) {
-    // 🔧 委托给cell_processor_处理
     cell_processor_->clearColumn(col);
 }
 
 void Worksheet::clearAll() {
-    // 🔧 委托给cell_processor_处理
     cell_processor_->clearAll();
     CORE_DEBUG("Cleared all cells in worksheet '{}'", name_);
 }
 
-// 🚀 新API：链式调用方法实现
+// 链式调用方法实现
 WorksheetChain Worksheet::chain() {
     return WorksheetChain(*this);
 }
 
-// ========== 图片插入功能实现 ==========
+// 图片插入功能实现
 
 std::string Worksheet::insertImage(int row, int col, const std::string& image_path) {
     FASTEXCEL_LOG_DEBUG("Inserting image from file: {} at cell ({}, {})", image_path, row, col);
     
-    // 🔧 委托给image_manager_处理图片插入
     std::string image_id = image_manager_->insertImage(row, col, image_path);
     
     if (!image_id.empty()) {
@@ -1391,7 +1350,6 @@ std::string Worksheet::insertImage(int row, int col, std::unique_ptr<Image> imag
         return "";
     }
     
-    // 🔧 委托给image_manager_处理图片插入
     std::string image_id = image_manager_->insertImage(row, col, std::move(image));
     
     if (!image_id.empty()) {
@@ -1422,7 +1380,6 @@ std::string Worksheet::insertImage(int from_row, int from_col, int to_row, int t
     FASTEXCEL_LOG_DEBUG("Inserting image from file: {} in range ({},{}) to ({},{})",
                        image_path, from_row, from_col, to_row, to_col);
     
-    // 🔧 委托给image_manager_处理图片范围插入
     std::string image_id = image_manager_->insertImage(from_row, from_col, to_row, to_col, image_path);
     
     if (!image_id.empty()) {
@@ -1456,7 +1413,6 @@ std::string Worksheet::insertImage(int from_row, int from_col, int to_row, int t
         return "";
     }
     
-    // 🔧 委托给image_manager_处理图片范围插入
     std::string image_id = image_manager_->insertImage(from_row, from_col, to_row, to_col, std::move(image));
     
     if (!image_id.empty()) {
@@ -1488,7 +1444,6 @@ std::string Worksheet::insertImageAt(double x, double y, double width, double he
     FASTEXCEL_LOG_DEBUG("Inserting image from file: {} at absolute position ({}, {}) with size {}x{}",
                        image_path, x, y, width, height);
     
-    // 🔧 委托给image_manager_处理绝对定位图片插入
     std::string image_id = image_manager_->insertImageAt(x, y, width, height, image_path);
     
     if (!image_id.empty()) {
@@ -1522,7 +1477,6 @@ std::string Worksheet::insertImageAt(double x, double y, double width, double he
         return "";
     }
     
-    // 🔧 委托给image_manager_处理绝对定位图片插入
     std::string image_id = image_manager_->insertImageAt(x, y, width, height, std::move(image));
     
     if (!image_id.empty()) {
@@ -1550,7 +1504,6 @@ std::string Worksheet::insertImageAt(double x, double y, double width, double he
 }
 
 std::string Worksheet::insertImage(const std::string& address, const std::string& image_path) {
-    // 🔧 委托给image_manager_处理地址格式图片插入
     std::string image_id = image_manager_->insertImage(address, image_path);
     
     if (!image_id.empty()) {
@@ -1580,7 +1533,6 @@ std::string Worksheet::insertImage(const std::string& address, std::unique_ptr<I
         return "";
     }
     
-    // 🔧 委托给image_manager_处理地址格式图片插入
     std::string image_id = image_manager_->insertImage(address, std::move(image));
     
     if (!image_id.empty()) {
@@ -1605,7 +1557,6 @@ std::string Worksheet::insertImage(const std::string& address, std::unique_ptr<I
 }
 
 std::string Worksheet::insertImageRange(const std::string& range, const std::string& image_path) {
-    // 🔧 委托给image_manager_处理范围格式图片插入
     std::string image_id = image_manager_->insertImageRange(range, image_path);
     
     if (!image_id.empty()) {
@@ -1635,7 +1586,6 @@ std::string Worksheet::insertImageRange(const std::string& range, std::unique_pt
         return "";
     }
     
-    // 🔧 委托给image_manager_处理范围格式图片插入
     std::string image_id = image_manager_->insertImageRange(range, std::move(image));
     
     if (!image_id.empty()) {
@@ -1659,20 +1609,17 @@ std::string Worksheet::insertImageRange(const std::string& range, std::unique_pt
     return image_id;
 }
 
-// ========== 图片管理功能实现 ==========
+// 图片管理功能实现
 
 const Image* Worksheet::findImage(const std::string& image_id) const {
-    // 🔧 委托给image_manager_处理图片查找
     return image_manager_->findImage(image_id);
 }
 
 Image* Worksheet::findImage(const std::string& image_id) {
-    // 🔧 委托给image_manager_处理图片查找
     return image_manager_->findImage(image_id);
 }
 
 bool Worksheet::removeImage(const std::string& image_id) {
-    // 🔧 委托给image_manager_处理图片移除
     bool result = image_manager_->removeImage(image_id);
     
     if (result) {
@@ -1703,7 +1650,6 @@ void Worksheet::clearImages() {
     size_t count = image_manager_->getImageCount();
     
     if (count > 0) {
-        // 🔧 委托给image_manager_处理图片清空
         image_manager_->clearImages();
         
         // 标记工作表为脏数据
@@ -1723,11 +1669,10 @@ void Worksheet::clearImages() {
 }
 
 size_t Worksheet::getImagesMemoryUsage() const {
-    // 🔧 委托给image_manager_处理内存使用统计
     return image_manager_->getImagesMemoryUsage();
 }
 
-// ========== 🔧 架构优化完成状态标记 ==========
+// 架构优化完成状态标记
 
 // ✅ 已完成的管理器委托架构优化：
 // - CellDataProcessor: 单元格数据操作、复制移动、查找替换、排序等 (已完成)
@@ -1741,29 +1686,25 @@ size_t Worksheet::getImagesMemoryUsage() const {
 // 3. 责任分离清晰：Worksheet专注协调，具体功能由专门管理器处理
 // 4. 性能优化考虑：避免重复数据复制，使用引用和移动语义
 
-// ========== CSV功能实现 ==========
+// CSV功能实现
 
 CSVParseInfo Worksheet::loadFromCSV(const std::string& filepath, const CSVOptions& options) {
     FASTEXCEL_LOG_INFO("Loading CSV from file: {} into worksheet: {}", filepath, name_);
-    // 🔧 委托给csv_handler_处理CSV加载
     return csv_handler_->loadFromCSV(filepath, options);
 }
 
 CSVParseInfo Worksheet::loadFromCSVString(const std::string& csv_content, const CSVOptions& options) {
     FASTEXCEL_LOG_DEBUG("Loading CSV from string into worksheet: {}, content length: {}", name_, csv_content.length());
-    // 🔧 委托给csv_handler_处理CSV字符串加载
     return csv_handler_->loadFromCSVString(csv_content, options);
 }
 
 bool Worksheet::saveAsCSV(const std::string& filepath, const CSVOptions& options) const {
     FASTEXCEL_LOG_INFO("Saving worksheet: {} as CSV to file: {}", name_, filepath);
-    // 🔧 委托给csv_handler_处理CSV保存
     return csv_handler_->saveAsCSV(filepath, options);
 }
 
 std::string Worksheet::toCSVString(const CSVOptions& options) const {
     FASTEXCEL_LOG_DEBUG("Converting worksheet: {} to CSV string", name_);
-    // 🔧 委托给csv_handler_处理CSV转换
     return csv_handler_->toCSVString(options);
 }
 
@@ -1771,27 +1712,22 @@ std::string Worksheet::rangeToCSVString(int start_row, int start_col, int end_ro
                                        const CSVOptions& options) const {
     FASTEXCEL_LOG_DEBUG("Converting range ({},{}) to ({},{}) of worksheet: {} to CSV string", 
                        start_row, start_col, end_row, end_col, name_);
-    // 🔧 委托给csv_handler_处理范围CSV转换
     return csv_handler_->rangeToCSVString(start_row, start_col, end_row, end_col, options);
 }
 
 CSVParseInfo Worksheet::previewCSV(const std::string& filepath, const CSVOptions& options) {
-    // 🔧 委托给csv_handler_处理CSV预览（静态方法）
     return WorksheetCSVHandler::previewCSV(filepath, options);
 }
 
 CSVOptions Worksheet::detectCSVOptions(const std::string& filepath) {
-    // 🔧 委托给csv_handler_处理CSV选项检测（静态方法）
     return WorksheetCSVHandler::detectCSVOptions(filepath);
 }
 
 bool Worksheet::isCSVFile(const std::string& filepath) {
-    // 🔧 委托给csv_handler_处理CSV文件检测（静态方法）
     return WorksheetCSVHandler::isCSVFile(filepath);
 }
 
 std::string Worksheet::getCellDisplayValue(int row, int col) const {
-    // 🔧 委托给csv_handler_处理单元格显示值获取
     return csv_handler_->getCellDisplayValue(row, col);
 }
 

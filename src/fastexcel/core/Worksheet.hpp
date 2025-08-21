@@ -5,18 +5,18 @@
 #include "fastexcel/core/FormatRepository.hpp"
 #include "fastexcel/core/CellRangeManager.hpp"
 #include "fastexcel/core/SharedFormula.hpp"
-#include "fastexcel/core/RangeFormatter.hpp"  // 🚀 新增：范围格式化器支持
-#include "fastexcel/core/Image.hpp"  // 🚀 新增：图片支持
-#include "fastexcel/core/CSVProcessor.hpp"  // 🚀 新增：CSV处理支持
-#include "fastexcel/core/ColumnWidthManager.hpp"  // 🚀 新架构：列宽管理器
-#include "fastexcel/core/managers/CellDataProcessor.hpp"  // 🔧 新增：单元格数据处理器
-#include "fastexcel/core/managers/WorksheetLayoutManager.hpp"  // 🔧 新增：布局管理器
-#include "fastexcel/core/managers/WorksheetImageManager.hpp"  // 🔧 新增：图片管理器
-#include "fastexcel/core/managers/WorksheetCSVHandler.hpp"  // 🔧 新增：CSV处理器
+#include "fastexcel/core/RangeFormatter.hpp"
+#include "fastexcel/core/Image.hpp"
+#include "fastexcel/core/CSVProcessor.hpp"
+#include "fastexcel/core/ColumnWidthManager.hpp"
+#include "fastexcel/core/managers/CellDataProcessor.hpp"
+#include "fastexcel/core/managers/WorksheetLayoutManager.hpp"
+#include "fastexcel/core/managers/WorksheetImageManager.hpp"
+#include "fastexcel/core/managers/WorksheetCSVHandler.hpp"
 #include "fastexcel/utils/CommonUtils.hpp"
-#include "fastexcel/utils/AddressParser.hpp"  // 🚀 新增：Excel地址解析支持
-#include "fastexcel/utils/ColumnWidthCalculator.hpp"  // 🚀 新增：列宽计算器支持
-#include "fastexcel/core/CellAddress.hpp"     // 🚀 新增：Excel地址类支持
+#include "fastexcel/utils/AddressParser.hpp"
+#include "fastexcel/utils/ColumnWidthCalculator.hpp"
+#include "fastexcel/core/CellAddress.hpp"
 #include "fastexcel/xml/XMLStreamWriter.hpp"
 #include "fastexcel/xml/Relationships.hpp"
 #include <string>
@@ -29,8 +29,8 @@
 #include <set>
 #include <functional>
 #include <sstream>
-#include <type_traits>  // 🚀 新增：支持模板类型判断
-#include <optional>     // 🚀 新增：支持安全访问方法
+#include <type_traits>
+#include <optional>
 
 namespace fastexcel {
 namespace xml {
@@ -135,7 +135,6 @@ private:
         int row_num;
         std::map<int, Cell> cells;
         double height = -1.0;
-        // format字段已移除，请使用FormatDescriptor架构
         bool hidden = false;
         bool data_changed = false;
         
@@ -147,7 +146,7 @@ private:
     // 使用范围跟踪
     CellRangeManager range_manager_;
     
-    // 🔧 新架构：管理器委托模式
+    // 管理器委托模式
     std::unique_ptr<CellDataProcessor> cell_processor_;
     std::unique_ptr<WorksheetLayoutManager> layout_manager_;
     std::unique_ptr<WorksheetImageManager> image_manager_;
@@ -186,14 +185,14 @@ private:
     // 活动单元格
     std::string active_cell_ = "A1";
     
-    // 🚀 新增：图片管理
+    // 图片管理
     std::vector<std::unique_ptr<Image>> images_;
     int next_image_id_ = 1;
     
-    // 🚀 新增：列宽管理器
+    // 列宽管理器
     std::unique_ptr<ColumnWidthManager> column_width_manager_;
     
-    // 🚀 新增：字体信息获取辅助方法
+    // 字体信息获取辅助方法
     std::string getWorkbookDefaultFont() const;
     double getWorkbookDefaultFontSize() const;
 
@@ -209,7 +208,7 @@ public:
     Worksheet(Worksheet&&) = default;
     Worksheet& operator=(Worksheet&&) = default;
     
-    // ========== 优化功能 ==========
+    // 优化功能
     
     /**
      * @brief 设置共享字符串表
@@ -224,7 +223,7 @@ public:
     void setFormatRepository(FormatRepository* format_repo) { 
         format_repo_ = format_repo;
         
-        // 🚀 初始化列宽管理器
+        // 初始化列宽管理器
         if (format_repo_ && !column_width_manager_) {
             column_width_manager_ = std::make_unique<ColumnWidthManager>(format_repo_);
             // 同步工作簿Normal字体的MDW，按默认格式估算（与Excel对齐）
@@ -270,7 +269,7 @@ public:
     };
     PerformanceStats getPerformanceStats() const;
     
-    // ========== 基本单元格操作 ==========
+    // 基本单元格操作
     
     /**
      * @brief 获取单元格引用
@@ -301,7 +300,7 @@ public:
         return getCell(address.getRow(), address.getCol());
     }
     
-    // 🚀 新API：模板化的单元格值获取和设置
+    // 模板化的单元格值获取和设置
     /**
      * @brief 模板化获取单元格值
      * @tparam T 返回值类型
@@ -333,7 +332,6 @@ public:
      */
     template<typename T>
     void setValue(int row, int col, const T& value) {
-        // 🔧 委托给cell_processor_处理
         cell_processor_->setValue(row, col, value);
     }
     
@@ -346,7 +344,7 @@ public:
         setValue<T>(row, col, value);
     }
     
-    // 🚀 智能单元格格式设置 API - 语义明确！
+    // 智能单元格格式设置 API
     
     /**
      * @brief 设置单元格格式（智能优化版）
@@ -362,7 +360,7 @@ public:
     void setCellFormat(int row, int col, std::shared_ptr<const core::FormatDescriptor> format);
     void setCellFormat(int row, int col, const core::StyleBuilder& builder);
     
-    // ========== 范围格式化API ==========
+    // 范围格式化API
     
     /**
      * @brief 创建范围格式化器
@@ -481,7 +479,7 @@ public:
         return getCell(row, col).getValueOr<T>(default_value);
     }
     
-    // 🚀 新API：Excel地址格式支持
+    // Excel地址格式支持
     /**
      * @brief 通过Excel地址获取单元格值
      * @tparam T 返回值类型
@@ -573,9 +571,9 @@ public:
      */
     void writeUrl(int row, int col, const std::string& url, const std::string& string = "");
     
-    // ========== 批量数据操作 ==========
+    // 批量数据操作
     
-    // 🚀 新API：模板化范围操作
+    // 模板化范围操作
     /**
      * @brief 获取范围内的所有值
      * @tparam T 返回值类型
@@ -671,7 +669,7 @@ public:
         setRange<T>(start_row, start_col, data);
     }
     
-    // 🚀 新API：链式调用支持
+    // 链式调用支持
     /**
      * @brief 获取链式调用对象
      * @return 链式调用助手对象
@@ -687,7 +685,7 @@ public:
      */
     WorksheetChain chain();
     
-    // ========== 行列操作 ==========
+    // 行列操作
     
     /**
      * @brief 设置列宽（简化版本）
@@ -722,7 +720,7 @@ public:
                                                   double font_size = 11.0);
     
     /**
-     * @brief 🚀 智能列宽设置（专家版本）
+     * @brief 智能列宽设置（专家版本）
      * @param col 列号
      * @param target_width 目标列宽
      * @param font_name 字体名称
@@ -750,7 +748,7 @@ public:
                                                   const std::vector<std::string>& cell_contents = {});
     
     /**
-     * @brief 🚀 新架构：批量智能列宽设置（高性能）
+     * @brief 批量智能列宽设置（高性能）
      * @param configs 列宽配置映射 (列号 -> 配置)
      * @return 实际设置结果 (列号 -> (宽度, 格式ID))
      * 
@@ -768,7 +766,7 @@ public:
         const std::unordered_map<int, ColumnWidthManager::ColumnWidthConfig>& configs);
     
     /**
-     * @brief 🚀 新架构：预计算列宽（不实际设置）
+     * @brief 预计算列宽（不实际设置）
      * @param target_width 目标宽度
      * @param font_name 字体名称
      * @param font_size 字体大小
@@ -777,7 +775,7 @@ public:
     double calculateOptimalWidth(double target_width, const std::string& font_name, double font_size) const;
     
     /**
-     * @brief 🚀 获取列宽管理器的缓存统计（性能监控）
+     * @brief 获取列宽管理器的缓存统计（性能监控）
      * @return 缓存统计信息
      */
     ColumnWidthManager::CacheStats getColumnWidthCacheStats() const {
@@ -788,7 +786,7 @@ public:
     }
     
     /**
-     * @brief 🚀 清理列宽管理器缓存（内存优化）
+     * @brief 清理列宽管理器缓存（内存优化）
      */
     void clearColumnWidthCache() {
         if (column_width_manager_) {
@@ -869,7 +867,7 @@ public:
      */
     void hideRow(int first_row, int last_row);
     
-    // ========== 合并单元格 ==========
+    // 合并单元格
     
     /**
      * @brief 合并单元格
@@ -905,7 +903,7 @@ public:
      * @param value 内容
      */
     
-    // ========== 自动筛选 ==========
+    // 自动筛选
     
     /**
      * @brief 设置自动筛选
@@ -935,7 +933,7 @@ public:
      */
     void removeAutoFilter();
     
-    // ========== 冻结窗格 ==========
+    // 冻结窗格
     
     /**
      * @brief 冻结窗格
@@ -975,7 +973,7 @@ public:
      */
     void splitPanes(int row, int col);
     
-    // ========== 打印设置 ==========
+    // 打印设置
     
     /**
      * @brief 设置打印区域
@@ -1074,7 +1072,7 @@ public:
      */
     void setCenterOnPage(bool horizontal, bool vertical);
     
-    // ========== 工作表保护 ==========
+    // 工作表保护
     
     /**
      * @brief 保护工作表
@@ -1093,7 +1091,7 @@ public:
      */
     bool isProtected() const { return protected_; }
     
-    // ========== 视图设置 ==========
+    // 视图设置
     
     /**
      * @brief 设置缩放比例
@@ -1171,7 +1169,7 @@ public:
         setSelection(range.getStartRow(), range.getStartCol(), range.getEndRow(), range.getEndCol());
     }
     
-    // ========== 获取信息 ==========
+    // 获取信息
     
     /**
      * @brief 获取工作表名称
@@ -1215,7 +1213,7 @@ public:
      */
     size_t getCellCount() const { return cells_.size(); }
     
-    // 🚀 新API：便捷的工作表状态检查方法
+    // 便捷的工作表状态检查方法
     /**
      * @brief 检查工作表是否为空（无任何单元格数据）
      * @return 是否为空
@@ -1488,7 +1486,7 @@ public:
      */
     const std::string& getSelection() const { return selection_; }
     
-    // ========== XML生成 ==========
+    // XML生成
     
     /**
      * @brief 生成工作表XML到回调函数（使用UnifiedXMLGenerator）
@@ -1508,7 +1506,7 @@ public:
      */
     void generateRelsXMLToFile(const std::string& filename) const;
     
-    // ========== 工具方法 ==========
+    // 工具方法
     
     /**
      * @brief 清空工作表
@@ -1552,7 +1550,7 @@ public:
      */
     void deleteColumns(int col, int count = 1);
     
-    // ========== 单元格编辑功能 ==========
+    // 单元格编辑功能
     
     /**
      * @brief 修改现有单元格的值
@@ -1664,7 +1662,7 @@ public:
     void sortRange(int first_row, int first_col, int last_row, int last_col,
                    int sort_column = 0, bool ascending = true, bool has_header = false);
     
-    // ========== 共享公式管理 ==========
+    // 共享公式管理
     
     /**
      * @brief 创建共享公式
@@ -1677,7 +1675,7 @@ public:
      */
     int createSharedFormula(int first_row, int first_col, int last_row, int last_col, const std::string& formula);
     
-    // 🚀 新API：便捷的公式设置方法（使用地址类）
+    // 便捷的公式设置方法（使用地址类）
     /**
      * @brief 设置单元格公式 - 支持地址类
      * @param address 单元格地址（支持 Address("A1") 或 Address(0, 0)）
@@ -1718,7 +1716,7 @@ public:
      */
     const SharedFormulaManager* getSharedFormulaManager() const { return shared_formula_manager_.get(); }
     
-    // 🚀 新API：便捷的行列操作方法
+    // 便捷的行列操作方法
     /**
      * @brief 追加行数据
      * @tparam T 数据类型
@@ -1836,7 +1834,7 @@ public:
         }
     }
     
-    // ========== 图片插入功能 ==========
+    // 图片插入功能
     
     /**
      * @brief 插入图片到指定单元格
@@ -1936,14 +1934,13 @@ public:
      */
     std::string insertImageRange(const std::string& range, std::unique_ptr<Image> image);
     
-    // ========== 图片管理功能 ==========
+    // 图片管理功能
     
     /**
      * @brief 获取所有图片
      * @return 图片列表的常量引用
      */
     const std::vector<std::unique_ptr<Image>>& getImages() const { 
-        // 🔧 委托给image_manager_处理图片获取
         return image_manager_->getImages(); 
     }
     
@@ -1952,7 +1949,6 @@ public:
      * @return 图片数量
      */
     size_t getImageCount() const { 
-        // 🔧 委托给image_manager_处理图片计数
         return image_manager_->getImageCount(); 
     }
     
@@ -1987,7 +1983,6 @@ public:
      * @return 是否包含图片
      */
     bool hasImages() const { 
-        // 🔧 委托给image_manager_处理图片存在检查
         return image_manager_->hasImages(); 
     }
     
@@ -1997,7 +1992,7 @@ public:
      */
     size_t getImagesMemoryUsage() const;
 
-    // ========== CSV功能 ==========
+    // CSV功能
     
     /**
      * @brief 从CSV文件加载数据到当前工作表
