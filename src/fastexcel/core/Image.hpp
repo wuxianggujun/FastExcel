@@ -64,7 +64,7 @@ struct ImageAnchor {
     
     // 绝对定位构造函数
     ImageAnchor(double x, double y, double w, double h)
-        : type(ImageAnchorType::Absolute), abs_x(x), abs_y(y), width(w), height(h) {}
+        : type(ImageAnchorType::Absolute), width(w), height(h), abs_x(x), abs_y(y) {}
 };
 
 /**

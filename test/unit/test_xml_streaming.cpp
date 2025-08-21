@@ -2,6 +2,7 @@
 #include "fastexcel/xml/XMLStreamWriter.hpp"
 #include <sstream>
 #include <vector>
+#include "fastexcel/utils/ModuleLoggers.hpp"
 
 using namespace fastexcel::xml;
 
@@ -224,6 +225,6 @@ TEST_F(XMLStreamingTest, MemoryEfficiency) {
     EXPECT_GT(total_chunks, 1); // 应该分成多个块
     EXPECT_LT(max_chunk_size, 1024 * 1024); // 单个块不应该太大（小于1MB）
     
-    std::cout << "Total chunks: " << total_chunks << std::endl;
-    std::cout << "Max chunk size: " << max_chunk_size << " bytes" << std::endl;
+    EXAMPLE_INFO("Total chunks: {}", total_chunks);
+    EXAMPLE_INFO("Max chunk size: {} bytes", max_chunk_size);
 }

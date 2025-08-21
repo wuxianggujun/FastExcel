@@ -1,8 +1,13 @@
 # Examples CMakeLists.txt for FastExcel
 
 # 收集所有示例源文件
-file(GLOB EXAMPLE_SOURCES
-    "*.cpp"
+# 精确列出保留的示例，避免构建过时/重复示例
+set(EXAMPLE_SOURCES
+    core_features_demo.cpp
+    edit_features_demo.cpp
+    formatting_features_demo.cpp
+    image_insertion_demo.cpp
+    performance_demo.cpp
 )
 
 # 为每个示例创建可执行文件

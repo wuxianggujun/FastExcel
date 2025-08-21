@@ -7,6 +7,7 @@
 #include <mz_zip.h>
 #include <mz_zip_rw.h>
 #include <array>
+#include "fastexcel/core/Constants.hpp"
 #include <cstring>
 
 namespace fastexcel {
@@ -259,7 +260,7 @@ ZipError ZipReader::extractFileToStream(std::string_view internal_path, std::ost
                 found = true;
                 
                 // 使用固定大小的缓冲区进行分块读取
-                constexpr size_t BUFFER_SIZE = 8192;  // 8KB 缓冲区
+                constexpr size_t BUFFER_SIZE = fastexcel::core::Constants::kIOBufferSize;  // 统一缓冲区大小
                 std::array<uint8_t, BUFFER_SIZE> buffer;
                 
                 int64_t total_read = 0;

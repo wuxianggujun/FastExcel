@@ -335,6 +335,27 @@ bool Workbook::close() {
     return true;
 }
 
+// 文档属性（对外便捷接口实现，转发到 WorkbookDocumentManager）
+void Workbook::setDocumentProperties(const std::string& title,
+                                     const std::string& subject,
+                                     const std::string& author,
+                                     const std::string& company,
+                                     const std::string& comments) {
+    if (!document_manager_) return;
+    // 新API：设置标题/主题/作者/公司/注释
+    document_manager_->setDocumentProperties(title, subject, author, company, comments);
+    // 兼容旧示例：将第5个参数同时作为“类别”写入
+    if (!comments.empty()) {
+        document_manager_->setCategory(comments);
+    }
+}
+
+void Workbook::setApplication(const std::string& application) {
+    if (document_manager_) {
+        document_manager_->setApplication(application);
+    }
+}
+
 // 工作表管理
 
 std::shared_ptr<Worksheet> Workbook::addSheet(const std::string& name) {

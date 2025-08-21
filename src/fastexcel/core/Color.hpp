@@ -56,6 +56,9 @@ public:
      * @param rgb RGB值
      */
     explicit Color(uint32_t rgb) : type_(Type::RGB), value_(rgb & 0xFFFFFF), tint_(0.0) {}
+
+    // 兼容旧API：从 RGB 整数创建颜色
+    static Color fromRGB(uint32_t rgb) { return Color(rgb); }
     
     /**
      * @brief 主题颜色构造函数 - 使用静态方法避免歧义

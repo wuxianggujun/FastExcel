@@ -127,6 +127,8 @@ public:
         bold_ = is_bold;
         return *this;
     }
+    // 兼容旧API
+    StyleBuilder& setBold(bool is_bold = true) { return bold(is_bold); }
     
     /**
      * @brief 设置斜体
@@ -177,6 +179,11 @@ public:
         script_ = is_sub ? FontScript::Subscript : FontScript::None;
         return *this;
     }
+
+    // 兼容旧API：背景色、字体色、数字格式
+    StyleBuilder& setBackgroundColor(core::Color color) { return backgroundColor(color); }
+    StyleBuilder& setFontColor(core::Color color) { return fontColor(color); }
+    StyleBuilder& setNumberFormat(const std::string& fmt) { return numberFormat(fmt); }
     
     // 对齐设置
     
@@ -189,6 +196,8 @@ public:
         horizontal_align_ = align;
         return *this;
     }
+    // 兼容旧API
+    StyleBuilder& setHorizontalAlign(HorizontalAlign align) { return horizontalAlign(align); }
     
     /**
      * @brief 设置垂直对齐
@@ -199,6 +208,8 @@ public:
         vertical_align_ = align;
         return *this;
     }
+    // 兼容旧API
+    StyleBuilder& setVerticalAlign(VerticalAlign align) { return verticalAlign(align); }
     
     /**
      * @brief 左对齐

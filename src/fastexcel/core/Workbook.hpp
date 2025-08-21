@@ -1570,6 +1570,7 @@ public:
     size_t optimize();
 
 private:
+    // 文档属性通过 WorkbookDocumentManager 管理
     // 内部方法
     
     /**
