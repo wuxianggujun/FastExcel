@@ -119,6 +119,11 @@ set(FASTEXCEL_SOURCES
         src/fastexcel/core/managers/WorksheetImageManager.cpp
         src/fastexcel/core/managers/WorksheetCSVHandler.cpp
         
+        # Workbook Responsibility Separation (Manager Classes)
+        src/fastexcel/core/managers/WorkbookDocumentManager.cpp
+        src/fastexcel/core/managers/WorkbookSecurityManager.cpp
+        src/fastexcel/core/managers/WorkbookDataManager.cpp
+        
 )
 
 # 如果启用了 libdeflate，添加相关源文件

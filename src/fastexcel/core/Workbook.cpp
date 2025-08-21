@@ -3,6 +3,9 @@
 #include "fastexcel/core/BatchFileWriter.hpp"
 #include "fastexcel/core/CustomPropertyManager.hpp"
 #include "fastexcel/core/DefinedNameManager.hpp"
+#include "fastexcel/core/managers/WorkbookDocumentManager.hpp"
+#include "fastexcel/core/managers/WorkbookSecurityManager.hpp"
+#include "fastexcel/core/managers/WorkbookDataManager.hpp"
 #include "fastexcel/core/ExcelStructureGenerator.hpp"
 #include "fastexcel/core/Exception.hpp"
 #include "fastexcel/core/Path.hpp"
@@ -31,14 +34,6 @@
 namespace fastexcel {
 namespace core {
 
-// DocumentProperties 实现
-
-DocumentProperties::DocumentProperties() {
-    // 使用 TimeUtils 获取当前时间
-    created_time = utils::TimeUtils::getCurrentTime();
-    modified_time = created_time;
-}
-
 // Workbook 实现
 
 std::unique_ptr<Workbook> Workbook::create(const Path& path) {
@@ -50,8 +45,8 @@ std::unique_ptr<Workbook> Workbook::create(const Path& path) {
     
     // 对于 create() 创建的工作簿，强制设置为新文件
     // 因为我们要完全重写目标文件，无论它是否已存在
-    if (workbook->dirty_manager_) {
-        workbook->dirty_manager_->setIsNewFile(true);
+    if (workbook->document_manager_) {
+        workbook->document_manager_->getDirtyManager()->setIsNewFile(true);
     }
     
     // 🎯 API修复：自动打开工作簿，返回可直接使用的对象
@@ -82,19 +77,17 @@ Workbook::Workbook(const Path& path) : filename_(path.string()) {
     // 初始化共享字符串表
     shared_string_table_ = std::make_unique<SharedStringTable>();
     
-    // 初始化管理器
-    custom_property_manager_ = std::make_unique<CustomPropertyManager>();
-    defined_name_manager_ = std::make_unique<DefinedNameManager>();
+    // 初始化专门管理器（职责分离）
+    document_manager_ = std::make_unique<WorkbookDocumentManager>(this);
+    security_manager_ = std::make_unique<WorkbookSecurityManager>(this);
+    data_manager_ = std::make_unique<WorkbookDataManager>(this);
     
-    // 初始化智能脏数据管理器
-    dirty_manager_ = std::make_unique<DirtyManager>();
-    // 对于 create() 创建的工作簿，无论目标文件是否存在都视为新文件
-    // 这里暂时保持原逻辑，在 create() 方法中会重新设置
-    dirty_manager_->setIsNewFile(!path.exists()); // 如果文件不存在，则是新文件
+    // 初始化DocumentManager的DirtyManager
+    document_manager_->getDirtyManager()->setIsNewFile(!path.exists()); // 如果文件不存在，则是新文件
     
     // 设置默认文档属性
-    doc_properties_.author = "FastExcel";
-    doc_properties_.company = "FastExcel Library";
+    document_manager_->setAuthor("FastExcel");
+    document_manager_->setCompany("FastExcel Library");
 }
 
 Workbook::~Workbook() {
@@ -130,8 +123,10 @@ bool Workbook::save() {
     }
     
     try {
-        // 使用 TimeUtils 更新修改时间
-        doc_properties_.modified_time = utils::TimeUtils::getCurrentTime();
+        // 使用 TimeUtils 更新修改时间（通过DocumentManager）
+        if (document_manager_) {
+            document_manager_->updateModifiedTime();
+        }
         
         // 设置ZIP压缩级别 (添加空指针检查)
         if (file_manager_ && file_manager_->isOpen()) {
@@ -843,79 +838,6 @@ void Workbook::setThemeMinorFontComplex(const std::string& name) {
     theme_dirty_ = true;
 }
 
-// 自定义属性
-
-void Workbook::setProperty(const std::string& name, const std::string& value) {
-    custom_property_manager_->setProperty(name, value);
-}
-
-void Workbook::setProperty(const std::string& name, double value) {
-    custom_property_manager_->setProperty(name, value);
-}
-
-void Workbook::setProperty(const std::string& name, bool value) {
-    custom_property_manager_->setProperty(name, value);
-}
-
-std::string Workbook::getProperty(const std::string& name) const {
-    return custom_property_manager_->getProperty(name);
-}
-
-bool Workbook::removeProperty(const std::string& name) {
-    return custom_property_manager_->removeProperty(name);
-}
-
-std::unordered_map<std::string, std::string> Workbook::getAllProperties() const {
-    return custom_property_manager_->getAllProperties();
-}
-
-// 定义名称
-
-void Workbook::defineName(const std::string& name, const std::string& formula, const std::string& scope) {
-    defined_name_manager_->define(name, formula, scope);
-}
-
-std::string Workbook::getDefinedName(const std::string& name, const std::string& scope) const {
-    return defined_name_manager_->get(name, scope);
-}
-
-bool Workbook::removeDefinedName(const std::string& name, const std::string& scope) {
-    return defined_name_manager_->remove(name, scope);
-}
-
-// VBA项目
-
-bool Workbook::addVbaProject(const std::string& vba_project_path) {
-    // 检查文件是否存在
-    std::ifstream file(vba_project_path, std::ios::binary);
-    if (!file.is_open()) {
-        CORE_ERROR("VBA project file not found: {}", vba_project_path);
-        return false;
-    }
-    
-    vba_project_path_ = vba_project_path;
-    has_vba_ = true;
-    
-    CORE_INFO("Added VBA project: {}", vba_project_path);
-    return true;
-}
-
-// 工作簿保护
-
-void Workbook::protect(const std::string& password, bool lock_structure, bool lock_windows) {
-    protected_ = true;
-    protection_password_ = password;
-    lock_structure_ = lock_structure;
-    lock_windows_ = lock_windows;
-}
-
-void Workbook::unprotect() {
-    protected_ = false;
-    protection_password_.clear();
-    lock_structure_ = false;
-    lock_windows_ = false;
-}
-
 // 工作簿选项
 
 void Workbook::setCalcOptions(bool calc_on_load, bool full_calc_on_load) {
@@ -926,18 +848,21 @@ void Workbook::setCalcOptions(bool calc_on_load, bool full_calc_on_load) {
 // 生成控制判定（使用 DirtyManager 进行管理）
 
 bool Workbook::shouldGenerateContentTypes() const {
-    if (!dirty_manager_) return true;
-    return dirty_manager_->shouldUpdate("[Content_Types].xml");
+    auto* dirty_manager = getDirtyManager();
+    if (!dirty_manager) return true;
+    return dirty_manager->shouldUpdate("[Content_Types].xml");
 }
 
 bool Workbook::shouldGenerateRootRels() const {
-    if (!dirty_manager_) return true;
-    return dirty_manager_->shouldUpdate("_rels/.rels");
+    auto* dirty_manager = getDirtyManager();
+    if (!dirty_manager) return true;
+    return dirty_manager->shouldUpdate("_rels/.rels");
 }
 
 bool Workbook::shouldGenerateWorkbookCore() const {
-    if (!dirty_manager_) return true;
-    return dirty_manager_->shouldUpdate("xl/workbook.xml");
+    auto* dirty_manager = getDirtyManager();
+    if (!dirty_manager) return true;
+    return dirty_manager->shouldUpdate("xl/workbook.xml");
 }
 
 bool Workbook::shouldGenerateStyles() const {
@@ -966,13 +891,14 @@ bool Workbook::shouldGenerateSharedStrings() const {
     }
     CORE_DEBUG("options_.use_shared_strings = true, SharedStrings enabled");
     
-    if (!dirty_manager_) {
+    auto* dirty_manager = getDirtyManager();
+    if (!dirty_manager) {
         CORE_DEBUG("No dirty manager, SharedStrings generation enabled (default true)");
         return true;
     }
     CORE_DEBUG("DirtyManager exists, checking shouldUpdate for xl/sharedStrings.xml");
     
-    bool should_update = dirty_manager_->shouldUpdate("xl/sharedStrings.xml");
+    bool should_update = dirty_manager->shouldUpdate("xl/sharedStrings.xml");
     CORE_DEBUG("DirtyManager shouldUpdate for SharedStrings: {}", should_update);
     
     // 如果 SharedStringTable 有内容但 DirtyManager 认为不需要更新，则强制生成
@@ -994,30 +920,35 @@ bool Workbook::shouldGenerateSharedStrings() const {
 }
 
 bool Workbook::shouldGenerateDocPropsCore() const {
-    if (!dirty_manager_) return true;
-    return dirty_manager_->shouldUpdate("docProps/core.xml");
+    auto* dirty_manager = getDirtyManager();
+    if (!dirty_manager) return true;
+    return dirty_manager->shouldUpdate("docProps/core.xml");
 }
 
 bool Workbook::shouldGenerateDocPropsApp() const {
-    if (!dirty_manager_) return true;
-    return dirty_manager_->shouldUpdate("docProps/app.xml");
+    auto* dirty_manager = getDirtyManager();
+    if (!dirty_manager) return true;
+    return dirty_manager->shouldUpdate("docProps/app.xml");
 }
 
 bool Workbook::shouldGenerateDocPropsCustom() const {
-    if (!dirty_manager_) return true;
-    return dirty_manager_->shouldUpdate("docProps/custom.xml");
+    auto* dirty_manager = getDirtyManager();
+    if (!dirty_manager) return true;
+    return dirty_manager->shouldUpdate("docProps/custom.xml");
 }
 
 bool Workbook::shouldGenerateSheet(size_t index) const {
-    if (!dirty_manager_) return true;
+    auto* dirty_manager = getDirtyManager();
+    if (!dirty_manager) return true;
     std::string sheetPart = "xl/worksheets/sheet" + std::to_string(index + 1) + ".xml";
-    return dirty_manager_->shouldUpdate(sheetPart);
+    return dirty_manager->shouldUpdate(sheetPart);
 }
 
 bool Workbook::shouldGenerateSheetRels(size_t index) const {
-    if (!dirty_manager_) return true;
+    auto* dirty_manager = getDirtyManager();
+    if (!dirty_manager) return true;
     std::string sheetRelsPart = "xl/worksheets/_rels/sheet" + std::to_string(index + 1) + ".xml.rels";
-    return dirty_manager_->shouldUpdate(sheetRelsPart);
+    return dirty_manager->shouldUpdate(sheetRelsPart);
 }
 
 // 共享字符串管理
@@ -1415,9 +1346,16 @@ bool Workbook::refresh() {
         // 替换当前内容
         worksheets_ = std::move(refreshed_workbook->worksheets_);
         format_repo_ = std::move(refreshed_workbook->format_repo_);
-        doc_properties_ = refreshed_workbook->doc_properties_;
-        custom_property_manager_ = std::move(refreshed_workbook->custom_property_manager_);
-        defined_name_manager_ = std::move(refreshed_workbook->defined_name_manager_);
+        
+        // 通过管理器复制文档属性
+        if (refreshed_workbook->document_manager_ && document_manager_) {
+            document_manager_->setDocumentProperties(refreshed_workbook->document_manager_->getDocumentProperties());
+            // 复制自定义属性
+            auto custom_props = refreshed_workbook->document_manager_->getAllCustomProperties();
+            for (const auto& [name, value] : custom_props) {
+                document_manager_->setCustomProperty(name, value);
+            }
+        }
         
         // 重新打开工作簿
         open();
@@ -1480,23 +1418,25 @@ bool Workbook::mergeWorkbook(const std::unique_ptr<Workbook>& other_workbook, co
         }
         
         // 合并文档属性
-        if (options.merge_properties) {
-            if (!other_workbook->doc_properties_.title.empty()) {
-                doc_properties_.title = other_workbook->doc_properties_.title;
+        if (options.merge_properties && other_workbook->document_manager_ && document_manager_) {
+            const auto& other_props = other_workbook->document_manager_->getDocumentProperties();
+            if (!other_props.title.empty()) {
+                document_manager_->setTitle(other_props.title);
             }
-            if (!other_workbook->doc_properties_.author.empty()) {
-                doc_properties_.author = other_workbook->doc_properties_.author;
+            if (!other_props.author.empty()) {
+                document_manager_->setAuthor(other_props.author);
             }
-            if (!other_workbook->doc_properties_.subject.empty()) {
-                doc_properties_.subject = other_workbook->doc_properties_.subject;
+            if (!other_props.subject.empty()) {
+                document_manager_->setSubject(other_props.subject);
             }
-            if (!other_workbook->doc_properties_.company.empty()) {
-                doc_properties_.company = other_workbook->doc_properties_.company;
+            if (!other_props.company.empty()) {
+                document_manager_->setCompany(other_props.company);
             }
             
             // 合并自定义属性
-            for (const auto& prop : other_workbook->custom_property_manager_->getAllDetailedProperties()) {
-                setProperty(prop.name, prop.value);
+            auto custom_props = other_workbook->document_manager_->getAllCustomProperties();
+            for (const auto& [name, value] : custom_props) {
+                setProperty(name, value);
             }
             
             CORE_DEBUG("Merged document properties");
@@ -1545,10 +1485,13 @@ bool Workbook::exportWorksheets(const std::vector<std::string>& worksheet_names,
         }
         
         // 复制文档属性
-        export_workbook->doc_properties_ = doc_properties_;
-        // 复制自定义属性
-        for (const auto& prop : custom_property_manager_->getAllDetailedProperties()) {
-            export_workbook->setProperty(prop.name, prop.value);
+        if (document_manager_ && export_workbook->document_manager_) {
+            export_workbook->document_manager_->setDocumentProperties(document_manager_->getDocumentProperties());
+            // 复制自定义属性
+            auto custom_props = document_manager_->getAllCustomProperties();
+            for (const auto& [name, value] : custom_props) {
+                export_workbook->setProperty(name, value);
+            }
         }
         
         // 保存导出的工作簿
@@ -1713,8 +1656,11 @@ Workbook::WorkbookStats Workbook::getStatistics() const {
     stats.memory_usage += sizeof(Workbook);
     stats.memory_usage += worksheets_.capacity() * sizeof(std::shared_ptr<Worksheet>);
     stats.memory_usage += format_repo_->getMemoryUsage();
-    stats.memory_usage += custom_property_manager_->size() * sizeof(CustomProperty);
-    stats.memory_usage += defined_name_manager_->size() * sizeof(DefinedName);
+    
+    // 估算管理器的内存使用量
+    if (document_manager_) {
+        stats.memory_usage += document_manager_->getCustomPropertyCount() * 64; // 估算每个属性64字节
+    }
     
     return stats;
 }
@@ -1856,7 +1802,8 @@ bool Workbook::generateWithGenerator(bool use_streaming_writer) {
 
 bool Workbook::isModified() const {
     // 检查DirtyManager是否有修改标记
-    if (dirty_manager_ && dirty_manager_->hasDirtyData()) {
+    auto* dirty_manager = getDirtyManager();
+    if (dirty_manager && dirty_manager->hasDirtyData()) {
         return true;
     }
     
@@ -1943,120 +1890,6 @@ void Workbook::transitionToState(WorkbookState new_state, const std::string& rea
 
 StyleBuilder Workbook::createStyleBuilder() const {
     return StyleBuilder();
-}
-
-// CSV功能实现
-
-std::shared_ptr<Worksheet> Workbook::loadCSV(const std::string& filepath, 
-                                            const std::string& sheet_name,
-                                            const CSVOptions& options) {
-    CORE_INFO("Loading CSV file: {} into workbook", filepath);
-    
-    // 确定工作表名称
-    std::string final_sheet_name = sheet_name;
-    if (final_sheet_name.empty()) {
-        // 从文件名提取工作表名称
-        size_t pos = filepath.find_last_of("/\\");
-        std::string filename = (pos != std::string::npos) ? filepath.substr(pos + 1) : filepath;
-        size_t dot_pos = filename.find_last_of('.');
-        final_sheet_name = (dot_pos != std::string::npos) ? filename.substr(0, dot_pos) : filename;
-        
-        // 确保名称唯一
-        if (hasSheet(final_sheet_name)) {
-            int counter = 1;
-            std::string base_name = final_sheet_name;
-            do {
-                final_sheet_name = base_name + "_" + std::to_string(counter++);
-            } while (hasSheet(final_sheet_name));
-        }
-    }
-    
-    // 创建新工作表
-    auto worksheet = addSheet(final_sheet_name);
-    if (!worksheet) {
-        CORE_ERROR("Failed to create worksheet: {}", final_sheet_name);
-        return nullptr;
-    }
-    
-    // 加载CSV数据
-    auto parse_info = worksheet->loadFromCSV(filepath, options);
-    if (!parse_info.isSuccess()) {
-        CORE_ERROR("Failed to load CSV data from: {}, errors: {}", filepath, parse_info.errors.size());
-        for (const auto& error : parse_info.errors) {
-            CORE_ERROR("CSV Parse Error: {}", error);
-        }
-        
-        // 移除创建的工作表
-        removeSheet(final_sheet_name);
-        return nullptr;
-    }
-    
-    CORE_INFO("Successfully loaded CSV: {} rows, {} columns", 
-             parse_info.rows_processed, parse_info.columns_detected);
-    
-    return worksheet;
-}
-
-std::shared_ptr<Worksheet> Workbook::loadCSVString(const std::string& csv_content,
-                                                  const std::string& sheet_name,
-                                                  const CSVOptions& options) {
-    CORE_INFO("Loading CSV from string into workbook, length: {}", csv_content.length());
-    
-    // 创建新工作表
-    auto worksheet = addSheet(sheet_name);
-    if (!worksheet) {
-        CORE_ERROR("Failed to create worksheet: {}", sheet_name);
-        return nullptr;
-    }
-    
-    // 加载CSV数据
-    auto parse_info = worksheet->loadFromCSVString(csv_content, options);
-    if (!parse_info.isSuccess()) {
-        CORE_ERROR("Failed to load CSV data from string, errors: {}", parse_info.errors.size());
-        for (const auto& error : parse_info.errors) {
-            CORE_ERROR("CSV Parse Error: {}", error);
-        }
-        
-        // 移除创建的工作表
-        removeSheet(sheet_name);
-        return nullptr;
-    }
-    
-    CORE_INFO("Successfully loaded CSV string: {} rows, {} columns", 
-             parse_info.rows_processed, parse_info.columns_detected);
-    
-    return worksheet;
-}
-
-bool Workbook::exportSheetAsCSV(size_t sheet_index, const std::string& filepath,
-                               const CSVOptions& options) const {
-    if (sheet_index >= worksheets_.size()) {
-        CORE_ERROR("Sheet index {} out of range (total: {})", sheet_index, worksheets_.size());
-        return false;
-    }
-    
-    auto worksheet = worksheets_[sheet_index];
-    
-    CORE_INFO("Exporting sheet '{}' (index {}) to CSV: {}", worksheet->getName(), sheet_index, filepath);
-    
-    return worksheet->saveAsCSV(filepath, options);
-}
-
-bool Workbook::exportSheetAsCSV(const std::string& sheet_name, const std::string& filepath,
-                               const CSVOptions& options) const {
-    auto worksheet = getSheet(sheet_name);
-    if (!worksheet) {
-        CORE_ERROR("Sheet not found: {}", sheet_name);
-        return false;
-    }
-    
-    CORE_INFO("Exporting sheet '{}' to CSV: {}", sheet_name, filepath);
-    
-    return worksheet->saveAsCSV(filepath, options);
-}
-
-bool Workbook::isCSVFile(const std::string& filepath) {
-    return CSVUtils::isCSVFile(filepath);
 }
 
 }} // namespace fastexcel::core

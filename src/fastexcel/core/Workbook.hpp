@@ -11,6 +11,9 @@
 #include "fastexcel/core/WorksheetManager.hpp"
 #include "fastexcel/core/ResourceManager.hpp"
 #include "fastexcel/core/SharedStringCollector.hpp"
+#include "fastexcel/core/managers/WorkbookDocumentManager.hpp"
+#include "fastexcel/core/managers/WorkbookSecurityManager.hpp"
+#include "fastexcel/core/managers/WorkbookDataManager.hpp"
 #include "fastexcel/archive/FileManager.hpp"
 #include "fastexcel/utils/CommonUtils.hpp"
 #include "fastexcel/utils/AddressParser.hpp"
@@ -62,23 +65,7 @@ enum class FileSource {
     EXISTING_FILE    // 从现有文件加载
 };
 
-// 文档属性结构
-struct DocumentProperties {
-    std::string title;
-    std::string subject;
-    std::string author;
-    std::string manager;
-    std::string company;
-    std::string category;
-    std::string keywords;
-    std::string comments;
-    std::string status;
-    std::string hyperlink_base;
-    std::tm created_time;
-    std::tm modified_time;
-    
-    DocumentProperties();
-};
+// DocumentProperties is defined in WorkbookDocumentManager.hpp
 
 // 工作簿选项
 struct WorkbookOptions {
@@ -151,23 +138,14 @@ private:
     FileSource file_source_ = FileSource::NEW_FILE;
     std::string original_package_path_;
     
-    // 文档属性和元数据
-    DocumentProperties doc_properties_;
-    std::unique_ptr<CustomPropertyManager> custom_property_manager_;
-    std::unique_ptr<DefinedNameManager> defined_name_manager_;
-    std::unique_ptr<DirtyManager> dirty_manager_;
+    // 专门管理器（职责分离）
+    std::unique_ptr<WorkbookDocumentManager> document_manager_;
+    std::unique_ptr<WorkbookSecurityManager> security_manager_;
+    std::unique_ptr<WorkbookDataManager> data_manager_;
     
     // 配置选项
     WorkbookOptions options_;
     bool preserve_unknown_parts_ = true;
-    
-    // VBA和保护
-    std::string vba_project_path_;
-    bool has_vba_ = false;
-    bool protected_ = false;
-    std::string protection_password_;
-    bool lock_structure_ = false;
-    bool lock_windows_ = false;
     
     // 兼容性保留
     std::vector<std::shared_ptr<Worksheet>> worksheets_;    // 暂时保留以兼容
@@ -286,7 +264,18 @@ public:
      */
     std::shared_ptr<Worksheet> loadCSV(const std::string& filepath, 
                                       const std::string& sheet_name = "",
-                                      const CSVOptions& options = CSVOptions::standard());
+                                      const CSVOptions& options = CSVOptions::standard()) {
+        if (data_manager_) {
+            auto result = data_manager_->importCSV(filepath, "", options);
+            if (result.success && result.worksheet) {
+                if (!sheet_name.empty()) {
+                    // TODO: Rename worksheet if name provided  
+                }
+                return result.worksheet;
+            }
+        }
+        return nullptr;
+    }
     
     /**
      * @brief 从CSV字符串创建新的工作表
@@ -297,7 +286,18 @@ public:
      */
     std::shared_ptr<Worksheet> loadCSVString(const std::string& csv_content,
                                             const std::string& sheet_name = "Sheet1",
-                                            const CSVOptions& options = CSVOptions::standard());
+                                            const CSVOptions& options = CSVOptions::standard()) {
+        if (data_manager_) {
+            auto result = data_manager_->importCSVString(csv_content, "", options);
+            if (result.success && result.worksheet) {
+                if (!sheet_name.empty()) {
+                    // TODO: Rename worksheet if name provided
+                }
+                return result.worksheet;
+            }
+        }
+        return nullptr;
+    }
     
     /**
      * @brief 将工作簿的指定工作表导出为CSV
@@ -307,7 +307,9 @@ public:
      * @return 是否成功
      */
     bool exportSheetAsCSV(size_t sheet_index, const std::string& filepath,
-                         const CSVOptions& options = CSVOptions::standard()) const;
+                         const CSVOptions& options = CSVOptions::standard()) const {
+        return data_manager_ ? data_manager_->exportCSV(sheet_index, filepath, options).success : false;
+    }
     
     /**
      * @brief 将工作簿的指定工作表导出为CSV（按名称）
@@ -317,14 +319,18 @@ public:
      * @return 是否成功
      */
     bool exportSheetAsCSV(const std::string& sheet_name, const std::string& filepath,
-                         const CSVOptions& options = CSVOptions::standard()) const;
+                         const CSVOptions& options = CSVOptions::standard()) const {
+        return data_manager_ ? data_manager_->exportCSVByName(sheet_name, filepath, options).success : false;
+    }
     
     /**
      * @brief 检查文件是否为CSV格式
      * @param filepath 文件路径
      * @return 是否为CSV文件
      */
-    static bool isCSVFile(const std::string& filepath);
+    static bool isCSVFile(const std::string& filepath) {
+        return WorkbookDataManager::isCSVFile(filepath);
+    }
     
     /**
      * @brief 检查工作簿是否已打开
@@ -957,91 +963,121 @@ public:
      * @brief 设置文档标题
      * @param title 标题
      */
-    void setTitle(const std::string& title) { doc_properties_.title = title; }
+    void setTitle(const std::string& title) { 
+        if (document_manager_) document_manager_->setTitle(title); 
+    }
     
     /**
      * @brief 获取文档标题
      * @return 标题
      */
-    const std::string& getTitle() const { return doc_properties_.title; }
+    std::string getTitle() const { 
+        return document_manager_ ? document_manager_->getTitle() : std::string(); 
+    }
     
     /**
      * @brief 设置文档主题
      * @param subject 主题
      */
-    void setSubject(const std::string& subject) { doc_properties_.subject = subject; }
+    void setSubject(const std::string& subject) { 
+        if (document_manager_) document_manager_->setSubject(subject); 
+    }
     
     /**
      * @brief 获取文档主题
      * @return 主题
      */
-    const std::string& getSubject() const { return doc_properties_.subject; }
+    std::string getSubject() const { 
+        return document_manager_ ? document_manager_->getSubject() : std::string(); 
+    }
     
     /**
      * @brief 设置文档作者
      * @param author 作者
      */
-    void setAuthor(const std::string& author) { doc_properties_.author = author; }
+    void setAuthor(const std::string& author) { 
+        if (document_manager_) document_manager_->setAuthor(author); 
+    }
     
     /**
      * @brief 获取文档作者
      * @return 作者
      */
-    const std::string& getAuthor() const { return doc_properties_.author; }
+    std::string getAuthor() const { 
+        return document_manager_ ? document_manager_->getAuthor() : std::string(); 
+    }
     
     /**
      * @brief 设置文档管理者
      * @param manager 管理者
      */
-    void setManager(const std::string& manager) { doc_properties_.manager = manager; }
+    void setManager(const std::string& manager) { 
+        if (document_manager_) document_manager_->setManager(manager); 
+    }
     
     /**
      * @brief 设置公司
      * @param company 公司
      */
-    void setCompany(const std::string& company) { doc_properties_.company = company; }
+    void setCompany(const std::string& company) { 
+        if (document_manager_) document_manager_->setCompany(company); 
+    }
     
     /**
      * @brief 设置类别
      * @param category 类别
      */
-    void setCategory(const std::string& category) { doc_properties_.category = category; }
+    void setCategory(const std::string& category) { 
+        if (document_manager_) document_manager_->setCategory(category); 
+    }
     
     /**
      * @brief 设置关键词
      * @param keywords 关键词
      */
-    void setKeywords(const std::string& keywords) { doc_properties_.keywords = keywords; }
+    void setKeywords(const std::string& keywords) { 
+        if (document_manager_) document_manager_->setKeywords(keywords); 
+    }
     
     /**
      * @brief 设置注释
      * @param comments 注释
      */
-    void setComments(const std::string& comments) { doc_properties_.comments = comments; }
+    void setComments(const std::string& comments) { 
+        if (document_manager_) document_manager_->setComments(comments); 
+    }
     
     /**
      * @brief 设置状态
      * @param status 状态
      */
-    void setStatus(const std::string& status) { doc_properties_.status = status; }
+    void setStatus(const std::string& status) { 
+        if (document_manager_) document_manager_->setStatus(status); 
+    }
     
     /**
      * @brief 设置超链接基础
      * @param hyperlink_base 超链接基础
      */
-    void setHyperlinkBase(const std::string& hyperlink_base) { doc_properties_.hyperlink_base = hyperlink_base; }
+    void setHyperlinkBase(const std::string& hyperlink_base) { 
+        if (document_manager_) document_manager_->setHyperlinkBase(hyperlink_base); 
+    }
     
     /**
      * @brief 设置创建时间
      * @param created_time 创建时间
      */
-    void setCreatedTime(const std::tm& created_time) { doc_properties_.created_time = created_time; }
+    void setCreatedTime(const std::tm& created_time) { 
+        if (document_manager_) document_manager_->setCreatedTime(created_time); 
+    }
     
     /**
      * @brief 设置修改时间
      * @param modified_time 修改时间
      */
-    void setModifiedTime(const std::tm& modified_time) { doc_properties_.modified_time = modified_time; }
+    void setModifiedTime(const std::tm& modified_time) { 
+        if (document_manager_) document_manager_->setModifiedTime(modified_time); 
+    }
     
     /**
      * @brief 批量设置文档属性（新API）
@@ -1070,41 +1106,53 @@ public:
      * @param name 属性名
      * @param value 属性值
      */
-    void setProperty(const std::string& name, const std::string& value);
+    void setProperty(const std::string& name, const std::string& value) {
+        if (document_manager_) document_manager_->setCustomProperty(name, value);
+    }
     
     /**
      * @brief 添加自定义属性（数字）
      * @param name 属性名
      * @param value 属性值
      */
-    void setProperty(const std::string& name, double value);
+    void setProperty(const std::string& name, double value) {
+        if (document_manager_) document_manager_->setCustomProperty(name, value);
+    }
     
     /**
      * @brief 添加自定义属性（布尔）
      * @param name 属性名
      * @param value 属性值
      */
-    void setProperty(const std::string& name, bool value);
+    void setProperty(const std::string& name, bool value) {
+        if (document_manager_) document_manager_->setCustomProperty(name, value);
+    }
     
     /**
      * @brief 获取自定义属性
      * @param name 属性名
      * @return 属性值（如果不存在返回空字符串）
      */
-    std::string getProperty(const std::string& name) const;
+    std::string getProperty(const std::string& name) const {
+        return document_manager_ ? document_manager_->getCustomProperty(name) : std::string();
+    }
     
     /**
      * @brief 删除自定义属性
      * @param name 属性名
      * @return 是否成功
      */
-    bool removeProperty(const std::string& name);
+    bool removeProperty(const std::string& name) {
+        return document_manager_ ? document_manager_->removeCustomProperty(name) : false;
+    }
     
     /**
      * @brief 获取所有自定义属性
      * @return 自定义属性映射 (名称 -> 值)
      */
-    std::unordered_map<std::string, std::string> getAllProperties() const;
+    std::unordered_map<std::string, std::string> getAllProperties() const {
+        return document_manager_ ? document_manager_->getAllCustomProperties() : std::unordered_map<std::string, std::string>();
+    }
     
     // 定义名称
     
@@ -1114,7 +1162,9 @@ public:
      * @param formula 公式
      * @param scope 作用域（工作表名或空表示全局）
      */
-    void defineName(const std::string& name, const std::string& formula, const std::string& scope = "");
+    void defineName(const std::string& name, const std::string& formula, const std::string& scope = "") {
+        if (document_manager_) document_manager_->defineName(name, formula, scope);
+    }
     
     /**
      * @brief 获取定义名称的公式
@@ -1122,7 +1172,9 @@ public:
      * @param scope 作用域
      * @return 公式（如果不存在返回空字符串）
      */
-    std::string getDefinedName(const std::string& name, const std::string& scope = "") const;
+    std::string getDefinedName(const std::string& name, const std::string& scope = "") const {
+        return document_manager_ ? document_manager_->getDefinedName(name, scope) : std::string();
+    }
     
     /**
      * @brief 删除定义名称
@@ -1130,7 +1182,9 @@ public:
      * @param scope 作用域
      * @return 是否成功
      */
-    bool removeDefinedName(const std::string& name, const std::string& scope = "");
+    bool removeDefinedName(const std::string& name, const std::string& scope = "") {
+        return document_manager_ ? document_manager_->removeDefinedName(name, scope) : false;
+    }
     
     // VBA项目
     
@@ -1139,13 +1193,17 @@ public:
      * @param vba_project_path VBA项目文件路径
      * @return 是否成功
      */
-    bool addVbaProject(const std::string& vba_project_path);
+    bool addVbaProject(const std::string& vba_project_path) {
+        return security_manager_ ? security_manager_->addVbaProject(vba_project_path) : false;
+    }
     
     /**
      * @brief 检查是否有VBA项目
      * @return 是否有VBA项目
      */
-    bool hasVbaProject() const { return has_vba_; }
+    bool hasVbaProject() const { 
+        return security_manager_ ? security_manager_->hasVbaProject() : false; 
+    }
     
     // 工作簿保护
     
@@ -1155,18 +1213,30 @@ public:
      * @param lock_structure 锁定结构
      * @param lock_windows 锁定窗口
      */
-    void protect(const std::string& password = "", bool lock_structure = true, bool lock_windows = false);
+    void protect(const std::string& password = "", bool lock_structure = true, bool lock_windows = false) {
+        if (security_manager_) {
+            WorkbookSecurityManager::ProtectionOptions options;
+            options.password = password;
+            options.lock_structure = lock_structure;
+            options.lock_windows = lock_windows;
+            security_manager_->protect(options);
+        }
+    }
     
     /**
      * @brief 取消保护
      */
-    void unprotect();
+    void unprotect() {
+        if (security_manager_) security_manager_->unprotect();
+    }
     
     /**
      * @brief 检查是否受保护
      * @return 是否受保护
      */
-    bool isProtected() const { return protected_; }
+    bool isProtected() const { 
+        return security_manager_ ? security_manager_->isProtected() : false; 
+    }
     
     // 工作簿选项
     
@@ -1251,9 +1321,19 @@ public:
     
     // 获取状态
 
-    // 获取脏数据管理器
-    DirtyManager* getDirtyManager() { return dirty_manager_.get(); }
-    const DirtyManager* getDirtyManager() const { return dirty_manager_.get(); }
+    // 管理器访问器（获取管理器实例）
+    WorkbookDocumentManager* getDocumentManager() { return document_manager_.get(); }
+    const WorkbookDocumentManager* getDocumentManager() const { return document_manager_.get(); }
+    
+    WorkbookSecurityManager* getSecurityManager() { return security_manager_.get(); }
+    const WorkbookSecurityManager* getSecurityManager() const { return security_manager_.get(); }
+    
+    WorkbookDataManager* getDataManager() { return data_manager_.get(); }
+    const WorkbookDataManager* getDataManager() const { return data_manager_.get(); }
+    
+    // 同步方法（保持遗留系统兼容）
+    DirtyManager* getDirtyManager() { return document_manager_ ? document_manager_->getDirtyManager() : nullptr; }
+    const DirtyManager* getDirtyManager() const { return document_manager_ ? document_manager_->getDirtyManager() : nullptr; }
     
     // 生成控制（基于DirtyManager的新实现）
     bool shouldGenerateContentTypes() const;
@@ -1290,7 +1370,10 @@ public:
      * @brief 获取文档属性
      * @return 文档属性
      */
-    const DocumentProperties& getDocumentProperties() const { return doc_properties_; }
+    const DocumentProperties& getDocumentProperties() const { 
+        static DocumentProperties empty_properties;
+        return document_manager_ ? document_manager_->getDocumentProperties() : empty_properties; 
+    }
     
     /**
      * @brief 获取工作簿选项

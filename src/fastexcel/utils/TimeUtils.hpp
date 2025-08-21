@@ -58,6 +58,33 @@ public:
     }
     
     /**
+     * @brief 解析ISO 8601格式的时间字符串
+     * @param iso_string ISO 8601格式的时间字符串 (YYYY-MM-DDTHH:MM:SSZ 或 YYYY-MM-DD)
+     * @return 解析后的时间结构
+     */
+    static std::tm parseTimeISO8601(const std::string& iso_string) {
+        std::tm result = {};
+        std::istringstream iss(iso_string);
+        
+        // 尝试解析完整的ISO 8601格式: YYYY-MM-DDTHH:MM:SSZ
+        iss >> std::get_time(&result, "%Y-%m-%dT%H:%M:%SZ");
+        if (!iss.fail()) {
+            return result;
+        }
+        
+        // 清除错误标志并尝试只解析日期部分: YYYY-MM-DD
+        iss.clear();
+        iss.str(iso_string);
+        iss >> std::get_time(&result, "%Y-%m-%d");
+        if (!iss.fail()) {
+            return result;
+        }
+        
+        // 如果都解析失败，返回当前时间
+        return getCurrentTime();
+    }
+    
+    /**
      * @brief 格式化时间为自定义格式
      * @param time 时间结构
      * @param format 格式字符串（如 "%Y-%m-%d %H:%M:%S"）
