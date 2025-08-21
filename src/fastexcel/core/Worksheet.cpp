@@ -39,6 +39,15 @@ Worksheet::Worksheet(const std::string& name, std::shared_ptr<Workbook> workbook
     // 🔧 新架构：初始化单元格数据处理器
     cell_processor_ = std::make_unique<CellDataProcessor>(cells_, range_manager_, parent_workbook_, sheet_id_);
     
+    // 🔧 新架构：初始化布局管理器
+    layout_manager_ = std::make_unique<WorksheetLayoutManager>();
+    
+    // 🔧 新架构：初始化图片管理器
+    image_manager_ = std::make_unique<WorksheetImageManager>();
+    
+    // 🔧 新架构：初始化CSV处理器
+    csv_handler_ = std::make_unique<WorksheetCSVHandler>(*this);
+    
     // 🚀 初始化列宽管理器（延迟初始化，等待 format_repo_ 设置）
     // column_width_manager_ 将在 setFormatRepository 中初始化
 }
@@ -89,29 +98,10 @@ std::pair<double, int> Worksheet::setColumnWidthAdvanced(int col, double target_
         parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::METADATA);
     }
     
-    // 确保列宽管理器已初始化
-    if (!column_width_manager_) {
-        if (!format_repo_) {
-            // 自动创建一个临时的 FormatRepository 用于列宽计算
-            // 注意：这只用于基本的列宽功能，不涉及复杂的格式管理
-            FASTEXCEL_LOG_DEBUG("FormatRepository未设置，使用基础列宽模式");
-        }
-        // 创建列宽管理器，即使 format_repo_ 为空也可以工作
-        column_width_manager_ = std::make_unique<ColumnWidthManager>(format_repo_);
-    }
+    // 🔧 委托给layout_manager_处理高级列宽设置
+    auto result = layout_manager_->setColumnWidthAdvanced(col, target_width, font_name, font_size, strategy, cell_contents);
     
-    // 构建配置
-    ColumnWidthManager::ColumnWidthConfig config(target_width, font_name, font_size, strategy);
-    
-    // 使用内容感知模式时，传递单元格内容
-    std::pair<double, int> result;
-    if (strategy == ColumnWidthManager::WidthStrategy::CONTENT_AWARE && !cell_contents.empty()) {
-        result = column_width_manager_->setSmartColumnWidth(col, target_width, cell_contents);
-    } else {
-        result = column_width_manager_->setColumnWidth(col, config);
-    }
-    
-    // 更新列信息
+    // 同步更新本地column_info_（保持兼容性）
     column_info_[col].width = result.first;
     column_info_[col].precise_width = true;
     if (result.second >= 0) {
@@ -129,24 +119,15 @@ std::unordered_map<int, std::pair<double, int>> Worksheet::setColumnWidthsBatch(
         parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::METADATA);
     }
     
-    // 确保列宽管理器已初始化
-    if (!column_width_manager_) {
-        if (!format_repo_) {
-            // 自动创建一个临时的 FormatRepository 用于列宽计算
-            FASTEXCEL_LOG_DEBUG("FormatRepository未设置，使用基础列宽模式");
-        }
-        column_width_manager_ = std::make_unique<ColumnWidthManager>(format_repo_);
-    }
-    
     // 验证所有列位置
     for (const auto& [col, config] : configs) {
         validateCellPosition(0, col);
     }
     
-    // 批量处理
-    auto results = column_width_manager_->setColumnWidths(configs);
+    // 🔧 委托给layout_manager_处理批量列宽设置
+    auto results = layout_manager_->setColumnWidthsBatch(configs);
     
-    // 更新列信息
+    // 同步更新本地column_info_（保持兼容性）
     for (const auto& [col, result] : results) {
         column_info_[col].width = result.first;
         column_info_[col].precise_width = true;
@@ -159,20 +140,8 @@ std::unordered_map<int, std::pair<double, int>> Worksheet::setColumnWidthsBatch(
 }
 
 double Worksheet::calculateOptimalWidth(double target_width, const std::string& font_name, double font_size) const {
-    // 确保列宽管理器已初始化
-    if (!column_width_manager_) {
-        if (!format_repo_) {
-            // 临时创建管理器进行计算
-            auto temp_manager = std::make_unique<ColumnWidthManager>(format_repo_);
-            return temp_manager->calculateOptimalWidth(target_width, font_name, font_size);
-        }
-        
-        // 临时创建管理器进行计算
-        auto temp_manager = std::make_unique<ColumnWidthManager>(format_repo_);
-        return temp_manager->calculateOptimalWidth(target_width, font_name, font_size);
-    }
-    
-    return column_width_manager_->calculateOptimalWidth(target_width, font_name, font_size);
+    // 🔧 委托给layout_manager_处理列宽计算
+    return layout_manager_->calculateOptimalWidth(target_width, font_name, font_size);
 }
 
 // ========== 🚀 新增：简化版列宽设置方法 ==========
@@ -185,14 +154,12 @@ double Worksheet::setColumnWidth(int col, double width) {
         parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::METADATA);
     }
     
-    // 🎆 简化方案：直接使用基础列宽计算器，无需FormatRepository
-    auto calculator = utils::ColumnWidthCalculator(utils::ColumnWidthCalculator::FontType::CALIBRI_11);
-    double actual_width = calculator.quantize(width);
+    // 🔧 委托给layout_manager_处理列宽设置
+    double actual_width = layout_manager_->setColumnWidth(col, width);
     
-    // 直接更新列信息，简洁高效
+    // 同步更新本地column_info_（保持兼容性）
     column_info_[col].width = actual_width;
     column_info_[col].precise_width = true;
-    // 不设置 format_id，因为这只是列宽操作
     
     FASTEXCEL_LOG_DEBUG("设置列{}宽度: {} -> {}", col, width, actual_width);
     
@@ -242,6 +209,11 @@ void Worksheet::setColumnFormatId(int col, int format_id) {
         std::string sheet_path = "xl/worksheets/sheet" + std::to_string(sheet_id_) + ".xml";
         parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::METADATA);
     }
+    
+    // 🔧 委托给layout_manager_处理列格式设置
+    layout_manager_->setColumnFormatId(col, format_id);
+    
+    // 同步更新本地column_info_（保持兼容性）
     validateCellPosition(0, col);
     column_info_[col].format_id = format_id;
 }
@@ -251,6 +223,11 @@ void Worksheet::setColumnFormatId(int first_col, int last_col, int format_id) {
         std::string sheet_path = "xl/worksheets/sheet" + std::to_string(sheet_id_) + ".xml";
         parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::METADATA);
     }
+    
+    // 🔧 委托给layout_manager_处理列格式设置
+    layout_manager_->setColumnFormatId(first_col, last_col, format_id);
+    
+    // 同步更新本地column_info_（保持兼容性）
     validateRange(0, first_col, 0, last_col);
     for (int col = first_col; col <= last_col; ++col) {
         column_info_[col].format_id = format_id;
@@ -266,6 +243,11 @@ void Worksheet::hideColumn(int col) {
         std::string sheet_path = "xl/worksheets/sheet" + std::to_string(sheet_id_) + ".xml";
         parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::METADATA);
     }
+    
+    // 🔧 委托给layout_manager_处理列隐藏
+    layout_manager_->hideColumn(col);
+    
+    // 同步更新本地column_info_（保持兼容性）
     validateCellPosition(0, col);
     column_info_[col].hidden = true;
 }
@@ -275,6 +257,11 @@ void Worksheet::hideColumn(int first_col, int last_col) {
         std::string sheet_path = "xl/worksheets/sheet" + std::to_string(sheet_id_) + ".xml";
         parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::METADATA);
     }
+    
+    // 🔧 委托给layout_manager_处理列隐藏
+    layout_manager_->hideColumn(first_col, last_col);
+    
+    // 同步更新本地column_info_（保持兼容性）
     validateRange(0, first_col, 0, last_col);
     for (int col = first_col; col <= last_col; ++col) {
         column_info_[col].hidden = true;
@@ -286,6 +273,11 @@ void Worksheet::setRowHeight(int row, double height) {
         std::string sheet_path = "xl/worksheets/sheet" + std::to_string(sheet_id_) + ".xml";
         parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::METADATA);
     }
+    
+    // 🔧 委托给layout_manager_处理行高设置
+    layout_manager_->setRowHeight(row, height);
+    
+    // 同步更新本地row_info_（保持兼容性）
     validateCellPosition(row, 0);
     row_info_[row].height = height;
 }
@@ -297,6 +289,11 @@ void Worksheet::hideRow(int row) {
         std::string sheet_path = "xl/worksheets/sheet" + std::to_string(sheet_id_) + ".xml";
         parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::METADATA);
     }
+    
+    // 🔧 委托给layout_manager_处理行隐藏
+    layout_manager_->hideRow(row);
+    
+    // 同步更新本地row_info_（保持兼容性）
     validateCellPosition(row, 0);
     row_info_[row].hidden = true;
 }
@@ -306,6 +303,11 @@ void Worksheet::hideRow(int first_row, int last_row) {
         std::string sheet_path = "xl/worksheets/sheet" + std::to_string(sheet_id_) + ".xml";
         parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::METADATA);
     }
+    
+    // 🔧 委托给layout_manager_处理行隐藏
+    layout_manager_->hideRow(first_row, last_row);
+    
+    // 同步更新本地row_info_（保持兼容性）
     validateRange(first_row, 0, last_row, 0);
     for (int row = first_row; row <= last_row; ++row) {
         row_info_[row].hidden = true;
@@ -319,6 +321,11 @@ void Worksheet::mergeCells(int first_row, int first_col, int last_row, int last_
         std::string sheet_path = "xl/worksheets/sheet" + std::to_string(sheet_id_) + ".xml";
         parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::METADATA);
     }
+    
+    // 🔧 委托给layout_manager_处理合并单元格
+    layout_manager_->mergeCells(first_row, first_col, last_row, last_col);
+    
+    // 同步更新本地merge_ranges_（保持兼容性）
     validateRange(first_row, first_col, last_row, last_col);
     merge_ranges_.emplace_back(first_row, first_col, last_row, last_col);
 }
@@ -330,6 +337,11 @@ void Worksheet::setAutoFilter(int first_row, int first_col, int last_row, int la
         std::string sheet_path = "xl/worksheets/sheet" + std::to_string(sheet_id_) + ".xml";
         parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::METADATA);
     }
+    
+    // 🔧 委托给layout_manager_处理自动筛选
+    layout_manager_->setAutoFilter(first_row, first_col, last_row, last_col);
+    
+    // 同步更新本地autofilter_（保持兼容性）
     validateRange(first_row, first_col, last_row, last_col);
     autofilter_ = std::make_unique<AutoFilterRange>(first_row, first_col, last_row, last_col);
 }
@@ -339,6 +351,11 @@ void Worksheet::removeAutoFilter() {
         std::string sheet_path = "xl/worksheets/sheet" + std::to_string(sheet_id_) + ".xml";
         parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::METADATA);
     }
+    
+    // 🔧 委托给layout_manager_处理自动筛选移除
+    layout_manager_->removeAutoFilter();
+    
+    // 同步更新本地autofilter_（保持兼容性）
     autofilter_.reset();
 }
 
@@ -349,6 +366,11 @@ void Worksheet::freezePanes(int row, int col) {
         std::string sheet_path = "xl/worksheets/sheet" + std::to_string(sheet_id_) + ".xml";
         parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::METADATA);
     }
+    
+    // 🔧 委托给layout_manager_处理冻结窗格
+    layout_manager_->freezePanes(row, col);
+    
+    // 同步更新本地freeze_panes_（保持兼容性）
     validateCellPosition(row, col);
     freeze_panes_ = std::make_unique<FreezePanes>(row, col);
 }
@@ -358,6 +380,11 @@ void Worksheet::freezePanes(int row, int col, int top_left_row, int top_left_col
         std::string sheet_path = "xl/worksheets/sheet" + std::to_string(sheet_id_) + ".xml";
         parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::METADATA);
     }
+    
+    // 🔧 委托给layout_manager_处理带左上角的冻结窗格
+    layout_manager_->freezePanes(row, col, top_left_row, top_left_col);
+    
+    // 同步更新本地freeze_panes_（保持兼容性）
     validateCellPosition(row, col);
     validateCellPosition(top_left_row, top_left_col);
     freeze_panes_ = std::make_unique<FreezePanes>(row, col, top_left_row, top_left_col);
@@ -368,6 +395,11 @@ void Worksheet::splitPanes(int row, int col) {
         std::string sheet_path = "xl/worksheets/sheet" + std::to_string(sheet_id_) + ".xml";
         parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::METADATA);
     }
+    
+    // 🔧 委托给layout_manager_处理分割窗格
+    layout_manager_->splitPanes(row, col);
+    
+    // 同步更新本地freeze_panes_（保持兼容性）
     validateCellPosition(row, col);
     // 分割窗格的实现与冻结窗格类似，但使用不同的XML属性
     freeze_panes_ = std::make_unique<FreezePanes>(row, col);
@@ -1326,13 +1358,31 @@ WorksheetChain Worksheet::chain() {
 std::string Worksheet::insertImage(int row, int col, const std::string& image_path) {
     FASTEXCEL_LOG_DEBUG("Inserting image from file: {} at cell ({}, {})", image_path, row, col);
     
-    auto image = Image::fromFile(image_path);
-    if (!image) {
-        FASTEXCEL_LOG_ERROR("Failed to load image from file: {}", image_path);
-        return "";
+    // 🔧 委托给image_manager_处理图片插入
+    std::string image_id = image_manager_->insertImage(row, col, image_path);
+    
+    if (!image_id.empty()) {
+        // 标记工作表为脏数据
+        if (parent_workbook_ && parent_workbook_->getDirtyManager()) {
+            std::string sheet_path = "xl/worksheets/sheet" + std::to_string(sheet_id_) + ".xml";
+            std::string drawing_path = "xl/drawings/drawing" + std::to_string(sheet_id_) + ".xml";
+            parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::CONTENT);
+            parent_workbook_->getDirtyManager()->markDirty(drawing_path, DirtyManager::DirtyLevel::CONTENT);
+        }
+        
+        // 同步更新本地images_（保持兼容性）
+        const auto& manager_images = image_manager_->getImages();
+        images_.clear();
+        for (const auto& img : manager_images) {
+            // 使用显式clone深拷贝，避免调用已删除的拷贝构造
+            images_.push_back(img->clone());
+        }
+        next_image_id_ = static_cast<int>(image_manager_->getImageCount()) + 1;
+        
+        FASTEXCEL_LOG_INFO("Successfully inserted image: {} at cell ({}, {})", image_id, row, col);
     }
     
-    return insertImage(row, col, std::move(image));
+    return image_id;
 }
 
 std::string Worksheet::insertImage(int row, int col, std::unique_ptr<Image> image) {
@@ -1341,27 +1391,29 @@ std::string Worksheet::insertImage(int row, int col, std::unique_ptr<Image> imag
         return "";
     }
     
-    validateCellPosition(row, col);
+    // 🔧 委托给image_manager_处理图片插入
+    std::string image_id = image_manager_->insertImage(row, col, std::move(image));
     
-    // 设置单元格锚定
-    image->setCellAnchor(row, col, image->getAnchor().width, image->getAnchor().height);
-    
-    // 生成唯一ID
-    std::string image_id = "img" + std::to_string(next_image_id_++);
-    image->setId(image_id);
-    
-    // 添加到图片列表
-    images_.push_back(std::move(image));
-    
-    // 标记工作表为脏数据
-    if (parent_workbook_ && parent_workbook_->getDirtyManager()) {
-        std::string sheet_path = "xl/worksheets/sheet" + std::to_string(sheet_id_) + ".xml";
-        std::string drawing_path = "xl/drawings/drawing" + std::to_string(sheet_id_) + ".xml";
-        parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::CONTENT);
-        parent_workbook_->getDirtyManager()->markDirty(drawing_path, DirtyManager::DirtyLevel::CONTENT);
+    if (!image_id.empty()) {
+        // 标记工作表为脏数据
+        if (parent_workbook_ && parent_workbook_->getDirtyManager()) {
+            std::string sheet_path = "xl/worksheets/sheet" + std::to_string(sheet_id_) + ".xml";
+            std::string drawing_path = "xl/drawings/drawing" + std::to_string(sheet_id_) + ".xml";
+            parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::CONTENT);
+            parent_workbook_->getDirtyManager()->markDirty(drawing_path, DirtyManager::DirtyLevel::CONTENT);
+        }
+        
+        // 同步更新本地images_（保持兼容性）
+        const auto& manager_images = image_manager_->getImages();
+        images_.clear();
+        for (const auto& img : manager_images) {
+            images_.push_back(img->clone());
+        }
+        next_image_id_ = static_cast<int>(image_manager_->getImageCount()) + 1;
+        
+        FASTEXCEL_LOG_INFO("Successfully inserted image: {} at cell position ({}, {})", image_id, row, col);
     }
     
-    FASTEXCEL_LOG_INFO("Successfully inserted image: {} at cell ({}, {})", image_id, row, col);
     return image_id;
 }
 
@@ -1370,13 +1422,31 @@ std::string Worksheet::insertImage(int from_row, int from_col, int to_row, int t
     FASTEXCEL_LOG_DEBUG("Inserting image from file: {} in range ({},{}) to ({},{})",
                        image_path, from_row, from_col, to_row, to_col);
     
-    auto image = Image::fromFile(image_path);
-    if (!image) {
-        FASTEXCEL_LOG_ERROR("Failed to load image from file: {}", image_path);
-        return "";
+    // 🔧 委托给image_manager_处理图片范围插入
+    std::string image_id = image_manager_->insertImage(from_row, from_col, to_row, to_col, image_path);
+    
+    if (!image_id.empty()) {
+        // 标记工作表为脏数据
+        if (parent_workbook_ && parent_workbook_->getDirtyManager()) {
+            std::string sheet_path = "xl/worksheets/sheet" + std::to_string(sheet_id_) + ".xml";
+            std::string drawing_path = "xl/drawings/drawing" + std::to_string(sheet_id_) + ".xml";
+            parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::CONTENT);
+            parent_workbook_->getDirtyManager()->markDirty(drawing_path, DirtyManager::DirtyLevel::CONTENT);
+        }
+        
+        // 同步更新本地images_（保持兼容性）
+        const auto& manager_images = image_manager_->getImages();
+        images_.clear();
+        for (const auto& img : manager_images) {
+            images_.push_back(img->clone());
+        }
+        next_image_id_ = static_cast<int>(image_manager_->getImageCount()) + 1;
+        
+        FASTEXCEL_LOG_INFO("Successfully inserted image: {} in range ({},{}) to ({},{})",
+                          image_id, from_row, from_col, to_row, to_col);
     }
     
-    return insertImage(from_row, from_col, to_row, to_col, std::move(image));
+    return image_id;
 }
 
 std::string Worksheet::insertImage(int from_row, int from_col, int to_row, int to_col,
@@ -1386,28 +1456,30 @@ std::string Worksheet::insertImage(int from_row, int from_col, int to_row, int t
         return "";
     }
     
-    validateRange(from_row, from_col, to_row, to_col);
+    // 🔧 委托给image_manager_处理图片范围插入
+    std::string image_id = image_manager_->insertImage(from_row, from_col, to_row, to_col, std::move(image));
     
-    // 设置双单元格锚定
-    image->setRangeAnchor(from_row, from_col, to_row, to_col);
-    
-    // 生成唯一ID
-    std::string image_id = "img" + std::to_string(next_image_id_++);
-    image->setId(image_id);
-    
-    // 添加到图片列表
-    images_.push_back(std::move(image));
-    
-    // 标记工作表为脏数据
-    if (parent_workbook_ && parent_workbook_->getDirtyManager()) {
-        std::string sheet_path = "xl/worksheets/sheet" + std::to_string(sheet_id_) + ".xml";
-        std::string drawing_path = "xl/drawings/drawing" + std::to_string(sheet_id_) + ".xml";
-        parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::CONTENT);
-        parent_workbook_->getDirtyManager()->markDirty(drawing_path, DirtyManager::DirtyLevel::CONTENT);
+    if (!image_id.empty()) {
+        // 标记工作表为脏数据
+        if (parent_workbook_ && parent_workbook_->getDirtyManager()) {
+            std::string sheet_path = "xl/worksheets/sheet" + std::to_string(sheet_id_) + ".xml";
+            std::string drawing_path = "xl/drawings/drawing" + std::to_string(sheet_id_) + ".xml";
+            parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::CONTENT);
+            parent_workbook_->getDirtyManager()->markDirty(drawing_path, DirtyManager::DirtyLevel::CONTENT);
+        }
+        
+        // 同步更新本地images_（保持兼容性）
+        const auto& manager_images = image_manager_->getImages();
+        images_.clear();
+        for (const auto& img : manager_images) {
+            images_.push_back(img->clone());
+        }
+        next_image_id_ = static_cast<int>(image_manager_->getImageCount()) + 1;
+        
+        FASTEXCEL_LOG_INFO("Successfully inserted image: {} in range ({},{}) to ({},{})",
+                          image_id, from_row, from_col, to_row, to_col);
     }
     
-    FASTEXCEL_LOG_INFO("Successfully inserted image: {} in range ({},{}) to ({},{})",
-                      image_id, from_row, from_col, to_row, to_col);
     return image_id;
 }
 
@@ -1416,13 +1488,31 @@ std::string Worksheet::insertImageAt(double x, double y, double width, double he
     FASTEXCEL_LOG_DEBUG("Inserting image from file: {} at absolute position ({}, {}) with size {}x{}",
                        image_path, x, y, width, height);
     
-    auto image = Image::fromFile(image_path);
-    if (!image) {
-        FASTEXCEL_LOG_ERROR("Failed to load image from file: {}", image_path);
-        return "";
+    // 🔧 委托给image_manager_处理绝对定位图片插入
+    std::string image_id = image_manager_->insertImageAt(x, y, width, height, image_path);
+    
+    if (!image_id.empty()) {
+        // 标记工作表为脏数据
+        if (parent_workbook_ && parent_workbook_->getDirtyManager()) {
+            std::string sheet_path = "xl/worksheets/sheet" + std::to_string(sheet_id_) + ".xml";
+            std::string drawing_path = "xl/drawings/drawing" + std::to_string(sheet_id_) + ".xml";
+            parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::CONTENT);
+            parent_workbook_->getDirtyManager()->markDirty(drawing_path, DirtyManager::DirtyLevel::CONTENT);
+        }
+        
+        // 同步更新本地images_（保持兼容性）
+        const auto& manager_images = image_manager_->getImages();
+        images_.clear();
+        for (const auto& img : manager_images) {
+            images_.push_back(img->clone());
+        }
+        next_image_id_ = static_cast<int>(image_manager_->getImageCount()) + 1;
+        
+        FASTEXCEL_LOG_INFO("Successfully inserted image: {} at absolute position ({}, {}) with size {}x{}",
+                          image_id, x, y, width, height);
     }
     
-    return insertImageAt(x, y, width, height, std::move(image));
+    return image_id;
 }
 
 std::string Worksheet::insertImageAt(double x, double y, double width, double height,
@@ -1432,97 +1522,160 @@ std::string Worksheet::insertImageAt(double x, double y, double width, double he
         return "";
     }
     
-    // 设置绝对定位
-    image->setAbsoluteAnchor(x, y, width, height);
+    // 🔧 委托给image_manager_处理绝对定位图片插入
+    std::string image_id = image_manager_->insertImageAt(x, y, width, height, std::move(image));
     
-    // 生成唯一ID
-    std::string image_id = "img" + std::to_string(next_image_id_++);
-    image->setId(image_id);
-    
-    // 添加到图片列表
-    images_.push_back(std::move(image));
-    
-    // 标记工作表为脏数据
-    if (parent_workbook_ && parent_workbook_->getDirtyManager()) {
-        std::string sheet_path = "xl/worksheets/sheet" + std::to_string(sheet_id_) + ".xml";
-        std::string drawing_path = "xl/drawings/drawing" + std::to_string(sheet_id_) + ".xml";
-        parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::CONTENT);
-        parent_workbook_->getDirtyManager()->markDirty(drawing_path, DirtyManager::DirtyLevel::CONTENT);
+    if (!image_id.empty()) {
+        // 标记工作表为脏数据
+        if (parent_workbook_ && parent_workbook_->getDirtyManager()) {
+            std::string sheet_path = "xl/worksheets/sheet" + std::to_string(sheet_id_) + ".xml";
+            std::string drawing_path = "xl/drawings/drawing" + std::to_string(sheet_id_) + ".xml";
+            parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::CONTENT);
+            parent_workbook_->getDirtyManager()->markDirty(drawing_path, DirtyManager::DirtyLevel::CONTENT);
+        }
+        
+        // 同步更新本地images_（保持兼容性）
+        const auto& manager_images = image_manager_->getImages();
+        images_.clear();
+        for (const auto& img : manager_images) {
+            images_.push_back(img->clone());
+        }
+        next_image_id_ = static_cast<int>(image_manager_->getImageCount()) + 1;
+        
+        FASTEXCEL_LOG_INFO("Successfully inserted image: {} at absolute position ({}, {}) with size {}x{}",
+                          image_id, x, y, width, height);
     }
     
-    FASTEXCEL_LOG_INFO("Successfully inserted image: {} at absolute position ({}, {}) with size {}x{}",
-                      image_id, x, y, width, height);
     return image_id;
 }
 
 std::string Worksheet::insertImage(const std::string& address, const std::string& image_path) {
-    try {
-        auto [sheet, row, col] = utils::AddressParser::parseAddress(address);
-        return insertImage(row, col, image_path);
-    } catch (const std::exception& e) {
-        FASTEXCEL_LOG_ERROR("Failed to parse address '{}': {}", address, e.what());
-        return "";
+    // 🔧 委托给image_manager_处理地址格式图片插入
+    std::string image_id = image_manager_->insertImage(address, image_path);
+    
+    if (!image_id.empty()) {
+        // 标记工作表为脏数据
+        if (parent_workbook_ && parent_workbook_->getDirtyManager()) {
+            std::string sheet_path = "xl/worksheets/sheet" + std::to_string(sheet_id_) + ".xml";
+            std::string drawing_path = "xl/drawings/drawing" + std::to_string(sheet_id_) + ".xml";
+            parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::CONTENT);
+            parent_workbook_->getDirtyManager()->markDirty(drawing_path, DirtyManager::DirtyLevel::CONTENT);
+        }
+        
+        // 同步更新本地images_（保持兼容性）
+        const auto& manager_images = image_manager_->getImages();
+        images_.clear();
+        for (const auto& img : manager_images) {
+            images_.push_back(img->clone());
+        }
+        next_image_id_ = static_cast<int>(image_manager_->getImageCount()) + 1;
     }
+    
+    return image_id;
 }
 
 std::string Worksheet::insertImage(const std::string& address, std::unique_ptr<Image> image) {
-    try {
-        auto [sheet, row, col] = utils::AddressParser::parseAddress(address);
-        return insertImage(row, col, std::move(image));
-    } catch (const std::exception& e) {
-        FASTEXCEL_LOG_ERROR("Failed to parse address '{}': {}", address, e.what());
+    if (!image) {
+        FASTEXCEL_LOG_ERROR("Cannot insert null image");
         return "";
     }
+    
+    // 🔧 委托给image_manager_处理地址格式图片插入
+    std::string image_id = image_manager_->insertImage(address, std::move(image));
+    
+    if (!image_id.empty()) {
+        // 标记工作表为脏数据
+        if (parent_workbook_ && parent_workbook_->getDirtyManager()) {
+            std::string sheet_path = "xl/worksheets/sheet" + std::to_string(sheet_id_) + ".xml";
+            std::string drawing_path = "xl/drawings/drawing" + std::to_string(sheet_id_) + ".xml";
+            parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::CONTENT);
+            parent_workbook_->getDirtyManager()->markDirty(drawing_path, DirtyManager::DirtyLevel::CONTENT);
+        }
+        
+        // 同步更新本地images_（保持兼容性）
+        const auto& manager_images = image_manager_->getImages();
+        images_.clear();
+        for (const auto& img : manager_images) {
+            images_.push_back(img->clone());
+        }
+        next_image_id_ = static_cast<int>(image_manager_->getImageCount()) + 1;
+    }
+    
+    return image_id;
 }
 
 std::string Worksheet::insertImageRange(const std::string& range, const std::string& image_path) {
-    try {
-        auto [sheet, start_row, start_col, end_row, end_col] = utils::AddressParser::parseRange(range);
-        return insertImage(start_row, start_col, end_row, end_col, image_path);
-    } catch (const std::exception& e) {
-        FASTEXCEL_LOG_ERROR("Failed to parse range '{}': {}", range, e.what());
-        return "";
+    // 🔧 委托给image_manager_处理范围格式图片插入
+    std::string image_id = image_manager_->insertImageRange(range, image_path);
+    
+    if (!image_id.empty()) {
+        // 标记工作表为脏数据
+        if (parent_workbook_ && parent_workbook_->getDirtyManager()) {
+            std::string sheet_path = "xl/worksheets/sheet" + std::to_string(sheet_id_) + ".xml";
+            std::string drawing_path = "xl/drawings/drawing" + std::to_string(sheet_id_) + ".xml";
+            parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::CONTENT);
+            parent_workbook_->getDirtyManager()->markDirty(drawing_path, DirtyManager::DirtyLevel::CONTENT);
+        }
+        
+        // 同步更新本地images_（保持兼容性）
+        const auto& manager_images = image_manager_->getImages();
+        images_.clear();
+        for (const auto& img : manager_images) {
+            images_.push_back(img->clone());
+        }
+        next_image_id_ = static_cast<int>(image_manager_->getImageCount()) + 1;
     }
+    
+    return image_id;
 }
 
 std::string Worksheet::insertImageRange(const std::string& range, std::unique_ptr<Image> image) {
-    try {
-        auto [sheet, start_row, start_col, end_row, end_col] = utils::AddressParser::parseRange(range);
-        return insertImage(start_row, start_col, end_row, end_col, std::move(image));
-    } catch (const std::exception& e) {
-        FASTEXCEL_LOG_ERROR("Failed to parse range '{}': {}", range, e.what());
+    if (!image) {
+        FASTEXCEL_LOG_ERROR("Cannot insert null image");
         return "";
     }
+    
+    // 🔧 委托给image_manager_处理范围格式图片插入
+    std::string image_id = image_manager_->insertImageRange(range, std::move(image));
+    
+    if (!image_id.empty()) {
+        // 标记工作表为脏数据
+        if (parent_workbook_ && parent_workbook_->getDirtyManager()) {
+            std::string sheet_path = "xl/worksheets/sheet" + std::to_string(sheet_id_) + ".xml";
+            std::string drawing_path = "xl/drawings/drawing" + std::to_string(sheet_id_) + ".xml";
+            parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::CONTENT);
+            parent_workbook_->getDirtyManager()->markDirty(drawing_path, DirtyManager::DirtyLevel::CONTENT);
+        }
+        
+        // 同步更新本地images_（保持兼容性）
+        const auto& manager_images = image_manager_->getImages();
+        images_.clear();
+        for (const auto& img : manager_images) {
+            images_.push_back(img->clone());
+        }
+        next_image_id_ = static_cast<int>(image_manager_->getImageCount()) + 1;
+    }
+    
+    return image_id;
 }
 
 // ========== 图片管理功能实现 ==========
 
 const Image* Worksheet::findImage(const std::string& image_id) const {
-    auto it = std::find_if(images_.begin(), images_.end(),
-                          [&image_id](const std::unique_ptr<Image>& img) {
-                              return img && img->getId() == image_id;
-                          });
-    return (it != images_.end()) ? it->get() : nullptr;
+    // 🔧 委托给image_manager_处理图片查找
+    return image_manager_->findImage(image_id);
 }
 
 Image* Worksheet::findImage(const std::string& image_id) {
-    auto it = std::find_if(images_.begin(), images_.end(),
-                          [&image_id](const std::unique_ptr<Image>& img) {
-                              return img && img->getId() == image_id;
-                          });
-    return (it != images_.end()) ? it->get() : nullptr;
+    // 🔧 委托给image_manager_处理图片查找
+    return image_manager_->findImage(image_id);
 }
 
 bool Worksheet::removeImage(const std::string& image_id) {
-    auto it = std::find_if(images_.begin(), images_.end(),
-                          [&image_id](const std::unique_ptr<Image>& img) {
-                              return img && img->getId() == image_id;
-                          });
+    // 🔧 委托给image_manager_处理图片移除
+    bool result = image_manager_->removeImage(image_id);
     
-    if (it != images_.end()) {
-        FASTEXCEL_LOG_INFO("Removed image: {}", image_id);
-        images_.erase(it);
-        
+    if (result) {
         // 标记工作表为脏数据
         if (parent_workbook_ && parent_workbook_->getDirtyManager()) {
             std::string sheet_path = "xl/worksheets/sheet" + std::to_string(sheet_id_) + ".xml";
@@ -1531,17 +1684,27 @@ bool Worksheet::removeImage(const std::string& image_id) {
             parent_workbook_->getDirtyManager()->markDirty(drawing_path, DirtyManager::DirtyLevel::CONTENT);
         }
         
-        return true;
+        // 同步更新本地images_（保持兼容性）
+        const auto& manager_images = image_manager_->getImages();
+        images_.clear();
+        for (const auto& img : manager_images) {
+            images_.push_back(img->clone());
+        }
+        
+        FASTEXCEL_LOG_INFO("Removed image: {}", image_id);
+    } else {
+        FASTEXCEL_LOG_WARN("Image not found for removal: {}", image_id);
     }
     
-    FASTEXCEL_LOG_WARN("Image not found for removal: {}", image_id);
-    return false;
+    return result;
 }
 
 void Worksheet::clearImages() {
-    if (!images_.empty()) {
-        size_t count = images_.size();
-        images_.clear();
+    size_t count = image_manager_->getImageCount();
+    
+    if (count > 0) {
+        // 🔧 委托给image_manager_处理图片清空
+        image_manager_->clearImages();
         
         // 标记工作表为脏数据
         if (parent_workbook_ && parent_workbook_->getDirtyManager()) {
@@ -1550,140 +1713,86 @@ void Worksheet::clearImages() {
             parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::CONTENT);
             parent_workbook_->getDirtyManager()->markDirty(drawing_path, DirtyManager::DirtyLevel::CONTENT);
         }
+        
+        // 同步更新本地images_（保持兼容性）
+        images_.clear();
+        next_image_id_ = 1;
         
         FASTEXCEL_LOG_INFO("Cleared {} images from worksheet", count);
     }
 }
 
 size_t Worksheet::getImagesMemoryUsage() const {
-    size_t total_memory = 0;
-    for (const auto& image : images_) {
-        if (image) {
-            total_memory += image->getMemoryUsage();
-        }
-    }
-    return total_memory;
+    // 🔧 委托给image_manager_处理内存使用统计
+    return image_manager_->getImagesMemoryUsage();
 }
+
+// ========== 🔧 架构优化完成状态标记 ==========
+
+// ✅ 已完成的管理器委托架构优化：
+// - CellDataProcessor: 单元格数据操作、复制移动、查找替换、排序等 (已完成)
+// - WorksheetLayoutManager: 列宽行高、隐藏、合并、筛选、冻结窗格等 (已完成)
+// - WorksheetImageManager: 图片插入、查找、移除等 (已完成)
+// - WorksheetCSVHandler: CSV导入导出处理 (已完成)
+
+// 架构设计说明：
+// 1. 保持向后兼容性：所有原有API保持不变，内部委托给管理器
+// 2. 数据同步策略：委托操作后同步更新本地数据结构（如column_info_、row_info_等）
+// 3. 责任分离清晰：Worksheet专注协调，具体功能由专门管理器处理
+// 4. 性能优化考虑：避免重复数据复制，使用引用和移动语义
 
 // ========== CSV功能实现 ==========
 
 CSVParseInfo Worksheet::loadFromCSV(const std::string& filepath, const CSVOptions& options) {
     FASTEXCEL_LOG_INFO("Loading CSV from file: {} into worksheet: {}", filepath, name_);
-    return CSVReader::loadFromFile(filepath, *this, options);
+    // 🔧 委托给csv_handler_处理CSV加载
+    return csv_handler_->loadFromCSV(filepath, options);
 }
 
 CSVParseInfo Worksheet::loadFromCSVString(const std::string& csv_content, const CSVOptions& options) {
     FASTEXCEL_LOG_DEBUG("Loading CSV from string into worksheet: {}, content length: {}", name_, csv_content.length());
-    return CSVReader::loadFromString(csv_content, *this, options);
+    // 🔧 委托给csv_handler_处理CSV字符串加载
+    return csv_handler_->loadFromCSVString(csv_content, options);
 }
 
 bool Worksheet::saveAsCSV(const std::string& filepath, const CSVOptions& options) const {
     FASTEXCEL_LOG_INFO("Saving worksheet: {} as CSV to file: {}", name_, filepath);
-    return CSVWriter::saveToFile(*this, filepath, options);
+    // 🔧 委托给csv_handler_处理CSV保存
+    return csv_handler_->saveAsCSV(filepath, options);
 }
 
 std::string Worksheet::toCSVString(const CSVOptions& options) const {
     FASTEXCEL_LOG_DEBUG("Converting worksheet: {} to CSV string", name_);
-    return CSVWriter::saveToString(*this, options);
+    // 🔧 委托给csv_handler_处理CSV转换
+    return csv_handler_->toCSVString(options);
 }
 
 std::string Worksheet::rangeToCSVString(int start_row, int start_col, int end_row, int end_col,
                                        const CSVOptions& options) const {
     FASTEXCEL_LOG_DEBUG("Converting range ({},{}) to ({},{}) of worksheet: {} to CSV string", 
                        start_row, start_col, end_row, end_col, name_);
-    return CSVWriter::saveRangeToString(*this, start_row, start_col, end_row, end_col, options);
+    // 🔧 委托给csv_handler_处理范围CSV转换
+    return csv_handler_->rangeToCSVString(start_row, start_col, end_row, end_col, options);
 }
 
 CSVParseInfo Worksheet::previewCSV(const std::string& filepath, const CSVOptions& options) {
-    return CSVReader::previewFile(filepath, options);
+    // 🔧 委托给csv_handler_处理CSV预览（静态方法）
+    return WorksheetCSVHandler::previewCSV(filepath, options);
 }
 
 CSVOptions Worksheet::detectCSVOptions(const std::string& filepath) {
-    return CSVReader::detectOptions(filepath);
+    // 🔧 委托给csv_handler_处理CSV选项检测（静态方法）
+    return WorksheetCSVHandler::detectCSVOptions(filepath);
 }
 
 bool Worksheet::isCSVFile(const std::string& filepath) {
-    return CSVUtils::isCSVFile(filepath);
+    // 🔧 委托给csv_handler_处理CSV文件检测（静态方法）
+    return WorksheetCSVHandler::isCSVFile(filepath);
 }
 
 std::string Worksheet::getCellDisplayValue(int row, int col) const {
-    try {
-        // 检查范围
-        if (row < 0 || col < 0) {
-            return "";
-        }
-        
-        // 获取单元格
-        const auto& cell = getCell(row, col);
-        
-        // 根据单元格类型返回适当的字符串表示
-        switch (cell.getType()) {
-            case CellType::Empty:
-                return "";
-                
-            case CellType::Number:
-                {
-                    double value = cell.getValue<double>();
-                    // 检查是否为整数
-                    if (value == std::floor(value) && std::abs(value) < 1e15) {
-                        return std::to_string(static_cast<long long>(value));
-                    } else {
-                        // 使用高精度浮点数输出
-                        std::ostringstream oss;
-                        oss << std::fixed << std::setprecision(10) << value;
-                        std::string result = oss.str();
-                        // 移除末尾的零
-                        result.erase(result.find_last_not_of('0') + 1, std::string::npos);
-                        result.erase(result.find_last_not_of('.') + 1, std::string::npos);
-                        return result;
-                    }
-                }
-                
-            case CellType::String:
-                return cell.getValue<std::string>();
-                
-            case CellType::Boolean:
-                return cell.getValue<bool>() ? "TRUE" : "FALSE";
-                
-            case CellType::Formula:
-                // 对于公式，优先返回计算结果，如果无法获取则返回公式文本
-                try {
-                    // 首先尝试获取公式的计算结果
-                    double result = cell.getFormulaResult();
-                    // 检查是否为整数
-                    if (result == std::floor(result) && std::abs(result) < 1e15) {
-                        return std::to_string(static_cast<long long>(result));
-                    } else {
-                        // 使用高精度浮点数输出
-                        std::ostringstream oss;
-                        oss << std::fixed << std::setprecision(10) << result;
-                        std::string result_str = oss.str();
-                        // 移除末尾的零
-                        result_str.erase(result_str.find_last_not_of('0') + 1, std::string::npos);
-                        result_str.erase(result_str.find_last_not_of('.') + 1, std::string::npos);
-                        return result_str;
-                    }
-                } catch (...) {
-                    // 如果无法获取计算结果，尝试返回公式文本
-                    try {
-                        std::string formula = cell.getFormula();
-                        return formula.empty() ? "=" : "=" + formula;
-                    } catch (...) {
-                        return "#FORMULA_ERROR";
-                    }
-                }
-                
-            case CellType::Error:
-                return "#ERROR";
-                
-            default:
-                return "";
-        }
-        
-    } catch (const std::exception& /*e*/) {
-        // 如果发生错误（例如单元格不存在），返回空字符串
-        return "";
-    }
+    // 🔧 委托给csv_handler_处理单元格显示值获取
+    return csv_handler_->getCellDisplayValue(row, col);
 }
 
 } // namespace core

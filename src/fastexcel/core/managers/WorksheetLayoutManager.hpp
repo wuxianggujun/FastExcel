@@ -16,6 +16,26 @@ struct ColumnInfo {
     bool collapsed = false;
     uint8_t outline_level = 0;
     bool precise_width = false;
+    
+    // 相等比较操作符
+    bool operator==(const ColumnInfo& other) const {
+        return width == other.width &&
+               format_id == other.format_id &&
+               hidden == other.hidden &&
+               collapsed == other.collapsed &&
+               outline_level == other.outline_level &&
+               precise_width == other.precise_width;
+    }
+    
+    // 小于比较操作符（用于排序）
+    bool operator<(const ColumnInfo& other) const {
+        if (width != other.width) return width < other.width;
+        if (format_id != other.format_id) return format_id < other.format_id;
+        if (hidden != other.hidden) return hidden < other.hidden;
+        if (collapsed != other.collapsed) return collapsed < other.collapsed;
+        if (outline_level != other.outline_level) return outline_level < other.outline_level;
+        return precise_width < other.precise_width;
+    }
 };
 
 // 行信息结构

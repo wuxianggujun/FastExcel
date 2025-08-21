@@ -19,6 +19,21 @@ Image::Image() : format_(ImageFormat::UNKNOWN) {
     id_ = generateId();
 }
 
+std::unique_ptr<Image> Image::clone() const {
+    // 进行字段级深拷贝，保持ID与锚定信息一致
+    auto copy = std::make_unique<Image>();
+    copy->id_ = id_;
+    copy->name_ = name_;
+    copy->description_ = description_;
+    copy->data_ = data_;
+    copy->format_ = format_;
+    copy->anchor_ = anchor_;
+    copy->original_filename_ = original_filename_;
+    copy->original_width_ = original_width_;
+    copy->original_height_ = original_height_;
+    return copy;
+}
+
 std::unique_ptr<Image> Image::fromFile(const std::string& filepath) {
     FASTEXCEL_LOG_DEBUG("Loading image from file: {}", filepath);
     

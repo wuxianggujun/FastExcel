@@ -34,7 +34,7 @@ std::pair<double, int> WorksheetLayoutManager::setColumnWidthAdvanced(int col, d
     
     // 确保列宽管理器已初始化
     if (!column_width_manager_) {
-        column_width_manager_ = std::make_unique<ColumnWidthManager>(format_repo_);
+        column_width_manager_ = std::make_unique<ColumnWidthManager>(format_repo_.get());
     }
     
     // 构建配置
@@ -63,7 +63,7 @@ std::unordered_map<int, std::pair<double, int>> WorksheetLayoutManager::setColum
     
     // 确保列宽管理器已初始化
     if (!column_width_manager_) {
-        column_width_manager_ = std::make_unique<ColumnWidthManager>(format_repo_);
+        column_width_manager_ = std::make_unique<ColumnWidthManager>(format_repo_.get());
     }
     
     // 验证所有列位置
@@ -225,7 +225,7 @@ void WorksheetLayoutManager::clear() {
 void WorksheetLayoutManager::setFormatRepository(std::shared_ptr<FormatRepository> format_repo) {
     format_repo_ = format_repo;
     if (column_width_manager_) {
-        column_width_manager_ = std::make_unique<ColumnWidthManager>(format_repo_);
+        column_width_manager_ = std::make_unique<ColumnWidthManager>(format_repo_.get());
     }
 }
 

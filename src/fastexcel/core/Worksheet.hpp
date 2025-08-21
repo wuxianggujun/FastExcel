@@ -10,6 +10,9 @@
 #include "fastexcel/core/CSVProcessor.hpp"  // 🚀 新增：CSV处理支持
 #include "fastexcel/core/ColumnWidthManager.hpp"  // 🚀 新架构：列宽管理器
 #include "fastexcel/core/managers/CellDataProcessor.hpp"  // 🔧 新增：单元格数据处理器
+#include "fastexcel/core/managers/WorksheetLayoutManager.hpp"  // 🔧 新增：布局管理器
+#include "fastexcel/core/managers/WorksheetImageManager.hpp"  // 🔧 新增：图片管理器
+#include "fastexcel/core/managers/WorksheetCSVHandler.hpp"  // 🔧 新增：CSV处理器
 #include "fastexcel/utils/CommonUtils.hpp"
 #include "fastexcel/utils/AddressParser.hpp"  // 🚀 新增：Excel地址解析支持
 #include "fastexcel/utils/ColumnWidthCalculator.hpp"  // 🚀 新增：列宽计算器支持
@@ -45,81 +48,8 @@ class RangeFormatter;
 // WorksheetChain类在独立的头文件中定义
 class WorksheetChain;
 
-// 列信息结构
-struct ColumnInfo {
-    double width = -1.0;           // 列宽，-1表示默认
-    int format_id = -1;            // FormatRepository中的格式ID，-1表示无格式
-    bool hidden = false;           // 是否隐藏
-    bool collapsed = false;        // 是否折叠
-    uint8_t outline_level = 0;     // 大纲级别
-    bool precise_width = false;    // 🚀 新增：是否使用精确宽度计算
-    
-    // 🔧 关键修复：添加比较操作符以支持排序
-    bool operator==(const ColumnInfo& other) const {
-        return width == other.width &&
-               format_id == other.format_id &&
-               hidden == other.hidden &&
-               collapsed == other.collapsed &&
-               outline_level == other.outline_level &&
-               precise_width == other.precise_width;
-    }
-    
-    bool operator!=(const ColumnInfo& other) const {
-        return !(*this == other);
-    }
-    
-    bool operator<(const ColumnInfo& other) const {
-        if (format_id != other.format_id) return format_id < other.format_id;
-        if (width != other.width) return width < other.width;
-        if (hidden != other.hidden) return hidden < other.hidden;
-        if (collapsed != other.collapsed) return collapsed < other.collapsed;
-        if (precise_width != other.precise_width) return precise_width < other.precise_width;
-        return outline_level < other.outline_level;
-    }
-};
-
-// 行信息结构
-struct RowInfo {
-    double height = -1.0;          // 行高，-1表示默认
-    int format_id = -1;            // FormatRepository中的格式ID，-1表示无格式
-    bool hidden = false;           // 是否隐藏
-    bool collapsed = false;        // 是否折叠
-    uint8_t outline_level = 0;     // 大纲级别
-};
-
-// 合并单元格范围
-struct MergeRange {
-    int first_row;
-    int first_col;
-    int last_row;
-    int last_col;
-    
-    MergeRange(int fr, int fc, int lr, int lc) 
-        : first_row(fr), first_col(fc), last_row(lr), last_col(lc) {}
-};
-
-// 自动筛选范围
-struct AutoFilterRange {
-    int first_row;
-    int first_col;
-    int last_row;
-    int last_col;
-    
-    AutoFilterRange(int fr, int fc, int lr, int lc) 
-        : first_row(fr), first_col(fc), last_row(lr), last_col(lc) {}
-};
-
-// 冻结窗格信息
-struct FreezePanes {
-    int row = 0;
-    int col = 0;
-    int top_left_row = 0;
-    int top_left_col = 0;
-    
-    FreezePanes() = default;
-    FreezePanes(int r, int c, int tlr = 0, int tlc = 0) 
-        : row(r), col(c), top_left_row(tlr), top_left_col(tlc) {}
-};
+// 列信息结构 - 使用WorksheetLayoutManager中的定义
+// struct ColumnInfo 已在 WorksheetLayoutManager.hpp 中定义
 
 // 打印设置
 struct PrintSettings {
@@ -219,6 +149,9 @@ private:
     
     // 🔧 新架构：管理器委托模式
     std::unique_ptr<CellDataProcessor> cell_processor_;
+    std::unique_ptr<WorksheetLayoutManager> layout_manager_;
+    std::unique_ptr<WorksheetImageManager> image_manager_;
+    std::unique_ptr<WorksheetCSVHandler> csv_handler_;
     
     // 行列信息
     std::unordered_map<int, ColumnInfo> column_info_;
@@ -2009,13 +1942,19 @@ public:
      * @brief 获取所有图片
      * @return 图片列表的常量引用
      */
-    const std::vector<std::unique_ptr<Image>>& getImages() const { return images_; }
+    const std::vector<std::unique_ptr<Image>>& getImages() const { 
+        // 🔧 委托给image_manager_处理图片获取
+        return image_manager_->getImages(); 
+    }
     
     /**
      * @brief 获取图片数量
      * @return 图片数量
      */
-    size_t getImageCount() const { return images_.size(); }
+    size_t getImageCount() const { 
+        // 🔧 委托给image_manager_处理图片计数
+        return image_manager_->getImageCount(); 
+    }
     
     /**
      * @brief 根据ID查找图片
@@ -2047,7 +1986,10 @@ public:
      * @brief 检查是否包含图片
      * @return 是否包含图片
      */
-    bool hasImages() const { return !images_.empty(); }
+    bool hasImages() const { 
+        // 🔧 委托给image_manager_处理图片存在检查
+        return image_manager_->hasImages(); 
+    }
     
     /**
      * @brief 获取图片占用的内存大小

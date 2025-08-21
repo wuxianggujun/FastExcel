@@ -102,6 +102,12 @@ public:
     // 允许移动构造和赋值
     Image(Image&&) = default;
     Image& operator=(Image&&) = default;
+
+    /**
+     * @brief 深拷贝当前图片对象
+     * @return 复制后的新图片对象（包含ID、锚定、元数据与二进制数据）
+     */
+    std::unique_ptr<Image> clone() const;
     
     /**
      * @brief 从文件创建图片
