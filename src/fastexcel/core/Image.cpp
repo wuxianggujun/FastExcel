@@ -13,7 +13,7 @@
 namespace fastexcel {
 namespace core {
 
-// ========== Image类实现 ==========
+// Image 类实现
 
 Image::Image() : format_(ImageFormat::UNKNOWN) {
     id_ = generateId();
@@ -247,7 +247,7 @@ std::string Image::generateId() const {
     return oss.str();
 }
 
-// ========== ImageUtils类实现 ==========
+// ImageUtils 类实现
 
 std::string ImageUtils::formatToString(ImageFormat format) {
     switch (format) {

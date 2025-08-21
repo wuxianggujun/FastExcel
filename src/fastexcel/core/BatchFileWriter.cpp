@@ -21,7 +21,7 @@ BatchFileWriter::~BatchFileWriter() {
 }
 
 bool BatchFileWriter::writeFile(const std::string& path, const std::string& content) {
-    // 🔧 关键修复：如果有流式文件打开，先关闭它
+    // 若有流式文件打开，先关闭
     if (streaming_file_open_) {
         CORE_WARN("Auto-closing streaming file {} to write batch file {}", current_path_, path);
         if (!closeStreamingFile()) {
@@ -72,7 +72,7 @@ bool BatchFileWriter::closeStreamingFile() {
         return false;
     }
     
-    // 🔧 关键修复：避免递归调用，直接添加到文件列表而不调用writeFile
+    // 避免递归调用：直接添加到文件列表而不调用 writeFile
     files_.emplace_back(current_path_, current_content_);
     stats_.streaming_files++;
     stats_.batch_files++; // 统计中也算作批量文件

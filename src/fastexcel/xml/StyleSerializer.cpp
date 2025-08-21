@@ -422,7 +422,7 @@ void StyleSerializer::writeProtection(const core::FormatDescriptor& format,
     writer.endElement(); // protection
 }
 
-// ========== 辅助方法实现 ==========
+// 辅助方法实现
 
 std::string StyleSerializer::borderStyleToXml(core::BorderStyle style) {
     switch (style) {
@@ -715,7 +715,7 @@ void StyleSerializer::collectUniqueNumberFormats(
     }
 }
 
-// ========== 哈希键生成函数（性能优化）==========
+// 哈希键生成函数（性能优化）
 
 std::string StyleSerializer::createFillHashKey(const core::FormatDescriptor& format) {
     // Gray125是特殊模式，单独处理

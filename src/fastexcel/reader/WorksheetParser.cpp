@@ -31,7 +31,7 @@ bool WorksheetParser::parse(const std::string& xml_content,
     }
     
     try {
-        // 🔧 关键修复：先解析列样式定义
+        // 先解析列样式定义
         READER_DEBUG("开始解析列样式定义");
         parseColumns(xml_content, worksheet, styles, style_id_mapping);
         READER_DEBUG("列样式解析完成");
@@ -153,7 +153,7 @@ bool WorksheetParser::parseRow(const std::string& row_xml,
         
         // 检查标签是否以 "/>" 结尾（自闭合标签）
         if (tag_end > 0 && row_xml[tag_end - 1] == '/') {
-            // 🔧 修复：自闭合标签处理
+            // 自闭合标签处理
             std::string cell_xml = row_xml.substr(pos, tag_end - pos + 1);
             parseCell(cell_xml, worksheet, shared_strings, styles, style_id_mapping);
             pos = tag_end + 1;
@@ -224,7 +224,7 @@ bool WorksheetParser::parseCell(const std::string& cell_xml,
             int string_index = std::stoi(cell_value);
             auto it = shared_strings.find(string_index);
             if (it != shared_strings.end()) {
-                // 🔧 关键修复：使用addSharedStringWithIndex保持原始索引
+                // 使用 addSharedStringWithIndex 保持原始索引
                 if (auto wb = worksheet->getParentWorkbook()) {
                     wb->addSharedStringWithIndex(it->second, string_index);
                 }
@@ -279,7 +279,7 @@ bool WorksheetParser::parseCell(const std::string& cell_xml,
     
     // 应用样式（如果有）
     if (style_index >= 0) {
-        // 🔧 关键修复：使用样式ID映射来获取正确的FormatRepository中的样式
+        // 使用样式 ID 映射来获取正确的 FormatRepository 中的样式
         int mapped_style_id = style_index;
         if (!style_id_mapping.empty()) {
             auto mapping_it = style_id_mapping.find(style_index);
@@ -588,7 +588,7 @@ bool WorksheetParser::parseColumns(const std::string& xml_content,
             
             // 设置列样式
             if (style_index >= 0) {
-                // 🔧 关键修复：使用样式ID映射来获取正确的格式
+                // 使用样式 ID 映射来获取正确的格式
                 int mapped_style_id = style_index;
                 if (!style_id_mapping.empty()) {
                     auto mapping_it = style_id_mapping.find(style_index);
@@ -599,7 +599,7 @@ bool WorksheetParser::parseColumns(const std::string& xml_content,
                 
                 auto style_it = styles.find(mapped_style_id);
                 if (style_it != styles.end()) {
-                    // 🔧 关键修复：设置列格式ID到工作表
+                    // 设置列格式 ID 到工作表
                     worksheet->setColumnFormatId(first_col, last_col, mapped_style_id);
                     READER_DEBUG("设置列样式：列 {}-{} 原始样式ID {} 映射样式ID {}", first_col, last_col, style_index, mapped_style_id);
                 }

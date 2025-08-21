@@ -22,7 +22,7 @@ SharedStringCollector::~SharedStringCollector() {
     clear();
 }
 
-// ========== 核心收集方法 ==========
+// 核心收集方法
 
 size_t SharedStringCollector::collectFromWorkbook(const Workbook* workbook) {
     if (!workbook) {
@@ -142,7 +142,7 @@ size_t SharedStringCollector::addStrings(const std::vector<std::string>& strings
     return added_count;
 }
 
-// ========== 应用到SharedStringTable ==========
+// 应用到 SharedStringTable
 
 size_t SharedStringCollector::applyToSharedStringTable(bool clear_existing) {
     if (!sst_) {
@@ -191,7 +191,7 @@ size_t SharedStringCollector::collectAndApply(const Workbook* workbook) {
     return applied;
 }
 
-// ========== 优化和清理 ==========
+// 优化和清理
 
 size_t SharedStringCollector::optimize() {
     if (collected_strings_.empty()) {
@@ -242,7 +242,7 @@ void SharedStringCollector::reset() {
     strategy_ = CollectionStrategy::IMMEDIATE;
 }
 
-// ========== 私有辅助方法 ==========
+// 私有辅助方法
 
 bool SharedStringCollector::shouldCollect(const std::string& str) const {
     // 检查长度限制

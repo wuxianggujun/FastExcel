@@ -7,7 +7,7 @@
 namespace fastexcel {
 namespace core {
 
-// ========== 财务格式化 ==========
+// 财务格式化
 
 void QuickFormat::formatAsCurrency(Worksheet& worksheet, const std::string& range, 
                                   const std::string& symbol,
@@ -56,7 +56,7 @@ void QuickFormat::formatAsAccounting(Worksheet& worksheet, const std::string& ra
     formatter.apply();
 }
 
-// ========== 数字格式化 ==========
+// 数字格式化
 
 void QuickFormat::formatAsNumber(Worksheet& worksheet, const std::string& range,
                                 int decimal_places) {
@@ -96,7 +96,7 @@ void QuickFormat::formatAsScientific(Worksheet& worksheet, const std::string& ra
     formatter.apply();
 }
 
-// ========== 日期时间格式化 ==========
+// 日期时间格式化
 
 void QuickFormat::formatAsDate(Worksheet& worksheet, const std::string& range,
                               const std::string& format) {
@@ -131,7 +131,7 @@ void QuickFormat::formatAsDateTime(Worksheet& worksheet, const std::string& rang
     formatter.apply();
 }
 
-// ========== 表格格式化 ==========
+// 表格格式化
 
 void QuickFormat::formatAsTable(Worksheet& worksheet, const std::string& range,
                                bool has_headers,
@@ -163,7 +163,7 @@ void QuickFormat::formatAsDataList(Worksheet& worksheet, const std::string& rang
     formatter.apply();
 }
 
-// ========== 标题和文本格式化 ==========
+// 标题和文本格式化
 
 void QuickFormat::formatAsTitle(Worksheet& worksheet, int row, int col, 
                                const std::string& text, 
@@ -223,7 +223,7 @@ void QuickFormat::formatAsComment(Worksheet& worksheet, const std::string& range
     formatter.apply();
 }
 
-// ========== 数据突出显示 ==========
+// 数据突出显示
 
 void QuickFormat::highlight(Worksheet& worksheet, const std::string& range, Color color) {
     auto formatter = worksheet.rangeFormatter(range);
@@ -270,7 +270,7 @@ void QuickFormat::formatAsSuccess(Worksheet& worksheet, const std::string& range
     formatter.apply();
 }
 
-// ========== 预定义样式套餐 ==========
+// 预定义样式套餐
 
 void QuickFormat::applyFinancialReportStyle(Worksheet& worksheet,
                                            const std::string& data_range,
@@ -323,7 +323,7 @@ void QuickFormat::applyClassicStyle(Worksheet& worksheet,
     formatter.apply();
 }
 
-// ========== 私有辅助方法 ==========
+// 私有辅助方法
 
 std::string QuickFormat::buildNumberFormat(const std::string& symbol, 
                                           int decimal_places, 

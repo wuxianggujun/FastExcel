@@ -80,7 +80,7 @@ std::pair<double, int> ColumnWidthManager::setSmartColumnWidth(int col, double t
 }
 
 double ColumnWidthManager::calculateOptimalWidth(double target_width, const std::string& font_name, double font_size) const {
-    // 🔧 关键修复：根据指定字体选择合适的MDW值，而不是固定使用workbook_mdw_
+    // 根据指定字体选择合适的 MDW 值，而非固定使用 workbook_mdw_
     int effective_mdw = workbook_mdw_; // 默认使用工作簿MDW
     
     // 如果指定了特定字体，计算该字体的MDW
@@ -139,7 +139,7 @@ ColumnWidthManager::CacheStats ColumnWidthManager::getCacheStats() const {
     };
 }
 
-// ========== 私有方法实现 ==========
+// 私有方法实现
 
 int ColumnWidthManager::getMDW(const std::string& font_name, double font_size) const {
     std::string font_key = makeFontKey(font_name, font_size);

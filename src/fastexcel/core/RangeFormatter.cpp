@@ -16,7 +16,7 @@ RangeFormatter::RangeFormatter(Worksheet* worksheet)
     }
 }
 
-// ========== 范围设置 ==========
+// 范围设置
 
 RangeFormatter& RangeFormatter::setRange(int start_row, int start_col, int end_row, int end_col) {
     if (start_row < 0 || start_col < 0 || end_row < 0 || end_col < 0) {
@@ -79,7 +79,7 @@ RangeFormatter& RangeFormatter::setColumn(int col, int start_row, int end_row) {
     return *this;
 }
 
-// ========== 格式应用 ==========
+// 格式应用
 
 RangeFormatter& RangeFormatter::applyFormat(const FormatDescriptor& format) {
     pending_format_ = std::make_unique<FormatDescriptor>(format);
@@ -98,7 +98,7 @@ RangeFormatter& RangeFormatter::applySharedFormat(std::shared_ptr<const FormatDe
     return *this;
 }
 
-// ========== 表格样式 ==========
+// 表格样式
 
 RangeFormatter& RangeFormatter::asTable(const std::string& style_name) {
     table_style_name_ = style_name;
@@ -116,7 +116,7 @@ RangeFormatter& RangeFormatter::withBanding(bool row_banding, bool col_banding) 
     return *this;
 }
 
-// ========== 边框快捷方法 ==========
+// 边框快捷方法
 
 RangeFormatter& RangeFormatter::allBorders(BorderStyle style, core::Color color) {
     border_target_ = BorderTarget::All;
@@ -146,7 +146,7 @@ RangeFormatter& RangeFormatter::noBorders() {
     return *this;
 }
 
-// ========== 快捷格式方法 ==========
+// 快捷格式方法
 
 RangeFormatter& RangeFormatter::backgroundColor(core::Color color) {
     if (!pending_format_) {
@@ -207,7 +207,7 @@ RangeFormatter& RangeFormatter::rightAlign() {
     return align(HorizontalAlign::Right, VerticalAlign::Bottom);
 }
 
-// ========== 执行操作 ==========
+// 执行操作
 
 int RangeFormatter::apply() {
     validateRange();
@@ -273,7 +273,7 @@ std::string RangeFormatter::preview() const {
     return oss.str();
 }
 
-// ========== 静态工厂方法 ==========
+// 静态工厂方法
 
 RangeFormatter RangeFormatter::create(Worksheet& worksheet, const std::string& range) {
     return std::move(RangeFormatter(&worksheet).setRange(range));
@@ -285,7 +285,7 @@ RangeFormatter RangeFormatter::create(Worksheet& worksheet,
     return std::move(RangeFormatter(&worksheet).setRange(start_row, start_col, end_row, end_col));
 }
 
-// ========== 私有辅助方法 ==========
+// 私有辅助方法
 
 bool RangeFormatter::parseRange(const std::string& range) {
     // 简单的Excel地址解析，支持格式如"A1:C10"

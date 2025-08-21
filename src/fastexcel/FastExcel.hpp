@@ -4,14 +4,13 @@
 // 基于minizip-ng、zlib-ng、libexpat、spdlog等依赖库实现
 // 版本 2.0 - 重构后的现代C++架构，支持新旧API共存
 
-// === 新架构组件 (推荐使用) ===
-// 核心组件 - 新架构
+// 核心组件
 #include "fastexcel/core/FormatDescriptor.hpp"    // 不可变格式描述符
 #include "fastexcel/core/FormatRepository.hpp"    // 线程安全格式仓储  
 #include "fastexcel/core/StyleBuilder.hpp"        // 流畅样式构建器
 #include "fastexcel/core/StyleTransferContext.hpp" // 跨工作簿样式传输
 
-// XML序列化层 - 新架构
+// XML序列化层
 #include "fastexcel/xml/StyleSerializer.hpp"      // XLSX样式序列化器
 
 // === 旧架构组件 (向后兼容) ===
@@ -143,7 +142,7 @@ FASTEXCEL_API inline void initialize() {
  */
 FASTEXCEL_API void cleanup();
 
-// ========== 新架构 2.0 API (推荐使用) ==========
+// API 2.0 （推荐使用）
 
 /**
  * @namespace fastexcel::core
@@ -165,7 +164,7 @@ namespace core {
 }
 
 /**
- * @brief 新架构版本信息
+ * @brief 版本信息
  */
 struct NewArchitectureVersion {
     static constexpr int MAJOR = 2;
@@ -175,7 +174,7 @@ struct NewArchitectureVersion {
     static constexpr const char* DESCRIPTION = "Modern C++ Architecture with immutable design patterns";
 };
 
-// ========== 样式构建便捷函数 ==========
+// 样式构建便捷函数
 
 /**
  * @brief 创建样式构建器
@@ -183,7 +182,7 @@ struct NewArchitectureVersion {
  */
 FASTEXCEL_API core::StyleBuilder createStyle();
 
-// ========== 类型别名 (便于使用) ==========
+// 类型别名 (便于使用)
 
 // 核心类型别名
 using StyleBuilder = core::StyleBuilder;
@@ -203,10 +202,10 @@ using VerticalAlign = core::VerticalAlign;
 using UnderlineType = core::UnderlineType;
 using FontScript = core::FontScript;
 
-// ========== 错误处理 ==========
+// 错误处理
 
 /**
- * @brief FastExcel异常基类(新架构)
+ * @brief FastExcel异常基类
  */
 class FASTEXCEL_API FastExcelException : public std::exception {
 private:
@@ -221,7 +220,7 @@ public:
 };
 
 /**
- * @brief 新架构专用异常
+ * @brief 专用异常
  */
 class FASTEXCEL_API StyleException : public FastExcelException {
 public:

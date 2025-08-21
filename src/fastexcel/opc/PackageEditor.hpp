@@ -37,7 +37,7 @@ namespace opc {
 /**
  * @brief Excel包文件编辑器 - 重构版
  * 
- * 新架构设计原则：
+ * 设计原则：
  * 1. 单一职责：PackageEditor专注于协调各个服务
  * 2. 依赖注入：通过接口依赖抽象实现
  * 3. 服务分离：XML生成、包管理、变更跟踪分别由专门服务处理
@@ -85,7 +85,7 @@ public:
     PackageEditor(PackageEditor&&) = default;
     PackageEditor& operator=(PackageEditor&&) = default;
     
-    // ========== 工厂方法 ==========
+    // 工厂方法
     
     /**
      * 打开现有Excel文件进行编辑
@@ -107,7 +107,7 @@ public:
      */
     static std::unique_ptr<PackageEditor> create();
     
-    // ========== 核心文件操作 ==========
+    // 核心文件操作
     
     /**
      * 保存所有修改到原文件
@@ -122,7 +122,7 @@ public:
      */
     bool commit(const core::Path& dst);
     
-    // ========== 工作簿访问 ==========
+    // 工作簿访问
     
     /**
      * 获取关联的Workbook对象
@@ -130,11 +130,11 @@ public:
      */
     core::Workbook* getWorkbook() const { return workbook_; }
     
-    // ========== 新功能：智能变更管理 ==========
+    // 智能变更管理
     
     /**
      * 智能检测并标记变更的部件
-     * 这是新架构的核心功能，自动分析Workbook变更
+     * 自动分析 Workbook 变更
      */
     void detectChanges();
     
@@ -156,7 +156,7 @@ public:
     
     ChangeStats getChangeStats() const;
     
-    // ========== 配置管理 ==========
+    // 配置管理
     
     /**
      * 设置是否保留未知部件
@@ -181,7 +181,7 @@ public:
     
     const Options& getOptions() const { return options_; }
     
-    // ========== 状态查询 ==========
+    // 状态查询
     
     /**
      * 检查是否有未保存的修改
@@ -203,7 +203,7 @@ public:
      */
     std::vector<std::string> getAllParts() const;
     
-    // ========== 验证方法 ==========
+    // 验证方法
     
     /**
      * 验证工作表名称是否合法
@@ -215,7 +215,7 @@ public:
      */
     static bool isValidCellRef(int row, int col);
     
-    // ========== 高级功能 ==========
+    // 高级功能
     
     /**
      * 生成指定部件的内容（用于调试和自定义）
@@ -232,13 +232,13 @@ public:
     bool validateXML(const std::string& xml_content) const;
     
 private:
-    // ========== 初始化方法 ==========
+    // 初始化方法
     
     bool initialize(const core::Path& xlsx_path);
     bool initializeFromWorkbook();
     bool initializeServices(std::unique_ptr<archive::ZipReader> zip_reader, core::Workbook* workbook);
     
-    // ========== 私有辅助方法 ==========
+    // 私有辅助方法
     
     std::string extractSheetNameFromPath(const std::string& part_path) const;
     bool isRequiredPart(const std::string& part) const;

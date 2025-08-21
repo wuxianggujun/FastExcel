@@ -25,7 +25,7 @@ namespace core {
  */
 class FormatUtils {
 public:
-    // ========== 格式复制 ==========
+    // 格式复制
     
     /**
      * @brief 复制单个单元格的格式
@@ -74,7 +74,7 @@ public:
                               const std::string& src_range,
                               const std::string& dest_start_cell);
     
-    // ========== 格式清除 ==========
+    // 格式清除
     
     /**
      * @brief 清除单个单元格的格式
@@ -117,7 +117,7 @@ public:
                                    bool clear_alignment = true,
                                    bool clear_number = true);
     
-    // ========== 格式检查 ==========
+    // 格式检查
     
     /**
      * @brief 检查单元格是否有格式
@@ -171,7 +171,7 @@ public:
     static FormatStats getFormatStats(const Worksheet& worksheet, 
                                      const std::string& range = "");
     
-    // ========== 格式比较 ==========
+    // 格式比较
     
     /**
      * @brief 比较两个格式是否相同
@@ -219,7 +219,7 @@ public:
                                                              int row1, int col1,
                                                              int row2, int col2);
     
-    // ========== 格式查找和替换 ==========
+    // 格式查找和替换
     
     /**
      * @brief 查找具有特定格式的单元格
@@ -246,7 +246,7 @@ public:
                             const FormatDescriptor& new_format,
                             const std::string& search_range = "");
     
-    // ========== 格式导入导出 ==========
+    // 格式导入导出
     
     /**
      * @brief 导出格式到描述字符串

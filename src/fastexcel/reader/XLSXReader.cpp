@@ -134,7 +134,7 @@ core::ErrorCode XLSXReader::loadWorkbook(std::unique_ptr<core::Workbook>& workbo
             // 样式解析失败不影响主要功能，继续执行
         }
         
-        // 🔧 关键修复：解析主题文件以保持原始样式
+        // 解析主题文件以保持原始样式
         result = parseThemeXML();
         if (result != core::ErrorCode::Ok && result != core::ErrorCode::FileNotFound) {
             READER_WARN("解析主题失败，错误码: {}", static_cast<int>(result));
@@ -183,7 +183,7 @@ core::ErrorCode XLSXReader::loadWorkbook(std::unique_ptr<core::Workbook>& workbo
             }
         }
         
-        // 🔧 关键修复：将解析的FormatDescriptor样式导入到工作簿的FormatRepository中（保持原始ID）
+        // 将解析的 FormatDescriptor 样式导入到工作簿的 FormatRepository 中（保持原始 ID）
         if (!styles_.empty()) {
             READER_DEBUG("开始导入 {} 个FormatDescriptor样式到工作簿格式仓储", styles_.size());
             
@@ -193,7 +193,7 @@ core::ErrorCode XLSXReader::loadWorkbook(std::unique_ptr<core::Workbook>& workbo
             // 清空之前的映射
             style_id_mapping_.clear();
             
-            // 🔧 关键修复：尽量保持原始ID映射，避免样式ID重新分配
+            // 尽量保持原始 ID 映射，避免样式 ID 重新分配
             int imported_count = 0;
             for (const auto& style_pair : styles_) {
                 int original_style_id = style_pair.first;
@@ -204,7 +204,7 @@ core::ErrorCode XLSXReader::loadWorkbook(std::unique_ptr<core::Workbook>& workbo
                     int new_id = format_repo.addFormat(*format_desc);
                     imported_count++;
                     
-                    // 🔧 关键修复：优先使用原始ID作为映射
+                    // 优先使用原始 ID 作为映射
                     // 如果新分配的ID与原始ID不同，我们仍然需要记录映射
                     // 但对于列样式，我们尝试保持一致性
                     if (original_style_id != new_id) {
@@ -223,7 +223,7 @@ core::ErrorCode XLSXReader::loadWorkbook(std::unique_ptr<core::Workbook>& workbo
             READER_DEBUG("未检测到自定义样式，使用默认样式");
         }
         
-        // 🔧 关键修复：将解析的主题XML设置到工作簿，以保持原始主题
+        // 将解析的主题 XML 设置到工作簿，以保持原始主题
         if (!theme_xml_.empty()) {
             // 保真：保存原始主题XML到工作簿（不触发脏标记）
             workbook->setOriginalThemeXML(theme_xml_);

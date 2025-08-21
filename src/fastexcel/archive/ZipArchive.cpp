@@ -6,7 +6,7 @@
 namespace fastexcel {
 namespace archive {
 
-// ========== 构造/析构 ==========
+// 构造/析构
 
 ZipArchive::ZipArchive(const core::Path& path) 
     : filepath_(path)
@@ -23,7 +23,7 @@ ZipArchive::~ZipArchive() {
     }
 }
 
-// ========== 文件操作 ==========
+// 文件操作
 
 bool ZipArchive::open(bool create) {
     // 如果已经打开，先关闭
@@ -86,7 +86,7 @@ bool ZipArchive::close() {
     return success;
 }
 
-// ========== 写入操作 ==========
+// 写入操作
 
 ZipError ZipArchive::addFile(std::string_view internal_path, std::string_view content) {
     if (!isWritable()) {
@@ -155,7 +155,7 @@ ZipError ZipArchive::closeEntry() {
     return writer_->closeEntry();
 }
 
-// ========== 读取操作 ==========
+// 读取操作
 
 ZipError ZipArchive::extractFile(std::string_view internal_path, std::string& content) {
     if (!isReadable()) {
@@ -201,7 +201,7 @@ std::vector<std::string> ZipArchive::listFiles() const {
     return reader_->listFiles();
 }
 
-// ========== 配置 ==========
+// 配置
 
 ZipError ZipArchive::setCompressionLevel(int level) {
     if (!isWritable()) {

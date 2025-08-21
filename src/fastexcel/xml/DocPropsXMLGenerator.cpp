@@ -10,7 +10,7 @@
 namespace fastexcel {
 namespace xml {
 
-// ========== 公共静态方法实现 ==========
+// 公共静态方法实现
 
 void DocPropsXMLGenerator::generateCoreXML(const core::Workbook* workbook,
                                            const std::function<void(const char*, size_t)>& callback) {
@@ -205,7 +205,7 @@ void DocPropsXMLGenerator::generateCustomXML(const core::Workbook* workbook,
     writer.endDocument();
 }
 
-// ========== 私有辅助方法实现 ==========
+// 私有辅助方法实现
 
 void DocPropsXMLGenerator::writeXMLHeader(XMLStreamWriter& writer) {
     writer.startDocument();

@@ -31,7 +31,7 @@
 namespace fastexcel {
 namespace core {
 
-// ========== DocumentProperties 实现 ==========
+// DocumentProperties 实现
 
 DocumentProperties::DocumentProperties() {
     // 使用 TimeUtils 获取当前时间
@@ -39,16 +39,16 @@ DocumentProperties::DocumentProperties() {
     modified_time = created_time;
 }
 
-// ========== Workbook 实现 ==========
+// Workbook 实现
 
 std::unique_ptr<Workbook> Workbook::create(const Path& path) {
     auto workbook = std::make_unique<Workbook>(path);
     
-    // 🔧 新状态管理系统：创建工作簿时设置正确的状态
+    // 创建工作簿时设置正确的状态
     workbook->file_source_ = FileSource::NEW_FILE;
     workbook->transitionToState(WorkbookState::CREATING, "Workbook::create()");
     
-    // 🔧 关键修复：对于 create() 创建的工作簿，强制设置为新文件
+    // 对于 create() 创建的工作簿，强制设置为新文件
     // 因为我们要完全重写目标文件，无论它是否已存在
     if (workbook->dirty_manager_) {
         workbook->dirty_manager_->setIsNewFile(true);
@@ -88,7 +88,7 @@ Workbook::Workbook(const Path& path) : filename_(path.string()) {
     
     // 初始化智能脏数据管理器
     dirty_manager_ = std::make_unique<DirtyManager>();
-    // 🔧 关键修复：对于 create() 创建的工作簿，无论目标文件是否存在都视为新文件
+    // 对于 create() 创建的工作簿，无论目标文件是否存在都视为新文件
     // 这里暂时保持原逻辑，在 create() 方法中会重新设置
     dirty_manager_->setIsNewFile(!path.exists()); // 如果文件不存在，则是新文件
     
@@ -101,7 +101,7 @@ Workbook::~Workbook() {
     close();
 }
 
-// ========== 文件操作 ==========
+// 文件操作
 
 bool Workbook::open() {
     // 内存模式无需文件操作
@@ -123,7 +123,7 @@ bool Workbook::save() {
     // 运行时检查：只读模式不能保存
     ensureEditable("save");
     
-    // 🔧 新增：检查关键组件是否存在
+    // 检查关键组件是否存在
     if (!file_manager_) {
         CORE_ERROR("Cannot save: FileManager is null");
         return false;
@@ -145,7 +145,7 @@ bool Workbook::save() {
             return false;
         }
         
-        // 🔧 修复SharedStrings生成逻辑：预先收集所有字符串，避免动态修改
+        // 预先收集所有字符串，避免动态修改
         if (options_.use_shared_strings) {
             CORE_DEBUG("SharedStrings enabled - pre-collecting all strings from worksheets");
             collectSharedStrings();  // 预先收集所有字符串
@@ -157,7 +157,7 @@ bool Workbook::save() {
         }
         
         // 编辑模式下，先将原包中未被我们生成的条目拷贝过来（绘图、图片、打印设置等）
-        // 🔧 修复：检查是否是保存到同一文件，避免文件锁定问题
+        // 检查是否是保存到同一文件，避免文件锁定问题
         if (isPassThroughEditMode() && !original_package_path_.empty() && file_manager_ && file_manager_->isOpen()) {
             // 检查是否保存到同一文件
             bool is_same_file = (original_package_path_ == filename_);
@@ -340,7 +340,7 @@ bool Workbook::close() {
     return true;
 }
 
-// ========== 工作表管理 ==========
+// 工作表管理
 
 std::shared_ptr<Worksheet> Workbook::addSheet(const std::string& name) {
     // 运行时检查：只读模式不能添加工作表
@@ -365,14 +365,14 @@ std::shared_ptr<Worksheet> Workbook::addSheet(const std::string& name) {
     
     auto worksheet = std::make_shared<Worksheet>(sheet_name, std::shared_ptr<Workbook>(this, [](Workbook*){}), next_sheet_id_++);
     
-    // 🔧 关键修复：设置FormatRepository，启用列宽管理功能
+    // 设置 FormatRepository，启用列宽管理功能
     if (format_repo_) {
         worksheet->setFormatRepository(format_repo_.get());
     }
     
     worksheets_.push_back(worksheet);
     
-    // 🚀 新增：如果这是第一个工作表，自动设置为激活状态
+    // 如果这是第一个工作表，自动设置为激活状态
     if (worksheets_.size() == 1) {
         worksheet->setTabSelected(true);
         active_worksheet_index_ = 0;
@@ -401,7 +401,7 @@ std::shared_ptr<Worksheet> Workbook::insertSheet(size_t index, const std::string
     
     auto worksheet = std::make_shared<Worksheet>(sheet_name, std::shared_ptr<Workbook>(this, [](Workbook*){}), next_sheet_id_++);
     
-    // 🔧 关键修复：设置FormatRepository，启用列宽管理功能
+    // 设置 FormatRepository，启用列宽管理功能
     if (format_repo_) {
         worksheet->setFormatRepository(format_repo_.get());
     }
@@ -438,7 +438,7 @@ bool Workbook::removeSheet(size_t index) {
         std::string name = worksheets_[index]->getName();
         worksheets_.erase(worksheets_.begin() + index);
         
-        // 🚀 新增：更新活动工作表索引
+        // 更新活动工作表索引
         if (active_worksheet_index_ == index) {
             // 如果删除的是当前活动工作表
             if (worksheets_.empty()) {
@@ -513,7 +513,7 @@ std::vector<std::string> Workbook::getSheetNames() const {
     return names;
 }
 
-// 🚀 新API：便捷的工作表查找方法
+// 便捷的工作表查找方法
 bool Workbook::hasSheet(const std::string& name) const {
     auto it = std::find_if(worksheets_.begin(), worksheets_.end(),
                           [&name](const std::shared_ptr<Worksheet>& ws) {
@@ -683,7 +683,7 @@ void Workbook::setActiveWorksheet(size_t index) {
     // 设置指定工作表为活动状态
     if (index < worksheets_.size()) {
         worksheets_[index]->setTabSelected(true);
-        active_worksheet_index_ = index;  // 🚀 新增：更新活动工作表索引
+        active_worksheet_index_ = index;  // 更新活动工作表索引
     }
 }
 
@@ -712,7 +712,7 @@ std::shared_ptr<const Worksheet> Workbook::getActiveWorksheet() const {
     return worksheets_[safe_index];
 }
 
-// ========== 样式管理 ==========
+// 样式管理
 
 int Workbook::addStyle(const FormatDescriptor& style) {
     return format_repo_->addFormat(style);
@@ -843,7 +843,7 @@ void Workbook::setThemeMinorFontComplex(const std::string& name) {
     theme_dirty_ = true;
 }
 
-// ========== 自定义属性 ==========
+// 自定义属性
 
 void Workbook::setProperty(const std::string& name, const std::string& value) {
     custom_property_manager_->setProperty(name, value);
@@ -869,7 +869,7 @@ std::unordered_map<std::string, std::string> Workbook::getAllProperties() const 
     return custom_property_manager_->getAllProperties();
 }
 
-// ========== 定义名称 ==========
+// 定义名称
 
 void Workbook::defineName(const std::string& name, const std::string& formula, const std::string& scope) {
     defined_name_manager_->define(name, formula, scope);
@@ -883,7 +883,7 @@ bool Workbook::removeDefinedName(const std::string& name, const std::string& sco
     return defined_name_manager_->remove(name, scope);
 }
 
-// ========== VBA项目 ==========
+// VBA项目
 
 bool Workbook::addVbaProject(const std::string& vba_project_path) {
     // 检查文件是否存在
@@ -900,7 +900,7 @@ bool Workbook::addVbaProject(const std::string& vba_project_path) {
     return true;
 }
 
-// ========== 工作簿保护 ==========
+// 工作簿保护
 
 void Workbook::protect(const std::string& password, bool lock_structure, bool lock_windows) {
     protected_ = true;
@@ -916,14 +916,14 @@ void Workbook::unprotect() {
     lock_windows_ = false;
 }
 
-// ========== 工作簿选项 ==========
+// 工作簿选项
 
 void Workbook::setCalcOptions(bool calc_on_load, bool full_calc_on_load) {
     options_.calc_on_load = calc_on_load;
     options_.full_calc_on_load = full_calc_on_load;
 }
 
-// ========== 生成控制判定（使用DirtyManager智能管理） ==========
+// 生成控制判定（使用 DirtyManager 进行管理）
 
 bool Workbook::shouldGenerateContentTypes() const {
     if (!dirty_manager_) return true;
@@ -949,7 +949,7 @@ bool Workbook::shouldGenerateStyles() const {
 }
 
 bool Workbook::shouldGenerateTheme() const {
-    // 🔧 关键修复：只有在确实有主题内容时才生成主题文件
+    // 只有在确有主题内容时才生成主题文件
     // 避免请求生成主题但ThemeGenerator找不到内容的问题
     if (!theme_xml_.empty() || !theme_xml_original_.empty() || theme_) {
         return true;
@@ -975,15 +975,15 @@ bool Workbook::shouldGenerateSharedStrings() const {
     bool should_update = dirty_manager_->shouldUpdate("xl/sharedStrings.xml");
     CORE_DEBUG("DirtyManager shouldUpdate for SharedStrings: {}", should_update);
     
-    // 🔧 关键修复：如果SharedStringTable有内容但DirtyManager说不需要更新，强制生成
+    // 如果 SharedStringTable 有内容但 DirtyManager 认为不需要更新，则强制生成
     if (shared_string_table_) {
         size_t string_count = shared_string_table_->getStringCount();
         CORE_DEBUG("SharedStringTable contains {} strings", string_count);
         
         if (string_count > 0 && !should_update) {
-            CORE_DEBUG("🔧 FORCE GENERATION: SharedStringTable has {} strings but DirtyManager says no update needed", string_count);
-            CORE_DEBUG("🔧 This happens when target file exists but we're creating new content with strings");
-            CORE_DEBUG("🔧 Forcing SharedStrings generation to avoid missing sharedStrings.xml");
+            CORE_DEBUG("FORCE GENERATION: SharedStringTable has {} strings but DirtyManager says no update needed", string_count);
+            CORE_DEBUG("This happens when target file exists but we're creating new content with strings");
+            CORE_DEBUG("Forcing SharedStrings generation to avoid missing sharedStrings.xml");
             return true; // 强制生成
         }
     } else {
@@ -1020,7 +1020,7 @@ bool Workbook::shouldGenerateSheetRels(size_t index) const {
     return dirty_manager_->shouldUpdate(sheetRelsPart);
 }
 
-// ========== 共享字符串管理 ==========
+// 共享字符串管理
 
 int Workbook::addSharedString(const std::string& str) {
     if (!shared_string_table_) shared_string_table_ = std::make_unique<SharedStringTable>();
@@ -1041,7 +1041,7 @@ const SharedStringTable* Workbook::getSharedStrings() const {
     return shared_string_table_.get();
 }
 
-// ========== 内部方法 ==========
+// 内部方法
 
 bool Workbook::generateExcelStructure() {
     // 智能选择生成模式：根据数据量和内存使用情况自动决定
@@ -1097,10 +1097,10 @@ bool Workbook::generateExcelStructure() {
 
 // 主题写出逻辑已迁移至 XML 层（ThemeGenerator），此处不再直接输出
 
-// ========== 格式管理内部方法 ==========
+// 格式管理内部方法
 
 
-// ========== 辅助函数 ==========
+// 辅助函数
 
 std::string Workbook::generateUniqueSheetName(const std::string& base_name) const {
     // 如果base_name不存在，直接返回
@@ -1226,7 +1226,7 @@ void Workbook::setHighPerformanceMode(bool enable) {
 
 
 
-// ========== 工作簿编辑功能实现 ==========
+// 工作簿编辑功能实现
 
 std::unique_ptr<Workbook> Workbook::open(const Path& path) {
     try {
@@ -1281,7 +1281,7 @@ std::unique_ptr<Workbook> Workbook::open(const std::string& filepath) {
     return open(Path(filepath));
 }
 
-// ========== 新的语义化API实现 ==========
+// 语义化 API 实现
 
 std::unique_ptr<Workbook> Workbook::openForReading(const Path& path) {
     try {
@@ -1368,7 +1368,7 @@ std::unique_ptr<Workbook> Workbook::openForEditing(const Path& path) {
             loaded_workbook->transitionToState(WorkbookState::EDITING, "openForEditing()");
             loaded_workbook->original_package_path_ = path.string();
             
-            // 🎯 关键修复：为编辑模式准备FileManager
+            // 为编辑模式准备 FileManager
             loaded_workbook->filename_ = path.string();
             loaded_workbook->file_manager_ = std::make_unique<archive::FileManager>(path);
             
@@ -1719,7 +1719,7 @@ Workbook::WorkbookStats Workbook::getStatistics() const {
     return stats;
 }
 
-// ========== 智能模式选择辅助方法 ==========
+// 智能模式选择辅助方法
 
 size_t Workbook::estimateMemoryUsage() const {
     size_t total_memory = 0;
@@ -1818,7 +1818,7 @@ std::unique_ptr<StyleTransferContext> Workbook::copyStylesFrom(const Workbook& s
     CORE_DEBUG("完成样式复制，传输了{}个格式，去重了{}个", 
              stats.transferred_count, stats.deduplicated_count);
     
-    // 🔧 关键修复：自动复制主题XML以保持颜色和字体一致性
+    // 自动复制主题 XML 以保持颜色和字体一致性
     const std::string& source_theme = source_workbook.getThemeXML();
     if (!source_theme.empty()) {
         // 只有当前工作簿没有自定义主题时才复制源主题
@@ -1878,7 +1878,7 @@ bool Workbook::isModified() const {
     return false;
 }
 
-// ========== 访问模式检查辅助方法实现 ==========
+// 访问模式检查辅助方法实现
 
 void Workbook::ensureEditable(const std::string& operation) const {
     if (state_ == WorkbookState::READING) {
@@ -1899,7 +1899,7 @@ void Workbook::ensureReadable(const std::string& operation) const {
     (void)operation; // 避免未使用参数警告
 }
 
-// ========== 🔧 新状态管理系统实现 ==========
+// 新状态管理系统实现
 
 bool Workbook::isStateValid(WorkbookState required_state) const {
     // 状态层级：CLOSED < CREATING/READING/EDITING
@@ -1939,13 +1939,13 @@ void Workbook::transitionToState(WorkbookState new_state, const std::string& rea
               reason.empty() ? "no reason" : reason);
 }
 
-// ========== 样式构建器 ==========
+// 样式构建器
 
 StyleBuilder Workbook::createStyleBuilder() const {
     return StyleBuilder();
 }
 
-// ========== CSV功能实现 ==========
+// CSV功能实现
 
 std::shared_ptr<Worksheet> Workbook::loadCSV(const std::string& filepath, 
                                             const std::string& sheet_name,

@@ -72,7 +72,7 @@ private:
     bool auto_flush_ = true;         // 自动刷新
     
     // 移除缓冲模式的字符串累积，专注于极致性能
-    // std::string whole_;  // 已移除：不再支持缓冲模式的字符串拼接
+    // std::string whole_;  // 不再支持缓冲模式的字符串拼接
     
     // 属性批处理
     struct XMLAttribute {

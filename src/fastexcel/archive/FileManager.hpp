@@ -1,9 +1,8 @@
-#include "fastexcel/utils/ModuleLoggers.hpp"
 #pragma once
 
 #include "fastexcel/archive/ZipArchive.hpp"
 #include "fastexcel/core/Path.hpp"
-#include "fastexcel/core/Image.hpp"  // 🚀 新增：图片支持
+#include "fastexcel/core/Image.hpp"
 #include <string>
 #include <memory>
 #include <unordered_map>
@@ -66,7 +65,7 @@ public:
     bool copyFromExistingPackage(const core::Path& source_package,
                                  const std::vector<std::string>& skip_prefixes);
     
-    // ========== 图片文件管理 ==========
+    // 图片文件管理
     
     /**
      * @brief 添加图片文件到媒体目录

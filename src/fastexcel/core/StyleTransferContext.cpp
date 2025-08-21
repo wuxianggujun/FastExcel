@@ -165,7 +165,7 @@ void StyleTransferContext::updateStats(bool was_new_transfer) const {
     // 实际的去重统计应该更复杂，但这里提供基本信息
 }
 
-// ========== StyleTransfer命名空间的辅助函数 ==========
+// StyleTransfer 命名空间的辅助函数
 
 namespace StyleTransfer {
 

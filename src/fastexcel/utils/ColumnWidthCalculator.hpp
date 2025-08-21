@@ -15,7 +15,7 @@ namespace utils {
  * Excel的列宽不是简单的像素或厘米，而是基于"0"字符在默认字体下的宽度。
  * 这个工具类实现了Excel的标准换算逻辑，解决列宽显示不准确的问题。
  * 
- * 🔧 关键修复：修正了pixelsToColWidth的分段阈值bug，现在使用正确的mdw+5阈值
+ * 修正了 pixelsToColWidth 的分段阈值问题，采用正确的 mdw+5 阈值
  */
 class ColumnWidthCalculator {
 public:
@@ -55,7 +55,7 @@ public:
      * @param width_chars 列宽（Excel字符数单位）
      * @return 对应的像素值
      * 
-     * 🔧 标准公式：基于Excel OpenXML规范
+     * 标准公式：基于 Excel OpenXML 规范
      * pixels = Truncate(((256 * width + Truncate(128/MDW))/256) * MDW)
      */
     int colWidthToPixels(double width_chars) const {
@@ -71,7 +71,7 @@ public:
      * @param pixels 像素值
      * @return Excel显示的列宽值
      * 
-     * 🔧 标准公式：基于Excel OpenXML规范和libxlsxwriter实现
+     * 标准公式：基于 Excel OpenXML 规范和 libxlsxwriter 实现
      * 参考：width = Truncate([chars * MDW + 5] / MDW * 256) / 256
      */
     double pixelsToColWidth(int pixels) const {
@@ -103,7 +103,7 @@ public:
      * @param desired_width 用户期望的列宽
      * @return Excel XML中应该存储的width值
      * 
-     * 🔧 关键修复：使用经过验证的Excel标准转换公式
+     * 使用经过验证的 Excel 标准转换公式
      * 参考：Excel OpenXML规范 + 实际测试数据
      */
     double quantize(double desired_width) const {

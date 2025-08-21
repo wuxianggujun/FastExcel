@@ -81,7 +81,7 @@ public:
     WorkbookCoordinator(WorkbookCoordinator&&) = default;
     WorkbookCoordinator& operator=(WorkbookCoordinator&&) = default;
     
-    // ========== 核心保存流程 ==========
+    // 核心保存流程
     
     /**
      * @brief 执行保存操作
@@ -106,7 +106,7 @@ public:
      */
     bool saveIncremental(const DirtyManager* dirty_manager);
     
-    // ========== XML生成协调 ==========
+    // XML生成协调
     
     /**
      * @brief 生成所有XML文件
@@ -129,7 +129,7 @@ public:
      */
     ::fastexcel::xml::UnifiedXMLGenerator* getOrCreateXMLGenerator();
     
-    // ========== 资源管理协调 ==========
+    // 资源管理协调
     
     /**
      * @brief 获取资源管理器
@@ -152,7 +152,7 @@ public:
      */
     bool performPassthroughCopy(const std::string& source_path);
     
-    // ========== 文件写入器工厂 ==========
+    // 文件写入器工厂
     
     /**
      * @brief 创建文件写入器
@@ -161,7 +161,7 @@ public:
      */
     std::unique_ptr<IFileWriter> createFileWriter(bool use_streaming = false);
     
-    // ========== 配置管理 ==========
+    // 配置管理
     
     /**
      * @brief 设置配置
@@ -175,7 +175,7 @@ public:
      */
     const Configuration& getConfiguration() const { return config_; }
     
-    // ========== 统计信息 ==========
+    // 统计信息
     
     /**
      * @brief 获取统计信息
@@ -188,7 +188,7 @@ public:
      */
     void resetStatistics() { stats_ = Statistics(); }
     
-    // ========== 性能优化 ==========
+    // 性能优化
     
     /**
      * @brief 预热缓存

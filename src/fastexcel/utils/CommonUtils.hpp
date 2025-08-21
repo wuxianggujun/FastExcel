@@ -22,7 +22,7 @@ namespace utils {
  */
 class CommonUtils {
 public:
-    // ========== 字符串工具 ==========
+    // 字符串工具
     
     /**
      * @brief 列号转换为字母表示（A, B, ..., Z, AA, AB, ...）
@@ -113,7 +113,7 @@ public:
         return std::make_pair(row, col);
     }
     
-    // ========== 验证工具 ==========
+    // 验证工具
     
     /**
      * @brief 验证单元格位置是否有效
@@ -154,7 +154,7 @@ public:
         return name.find_first_of(invalid_chars) == std::string::npos;
     }
     
-    // ========== 模板工具 ==========
+    // 模板工具
     
     /**
      * @brief 安全的数值转换
@@ -200,7 +200,7 @@ public:
         std::for_each(std::begin(container), std::end(container), std::forward<Func>(func));
     }
     
-    // ========== 内存和性能工具 ==========
+    // 内存和性能工具
     
     /**
      * @brief 计算容器的内存使用量

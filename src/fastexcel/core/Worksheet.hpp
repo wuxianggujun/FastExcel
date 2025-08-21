@@ -2087,7 +2087,7 @@ private:
     void updateUsedRangeOptimized(int row, int col);
     
     // XML生成辅助方法 - 已移至UnifiedXMLGenerator
-    // 保留这些方法声明用于向后兼容，但实际实现已委托给UnifiedXMLGenerator
+    // 保留这些方法声明用于向后兼容，但实际实现由 UnifiedXMLGenerator 负责
     void generateXMLBatch(const std::function<void(const char*, size_t)>& callback) const;
     void generateXMLStreaming(const std::function<void(const char*, size_t)>& callback) const;
     

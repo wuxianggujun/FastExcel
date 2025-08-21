@@ -44,7 +44,7 @@ Cell::~Cell() {
     clearExtended();
 }
 
-// ========== V3风格赋值运算 ==========
+// 赋值运算（便捷API）
 
 Cell& Cell::operator=(double value) {
     setValue<double>(value);
@@ -76,7 +76,7 @@ Cell& Cell::operator=(const char* value) {
     return *this;
 }
 
-// ========== 内部实现方法（由模板API调用）==========
+// 内部实现方法（由模板API调用）
 
 void Cell::setValueImpl(double value) {
     clear();
@@ -121,7 +121,7 @@ void Cell::setFormula(const std::string& formula, double result) {
     flags_.has_formula_result = true;
 }
 
-// ========== 内部get方法实现 ==========
+// 内部get方法实现
 
 double Cell::getNumberValue() const {
     if (flags_.type == CellType::Number) {
@@ -170,7 +170,7 @@ double Cell::getFormulaResult() const {
     return 0.0;
 }
 
-// ========== 共享公式支持方法 ==========
+// 共享公式支持方法
 
 void Cell::setSharedFormula(int shared_index, double result) {
     // 如果当前不是公式类型，则清除并设置为共享公式
@@ -300,7 +300,7 @@ size_t Cell::getMemoryUsage() const {
         if (extended_->comment) {
             usage += sizeof(std::string) + extended_->comment->capacity();
         }
-        // Format相关内存计算已移除，现在使用FormatDescriptor
+        // 格式相关内存计算由 FormatDescriptor 管理
     }
     return usage;
 }

@@ -62,7 +62,7 @@ void XMLStreamWriter::setDirectFileMode(FILE* file, bool take_ownership) {
     XML_DEBUG("XMLStreamWriter switched to direct file mode");
 }
 
-// 已移除setBufferedMode()以获得极致性能
+// 不再提供 setBufferedMode() 接口，统一使用流式写入
 // 现在只支持直接文件模式和回调模式
 
 void XMLStreamWriter::setCallbackMode(WriteCallback callback, bool auto_flush) {
@@ -104,7 +104,7 @@ void XMLStreamWriter::flushBuffer() {
 
 void XMLStreamWriter::startDocument() {
     buffer_pos_ = 0;
-    // 关键修复：添加换行符以匹配libxlsxwriter格式
+    // 添加换行符以与常见工具的格式保持一致
     const char* xml_decl = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n";
     size_t xml_decl_len = strlen(xml_decl);
     writeRawDirect(xml_decl, xml_decl_len);

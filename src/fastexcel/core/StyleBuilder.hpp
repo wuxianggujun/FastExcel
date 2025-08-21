@@ -63,7 +63,7 @@ public:
     // 从现有格式创建Builder（用于修改现有格式）
     explicit StyleBuilder(const FormatDescriptor& format);
     
-    // ========== 字体设置（链式调用） ==========
+    // 字体设置（链式调用）
     
     /**
      * @brief 设置字体名称
@@ -178,7 +178,7 @@ public:
         return *this;
     }
     
-    // ========== 对齐设置 ==========
+    // 对齐设置
     
     /**
      * @brief 设置水平对齐
@@ -274,7 +274,7 @@ public:
         return *this;
     }
     
-    // ========== 边框设置 ==========
+    // 边框设置
     
     /**
      * @brief 设置所有边框
@@ -352,7 +352,7 @@ public:
         return *this;
     }
     
-    // ========== 填充设置 ==========
+    // 填充设置
     
     /**
      * @brief 设置填充（纯色）
@@ -394,7 +394,7 @@ public:
         return *this;
     }
     
-    // ========== 数字格式设置 ==========
+    // 数字格式设置
     
     /**
      * @brief 设置数字格式
@@ -427,7 +427,7 @@ public:
     StyleBuilder& scientific() { return numberFormatIndex(11); }        // 0.00E+00
     StyleBuilder& text() { return numberFormatIndex(49); }             // @
     
-    // ========== 保护设置 ==========
+    // 保护设置
     
     /**
      * @brief 设置单元格锁定
@@ -459,7 +459,7 @@ public:
         return *this;
     }
     
-    // ========== 构建最终对象 ==========
+    // 构建最终对象
     
     /**
      * @brief 构建不可变的格式描述符
@@ -467,7 +467,7 @@ public:
      */
     FormatDescriptor build() const;
     
-    // ========== 预定义样式的静态工厂方法 ==========
+    // 预定义样式的静态工厂方法
     
     static StyleBuilder header() {
         return StyleBuilder()

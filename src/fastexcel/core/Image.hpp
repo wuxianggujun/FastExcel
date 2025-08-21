@@ -138,7 +138,7 @@ public:
                                           ImageFormat format,
                                           const std::string& filename = "");
     
-    // ========== 属性访问器 ==========
+    // 属性访问器
     
     /**
      * @brief 获取图片ID
@@ -200,7 +200,7 @@ public:
      */
     int getOriginalHeight() const { return original_height_; }
     
-    // ========== 锚定信息管理 ==========
+    // 锚定信息管理
     
     /**
      * @brief 获取锚定信息
@@ -242,7 +242,7 @@ public:
      */
     void setAbsoluteAnchor(double x, double y, double width, double height);
     
-    // ========== 工具方法 ==========
+    // 工具方法
     
     /**
      * @brief 获取图片格式的文件扩展名

@@ -9,7 +9,7 @@
 namespace fastexcel {
 namespace core {
 
-// ========== SharedFormula 实现 ==========
+// SharedFormula 实现
 
 SharedFormula::SharedFormula(int shared_index, const std::string& base_formula, const std::string& ref_range)
     : shared_index_(shared_index), base_formula_(base_formula), ref_range_(ref_range)
@@ -127,7 +127,7 @@ std::string SharedFormula::adjustFormula(const std::string& formula, int base_ro
     return result;
 }
 
-// ========== SharedFormulaManager 实现 ==========
+// SharedFormulaManager 实现
 
 bool SharedFormulaManager::registerSharedFormula(const SharedFormula& shared_formula) {
     int index = shared_formula.getSharedIndex();
@@ -269,7 +269,7 @@ int SharedFormulaManager::optimizeFormulas(const std::map<std::pair<int, int>, s
             if (formula_it != formulas.end()) {
                 int shared_index = registerSharedFormula(formula_it->second, range);
                 if (shared_index >= 0) {
-                    // 🔧 关键修复：为SharedFormula对象添加受影响的单元格
+                    // 为 SharedFormula 对象添加受影响的单元格
                     SharedFormula* shared_formula = &shared_formulas_[shared_index];
                     for (const auto& [row, col] : pattern.matching_cells) {
                         shared_formula->addAffectedCell(row, col);

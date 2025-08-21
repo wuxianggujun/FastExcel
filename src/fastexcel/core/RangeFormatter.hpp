@@ -82,7 +82,7 @@ public:
     RangeFormatter(RangeFormatter&&) = default;
     RangeFormatter& operator=(RangeFormatter&&) = default;
     
-    // ========== 范围设置 ==========
+    // 范围设置
     
     /**
      * @brief 设置格式化范围（数字坐标）
@@ -119,7 +119,7 @@ public:
      */
     RangeFormatter& setColumn(int col, int start_row = 0, int end_row = -1);
     
-    // ========== 格式应用 ==========
+    // 格式应用
     
     /**
      * @brief 应用格式描述符
@@ -142,7 +142,7 @@ public:
      */
     RangeFormatter& applySharedFormat(std::shared_ptr<const FormatDescriptor> format);
     
-    // ========== 表格样式 ==========
+    // 表格样式
     
     /**
      * @brief 应用表格样式
@@ -166,7 +166,7 @@ public:
      */
     RangeFormatter& withBanding(bool row_banding = true, bool col_banding = false);
     
-    // ========== 边框快捷方法 ==========
+    // 边框快捷方法
     
     /**
      * @brief 设置所有边框
@@ -201,7 +201,7 @@ public:
      */
     RangeFormatter& noBorders();
     
-    // ========== 快捷格式方法 ==========
+    // 快捷格式方法
     
     /**
      * @brief 设置背景色
@@ -245,7 +245,7 @@ public:
      */
     RangeFormatter& rightAlign();
     
-    // ========== 执行操作 ==========
+    // 执行操作
     
     /**
      * @brief 应用所有设置到工作表
@@ -260,7 +260,7 @@ public:
      */
     std::string preview() const;
     
-    // ========== 静态工厂方法 ==========
+    // 静态工厂方法
     
     /**
      * @brief 创建范围格式化器

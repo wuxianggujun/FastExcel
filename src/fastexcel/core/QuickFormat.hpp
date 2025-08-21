@@ -23,7 +23,7 @@ namespace core {
  */
 class QuickFormat {
 public:
-    // ========== 财务格式化 ==========
+    // 财务格式化
     
     /**
      * @brief 格式化为货币
@@ -56,7 +56,7 @@ public:
     static void formatAsAccounting(Worksheet& worksheet, const std::string& range,
                                   const std::string& symbol = "$");
     
-    // ========== 数字格式化 ==========
+    // 数字格式化
     
     /**
      * @brief 格式化为数字（带千位分隔符）
@@ -76,7 +76,7 @@ public:
     static void formatAsScientific(Worksheet& worksheet, const std::string& range,
                                   int decimal_places = 2);
     
-    // ========== 日期时间格式化 ==========
+    // 日期时间格式化
     
     /**
      * @brief 格式化为日期
@@ -105,7 +105,7 @@ public:
     static void formatAsDateTime(Worksheet& worksheet, const std::string& range,
                                 const std::string& format = "m/d/yyyy h:mm");
     
-    // ========== 表格格式化 ==========
+    // 表格格式化
     
     /**
      * @brief 格式化为表格
@@ -129,7 +129,7 @@ public:
     static void formatAsDataList(Worksheet& worksheet, const std::string& range,
                                 bool has_headers = true);
     
-    // ========== 标题和文本格式化 ==========
+    // 标题和文本格式化
     
     /**
      * @brief 格式化为主标题
@@ -166,7 +166,7 @@ public:
      */
     static void formatAsComment(Worksheet& worksheet, const std::string& range);
     
-    // ========== 数据突出显示 ==========
+    // 数据突出显示
     
     /**
      * @brief 突出显示重要数据
@@ -198,7 +198,7 @@ public:
      */
     static void formatAsSuccess(Worksheet& worksheet, const std::string& range);
     
-    // ========== 预定义样式套餐 ==========
+    // 预定义样式套餐
     
     /**
      * @brief 应用财务报表样式套餐

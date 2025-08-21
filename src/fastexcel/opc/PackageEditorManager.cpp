@@ -8,7 +8,7 @@ PackageEditorManager::PackageEditorManager(std::unique_ptr<archive::ZipReader> r
     : zip_reader_(std::move(reader)) {
 }
 
-// ========== 读取操作实现 ==========
+// 读取操作实现
 
 bool PackageEditorManager::openForReading(const core::Path& path) {
     zip_reader_ = std::make_unique<archive::ZipReader>(path);
@@ -56,7 +56,7 @@ std::vector<std::string> PackageEditorManager::listParts() const {
     return zip_reader_->listFiles();
 }
 
-// ========== 写入操作实现 ==========
+// 写入操作实现
 
 bool PackageEditorManager::openForWriting(const core::Path& path) {
     target_path_ = path;
@@ -149,7 +149,7 @@ bool PackageEditorManager::commit() {
     return success;
 }
 
-// ========== 状态查询实现 ==========
+// 状态查询实现
 
 bool PackageEditorManager::isReadable() const {
     return readable_ && zip_reader_ != nullptr;

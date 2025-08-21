@@ -48,7 +48,7 @@ public:
     SharedFormula() : shared_index_(-1), ref_first_row_(-1), ref_first_col_(-1), 
                      ref_last_row_(-1), ref_last_col_(-1) {}
     
-    // ========== Getters ==========
+    // Getters
     
     int getSharedIndex() const { return shared_index_; }
     const std::string& getBaseFormula() const { return base_formula_; }
@@ -61,7 +61,7 @@ public:
     
     const std::vector<std::pair<int, int>>& getAffectedCells() const { return affected_cells_; }
     
-    // ========== 核心功能 ==========
+    // 核心功能
     
     /**
      * @brief 检查指定单元格是否在共享公式范围内
@@ -98,7 +98,7 @@ public:
     };
     Statistics getStatistics() const;
     
-    // ========== 内部工具方法 ==========
+    // 内部工具方法
     
 private:
     /**
@@ -134,7 +134,7 @@ private:
 public:
     SharedFormulaManager() : next_shared_index_(0) {}
     
-    // ========== 注册和管理 ==========
+    // 注册和管理
     
     /**
      * @brief 注册一个共享公式
@@ -151,7 +151,7 @@ public:
      */
     int registerSharedFormula(const std::string& base_formula, const std::string& ref_range);
     
-    // ========== 查询功能 ==========
+    // 查询功能
     
     /**
      * @brief 检查指定单元格是否属于某个共享公式
@@ -184,7 +184,7 @@ public:
      */
     bool isMainCell(int row, int col) const;
     
-    // ========== 优化功能 ==========
+    // 优化功能
     
     /**
      * @brief 公式模式检测结果
@@ -212,7 +212,7 @@ public:
     int optimizeFormulas(const std::map<std::pair<int, int>, std::string>& formulas, 
                         int min_count = 3);
     
-    // ========== 统计和诊断 ==========
+    // 统计和诊断
     
     /**
      * @brief 获取共享公式统计信息

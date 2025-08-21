@@ -57,7 +57,7 @@ public:
      */
     ~WorksheetXMLGenerator() = default;
     
-    // ========== 主要生成方法 ==========
+    // 主要生成方法
     
     /**
      * @brief 生成完整的工作表XML
@@ -71,7 +71,7 @@ public:
      */
     void generateRelationships(const std::function<void(const char*, size_t)>& callback);
     
-    // ========== 配置方法 ==========
+    // 配置方法
     
     /**
      * @brief 设置生成模式
@@ -86,7 +86,7 @@ public:
     GenerationMode getMode() const { return mode_; }
 
 private:
-    // ========== 批量模式生成方法 ==========
+    // 批量模式生成方法
     
     /**
      * @brief 批量模式生成工作表XML
@@ -154,7 +154,7 @@ private:
      */
     void generateDrawing(XMLStreamWriter& writer);
     
-    // ========== 流式模式生成方法 ==========
+    // 流式模式生成方法
     
     /**
      * @brief 流式模式生成工作表XML
@@ -168,7 +168,7 @@ private:
      */
     void generateSheetDataStreaming(XMLStreamWriter& writer);
     
-    // ========== 辅助方法 ==========
+    // 辅助方法
     
     /**
      * @brief 获取单元格格式索引

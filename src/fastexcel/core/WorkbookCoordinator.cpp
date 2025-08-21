@@ -24,7 +24,7 @@ WorkbookCoordinator::~WorkbookCoordinator() {
     clearCache();
 }
 
-// ========== 核心保存流程 ==========
+// 核心保存流程
 
 bool WorkbookCoordinator::save(const std::string& filename, const SaveStrategy& strategy) {
     auto start_time = std::chrono::steady_clock::now();
@@ -97,7 +97,7 @@ bool WorkbookCoordinator::saveIncremental(const DirtyManager* dirty_manager) {
     return generateSpecificXML(*writer, parts_to_generate);
 }
 
-// ========== XML生成协调 ==========
+// XML生成协调
 
 bool WorkbookCoordinator::generateAllXML(IFileWriter& writer) {
     auto generator = getOrCreateXMLGenerator();
@@ -155,7 +155,7 @@ bool WorkbookCoordinator::generateSpecificXML(IFileWriter& writer, const std::ve
     return xml_generator_cache_.get();
 }
 
-// ========== 资源管理协调 ==========
+// 资源管理协调
 
 bool WorkbookCoordinator::prepareForEditing(const std::string& original_path) {
     if (!resource_manager_) {
@@ -184,7 +184,7 @@ bool WorkbookCoordinator::performPassthroughCopy(const std::string& source_path)
     );
 }
 
-// ========== 文件写入器工厂 ==========
+// 文件写入器工厂
 
 std::unique_ptr<IFileWriter> WorkbookCoordinator::createFileWriter(bool use_streaming) {
     // 从ResourceManager获取FileManager
@@ -208,7 +208,7 @@ std::unique_ptr<IFileWriter> WorkbookCoordinator::createFileWriter(bool use_stre
     }
 }
 
-// ========== 性能优化 ==========
+// 性能优化
 
 void WorkbookCoordinator::warmupCache() {
     // 预创建XML生成器
@@ -239,7 +239,7 @@ void WorkbookCoordinator::optimizeMemory() {
     FASTEXCEL_LOG_DEBUG("Memory optimized");
 }
 
-// ========== 私有辅助方法 ==========
+// 私有辅助方法
 
 bool WorkbookCoordinator::initializeResourceManager(const std::string& filename) {
     if (!resource_manager_) {
@@ -365,7 +365,7 @@ std::vector<std::string> WorkbookCoordinator::determinePartsToGenerate(const Dir
     return parts;
 }
 
-// ========== 智能决策方法 ==========
+// 智能决策方法
 
 bool WorkbookCoordinator::shouldUseStreaming(size_t estimated_size) const {
     // 如果估计大小超过50MB，使用流式写入

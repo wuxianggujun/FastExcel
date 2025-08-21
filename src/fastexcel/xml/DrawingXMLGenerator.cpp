@@ -55,7 +55,7 @@ void DrawingXMLGenerator::generateDrawingXML(const std::function<void(const char
     
     writer.endElement(); // xdr:wsDr
     
-    // 🔧 关键修复：保证XML数据被完整写入
+    // 保证 XML 数据被完整写入
     writer.flushBuffer();
     
     FASTEXCEL_LOG_DEBUG("Generated drawing XML with {} images", image_index);

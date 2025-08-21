@@ -7,7 +7,7 @@
 namespace fastexcel {
 namespace core {
 
-// ========== 预定义颜色常量 ==========
+// 预定义颜色常量
 
 const Color Color::BLACK(static_cast<uint32_t>(0x000000));
 const Color Color::WHITE(static_cast<uint32_t>(0xFFFFFF));
@@ -26,7 +26,7 @@ const Color Color::PINK(static_cast<uint32_t>(0xFF00FF));
 const Color Color::PURPLE(static_cast<uint32_t>(0x800080));
 const Color Color::SILVER(static_cast<uint32_t>(0xC0C0C0));
 
-// ========== 静态方法 ==========
+// 静态方法
 
 Color Color::fromHex(const std::string& hex_string) {
     std::string hex = hex_string;
@@ -80,7 +80,7 @@ Color Color::fromHSL(double h, double s, double l) {
     return Color(rgb);
 }
 
-// ========== 访问器 ==========
+// 访问器
 
 uint32_t Color::getRGB() const {
     switch (type_) {
@@ -97,7 +97,7 @@ uint32_t Color::getRGB() const {
     }
 }
 
-// ========== 修改器 ==========
+// 修改器
 
 Color Color::adjustBrightness(double factor) const {
     uint32_t rgb = getRGB();
@@ -119,7 +119,7 @@ Color Color::adjustSaturation(double factor) const {
     return fromHSL(h, s, l);
 }
 
-// ========== 格式化 ==========
+// 格式化
 
 std::string Color::toHex(bool include_hash) const {
     uint32_t rgb = getRGB();
@@ -172,7 +172,7 @@ std::string Color::toCSS() const {
     return oss.str();
 }
 
-// ========== 颜色混合 ==========
+// 颜色混合
 
 Color Color::blend(const Color& other, double ratio) const {
     ratio = std::max(0.0, std::min(1.0, ratio));
@@ -195,7 +195,7 @@ Color Color::blend(const Color& other, double ratio) const {
     return Color(static_cast<uint32_t>((r << 16) | (g << 8) | b));
 }
 
-// ========== 颜色空间转换 ==========
+// 颜色空间转换
 
 void Color::toHSL(double& h, double& s, double& l) const {
     uint32_t rgb = getRGB();
@@ -230,7 +230,7 @@ void Color::toHSL(double& h, double& s, double& l) const {
     }
 }
 
-// ========== 私有方法 ==========
+// 私有方法
 
 uint32_t Color::themeToRGB() const {
     // Excel主题颜色映射表（简化版）

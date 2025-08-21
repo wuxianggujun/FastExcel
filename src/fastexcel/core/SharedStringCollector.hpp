@@ -81,7 +81,7 @@ public:
     SharedStringCollector(SharedStringCollector&&) = default;
     SharedStringCollector& operator=(SharedStringCollector&&) = default;
     
-    // ========== 核心收集方法 ==========
+    // 核心收集方法
     
     /**
      * @brief 从工作簿收集所有字符串
@@ -118,7 +118,7 @@ public:
      */
     size_t addStrings(const std::vector<std::string>& strings);
     
-    // ========== 应用到SharedStringTable ==========
+    // 应用到 SharedStringTable
     
     /**
      * @brief 将收集的字符串应用到SharedStringTable
@@ -134,7 +134,7 @@ public:
      */
     size_t collectAndApply(const Workbook* workbook);
     
-    // ========== 优化和清理 ==========
+    // 优化和清理
     
     /**
      * @brief 优化收集的字符串（去重、排序等）
@@ -152,7 +152,7 @@ public:
      */
     void reset();
     
-    // ========== 过滤和转换 ==========
+    // 过滤和转换
     
     /**
      * @brief 添加字符串过滤器
@@ -180,7 +180,7 @@ public:
      */
     void clearTransformers() { transformers_.clear(); }
     
-    // ========== 查询和统计 ==========
+    // 查询和统计
     
     /**
      * @brief 获取收集的字符串数量

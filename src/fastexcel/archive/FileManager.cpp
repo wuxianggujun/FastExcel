@@ -342,7 +342,7 @@ bool FileManager::copyFromExistingPackage(const core::Path& source_package,
     return true;
 }
 
-// ========== 图片文件管理实现 ==========
+// 图片文件管理
 
 bool FileManager::addImageFile(const std::string& image_id,
                                const std::vector<uint8_t>& image_data,

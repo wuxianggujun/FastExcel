@@ -12,7 +12,7 @@
 namespace fastexcel {
 namespace archive {
 
-// ========== 构造/析构 ==========
+// 构造/析构
 
 ZipWriter::ZipWriter(const core::Path& path)
     : filepath_(path), filename_(path.string()) {
@@ -59,7 +59,7 @@ ZipWriter& ZipWriter::operator=(ZipWriter&& other) noexcept {
     return *this;
 }
 
-// ========== 文件操作 ==========
+// 文件操作
 
 bool ZipWriter::open(bool create) {
     std::lock_guard<std::mutex> lock(mutex_);
@@ -102,7 +102,7 @@ bool ZipWriter::close() {
     return success;
 }
 
-// ========== 基本写入操作 ==========
+// 基本写入操作
 
 ZipError ZipWriter::addFile(std::string_view internal_path, std::string_view content) {
     return addFile(internal_path, content.data(), content.size());
@@ -123,7 +123,7 @@ ZipError ZipWriter::addFile(std::string_view internal_path, const void* data, si
     return writeFileEntry(path_str, data, size);
 }
 
-// ========== 批量写入 ==========
+// 批量写入
 
 ZipError ZipWriter::addFiles(const std::vector<FileEntry>& files) {
     std::lock_guard<std::mutex> lock(mutex_);
@@ -225,7 +225,7 @@ ZipError ZipWriter::addFiles(std::vector<FileEntry>&& files) {
     return ZipError::Ok;
 }
 
-// ========== 流式写入 ==========
+// 流式写入
 
 ZipError ZipWriter::openEntry(std::string_view internal_path) {
     std::lock_guard<std::mutex> lock(mutex_);
@@ -344,7 +344,7 @@ ZipError ZipWriter::closeEntry() {
     return ZipError::Ok;
 }
 
-// ========== 高级功能 ==========
+// 高级功能
 
 ZipError ZipWriter::writeRawCompressedData(std::string_view internal_path,
                                           const void* raw_data, size_t size,
@@ -375,7 +375,7 @@ ZipError ZipWriter::setCompressionLevel(int level) {
     return ZipError::Ok;
 }
 
-// ========== 内部辅助方法 ==========
+// 内部辅助方法
 
 bool ZipWriter::initializeWriter() {
     ARCHIVE_DEBUG("Initializing ZIP writer for file: {}", filename_);

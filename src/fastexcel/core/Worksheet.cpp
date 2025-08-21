@@ -1127,7 +1127,7 @@ void Worksheet::setCellFormat(int row, int col, std::shared_ptr<const core::Form
         return;
     }
     
-    // 委托给值版本
+    // 调用值版本
     setCellFormat(row, col, *format);
 }
 

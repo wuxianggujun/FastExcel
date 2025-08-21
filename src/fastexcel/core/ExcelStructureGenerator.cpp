@@ -196,7 +196,7 @@ bool ExcelStructureGenerator::generateWorksheets() {
             }
         }
         
-        // 🔧 关键修复：如果工作表包含图片，生成drawing和相关文件
+        // 若工作表包含图片，则生成 drawing 及其关系文件
         if (worksheet && !worksheet->getImages().empty()) {
             CORE_DEBUG("Worksheet {} contains {} images, generating drawing files", i + 1, worksheet->getImages().size());
             
@@ -220,7 +220,7 @@ bool ExcelStructureGenerator::generateWorksheets() {
         reportProgress("Generating worksheets", progress, 100);
     }
     
-    // 🔧 关键修复：在所有工作表处理完后，生成所有媒体文件
+    // 在所有工作表处理完后，统一生成媒体文件
     // 收集所有工作表的图片并生成媒体文件
     bool has_images = false;
     for (size_t i = 0; i < worksheet_count; ++i) {

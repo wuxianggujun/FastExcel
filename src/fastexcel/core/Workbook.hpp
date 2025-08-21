@@ -1,19 +1,19 @@
 #pragma once
 
 #include "fastexcel/core/Worksheet.hpp"
-#include "fastexcel/core/CSVProcessor.hpp"  // 🚀 新增：CSV处理支持
+#include "fastexcel/core/CSVProcessor.hpp"
 #include "fastexcel/core/WorkbookModeSelector.hpp"
 #include "fastexcel/core/Path.hpp"
 #include "fastexcel/core/CustomPropertyManager.hpp"
 #include "fastexcel/core/DefinedNameManager.hpp"
 #include "fastexcel/core/DirtyManager.hpp"
-#include "fastexcel/core/WorkbookCoordinator.hpp"  // 🔧 新架构：协调器
-#include "fastexcel/core/WorksheetManager.hpp"     // 🔧 新架构：工作表管理器
-#include "fastexcel/core/ResourceManager.hpp"      // 🔧 新架构：资源管理器
-#include "fastexcel/core/SharedStringCollector.hpp" // 🔧 新架构：字符串收集器
+#include "fastexcel/core/WorkbookCoordinator.hpp"
+#include "fastexcel/core/WorksheetManager.hpp"
+#include "fastexcel/core/ResourceManager.hpp"
+#include "fastexcel/core/SharedStringCollector.hpp"
 #include "fastexcel/archive/FileManager.hpp"
 #include "fastexcel/utils/CommonUtils.hpp"
-#include "fastexcel/utils/AddressParser.hpp"  // 🚀 新增：Excel地址解析支持
+#include "fastexcel/utils/AddressParser.hpp"
 #include "fastexcel/theme/Theme.hpp"
 #include "FormatDescriptor.hpp"
 #include "FormatRepository.hpp"
@@ -28,7 +28,7 @@
 #include <set>
 #include <ctime>
 #include <functional>
-#include <stdexcept>  // 🚀 新增：支持异常处理
+#include <stdexcept>
 
 namespace fastexcel {
 namespace xml {
@@ -109,7 +109,7 @@ struct WorkbookOptions {
 };
 
 /**
- * @brief Workbook类 - Excel工作簿（新架构）
+ * @brief Workbook类 - Excel工作簿
  * 
  * 采用全新的样式管理系统，提供线程安全、高性能的Excel操作接口。
  * 
@@ -129,39 +129,39 @@ class Workbook {
     friend class ::fastexcel::reader::XLSXReader;  // 让XLSXReader能访问私有open方法
     friend class ::fastexcel::xml::DocPropsXMLGenerator;  // 让XML生成器能访问私有方法
 private:
-    // ========== 核心架构组件（重构后） ==========
+    // 核心架构组件
     std::string filename_;
-    std::unique_ptr<WorkbookCoordinator> coordinator_;      // 🔧 新架构：协调器
-    std::unique_ptr<WorksheetManager> worksheet_manager_;   // 🔧 新架构：工作表管理器
-    std::unique_ptr<ResourceManager> resource_manager_;     // 🔧 新架构：资源管理器
+    std::unique_ptr<WorkbookCoordinator> coordinator_;
+    std::unique_ptr<WorksheetManager> worksheet_manager_;
+    std::unique_ptr<ResourceManager> resource_manager_;
     
-    // ========== 样式和格式管理 ==========
+    // 样式和格式管理
     std::unique_ptr<FormatRepository> format_repo_;
     std::unique_ptr<SharedStringTable> shared_string_table_;
-    std::unique_ptr<SharedStringCollector> string_collector_; // 🔧 新架构：字符串收集器
+    std::unique_ptr<SharedStringCollector> string_collector_;
     
-    // ========== 主题管理 ==========
+    // 主题管理
     std::unique_ptr<theme::Theme> theme_;
     std::string theme_xml_;
     std::string theme_xml_original_;
     bool theme_dirty_ = false;
     
-    // ========== 状态管理 ==========
+    // 状态管理
     WorkbookState state_ = WorkbookState::CLOSED;
     FileSource file_source_ = FileSource::NEW_FILE;
     std::string original_package_path_;
     
-    // ========== 文档属性和元数据 ==========
+    // 文档属性和元数据
     DocumentProperties doc_properties_;
     std::unique_ptr<CustomPropertyManager> custom_property_manager_;
     std::unique_ptr<DefinedNameManager> defined_name_manager_;
     std::unique_ptr<DirtyManager> dirty_manager_;
     
-    // ========== 配置选项 ==========
+    // 配置选项
     WorkbookOptions options_;
     bool preserve_unknown_parts_ = true;
     
-    // ========== VBA和保护 ==========
+    // VBA和保护
     std::string vba_project_path_;
     bool has_vba_ = false;
     bool protected_ = false;
@@ -169,7 +169,7 @@ private:
     bool lock_structure_ = false;
     bool lock_windows_ = false;
     
-    // ========== 兼容性保留 ==========
+    // 兼容性保留
     std::vector<std::shared_ptr<Worksheet>> worksheets_;    // 暂时保留以兼容
     std::unique_ptr<archive::FileManager> file_manager_;    // 暂时保留以兼容
     int next_sheet_id_ = 1;                                // 迁移到WorksheetManager
@@ -260,7 +260,7 @@ public:
     Workbook(Workbook&&) = default;
     Workbook& operator=(Workbook&&) = default;
     
-    // ========== 文件操作 ==========
+    // 文件操作
     
     /**
      * @brief 保存工作簿
@@ -275,7 +275,7 @@ public:
      */
     bool saveAs(const std::string& filename);
     
-    // ========== CSV功能 ==========
+    // CSV功能
     
     /**
      * @brief 从CSV文件创建新的工作表
@@ -338,11 +338,11 @@ public:
      */
     bool close();
     
-    // ========== 编辑模式/保真写回配置 ==========
+    // 编辑模式/保真写回配置
     void setPreserveUnknownParts(bool enable) { preserve_unknown_parts_ = enable; }
     bool getPreserveUnknownParts() const { return preserve_unknown_parts_; }
 
-    // ========== 工作表管理 ==========
+    // 工作表管理
     
     /**
      * @brief 添加工作表
@@ -401,7 +401,7 @@ public:
      */
     std::shared_ptr<const Worksheet> getSheet(size_t index) const;
     
-    // 🚀 便捷的工作表访问操作符
+    // 便捷的工作表访问操作符
     /**
      * @brief 通过索引访问工作表（操作符重载）
      * @param index 工作表索引
@@ -493,7 +493,7 @@ public:
      */
     std::vector<std::string> getSheetNames() const;
     
-    // 🚀 新API：便捷的工作表查找方法
+    // 便捷的工作表查找方法
     /**
      * @brief 检查是否存在指定名称的工作表
      * @param name 工作表名称
@@ -610,7 +610,7 @@ public:
      */
     std::shared_ptr<const Worksheet> getActiveWorksheet() const;
     
-    // 🚀 新API：便捷的单元格访问方法（跨工作表）
+    // 便捷的单元格访问方法（跨工作表）
     /**
      * @brief 通过工作表索引和单元格坐标获取值
      * @tparam T 返回值类型
@@ -670,7 +670,7 @@ public:
         worksheet->setValue<T>(row, col, value);
     }
     
-    // 🚀 新API：安全版本的跨工作表访问方法（不抛异常）
+    // 安全版本的跨工作表访问方法（不抛异常）
     /**
      * @brief 安全获取工作表指针
      * @param name 工作表名称
@@ -818,7 +818,7 @@ public:
         worksheet->setValue<T>(row, col, value);
     }
     
-    // ========== 样式管理 ==========
+    // 样式管理
     
     /**
      * @brief 添加样式到工作簿
@@ -951,7 +951,7 @@ public:
      */
     FormatRepository::DeduplicationStats getStyleStats() const;
     
-    // ========== 文档属性 ==========
+    // 文档属性
     
     /**
      * @brief 设置文档标题
@@ -1063,7 +1063,7 @@ public:
      */
     void setApplication(const std::string& application);
     
-    // ========== 自定义属性 ==========
+    // 自定义属性
     
     /**
      * @brief 添加自定义属性（字符串）
@@ -1106,7 +1106,7 @@ public:
      */
     std::unordered_map<std::string, std::string> getAllProperties() const;
     
-    // ========== 定义名称 ==========
+    // 定义名称
     
     /**
      * @brief 定义名称
@@ -1132,7 +1132,7 @@ public:
      */
     bool removeDefinedName(const std::string& name, const std::string& scope = "");
     
-    // ========== VBA项目 ==========
+    // VBA项目
     
     /**
      * @brief 添加VBA项目
@@ -1147,7 +1147,7 @@ public:
      */
     bool hasVbaProject() const { return has_vba_; }
     
-    // ========== 工作簿保护 ==========
+    // 工作簿保护
     
     /**
      * @brief 保护工作簿
@@ -1168,7 +1168,7 @@ public:
      */
     bool isProtected() const { return protected_; }
     
-    // ========== 工作簿选项 ==========
+    // 工作簿选项
     
     /**
      * @brief 设置常量内存模式
@@ -1249,7 +1249,7 @@ public:
      */
     void setHighPerformanceMode(bool enable);
     
-    // ========== 获取状态 ==========
+    // 获取状态
 
     // 获取脏数据管理器
     DirtyManager* getDirtyManager() { return dirty_manager_.get(); }
@@ -1304,7 +1304,7 @@ public:
      */
     const WorkbookOptions& getOptions() const { return options_; }
     
-    // ========== 共享字符串管理 ==========
+    // 共享字符串管理
     
     /**
      * @brief 添加共享字符串
@@ -1335,7 +1335,7 @@ public:
     const SharedStringTable* getSharedStrings() const;
     
     /**
-     * @brief 获取共享字符串表（新架构方法）
+     * @brief 获取共享字符串表
      * @return 共享字符串表指针
      */
     SharedStringTable* getSharedStringTable() { return shared_string_table_.get(); }
@@ -1360,7 +1360,7 @@ public:
     size_t getEstimatedSize() const;
 
     
-    // ========== 工作簿编辑功能 ==========
+    // 工作簿编辑功能
     
     /**
      * @brief 打开现有文件进行编辑（直接可用，无需再调用open）
@@ -1481,7 +1481,7 @@ public:
     size_t optimize();
 
 private:
-    // ========== 内部方法 ==========
+    // 内部方法
     
     /**
      * @brief 内部方法：打开工作簿文件管理器
@@ -1513,7 +1513,7 @@ private:
     size_t estimateMemoryUsage() const;
     size_t getTotalCellCount() const;
 
-    // 🔧 状态验证和转换辅助方法
+    // 状态验证和转换辅助方法
     /**
      * @brief 检查当前状态是否允许指定操作
      * @param required_state 要求的最低状态

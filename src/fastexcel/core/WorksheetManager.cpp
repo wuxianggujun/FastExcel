@@ -18,7 +18,7 @@ WorksheetManager::~WorksheetManager() {
     clear();
 }
 
-// ========== 创建和添加 ==========
+// 创建和添加
 
 WorksheetManager::WorksheetPtr WorksheetManager::createWorksheet(const std::string& name) {
     std::string worksheet_name = name.empty() ? generateUniqueName() : name;
@@ -110,7 +110,7 @@ std::vector<WorksheetManager::WorksheetPtr> WorksheetManager::createWorksheets(
     return created;
 }
 
-// ========== 查找和访问 ==========
+// 查找和访问
 
 WorksheetManager::WorksheetPtr WorksheetManager::getByName(const std::string& name) {
     stats_.lookups_by_name++;
@@ -193,7 +193,7 @@ std::vector<WorksheetManager::WorksheetPtr> WorksheetManager::findWhere(Workshee
     return result;
 }
 
-// ========== 删除操作 ==========
+// 删除操作
 
 bool WorksheetManager::removeByName(const std::string& name) {
     auto it = name_index_.find(name);
@@ -254,7 +254,7 @@ size_t WorksheetManager::clear() {
     return count;
 }
 
-// ========== 重命名和移动 ==========
+// 重命名和移动
 
 bool WorksheetManager::rename(const std::string& old_name, const std::string& new_name) {
     if (!validateName(new_name)) {
@@ -326,7 +326,7 @@ bool WorksheetManager::swap(size_t index1, size_t index2) {
     return true;
 }
 
-// ========== 复制和克隆 ==========
+// 复制和克隆
 
 WorksheetManager::WorksheetPtr WorksheetManager::copy(
     const std::string& source_name, const std::string& new_name) {
@@ -362,7 +362,7 @@ WorksheetManager::WorksheetPtr WorksheetManager::deepClone(
     return cloned;
 }
 
-// ========== 活动工作表管理 ==========
+// 活动工作表管理
 
 void WorksheetManager::setActive(size_t index) {
     if (!isValidIndex(index)) {
@@ -410,7 +410,7 @@ WorksheetManager::ConstWorksheetPtr WorksheetManager::getActive() const {
     return worksheets_[safe_index];
 }
 
-// ========== 查询和统计 ==========
+// 查询和统计
 
 WorksheetManager::WorksheetInfo WorksheetManager::getInfo(size_t index) const {
     WorksheetInfo info{};
@@ -440,7 +440,7 @@ std::vector<WorksheetManager::WorksheetInfo> WorksheetManager::getAllInfo() cons
     return result;
 }
 
-// ========== 验证和工具 ==========
+// 验证和工具
 
 bool WorksheetManager::validateName(const std::string& name) const {
     if (name.empty()) {
@@ -483,7 +483,7 @@ void WorksheetManager::rebuildIndexes() {
     }
 }
 
-// ========== 私有辅助方法 ==========
+// 私有辅助方法
 
 void WorksheetManager::updateIndexes(size_t start_index) {
     for (size_t i = start_index; i < worksheets_.size(); ++i) {

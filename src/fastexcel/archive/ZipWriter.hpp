@@ -29,7 +29,7 @@ enum class ZipError;
  */
 class ZipWriter {
 public:
-    // ========== 文件条目结构 ==========
+    // 文件条目结构
     struct FileEntry {
         std::string internal_path;
         std::string content;
@@ -52,7 +52,7 @@ public:
             : internal_path(path), content(std::move(data)) {}
     };
     
-    // ========== 构造/析构 ==========
+    // 构造/析构
     explicit ZipWriter(const core::Path& path);
     ~ZipWriter();
     
@@ -64,7 +64,7 @@ public:
     ZipWriter(ZipWriter&& other) noexcept;
     ZipWriter& operator=(ZipWriter&& other) noexcept;
     
-    // ========== 文件操作 ==========
+    // 文件操作
     
     /**
      * 创建/打开ZIP文件进行写入
@@ -84,7 +84,7 @@ public:
      */
     bool isOpen() const { return is_open_; }
     
-    // ========== 基本写入操作 ==========
+    // 基本写入操作
     
     /**
      * 添加文件（字符串内容）
@@ -111,7 +111,7 @@ public:
      */
     ZipError addFile(std::string_view internal_path, const uint8_t* data, size_t size);
     
-    // ========== 批量写入（性能优化） ==========
+    // 批量写入（性能优化）
     
     /**
      * 批量添加文件
@@ -127,7 +127,7 @@ public:
      */
     ZipError addFiles(std::vector<FileEntry>&& files);
     
-    // ========== 流式写入（大文件） ==========
+    // 流式写入（大文件）
     
     /**
      * 开始流式写入条目
@@ -150,7 +150,7 @@ public:
      */
     ZipError closeEntry();
     
-    // ========== 高级功能 ==========
+    // 高级功能
     
     /**
      * 写入原始压缩数据（用于高效复制）
@@ -182,7 +182,7 @@ public:
      */
     int getCompressionLevel() const { return compression_level_; }
     
-    // ========== 状态查询 ==========
+    // 状态查询
     
     /**
      * 检查文件是否已写入（防重复）

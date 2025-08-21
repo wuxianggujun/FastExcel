@@ -15,7 +15,7 @@
 namespace fastexcel {
 namespace xml {
 
-// ========== 构造函数 ==========
+// 构造函数
 
 WorksheetXMLGenerator::WorksheetXMLGenerator(const core::Worksheet* worksheet)
     : worksheet_(worksheet)
@@ -39,7 +39,7 @@ WorksheetXMLGenerator::WorksheetXMLGenerator(const core::Worksheet* worksheet)
     }
 }
 
-// ========== 主要生成方法 ==========
+// 主要生成方法
 
 void WorksheetXMLGenerator::generate(const std::function<void(const char*, size_t)>& callback) {
     if (!worksheet_) {
@@ -105,7 +105,7 @@ void WorksheetXMLGenerator::generateRelationships(const std::function<void(const
     writer.endDocument();
 }
 
-// ========== 批量模式生成方法 ==========
+// 批量模式生成方法
 
 void WorksheetXMLGenerator::generateBatch(const std::function<void(const char*, size_t)>& callback) {
     // 使用XMLStreamWriter来正确生成XML
@@ -167,7 +167,7 @@ void WorksheetXMLGenerator::generateBatch(const std::function<void(const char*, 
     // 生成页面边距
     generatePageMargins(writer);
     
-    // 🚀 新增：生成图片绘图引用
+    // 生成图片绘图引用
     generateDrawing(writer);
     
     writer.endElement(); // worksheet
@@ -273,7 +273,7 @@ void WorksheetXMLGenerator::generateColumns(XMLStreamWriter& writer) {
     writer.endElement(); // cols
 }
 
-// ========== 继续实现其他方法 ==========
+// 其他方法
 
 void WorksheetXMLGenerator::generateSheetData(XMLStreamWriter& writer) {
     writer.startElement("sheetData");
@@ -528,8 +528,7 @@ void WorksheetXMLGenerator::generateDrawing(XMLStreamWriter& writer) {
     
     // 生成drawing引用
     writer.startElement("drawing");
-    // 🔧 关键修复：drawing关系应该是worksheet关系文件中的最后一个rId
-    // 通常超链接占用前面的rId，drawing应该在最后
+    // drawing 关系通常在 worksheet 关系文件中位于超链接之后
     int hyperlink_count = 0;
     auto [max_row, max_col] = worksheet_->getUsedRange();
     for (int row = 0; row <= max_row; ++row) {
@@ -543,13 +542,13 @@ void WorksheetXMLGenerator::generateDrawing(XMLStreamWriter& writer) {
         }
     }
     
-    // drawing的rId应该是超链接数量+1
+    // drawing 的 rId 应为超链接数量 + 1
     std::string drawing_rel = "rId" + std::to_string(hyperlink_count + 1);
     writer.writeAttribute("r:id", drawing_rel.c_str());
     writer.endElement(); // drawing
 }
 
-// ========== 流式模式生成方法 ==========
+// 流式模式生成方法
 
 void WorksheetXMLGenerator::generateStreaming(const std::function<void(const char*, size_t)>& callback) {
     // 使用XMLStreamWriter替代字符串拼接，提高性能
@@ -646,7 +645,7 @@ void WorksheetXMLGenerator::generateStreaming(const std::function<void(const cha
     writer.writeAttribute("footer", "0.3");
     writer.endElement(); // pageMargins
     
-    // 🚀 新增：生成图片绘图引用（流式模式）
+    // 生成图片绘图引用（流式模式）
     generateDrawing(writer);
     
     writer.endElement(); // worksheet
@@ -698,7 +697,7 @@ void WorksheetXMLGenerator::generateSheetDataStreaming(XMLStreamWriter& writer) 
     }
 }
 
-// ========== 辅助方法 ==========
+// 辅助方法
 
 int WorksheetXMLGenerator::getCellFormatIndex(const core::Cell& cell) {
     if (!cell.hasFormat() || !format_repo_) {

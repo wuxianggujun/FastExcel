@@ -36,7 +36,7 @@ public:
     using value_type = T;
     using error_type = E;
 
-    // ========== 构造函数 ==========
+// 构造函数
     
     /**
      * @brief 默认构造函数（成功值）
@@ -102,7 +102,7 @@ public:
         }
     }
     
-    // ========== 赋值操作符 ==========
+// 赋值操作符
     
     Expected& operator=(const Expected& other) {
         if (this != &other) {
@@ -144,14 +144,14 @@ public:
         return *this;
     }
     
-    // ========== 状态检查 ==========
+// 状态检查
     
     bool hasValue() const noexcept { return has_value_; }
     bool hasError() const noexcept { return !has_value_; }
     
     explicit operator bool() const noexcept { return has_value_; }
     
-    // ========== 值访问 ==========
+// 值访问
     
     /**
      * @brief 获取值（不检查）
@@ -195,7 +195,7 @@ public:
     T* operator->() noexcept { return &value_; }
     const T* operator->() const noexcept { return &value_; }
     
-    // ========== 函数式操作 ==========
+// 函数式操作
     
     /**
      * @brief 映射操作（成功时）
@@ -285,7 +285,7 @@ public:
     }
 };
 
-// ========== 便利函数 ==========
+// 便利函数
 
 /**
  * @brief 创建成功结果
@@ -342,7 +342,7 @@ public:
     }
 };
 
-// ========== 类型别名 ==========
+// 类型别名
 
 template<typename T>
 using Result = Expected<T, Error>;

@@ -33,7 +33,7 @@ private:
     double tint_;       // 色调调整 (-1.0 到 1.0)
 
 public:
-    // ========== 构造函数 ==========
+    // 构造函数
     
     /**
      * @brief 默认构造函数（黑色）
@@ -97,7 +97,7 @@ public:
      */
     static Color fromHex(const std::string& hex_string);
     
-    // ========== 预定义颜色常量 ==========
+    // 预定义颜色常量
     
     static const Color BLACK;
     static const Color WHITE;
@@ -116,7 +116,7 @@ public:
     static const Color PURPLE;
     static const Color SILVER;
     
-    // ========== 访问器 ==========
+    // 访问器
     
     Type getType() const { return type_; }
     uint32_t getValue() const { return value_; }
@@ -149,7 +149,7 @@ public:
      */
     uint8_t getBlue() const { return getRGB() & 0xFF; }
     
-    // ========== 修改器 ==========
+    // 修改器
     
     /**
      * @brief 设置色调
@@ -171,7 +171,7 @@ public:
      */
     Color adjustSaturation(double factor) const;
     
-    // ========== 格式化 ==========
+    // 格式化
     
     /**
      * @brief 转换为十六进制字符串
@@ -192,7 +192,7 @@ public:
      */
     std::string toCSS() const;
     
-    // ========== 比较操作 ==========
+    // 比较操作
     
     bool operator==(const Color& other) const {
         return type_ == other.type_ && value_ == other.value_ && tint_ == other.tint_;
@@ -211,14 +211,14 @@ public:
                std::hash<double>{}(tint_);
     }
     
-    // ========== 类型转换 ==========
+    // 类型转换
     
     /**
      * @brief 隐式转换为uint32_t（RGB值）
      */
     operator uint32_t() const { return getRGB(); }
     
-    // ========== 颜色混合 ==========
+    // 颜色混合
     
     /**
      * @brief 与另一个颜色混合
@@ -228,7 +228,7 @@ public:
      */
     Color blend(const Color& other, double ratio) const;
     
-    // ========== 颜色空间转换 ==========
+    // 颜色空间转换
     
     /**
      * @brief 转换为HSL颜色空间

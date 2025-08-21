@@ -55,7 +55,7 @@ public:
     explicit ZipArchive(const core::Path& path);
     ~ZipArchive();
     
-    // ========== 文件操作 ==========
+    // 文件操作
     
     /**
      * 打开ZIP文件
@@ -70,7 +70,7 @@ public:
      */
     bool close();
     
-    // ========== 写入操作（委托给ZipWriter） ==========
+    // 写入操作
     
     ZipError addFile(std::string_view internal_path, std::string_view content);
     ZipError addFile(std::string_view internal_path, const uint8_t* data, size_t size);
@@ -85,7 +85,7 @@ public:
     ZipError writeChunk(const void* data, size_t size);
     ZipError closeEntry();
     
-    // ========== 读取操作（委托给ZipReader） ==========
+    // 读取操作
     
     ZipError extractFile(std::string_view internal_path, std::string& content);
     ZipError extractFile(std::string_view internal_path, std::vector<uint8_t>& data);
@@ -95,17 +95,17 @@ public:
     // 文件列表
     std::vector<std::string> listFiles() const;
     
-    // ========== 状态查询 ==========
+    // 状态查询
     
     bool isOpen() const { return is_open_; }
     bool isWritable() const { return mode_ == Mode::Write || mode_ == Mode::ReadWrite; }
     bool isReadable() const { return mode_ == Mode::Read || mode_ == Mode::ReadWrite; }
     
-    // ========== 配置 ==========
+    // 配置
     
     ZipError setCompressionLevel(int level);
     
-    // ========== 直接访问底层对象 ==========
+    // 直接访问底层对象
     
     /**
      * 获取ZipReader对象（如果可用）

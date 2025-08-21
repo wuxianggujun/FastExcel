@@ -12,7 +12,7 @@
 namespace fastexcel {
 namespace archive {
 
-// ========== 构造/析构 ==========
+// 构造/析构
 
 ZipReader::ZipReader(const core::Path& path) 
     : filepath_(path), filename_(path.string()) {
@@ -53,7 +53,7 @@ ZipReader& ZipReader::operator=(ZipReader&& other) noexcept {
     return *this;
 }
 
-// ========== 文件操作 ==========
+// 文件操作
 
 bool ZipReader::open() {
     std::lock_guard<std::mutex> lock(mutex_);
@@ -80,7 +80,7 @@ bool ZipReader::close() {
     return success;
 }
 
-// ========== 条目查询 ==========
+// 条目查询
 
 std::vector<std::string> ZipReader::listFiles() const {
     std::lock_guard<std::mutex> lock(mutex_);
@@ -170,7 +170,7 @@ bool ZipReader::getEntryInfo(std::string_view internal_path, EntryInfo& info) co
     return false;
 }
 
-// ========== 读取操作 ==========
+// 读取操作
 
 ZipError ZipReader::extractFile(std::string_view internal_path, std::string& content) {
     std::vector<uint8_t> data;
@@ -302,7 +302,7 @@ ZipError ZipReader::extractFileToStream(std::string_view internal_path, std::ost
     return ZipError::Ok;
 }
 
-// ========== 高级功能 ==========
+// 高级功能
 
 bool ZipReader::getRawCompressedData(std::string_view internal_path, 
                                      std::vector<uint8_t>& raw_data,
@@ -370,7 +370,7 @@ ZipError ZipReader::streamFile(std::string_view internal_path,
     return continue_reading ? ZipError::Ok : ZipError::Ok;  // 用户取消也算成功
 }
 
-// ========== 统计信息 ==========
+// 统计信息
 
 ZipReader::Stats ZipReader::getStats() const {
     std::lock_guard<std::mutex> lock(mutex_);
@@ -400,7 +400,7 @@ ZipReader::Stats ZipReader::getStats() const {
     return stats;
 }
 
-// ========== 内部辅助方法 ==========
+// 内部辅助方法
 
 bool ZipReader::initializeReader() {
     unzip_handle_ = mz_zip_reader_create();

@@ -124,7 +124,7 @@ public:
     void importFormats(const FormatRepository& source_repo, 
                       std::unordered_map<int, int>& id_mapping);
     
-    // ========== 线程安全的迭代器支持 ==========
+    // 线程安全的迭代器支持
     
     /**
      * @brief 格式快照 - 用于安全遍历

@@ -50,7 +50,7 @@ public:
     StandardPackageManager(StandardPackageManager&&) = default;
     StandardPackageManager& operator=(StandardPackageManager&&) = default;
     
-    // ========== 读取操作 ==========
+    // 读取操作
     
     bool openForReading(const core::Path& path) override {
         package_path_ = path;
@@ -119,7 +119,7 @@ public:
         return cached_parts_;
     }
     
-    // ========== 写入操作 ==========
+    // 写入操作
     
     bool openForWriting(const core::Path& path) override {
         package_path_ = path;
@@ -228,7 +228,7 @@ public:
         }
     }
     
-    // ========== 状态查询 ==========
+    // 状态查询
     
     bool isReadable() const override {
         return reader_ && reader_->isOpen();
@@ -242,7 +242,7 @@ public:
         return listParts().size();
     }
     
-    // ========== 扩展功能 ==========
+    // 扩展功能
     
     /**
      * @brief 获取修改统计信息

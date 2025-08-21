@@ -5,7 +5,7 @@
 #include <optional>
 #include <memory>
 #include <cstdint>
-#include <type_traits>  // 🚀 新增：支持模板类型判断
+#include <type_traits>
 
 namespace fastexcel {
 namespace xml {
@@ -62,7 +62,7 @@ private:
         std::unique_ptr<std::string> formula;        // 公式
         std::unique_ptr<std::string> hyperlink;      // 超链接
         std::unique_ptr<std::string> comment;        // 批注
-        // 格式相关字段已移除，现在使用FormatDescriptor
+        // 格式相关字段由 FormatDescriptor 管理
         double formula_result;       // 公式计算结果
         int shared_formula_index;    // 共享公式索引（-1表示不是共享公式）
         
@@ -138,7 +138,7 @@ public:
     std::string getComment() const;
     bool hasComment() const { return extended_ && extended_->comment; }
     
-    // 🚀 新API：模板化的值获取和设置
+    // 模板化的值获取和设置
     template<typename T>
     T getValue() const {
         if constexpr (std::is_same_v<T, std::string>) {
@@ -169,7 +169,7 @@ public:
         }
     }
     
-    // 🚀 新API：安全访问方法
+    // 安全访问方法
     template<typename T>
     std::optional<T> tryGetValue() const noexcept {
         try {
@@ -192,7 +192,7 @@ public:
     bool isFormula() const { return flags_.type == CellType::Formula || flags_.type == CellType::SharedFormula; }
     bool isDate() const { return flags_.type == CellType::Date; }
     
-    // 🚀 新API：便捷访问方法（统一命名风格）
+    // 便捷访问方法（统一命名风格）
     /**
      * @brief 将单元格值转为字符串
      * @return 字符串表示的值
@@ -217,7 +217,7 @@ public:
      */
     int asInt() const { return getValue<int>(); }
     
-    // 🚀 新API：安全的类型转换方法
+    // 安全的类型转换方法
     /**
      * @brief 检查是否可以转换为指定类型
      * @tparam T 目标类型

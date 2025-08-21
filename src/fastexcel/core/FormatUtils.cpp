@@ -8,7 +8,7 @@
 namespace fastexcel {
 namespace core {
 
-// ========== 格式复制 ==========
+// 格式复制
 
 bool FormatUtils::copyFormat(Worksheet& worksheet, 
                             int src_row, int src_col,
@@ -113,7 +113,7 @@ int FormatUtils::smartCopyFormat(Worksheet& worksheet,
     }
 }
 
-// ========== 格式清除 ==========
+// 格式清除
 
 void FormatUtils::clearFormat(Worksheet& worksheet, int row, int col) {
     if (isValidCellPosition(row, col)) {
@@ -198,7 +198,7 @@ int FormatUtils::selectiveClearFormat(Worksheet& worksheet, const std::string& r
     }
 }
 
-// ========== 格式检查 ==========
+// 格式检查
 
 bool FormatUtils::hasFormat(const Worksheet& worksheet, int row, int col) {
     (void)worksheet; (void)row; (void)col; // 消除未使用参数警告
@@ -278,7 +278,7 @@ std::vector<FormatDescriptor> FormatUtils::getUniqueFormats(const Worksheet& wor
     return unique_formats;
 }
 
-// ========== 格式比较 ==========
+// 格式比较
 
 bool FormatUtils::formatsMatch(const FormatDescriptor& format1, 
                               const FormatDescriptor& format2) {
@@ -342,7 +342,7 @@ std::string FormatUtils::FormatDifference::toString() const {
     return oss.str();
 }
 
-// ========== 私有辅助方法 ==========
+// 私有辅助方法
 
 std::pair<int, int> FormatUtils::parseCell(const std::string& cell_address) {
     // 简单的Excel地址解析，如"A1" -> (0, 0)
@@ -384,7 +384,7 @@ bool FormatUtils::isValidCellPosition(int row, int col) {
     return row >= 0 && col >= 0 && row < 1048576 && col < 16384; // Excel限制
 }
 
-// ========== 格式导入导出（简化实现） ==========
+// 格式导入导出（简化实现）
 
 std::string FormatUtils::exportFormat(const FormatDescriptor& format) {
     // 简化的JSON导出

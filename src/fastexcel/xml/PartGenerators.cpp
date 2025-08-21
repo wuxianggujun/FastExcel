@@ -58,7 +58,7 @@ public:
             w.startElement("Default"); w.writeAttribute("Extension", "jpeg"); w.writeAttribute("ContentType", "image/jpeg"); w.endElement();
             w.startElement("Default"); w.writeAttribute("Extension", "gif"); w.writeAttribute("ContentType", "image/gif"); w.endElement();
             w.startElement("Default"); w.writeAttribute("Extension", "bmp"); w.writeAttribute("ContentType", "image/bmp"); w.endElement();
-            // 🔧 关键修复：添加 docProps 的内容类型声明
+            // 添加 docProps 的内容类型声明
             w.startElement("Override"); w.writeAttribute("PartName", "/docProps/core.xml"); w.writeAttribute("ContentType", "application/vnd.openxmlformats-package.core-properties+xml"); w.endElement();
             w.startElement("Override"); w.writeAttribute("PartName", "/docProps/app.xml"); w.writeAttribute("ContentType", "application/vnd.openxmlformats-officedocument.extended-properties+xml"); w.endElement();
             w.startElement("Override"); w.writeAttribute("PartName", "/xl/workbook.xml"); w.writeAttribute("ContentType", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"); w.endElement();
@@ -257,11 +257,11 @@ public:
         if (!ctx.workbook) return false;
         // 解析 sheet index
         // part format: xl/worksheets/sheet{N}.xml
-        auto pos1 = part.rfind("sheet");  // 🔧 使用 rfind 找最后一个 "sheet"
+        auto pos1 = part.rfind("sheet");  // 使用 rfind 找最后一个 "sheet"
         auto pos2 = part.find(".xml");
         if (pos1 == std::string::npos || pos2 == std::string::npos) return false;
         
-        // 🔧 关键修复：正确计算数字部分的起始位置
+        // 正确计算数字部分的起始位置
         size_t number_start = pos1 + 5; // "sheet" 有5个字符
         if (number_start >= pos2) return false; // 确保有数字部分
         
@@ -300,11 +300,11 @@ public:
     }
     bool generatePart(const std::string& part, const XMLContextView& ctx, IFileWriter& writer) override {
         if (!ctx.workbook) return false;
-        auto pos1 = part.rfind("sheet");  // 🔧 使用 rfind 找最后一个 "sheet"
+        auto pos1 = part.rfind("sheet");  // 使用 rfind 找最后一个 "sheet"
         auto pos2 = part.find(".xml.rels");
         if (pos1 == std::string::npos || pos2 == std::string::npos) return false;
         
-        // 🔧 关键修复：正确计算数字部分的起始位置
+        // 正确计算数字部分的起始位置
         size_t number_start = pos1 + 5; // "sheet" 有5个字符
         if (number_start >= pos2) return false; // 确保有数字部分
         
@@ -373,7 +373,7 @@ public:
             return false;
         }
         
-        // 🔧 关键修复：使用DrawingXMLGenerator而非硬编码XML
+        // 使用 DrawingXMLGenerator 而非硬编码 XML
         const auto& images = ws->getImages();
         DrawingXMLGenerator gen(&images, idx + 1);
         XML_DEBUG("Generating drawing XML for {} images using DrawingXMLGenerator", images.size());
@@ -440,7 +440,7 @@ public:
                 w.writeAttribute("Id", ("rId" + std::to_string(i + 1)).c_str());
                 w.writeAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image");
                 
-                // 🔧 关键修复：使用动态扩展名而非硬编码.png
+                // 使用动态扩展名而非硬编码 .png
                 std::string ext = images[i]->getFileExtension();
                 if (ext.empty()) {
                     XML_ERROR("Image {} has unknown format, using png as fallback", i + 1);
@@ -474,7 +474,7 @@ public:
             if (ws) {
                 const auto& images = ws->getImages();
                 for (const auto& image : images) {
-                // 🔧 关键修复：使用动态扩展名
+                // 使用动态扩展名
                 std::string ext = image->getFileExtension();
                 if (ext.empty()) {
                         XML_ERROR("Image has unknown format, skipping: {}", image->getId());
@@ -520,7 +520,7 @@ public:
                     if (static_cast<int>(image_counter) == target_idx) {
                         // 找到目标图片，写入文件
                         const auto& data = image->getData();
-                        // 🔧 关键修复：使用二进制数据写入，不要转换为字符串
+                        // 使用二进制数据写入，不要转换为字符串
                         if (!writer.openStreamingFile(part)) {
                             XML_ERROR("Failed to open streaming file for image: {}", part);
                             return false;

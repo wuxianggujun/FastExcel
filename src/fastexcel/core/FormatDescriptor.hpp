@@ -129,7 +129,7 @@ public:
     // 默认格式的静态创建方法
     static const FormatDescriptor& getDefault();
     
-    // ========== 获取属性（只读） ==========
+    // 获取属性（只读）
     
     const std::string& getFontName() const { return font_name_; }
     double getFontSize() const { return font_size_; }
@@ -172,7 +172,7 @@ public:
     bool isLocked() const { return locked_; }
     bool isHidden() const { return hidden_; }
     
-    // ========== 格式检查 ==========
+    // 格式检查
     
     bool hasFont() const;
     bool hasFill() const; 
@@ -181,7 +181,7 @@ public:
     bool hasProtection() const;
     bool hasAnyFormatting() const;
     
-    // ========== 值对象操作 ==========
+    // 值对象操作
     
     /**
      * @brief 比较两个格式是否相等

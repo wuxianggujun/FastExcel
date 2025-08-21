@@ -97,7 +97,7 @@ public:
     PerformanceStats getPerformanceStats() const { return perf_stats_; }
 
 private:
-    // ========== 核心生成方法 ==========
+    // 核心生成方法
     
     /**
      * @brief 生成基础Excel文件
@@ -117,7 +117,7 @@ private:
      */
     bool finalize();
     
-    // ========== 辅助方法 ==========
+    // 辅助方法
     
     /**
      * @brief 报告进度

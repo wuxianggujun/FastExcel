@@ -30,7 +30,7 @@ enum class ZipError;
  */
 class ZipReader {
 public:
-    // ========== 条目信息结构 ==========
+    // 条目信息结构
     struct EntryInfo {
         std::string path;
         uint64_t compressed_size;
@@ -43,7 +43,7 @@ public:
         bool is_directory;
     };
     
-    // ========== 构造/析构 ==========
+    // 构造/析构
     explicit ZipReader(const core::Path& path);
     ~ZipReader();
     
@@ -55,7 +55,7 @@ public:
     ZipReader(ZipReader&& other) noexcept;
     ZipReader& operator=(ZipReader&& other) noexcept;
     
-    // ========== 文件操作 ==========
+    // 文件操作
     
     /**
      * 打开ZIP文件进行读取
@@ -74,7 +74,7 @@ public:
      */
     bool isOpen() const { return is_open_; }
     
-    // ========== 条目查询 ==========
+    // 条目查询
     
     /**
      * 获取所有文件列表
@@ -103,7 +103,7 @@ public:
      */
     bool getEntryInfo(std::string_view internal_path, EntryInfo& info) const;
     
-    // ========== 读取操作 ==========
+    // 读取操作
     
     /**
      * 提取文件到字符串
@@ -129,7 +129,7 @@ public:
      */
     ZipError extractFileToStream(std::string_view internal_path, std::ostream& output);
     
-    // ========== 高级功能 ==========
+    // 高级功能
     
     /**
      * 获取原始压缩数据（用于高效复制）
@@ -156,7 +156,7 @@ public:
                         std::function<bool(const uint8_t*, size_t)> callback,
                         size_t buffer_size = 65536) const;
     
-    // ========== 统计信息 ==========
+    // 统计信息
     
     /**
      * 获取ZIP文件统计信息

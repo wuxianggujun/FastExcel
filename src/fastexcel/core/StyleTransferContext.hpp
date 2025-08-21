@@ -107,7 +107,7 @@ public:
      */
     const std::unordered_map<int, int>& getIdMapping() const;
     
-    // ========== 批量操作 ==========
+    // 批量操作
     
     /**
      * @brief 传输指定范围的样式

@@ -13,7 +13,7 @@ namespace core {
  * 避免在多个文件中重复定义，提高代码组织性和维护性。
  */
 
-// ========== 字体相关枚举 ==========
+// 字体相关枚举
 
 /**
  * @brief 下划线类型
@@ -35,7 +35,7 @@ enum class FontScript : uint8_t {
     Subscript = 2
 };
 
-// ========== 对齐相关枚举 ==========
+// 对齐相关枚举
 
 /**
  * @brief 水平对齐方式
@@ -62,7 +62,7 @@ enum class VerticalAlign : uint8_t {
     Distributed = 4
 };
 
-// ========== 填充相关枚举 ==========
+// 填充相关枚举
 
 /**
  * @brief 填充模式
@@ -89,7 +89,7 @@ enum class PatternType : uint8_t {
     Gray0625 = 18
 };
 
-// ========== 边框相关枚举 ==========
+// 边框相关枚举
 
 /**
  * @brief 边框样式
@@ -121,7 +121,7 @@ enum class DiagonalBorderType : uint8_t {
     Both = 3    // 两条对角线
 };
 
-// ========== 数字格式相关枚举 ==========
+// 数字格式相关枚举
 
 /**
  * @brief 数字格式类型（用于快速设置常见格式）
@@ -140,7 +140,7 @@ enum class NumberFormatType : uint8_t {
     Text = 49
 };
 
-// ========== 枚举实用函数 ==========
+// 枚举实用函数
 
 /**
  * @brief 将枚举转换为字符串（用于调试）

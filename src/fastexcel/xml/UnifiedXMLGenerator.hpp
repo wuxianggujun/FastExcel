@@ -49,11 +49,11 @@ public:
     explicit UnifiedXMLGenerator(const GenerationContext& context);
     ~UnifiedXMLGenerator();
 
-    // 新增：作为编排器的统一生成入口（批量/流式由 IFileWriter 决定）
+    // 作为编排器的统一生成入口（批量/流式由 IFileWriter 决定）
     bool generateAll(class ::fastexcel::core::IFileWriter& writer);
     bool generateAll(class ::fastexcel::core::IFileWriter& writer,
                      const class ::fastexcel::core::DirtyManager* dirty_manager);
-    // 新增：生成指定部件集合（用于上层精简流程的选择性调度）
+    // 生成指定部件集合（用于上层精简流程的选择性调度）
     bool generateParts(class ::fastexcel::core::IFileWriter& writer,
                        const std::vector<std::string>& parts_to_generate);
     bool generateParts(class ::fastexcel::core::IFileWriter& writer,
@@ -62,7 +62,7 @@ public:
 
     // 删除所有回调与 string 便捷API，统一使用 IFileWriter 接口
 
-    // ========== 工厂方法 - 简化创建过程 ==========
+    // 工厂方法 - 简化创建过程
     
     /**
      * @brief 从Workbook创建生成器

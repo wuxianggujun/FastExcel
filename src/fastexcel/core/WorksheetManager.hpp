@@ -75,7 +75,7 @@ public:
     WorksheetManager(WorksheetManager&&) = default;
     WorksheetManager& operator=(WorksheetManager&&) = default;
     
-    // ========== 创建和添加 ==========
+    // 创建和添加
     
     /**
      * @brief 创建新工作表
@@ -99,7 +99,7 @@ public:
      */
     std::vector<WorksheetPtr> createWorksheets(size_t count, const std::string& name_prefix = "");
     
-    // ========== 查找和访问 ==========
+    // 查找和访问
     
     /**
      * @brief 通过名称获取工作表
@@ -139,7 +139,7 @@ public:
      */
     std::vector<WorksheetPtr> findWhere(WorksheetPredicate predicate);
     
-    // ========== 删除操作 ==========
+    // 删除操作
     
     /**
      * @brief 删除工作表
@@ -168,7 +168,7 @@ public:
      */
     size_t clear();
     
-    // ========== 重命名和移动 ==========
+    // 重命名和移动
     
     /**
      * @brief 重命名工作表
@@ -194,7 +194,7 @@ public:
      */
     bool swap(size_t index1, size_t index2);
     
-    // ========== 复制和克隆 ==========
+    // 复制和克隆
     
     /**
      * @brief 复制工作表
@@ -212,7 +212,7 @@ public:
      */
     WorksheetPtr deepClone(const WorksheetPtr& source, const std::string& new_name);
     
-    // ========== 活动工作表管理 ==========
+    // 活动工作表管理
     
     /**
      * @brief 设置活动工作表
@@ -240,7 +240,7 @@ public:
      */
     size_t getActiveIndex() const { return active_index_; }
     
-    // ========== 查询和统计 ==========
+    // 查询和统计
     
     /**
      * @brief 获取工作表数量
@@ -282,7 +282,7 @@ public:
      */
     const Statistics& getStatistics() const { return stats_; }
     
-    // ========== 验证和工具 ==========
+    // 验证和工具
     
     /**
      * @brief 验证工作表名称

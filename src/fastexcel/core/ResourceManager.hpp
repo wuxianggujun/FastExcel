@@ -60,7 +60,7 @@ public:
     ResourceManager(ResourceManager&&) = default;
     ResourceManager& operator=(ResourceManager&&) = default;
 
-    // ========== 核心文件操作 ==========
+    // 核心文件操作
     
     /**
      * @brief 打开资源管理器
@@ -104,7 +104,7 @@ public:
      */
     bool saveAs(const Path& new_path, const Workbook* workbook);
     
-    // ========== 透传复制功能 ==========
+    // 透传复制功能
     
     /**
      * @brief 从原始包复制非核心组件
@@ -126,7 +126,7 @@ public:
                          bool preserve_media = true, 
                          bool preserve_vba = true);
     
-    // ========== 文件写入接口 ==========
+    // 文件写入接口
     
     /**
      * @brief 写入文件内容
@@ -151,7 +151,7 @@ public:
      */
     std::unique_ptr<IFileWriter> createFileWriter(bool use_streaming = false);
     
-    // ========== 压缩设置 ==========
+    // 压缩设置
     
     /**
      * @brief 设置压缩级别
@@ -160,7 +160,7 @@ public:
      */
     bool setCompressionLevel(int level);
     
-    // ========== 临时文件管理 ==========
+    // 临时文件管理
     
     /**
      * @brief 创建临时文件路径
@@ -177,7 +177,7 @@ public:
      */
     static bool atomicReplace(const Path& temp_path, const Path& target_path);
     
-    // ========== 状态查询 ==========
+    // 状态查询
     
     Mode getMode() const { return mode_; }
     const std::string& getFilename() const { return filename_; }
