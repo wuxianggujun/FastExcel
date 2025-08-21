@@ -88,7 +88,7 @@ std::unordered_map<int, std::pair<double, int>> WorksheetLayoutManager::setColum
 
 double WorksheetLayoutManager::calculateOptimalWidth(double target_width, const std::string& font_name, double font_size) const {
     if (!column_width_manager_) {
-        auto temp_manager = std::make_unique<ColumnWidthManager>(format_repo_);
+        auto temp_manager = std::make_unique<ColumnWidthManager>(format_repo_.get());
         return temp_manager->calculateOptimalWidth(target_width, font_name, font_size);
     }
     
