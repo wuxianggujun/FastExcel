@@ -50,7 +50,7 @@ bool WorksheetParser::parse(const std::string& xml_content,
         return parseSheetData(xml_content, worksheet, shared_strings, styles, style_id_mapping);
         
     } catch (const std::exception& e) {
-        std::cerr << "解析工作表时发生错误: " << e.what() << std::endl;
+        READER_ERROR("解析工作表时发生错误: {}", e.what());
         return false;
     }
 }
@@ -109,7 +109,7 @@ bool WorksheetParser::parseSheetData(const std::string& xml_content,
         
         // 解析行
         if (!parseRow(row_xml, worksheet, shared_strings, styles, style_id_mapping)) {
-            std::cerr << "解析行失败" << std::endl;
+            READER_WARN("解析行失败");
             // 继续处理其他行
         }
         
@@ -171,7 +171,7 @@ bool WorksheetParser::parseRow(const std::string& row_xml,
         
         // 解析单元格
         if (!parseCell(cell_xml, worksheet, shared_strings, styles, style_id_mapping)) {
-            std::cerr << "解析单元格失败: " << cell_xml << std::endl;
+            READER_WARN("解析单元格失败: {}", cell_xml);
             // 继续处理其他单元格
         }
         
@@ -231,7 +231,7 @@ bool WorksheetParser::parseCell(const std::string& cell_xml,
                 worksheet->setValue(row, col, it->second);
             }
         } catch (const std::exception& e) {
-            std::cerr << "解析共享字符串索引失败: " << e.what() << std::endl;
+            READER_WARN("解析共享字符串索引失败: {}", e.what());
         }
     } else if (cell_type == "inlineStr") {
         // 内联字符串

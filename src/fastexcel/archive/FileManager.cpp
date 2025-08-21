@@ -9,6 +9,7 @@
 #include <sstream>
 #include <algorithm>
 #include <fstream>
+#include "fastexcel/utils/TimeUtils.hpp"
 
 namespace fastexcel {
 namespace archive {

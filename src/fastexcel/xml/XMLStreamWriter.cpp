@@ -395,22 +395,22 @@ void XMLStreamWriter::escapeAttributesToBuffer(const char* text, size_t length) 
     for (size_t i = 0; i < length; i++) {
         switch (text[i]) {
             case '&':
-                writeRawToBuffer(AMP_REPLACEMENT, AMP_REPLACEMENT_LEN);
+                writeRawToBuffer(XMLEscapes::AMP, sizeof(XMLEscapes::AMP)-1);
                 break;
             case '<':
-                writeRawToBuffer(LT_REPLACEMENT, LT_REPLACEMENT_LEN);
+                writeRawToBuffer(XMLEscapes::LT, sizeof(XMLEscapes::LT)-1);
                 break;
             case '>':
-                writeRawToBuffer(GT_REPLACEMENT, GT_REPLACEMENT_LEN);
+                writeRawToBuffer(XMLEscapes::GT, sizeof(XMLEscapes::GT)-1);
                 break;
             case '\"':
-                writeRawToBuffer(QUOT_REPLACEMENT, QUOT_REPLACEMENT_LEN);
+                writeRawToBuffer(XMLEscapes::QUOT, sizeof(XMLEscapes::QUOT)-1);
                 break;
             case '\'':
-                writeRawToBuffer(APOS_REPLACEMENT, APOS_REPLACEMENT_LEN);
+                writeRawToBuffer(XMLEscapes::APOS, sizeof(XMLEscapes::APOS)-1);
                 break;
             case '\n':
-                writeRawToBuffer(NL_REPLACEMENT, NL_REPLACEMENT_LEN);
+                writeRawToBuffer(XMLEscapes::NL, sizeof(XMLEscapes::NL)-1);
                 break;
             default:
                 writeRawToBuffer(&text[i], 1);
@@ -423,13 +423,13 @@ void XMLStreamWriter::escapeDataToBuffer(const char* text, size_t length) {
     for (size_t i = 0; i < length; i++) {
         switch (text[i]) {
             case '&':
-                writeRawToBuffer(AMP_REPLACEMENT, AMP_REPLACEMENT_LEN);
+                writeRawToBuffer(XMLEscapes::AMP, sizeof(XMLEscapes::AMP)-1);
                 break;
             case '<':
-                writeRawToBuffer(LT_REPLACEMENT, LT_REPLACEMENT_LEN);
+                writeRawToBuffer(XMLEscapes::LT, sizeof(XMLEscapes::LT)-1);
                 break;
             case '>':
-                writeRawToBuffer(GT_REPLACEMENT, GT_REPLACEMENT_LEN);
+                writeRawToBuffer(XMLEscapes::GT, sizeof(XMLEscapes::GT)-1);
                 break;
             default:
                 writeRawToBuffer(&text[i], 1);
@@ -442,22 +442,22 @@ void XMLStreamWriter::escapeAttributesToFile(const char* text, size_t length) {
     for (size_t i = 0; i < length; i++) {
         switch (text[i]) {
             case '&':
-                fwrite(AMP_REPLACEMENT, 1, AMP_REPLACEMENT_LEN, output_file_);
+                fwrite(XMLEscapes::AMP, 1, sizeof(XMLEscapes::AMP)-1, output_file_);
                 break;
             case '<':
-                fwrite(LT_REPLACEMENT, 1, LT_REPLACEMENT_LEN, output_file_);
+                fwrite(XMLEscapes::LT, 1, sizeof(XMLEscapes::LT)-1, output_file_);
                 break;
             case '>':
-                fwrite(GT_REPLACEMENT, 1, GT_REPLACEMENT_LEN, output_file_);
+                fwrite(XMLEscapes::GT, 1, sizeof(XMLEscapes::GT)-1, output_file_);
                 break;
             case '\"':
-                fwrite(QUOT_REPLACEMENT, 1, QUOT_REPLACEMENT_LEN, output_file_);
+                fwrite(XMLEscapes::QUOT, 1, sizeof(XMLEscapes::QUOT)-1, output_file_);
                 break;
             case '\'':
-                fwrite(APOS_REPLACEMENT, 1, APOS_REPLACEMENT_LEN, output_file_);
+                fwrite(XMLEscapes::APOS, 1, sizeof(XMLEscapes::APOS)-1, output_file_);
                 break;
             case '\n':
-                fwrite(NL_REPLACEMENT, 1, NL_REPLACEMENT_LEN, output_file_);
+                fwrite(XMLEscapes::NL, 1, sizeof(XMLEscapes::NL)-1, output_file_);
                 break;
             default:
                 fwrite(&text[i], 1, 1, output_file_);
@@ -470,13 +470,13 @@ void XMLStreamWriter::escapeDataToFile(const char* text, size_t length) {
     for (size_t i = 0; i < length; i++) {
         switch (text[i]) {
             case '&':
-                fwrite(AMP_REPLACEMENT, 1, AMP_REPLACEMENT_LEN, output_file_);
+                fwrite(XMLEscapes::AMP, 1, sizeof(XMLEscapes::AMP)-1, output_file_);
                 break;
             case '<':
-                fwrite(LT_REPLACEMENT, 1, LT_REPLACEMENT_LEN, output_file_);
+                fwrite(XMLEscapes::LT, 1, sizeof(XMLEscapes::LT)-1, output_file_);
                 break;
             case '>':
-                fwrite(GT_REPLACEMENT, 1, GT_REPLACEMENT_LEN, output_file_);
+                fwrite(XMLEscapes::GT, 1, sizeof(XMLEscapes::GT)-1, output_file_);
                 break;
             default:
                 fwrite(&text[i], 1, 1, output_file_);

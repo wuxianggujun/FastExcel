@@ -9,6 +9,7 @@
 #include <unordered_map>
 #include <cstdio>
 #include <expat.h>
+#include "fastexcel/core/Constants.hpp"
 #include "fastexcel/core/Expected.hpp"
 #include "fastexcel/core/ErrorCode.hpp"
 
@@ -105,7 +106,7 @@ private:
     bool collecting_text_ = false;
     
     // 缓冲区设置
-    static constexpr size_t BUFFER_SIZE = 8192;
+    static constexpr size_t BUFFER_SIZE = fastexcel::core::Constants::kIOBufferSize;
     char buffer_[BUFFER_SIZE];
     
     // 回调函数

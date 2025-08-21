@@ -162,7 +162,7 @@ DefaultErrorHandler::DefaultErrorHandler(bool throw_on_error, bool log_warnings)
 }
 
 bool DefaultErrorHandler::handleError(const FastExcelException& exception) {
-    std::cerr << "FastExcel Error: " << exception.getDetailedMessage() << std::endl;
+    std::cerr << "FastExcel Error: " << exception.getDetailedMessage() << '\n';
     
     if (throw_on_error_) {
         throw exception;
@@ -178,7 +178,7 @@ void DefaultErrorHandler::handleWarning(const std::string& message,
         if (!context.empty()) {
             std::cerr << " (context: " << context << ")";
         }
-        std::cerr << std::endl;
+        std::cerr << '\n';
     }
 }
 

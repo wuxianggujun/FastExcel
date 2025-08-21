@@ -55,7 +55,7 @@ bool SharedStringsParser::parse(const std::string& xml_content) {
         return true;
         
     } catch (const std::exception& e) {
-        std::cerr << "解析共享字符串时发生错误: " << e.what() << std::endl;
+        READER_ERROR("解析共享字符串时发生错误: {}", e.what());
         return false;
     }
 }

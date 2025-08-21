@@ -50,7 +50,7 @@ bool ZipArchive::open(bool create) {
             }
         }
     } catch (const std::exception& e) {
-        std::cerr << "Failed to open ZIP archive: " << e.what() << std::endl;
+        ARCHIVE_ERROR("Failed to open ZIP archive: {}", e.what());
     }
     
     // 打开失败，清理

@@ -82,7 +82,7 @@ bool MinizipParallelWriter::compressAndWrite(
                 compressed_files.push_back(std::move(result));
                 stats_.completed_tasks++;
             } else {
-                std::cerr << "Failed to compress file: " << result.filename << std::endl;
+                std::cerr << "Failed to compress file: " << result.filename << '\n';
                 return false;
             }
         }
@@ -100,7 +100,7 @@ bool MinizipParallelWriter::compressAndWrite(
         return success;
         
     } catch (const std::exception& e) {
-        std::cerr << "Exception in compressAndWrite: " << e.what() << std::endl;
+        std::cerr << "Exception in compressAndWrite: " << e.what() << '\n';
         return false;
     }
 }
@@ -156,7 +156,7 @@ CompressedFile MinizipParallelWriter::compressFile(
         result.success = true;
         
     } catch (const std::exception& e) {
-        std::cerr << "Exception in compressFile for " << filename << ": " << e.what() << std::endl;
+        ARCHIVE_ERROR("Exception in compressFile for {}: {}", filename, e.what());
         result.error_message = e.what();
     }
     
@@ -236,7 +236,7 @@ bool MinizipParallelWriter::writeCompressedFilesToZip(
             // 使用 mz_zip_entry_* API 进行 raw 写入
             err = mz_zip_entry_write_open(zip_handle, &file_info, 0, 1, nullptr); // raw=1
             if (err != MZ_OK) {
-                std::cerr << "Failed to open entry for " << file.filename << " (error: " << err << ")" << std::endl;
+                ARCHIVE_ERROR("Failed to open entry for {} (error: {})", file.filename, err);
                 mz_zip_close(zip_handle);
                 mz_stream_os_close(file_stream);
                 mz_stream_os_delete(&file_stream);
@@ -249,7 +249,7 @@ bool MinizipParallelWriter::writeCompressedFilesToZip(
                                    file.compressed_data.data(),
                                    static_cast<int32_t>(file.compressed_size));
             if (err < 0) {
-                std::cerr << "Failed to write data for " << file.filename << " (error: " << err << ")" << std::endl;
+                ARCHIVE_ERROR("Failed to write data for {} (error: {})", file.filename, err);
                 mz_zip_entry_close(zip_handle);
                 mz_zip_close(zip_handle);
                 mz_stream_os_close(file_stream);
@@ -261,7 +261,7 @@ bool MinizipParallelWriter::writeCompressedFilesToZip(
             // 关闭 raw 条目
             err = mz_zip_entry_close_raw(zip_handle, file.uncompressed_size, file.crc32);
             if (err != MZ_OK) {
-                std::cerr << "Failed to close raw entry for " << file.filename << " (error: " << err << ")" << std::endl;
+                ARCHIVE_ERROR("Failed to close raw entry for {} (error: {})", file.filename, err);
                 mz_zip_close(zip_handle);
                 mz_stream_os_close(file_stream);
                 mz_stream_os_delete(&file_stream);
@@ -279,7 +279,7 @@ bool MinizipParallelWriter::writeCompressedFilesToZip(
         return err == MZ_OK;
         
     } catch (const std::exception& e) {
-        std::cerr << "Exception in writeCompressedFilesToZip: " << e.what() << std::endl;
+        ARCHIVE_ERROR("Exception in writeCompressedFilesToZip: {}", e.what());
         return false;
     }
 }

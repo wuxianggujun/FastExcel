@@ -11,6 +11,8 @@
 
 // 项目日志头文件
 #include "fastexcel/utils/Logger.hpp"
+#include "fastexcel/core/Constants.hpp"
+#include "fastexcel/xml/XMLUtils.hpp"
 // 需要使用 Path 进行跨平台文件打开
 #include "fastexcel/core/Path.hpp"
 
@@ -57,7 +59,7 @@ private:
     static constexpr size_t NL_REPLACEMENT_LEN = sizeof(NL_REPLACEMENT) - 1;
     
     // 固定大小缓冲区，避免动态内存分配
-    static constexpr size_t BUFFER_SIZE = 8192;
+    static constexpr size_t BUFFER_SIZE = fastexcel::core::Constants::kIOBufferSize;
     char buffer_[BUFFER_SIZE];
     size_t buffer_pos_ = 0;
     
