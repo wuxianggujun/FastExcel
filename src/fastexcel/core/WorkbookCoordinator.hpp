@@ -89,7 +89,9 @@ public:
      * @param strategy 保存策略
      * @return 是否成功
      */
-    bool save(const std::string& filename, const SaveStrategy& strategy = SaveStrategy());
+    bool save(const std::string& filename, const SaveStrategy& strategy);
+    // 便捷重载：使用默认策略
+    bool save(const std::string& filename);
     
     /**
      * @brief 执行另存为操作
@@ -97,7 +99,9 @@ public:
      * @param strategy 保存策略
      * @return 是否成功
      */
-    bool saveAs(const std::string& new_filename, const SaveStrategy& strategy = SaveStrategy());
+    bool saveAs(const std::string& new_filename, const SaveStrategy& strategy);
+    // 便捷重载：使用默认策略
+    bool saveAs(const std::string& new_filename);
     
     /**
      * @brief 执行增量保存

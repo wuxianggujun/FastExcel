@@ -1478,7 +1478,9 @@ public:
         bool overwrite_existing = false;   // 覆盖现有内容
         std::string name_prefix;           // 工作表名称前缀
     };
-    bool mergeWorkbook(const std::unique_ptr<Workbook>& other_workbook, const MergeOptions& options = {});
+    bool mergeWorkbook(const std::unique_ptr<Workbook>& other_workbook, const MergeOptions& options);
+    // 便捷重载：默认选项
+    bool mergeWorkbook(const std::unique_ptr<Workbook>& other_workbook);
     
     /**
      * @brief 导出工作表到新工作簿
@@ -1522,7 +1524,9 @@ public:
         std::vector<std::string> worksheet_filter; // 限制在特定工作表中查找
     };
     int findAndReplaceAll(const std::string& find_text, const std::string& replace_text,
-                         const FindReplaceOptions& options = {});
+                         const FindReplaceOptions& options);
+    // 便捷重载：默认选项
+    int findAndReplaceAll(const std::string& find_text, const std::string& replace_text);
     
     /**
      * @brief 全局查找
@@ -1531,7 +1535,9 @@ public:
      * @return 匹配结果列表 (工作表名, 行, 列)
      */
     std::vector<std::tuple<std::string, int, int>> findAll(const std::string& search_text,
-                                                           const FindReplaceOptions& options = {});
+                                                           const FindReplaceOptions& options);
+    // 便捷重载：默认选项
+    std::vector<std::tuple<std::string, int, int>> findAll(const std::string& search_text);
     
     /**
      * @brief 获取工作簿统计信息

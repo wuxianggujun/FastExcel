@@ -1369,6 +1369,10 @@ bool Workbook::refresh() {
     }
 }
 
+bool Workbook::mergeWorkbook(const std::unique_ptr<Workbook>& other_workbook) {
+    return mergeWorkbook(other_workbook, MergeOptions{});
+}
+
 bool Workbook::mergeWorkbook(const std::unique_ptr<Workbook>& other_workbook, const MergeOptions& options) {
     if (!other_workbook) {
         CORE_ERROR("Cannot merge: other workbook is null");
@@ -1578,7 +1582,7 @@ bool Workbook::reorderWorksheets(const std::vector<std::string>& new_order) {
 }
 
 int Workbook::findAndReplaceAll(const std::string& find_text, const std::string& replace_text,
-                                const FindReplaceOptions& options) {
+                         const FindReplaceOptions& options) {
     int total_replacements = 0;
     
     for (const auto& worksheet : worksheets_) {
@@ -1605,8 +1609,12 @@ int Workbook::findAndReplaceAll(const std::string& find_text, const std::string&
     return total_replacements;
 }
 
+int Workbook::findAndReplaceAll(const std::string& find_text, const std::string& replace_text) {
+    return findAndReplaceAll(find_text, replace_text, FindReplaceOptions{});
+}
+
 std::vector<std::tuple<std::string, int, int>> Workbook::findAll(const std::string& search_text,
-                                                                 const FindReplaceOptions& options) {
+                                                           const FindReplaceOptions& options) {
     std::vector<std::tuple<std::string, int, int>> results;
     
     for (const auto& worksheet : worksheets_) {
@@ -1633,6 +1641,10 @@ std::vector<std::tuple<std::string, int, int>> Workbook::findAll(const std::stri
     
     CORE_INFO("Global search completed: {} total matches found", results.size());
     return results;
+}
+
+std::vector<std::tuple<std::string, int, int>> Workbook::findAll(const std::string& search_text) {
+    return findAll(search_text, FindReplaceOptions{});
 }
 
 Workbook::WorkbookStats Workbook::getStatistics() const {

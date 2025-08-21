@@ -46,6 +46,10 @@ bool WorkbookSecurityManager::protect(const ProtectionOptions& options) {
     return true;
 }
 
+bool WorkbookSecurityManager::protect() {
+    return protect(ProtectionOptions{});
+}
+
 bool WorkbookSecurityManager::protect(const std::string& password, bool lock_structure, bool lock_windows) {
     ProtectionOptions options;
     options.password = password;

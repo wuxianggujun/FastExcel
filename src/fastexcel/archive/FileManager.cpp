@@ -196,16 +196,13 @@ bool FileManager::addDocProps() {
     core_props << "  <cp:lastModifiedBy>FastExcel</cp:lastModifiedBy>\r\n";
     core_props << "  <dcterms:created xsi:type=\"dcterms:W3CDTF\">";
     
-    // 添加当前时间
-    auto now = std::chrono::system_clock::now();
-    auto time_t = std::chrono::system_clock::to_time_t(now);
-    std::tm tm;
-    localtime_s(&tm, &time_t);
-    core_props << std::put_time(&tm, "%Y-%m-%dT%H:%M:%SZ");
+    // 添加当前UTC时间（统一封装自 TimeUtils）
+    auto tm_utc = ::fastexcel::utils::TimeUtils::getCurrentUTCTime();
+    core_props << ::fastexcel::utils::TimeUtils::formatTimeISO8601(tm_utc);
     
     core_props << "</dcterms:created>\r\n";
     core_props << "  <dcterms:modified xsi:type=\"dcterms:W3CDTF\">";
-    core_props << std::put_time(&tm, "%Y-%m-%dT%H:%M:%SZ");
+    core_props << ::fastexcel::utils::TimeUtils::formatTimeISO8601(tm_utc);
     core_props << "</dcterms:modified>\r\n";
     core_props << "</cp:coreProperties>\r\n";
     

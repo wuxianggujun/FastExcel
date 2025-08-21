@@ -94,7 +94,9 @@ public:
      * @param strategy 保存策略
      * @return 是否成功
      */
-    bool atomicSave(const Workbook* workbook, const SaveStrategy& strategy = SaveStrategy());
+    bool atomicSave(const Workbook* workbook, const SaveStrategy& strategy);
+    // 便捷重载：使用默认策略
+    bool atomicSave(const Workbook* workbook);
     
     /**
      * @brief 另存为

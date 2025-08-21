@@ -58,10 +58,18 @@ bool WorkbookCoordinator::save(const std::string& filename, const SaveStrategy& 
     return success;
 }
 
+bool WorkbookCoordinator::save(const std::string& filename) {
+    return save(filename, SaveStrategy{});
+}
+
 bool WorkbookCoordinator::saveAs(const std::string& new_filename, const SaveStrategy& strategy) {
     // 另存为逻辑：创建新的资源管理器
     resource_manager_ = std::make_unique<ResourceManager>(Path(new_filename), ResourceManager::Mode::WRITE_NEW);
     return save(new_filename, strategy);
+}
+
+bool WorkbookCoordinator::saveAs(const std::string& new_filename) {
+    return saveAs(new_filename, SaveStrategy{});
 }
 
 bool WorkbookCoordinator::saveIncremental(const DirtyManager* dirty_manager) {

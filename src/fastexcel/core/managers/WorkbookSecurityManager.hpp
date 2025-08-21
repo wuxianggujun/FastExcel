@@ -81,7 +81,9 @@ public:
      * @param options 保护选项
      * @return 是否成功
      */
-    bool protect(const ProtectionOptions& options = ProtectionOptions());
+    bool protect(const ProtectionOptions& options);
+    // 便捷重载：使用默认选项
+    bool protect();
     
     /**
      * @brief 保护工作簿（简化版本）

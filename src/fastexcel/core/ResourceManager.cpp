@@ -159,6 +159,10 @@ bool ResourceManager::atomicSave(const Workbook* workbook, const SaveStrategy& s
     return saveInternal(workbook, strategy);
 }
 
+bool ResourceManager::atomicSave(const Workbook* workbook) {
+    return atomicSave(workbook, SaveStrategy{});
+}
+
 bool ResourceManager::saveAs(const Path& new_path, const Workbook* workbook) {
     if (!workbook) {
         FASTEXCEL_LOG_ERROR("Workbook is null");

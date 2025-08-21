@@ -3,6 +3,7 @@
 #include "fastexcel/utils/TimeUtils.hpp"
 #include <string>
 #include <unordered_map>
+#include <vector>
 #include <ctime>
 
 namespace fastexcel {

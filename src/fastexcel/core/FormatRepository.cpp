@@ -1,5 +1,6 @@
 #include "FormatRepository.hpp"
 #include <algorithm>
+#include <mutex>
 
 namespace fastexcel {
 namespace core {
