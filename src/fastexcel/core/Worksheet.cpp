@@ -36,6 +36,9 @@ Worksheet::Worksheet(const std::string& name, std::shared_ptr<Workbook> workbook
     // 初始化共享公式管理器
     shared_formula_manager_ = std::make_unique<SharedFormulaManager>();
     
+    // 🔧 新架构：初始化单元格数据处理器
+    cell_processor_ = std::make_unique<CellDataProcessor>(cells_, range_manager_, parent_workbook_, sheet_id_);
+    
     // 🚀 初始化列宽管理器（延迟初始化，等待 format_repo_ 设置）
     // column_width_manager_ 将在 setFormatRepository 中初始化
 }
@@ -43,19 +46,13 @@ Worksheet::Worksheet(const std::string& name, std::shared_ptr<Workbook> workbook
 // ========== 基本单元格操作 ==========
 
 Cell& Worksheet::getCell(int row, int col) {
-    validateCellPosition(row, col);
-    updateUsedRange(row, col);
-    return cells_[std::make_pair(row, col)];
+    // 🔧 委托给cell_processor_处理
+    return cell_processor_->getCell(row, col);
 }
 
 const Cell& Worksheet::getCell(int row, int col) const {
-    validateCellPosition(row, col);
-    auto it = cells_.find(std::make_pair(row, col));
-    if (it == cells_.end()) {
-        static Cell empty_cell;
-        return empty_cell;
-    }
-    return it->second;
+    // 🔧 委托给cell_processor_处理
+    return cell_processor_->getCell(row, col);
 }
 
 // ========== 基本写入方法（已移除旧API） ==========
@@ -73,19 +70,8 @@ void Worksheet::writeDateTime(int row, int col, const std::tm& datetime) {
 }
 
 void Worksheet::writeUrl(int row, int col, const std::string& url, const std::string& string) {
-    if (parent_workbook_ && parent_workbook_->getDirtyManager()) {
-        std::string sheet_path = "xl/worksheets/sheet" + std::to_string(sheet_id_) + ".xml";
-        std::string rels_path = "xl/worksheets/_rels/sheet" + std::to_string(sheet_id_) + ".xml.rels";
-        parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::CONTENT);
-        parent_workbook_->getDirtyManager()->markDirty(rels_path, DirtyManager::DirtyLevel::CONTENT);
-    }
-    this->validateCellPosition(row, col);
-    
-    std::string display_text = string.empty() ? url : string;
-    this->setValue(row, col, display_text);
-    this->getCell(row, col).setHyperlink(url);
-    
-    this->updateUsedRange(row, col);
+    // 🔧 委托给cell_processor_处理超链接设置
+    cell_processor_->setHyperlink(row, col, url, string);
 }
 
 
@@ -531,19 +517,18 @@ void Worksheet::setSelection(int first_row, int first_col, int last_row, int las
 // ========== 获取信息 ==========
 
 std::pair<int, int> Worksheet::getUsedRange() const {
-    return range_manager_.getUsedRowRange().first != -1 ? 
-           std::make_pair(range_manager_.getUsedRowRange().second, range_manager_.getUsedColRange().second) :
-           std::make_pair(-1, -1);
+    // 🔧 委托给cell_processor_处理
+    return cell_processor_->getUsedRange();
 }
 
 std::tuple<int, int, int, int> Worksheet::getUsedRangeFull() const {
-    return range_manager_.getUsedRange();
+    // 🔧 委托给cell_processor_处理
+    return cell_processor_->getUsedRangeFull();
 }
 
 bool Worksheet::hasCellAt(int row, int col) const {
-    auto it = cells_.find(std::make_pair(row, col));
-    // 🔧 关键修复：有格式的空单元格也应该被认为是存在的，以便保持格式信息
-    return it != cells_.end() && (!it->second.isEmpty() || it->second.hasFormat());
+    // 🔧 委托给cell_processor_处理
+    return cell_processor_->hasCellAt(row, col);
 }
 
 // ========== 获取方法实现 ==========
@@ -1165,36 +1150,8 @@ RangeFormatter Worksheet::rangeFormatter(int start_row, int start_col, int end_r
 }
 
 void Worksheet::copyCell(int src_row, int src_col, int dst_row, int dst_col, bool copy_format, bool copy_row_height) {
-    validateCellPosition(src_row, src_col);
-    validateCellPosition(dst_row, dst_col);
-    
-    const auto& src_cell = getCell(src_row, src_col);
-    if (src_cell.isEmpty()) {
-        return; // 源单元格为空，无需复制
-    }
-    
-    auto& dst_cell = getCell(dst_row, dst_col);
-    
-    // 复制值
-    if (src_cell.isString()) {
-        dst_cell.setValue(src_cell.getValue<std::string>());
-    } else if (src_cell.isNumber()) {
-        dst_cell.setValue(src_cell.getValue<double>());
-    } else if (src_cell.isBoolean()) {
-        dst_cell.setValue(src_cell.getValue<bool>());
-    } else if (src_cell.isFormula()) {
-        dst_cell.setFormula(src_cell.getFormula(), src_cell.getFormulaResult());
-    }
-    
-    // 复制格式
-    if (copy_format && src_cell.hasFormat()) {
-        dst_cell.setFormat(src_cell.getFormatDescriptor());
-    }
-    
-    // 复制超链接
-    if (src_cell.hasHyperlink()) {
-        dst_cell.setHyperlink(src_cell.getHyperlink());
-    }
+    // 🔧 委托给cell_processor_处理单元格复制
+    cell_processor_->copyCell(src_row, src_col, dst_row, dst_col, copy_format);
     
     // 🔧 新增功能：复制行高
     if (copy_row_height && src_row != dst_row) {
@@ -1203,281 +1160,42 @@ void Worksheet::copyCell(int src_row, int src_col, int dst_row, int dst_col, boo
             setRowHeight(dst_row, src_row_height);
         }
     }
-    
-    updateUsedRange(dst_row, dst_col);
 }
 
 void Worksheet::moveCell(int src_row, int src_col, int dst_row, int dst_col) {
-    validateCellPosition(src_row, src_col);
-    validateCellPosition(dst_row, dst_col);
-    
-    if (src_row == dst_row && src_col == dst_col) {
-        return; // 源和目标相同，无需移动
-    }
-    
-    // 复制单元格（包括行高）
-    copyCell(src_row, src_col, dst_row, dst_col, true, true);
-    
-    // 清空源单元格
-    auto it = cells_.find(std::make_pair(src_row, src_col));
-    if (it != cells_.end()) {
-        cells_.erase(it);
-    }
+    // 🔧 委托给cell_processor_处理单元格移动
+    cell_processor_->moveCell(src_row, src_col, dst_row, dst_col);
 }
 
 void Worksheet::copyRange(int src_first_row, int src_first_col, int src_last_row, int src_last_col,
                          int dst_row, int dst_col, bool copy_format) {
-    validateRange(src_first_row, src_first_col, src_last_row, src_last_col);
-    
-    int rows = src_last_row - src_first_row + 1;
-    int cols = src_last_col - src_first_col + 1;
-    
-    // 检查目标范围是否有效
-    validateCellPosition(dst_row + rows - 1, dst_col + cols - 1);
-    
-    for (int r = 0; r < rows; ++r) {
-        for (int c = 0; c < cols; ++c) {
-            // 🔧 优化：对于范围复制，默认复制行高（智能判断）
-            bool copy_row_height = (c == 0); // 只在每行的第一列复制行高
-            copyCell(src_first_row + r, src_first_col + c,
-                    dst_row + r, dst_col + c, copy_format, copy_row_height);
-        }
-    }
+    // 🔧 委托给cell_processor_处理范围复制
+    cell_processor_->copyRange(src_first_row, src_first_col, src_last_row, src_last_col, dst_row, dst_col, copy_format);
 }
 
 void Worksheet::moveRange(int src_first_row, int src_first_col, int src_last_row, int src_last_col,
                          int dst_row, int dst_col) {
-    validateRange(src_first_row, src_first_col, src_last_row, src_last_col);
-    
-    int rows = src_last_row - src_first_row + 1;
-    int cols = src_last_col - src_first_col + 1;
-    
-    // 检查目标范围是否有效
-    validateCellPosition(dst_row + rows - 1, dst_col + cols - 1);
-    
-    // 检查源和目标范围是否重叠
-    bool overlaps = !(dst_row + rows <= src_first_row || dst_row >= src_last_row + 1 ||
-                     dst_col + cols <= src_first_col || dst_col >= src_last_col + 1);
-    
-    if (overlaps) {
-        // 如果重叠，需要使用临时存储
-        std::map<std::pair<int, int>, Cell> temp_cells;
-        
-        // 先复制到临时存储
-        for (int r = 0; r < rows; ++r) {
-            for (int c = 0; c < cols; ++c) {
-                int src_r = src_first_row + r;
-                int src_c = src_first_col + c;
-                auto it = cells_.find(std::make_pair(src_r, src_c));
-                if (it != cells_.end()) {
-                    temp_cells[std::make_pair(r, c)] = std::move(it->second);
-                    cells_.erase(it);
-                }
-            }
-        }
-        
-        // 从临时存储移动到目标位置
-        for (const auto& [temp_pos, cell] : temp_cells) {
-            int dst_r = dst_row + temp_pos.first;
-            int dst_c = dst_col + temp_pos.second;
-            cells_[std::make_pair(dst_r, dst_c)] = std::move(const_cast<Cell&>(cell));
-            updateUsedRange(dst_r, dst_c);
-        }
-    } else {
-        // 不重叠，直接移动
-        copyRange(src_first_row, src_first_col, src_last_row, src_last_col, dst_row, dst_col, true);
-        clearRange(src_first_row, src_first_col, src_last_row, src_last_col);
-    }
+    // 🔧 委托给cell_processor_处理范围移动
+    cell_processor_->moveRange(src_first_row, src_first_col, src_last_row, src_last_col, dst_row, dst_col);
 }
 
 int Worksheet::findAndReplace(const std::string& find_text, const std::string& replace_text,
                              bool match_case, bool match_entire_cell) {
-    int replace_count = 0;
-    
-    for (auto& [pos, cell] : cells_) {
-        if (!cell.isString()) {
-            continue; // 只处理字符串单元格
-        }
-        
-        std::string cell_text = cell.getValue<std::string>();
-        std::string search_text = find_text;
-        std::string target_text = cell_text;
-        
-        // 处理大小写敏感性
-        if (!match_case) {
-            std::transform(search_text.begin(), search_text.end(), search_text.begin(),
-                         [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-            std::transform(target_text.begin(), target_text.end(), target_text.begin(),
-                         [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-        }
-        
-        if (match_entire_cell) {
-            // 匹配整个单元格
-            if (target_text == search_text) {
-                cell.setValue(replace_text);
-                replace_count++;
-            }
-        } else {
-            // 部分匹配
-            size_t pos_found = target_text.find(search_text);
-            if (pos_found != std::string::npos) {
-                // 在原始文本中进行替换
-                std::string new_text = cell_text;
-                size_t actual_pos = pos_found;
-                
-                // 如果不区分大小写，需要找到原始文本中的实际位置
-                if (!match_case) {
-                    actual_pos = cell_text.find(find_text);
-                    if (actual_pos == std::string::npos) {
-                        // 尝试不区分大小写的查找
-                        for (size_t i = 0; i <= cell_text.length() - find_text.length(); ++i) {
-                            bool match = true;
-                            for (size_t j = 0; j < find_text.length(); ++j) {
-                                if (std::tolower(static_cast<unsigned char>(cell_text[i + j])) !=
-                                    std::tolower(static_cast<unsigned char>(find_text[j]))) {
-                                    match = false;
-                                    break;
-                                }
-                            }
-                            if (match) {
-                                actual_pos = i;
-                                break;
-                            }
-                        }
-                    }
-                }
-                
-                if (actual_pos != std::string::npos) {
-                    new_text.replace(actual_pos, find_text.length(), replace_text);
-                    cell.setValue(new_text);
-                    replace_count++;
-                }
-            }
-        }
-    }
-    
-    return replace_count;
+    // 🔧 委托给cell_processor_处理查找替换
+    return cell_processor_->findAndReplace(find_text, replace_text, match_case, match_entire_cell);
 }
 
 std::vector<std::pair<int, int>> Worksheet::findCells(const std::string& search_text,
                                                       bool match_case,
                                                       bool match_entire_cell) const {
-    std::vector<std::pair<int, int>> results;
-    
-    for (const auto& [pos, cell] : cells_) {
-        if (!cell.isString()) {
-            continue; // 只搜索字符串单元格
-        }
-        
-        std::string cell_text = cell.getValue<std::string>();
-        std::string target_text = cell_text;
-        std::string find_text = search_text;
-        
-        // 处理大小写敏感性
-        if (!match_case) {
-            std::transform(find_text.begin(), find_text.end(), find_text.begin(),
-                         [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-            std::transform(target_text.begin(), target_text.end(), target_text.begin(),
-                         [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-        }
-        
-        bool found = false;
-        if (match_entire_cell) {
-            found = (target_text == find_text);
-        } else {
-            found = (target_text.find(find_text) != std::string::npos);
-        }
-        
-        if (found) {
-            results.push_back(pos);
-        }
-    }
-    
-    return results;
+    // 🔧 委托给cell_processor_处理查找单元格
+    return cell_processor_->findCells(search_text, match_case, match_entire_cell);
 }
 
 void Worksheet::sortRange(int first_row, int first_col, int last_row, int last_col,
                          int sort_column, bool ascending, bool has_header) {
-    validateRange(first_row, first_col, last_row, last_col);
-    
-    int data_start_row = has_header ? first_row + 1 : first_row;
-    if (data_start_row > last_row) {
-        return; // 没有数据行需要排序
-    }
-    
-    int sort_col = first_col + sort_column;
-    if (sort_col > last_col) {
-        FASTEXCEL_THROW_PARAM("Sort column is outside the range");
-    }
-    
-    // 收集需要排序的行数据
-    std::vector<std::pair<int, std::map<int, Cell>>> rows_data;
-    
-    for (int row = data_start_row; row <= last_row; ++row) {
-        std::map<int, Cell> row_cells;
-        for (int col = first_col; col <= last_col; ++col) {
-            auto it = cells_.find(std::make_pair(row, col));
-            if (it != cells_.end()) {
-                row_cells[col] = std::move(it->second);
-                cells_.erase(it);
-            }
-        }
-        rows_data.emplace_back(row, std::move(row_cells));
-    }
-    
-    // 排序
-    std::sort(rows_data.begin(), rows_data.end(),
-        [sort_col, ascending](const auto& a, const auto& b) {
-            const auto& a_cells = a.second;
-            const auto& b_cells = b.second;
-            
-            auto a_it = a_cells.find(sort_col);
-            auto b_it = b_cells.find(sort_col);
-            
-            // 处理空单元格
-            if (a_it == a_cells.end() && b_it == b_cells.end()) {
-                return false; // 两个都为空，认为相等
-            }
-            if (a_it == a_cells.end()) {
-                return ascending; // 空单元格排在后面（升序）或前面（降序）
-            }
-            if (b_it == b_cells.end()) {
-                return !ascending;
-            }
-            
-            const Cell& a_cell = a_it->second;
-            const Cell& b_cell = b_it->second;
-            
-            // 比较单元格值
-            if (a_cell.isNumber() && b_cell.isNumber()) {
-                double a_val = a_cell.getValue<double>();
-                double b_val = b_cell.getValue<double>();
-                return ascending ? (a_val < b_val) : (a_val > b_val);
-            } else if (a_cell.isString() && b_cell.isString()) {
-                const std::string& a_str = a_cell.getValue<std::string>();
-                const std::string& b_str = b_cell.getValue<std::string>();
-                return ascending ? (a_str < b_str) : (a_str > b_str);
-            } else {
-                // 混合类型：数字 < 字符串
-                if (a_cell.isNumber() && b_cell.isString()) {
-                    return ascending;
-                } else if (a_cell.isString() && b_cell.isNumber()) {
-                    return !ascending;
-                }
-                return false; // 其他情况认为相等
-            }
-        });
-    
-    // 将排序后的数据放回工作表
-    for (size_t i = 0; i < rows_data.size(); ++i) {
-        int target_row = data_start_row + static_cast<int>(i);
-        const auto& row_cells = rows_data[i].second;
-        
-        for (const auto& [col, cell] : row_cells) {
-            cells_[std::make_pair(target_row, col)] = std::move(const_cast<Cell&>(cell));
-            updateUsedRange(target_row, col);
-        }
-    }
+    // 🔧 委托给cell_processor_处理排序
+    cell_processor_->sortRange(first_row, first_col, last_row, last_col, sort_column, ascending, has_header);
 }
 
 // ========== 共享公式管理 ==========
@@ -1571,55 +1289,30 @@ int Worksheet::getColumnCount() const {
 }
 
 int Worksheet::getCellCountInRow(int row) const {
-    int count = 0;
-    for (const auto& [pos, cell] : cells_) {
-        if (pos.first == row && !cell.isEmpty()) {
-            count++;
-        }
-    }
-    return count;
+    // 🔧 委托给cell_processor_处理
+    return cell_processor_->getCellCountInRow(row);
 }
 
 int Worksheet::getCellCountInColumn(int col) const {
-    int count = 0;
-    for (const auto& [pos, cell] : cells_) {
-        if (pos.second == col && !cell.isEmpty()) {
-            count++;
-        }
-    }
-    return count;
+    // 🔧 委托给cell_processor_处理
+    return cell_processor_->getCellCountInColumn(col);
 }
 
 // 注意：这些方法与头文件中的声明重复，已在头文件的实现中定义
 
 void Worksheet::clearRow(int row) {
-    // 删除指定行的所有单元格
-    auto it = cells_.begin();
-    while (it != cells_.end()) {
-        if (it->first.first == row) {
-            it = cells_.erase(it);
-        } else {
-            ++it;
-        }
-    }
-    CORE_DEBUG("Cleared row {}", row);
+    // 🔧 委托给cell_processor_处理
+    cell_processor_->clearRow(row);
 }
 
 void Worksheet::clearColumn(int col) {
-    // 删除指定列的所有单元格
-    auto it = cells_.begin();
-    while (it != cells_.end()) {
-        if (it->first.second == col) {
-            it = cells_.erase(it);
-        } else {
-            ++it;
-        }
-    }
-    CORE_DEBUG("Cleared column {}", col);
+    // 🔧 委托给cell_processor_处理
+    cell_processor_->clearColumn(col);
 }
 
 void Worksheet::clearAll() {
-    cells_.clear();
+    // 🔧 委托给cell_processor_处理
+    cell_processor_->clearAll();
     CORE_DEBUG("Cleared all cells in worksheet '{}'", name_);
 }
 

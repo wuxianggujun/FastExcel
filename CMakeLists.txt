@@ -98,7 +98,7 @@ set(FASTEXCEL_SOURCES
         src/fastexcel/xml/WorksheetXMLGenerator.cpp
         src/fastexcel/xml/DocPropsXMLGenerator.cpp
         src/fastexcel/xml/DrawingXMLGenerator.cpp  # 🚀 新增：绘图XML生成器
-         src/fastexcel/theme/Theme.cpp
+        src/fastexcel/theme/Theme.cpp
          src/fastexcel/theme/ThemeParser.cpp
         # OPC Repack Architecture (New)
         src/fastexcel/opc/PackageEditor.cpp
@@ -112,6 +112,12 @@ set(FASTEXCEL_SOURCES
         src/fastexcel/core/WorkbookCoordinator.cpp
         src/fastexcel/core/WorksheetManager.cpp
         src/fastexcel/core/SharedStringCollector.cpp
+        
+        # Worksheet Responsibility Separation (Manager Classes)
+        src/fastexcel/core/managers/CellDataProcessor.cpp
+        src/fastexcel/core/managers/WorksheetLayoutManager.cpp
+        src/fastexcel/core/managers/WorksheetImageManager.cpp
+        src/fastexcel/core/managers/WorksheetCSVHandler.cpp
         
 )
 

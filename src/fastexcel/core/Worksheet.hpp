@@ -9,6 +9,7 @@
 #include "fastexcel/core/Image.hpp"  // 🚀 新增：图片支持
 #include "fastexcel/core/CSVProcessor.hpp"  // 🚀 新增：CSV处理支持
 #include "fastexcel/core/ColumnWidthManager.hpp"  // 🚀 新架构：列宽管理器
+#include "fastexcel/core/managers/CellDataProcessor.hpp"  // 🔧 新增：单元格数据处理器
 #include "fastexcel/utils/CommonUtils.hpp"
 #include "fastexcel/utils/AddressParser.hpp"  // 🚀 新增：Excel地址解析支持
 #include "fastexcel/utils/ColumnWidthCalculator.hpp"  // 🚀 新增：列宽计算器支持
@@ -216,6 +217,9 @@ private:
     // 使用范围跟踪
     CellRangeManager range_manager_;
     
+    // 🔧 新架构：管理器委托模式
+    std::unique_ptr<CellDataProcessor> cell_processor_;
+    
     // 行列信息
     std::unordered_map<int, ColumnInfo> column_info_;
     std::unordered_map<int, RowInfo> row_info_;
@@ -396,7 +400,8 @@ public:
      */
     template<typename T>
     void setValue(int row, int col, const T& value) {
-        getCell(row, col).setValue<T>(value);
+        // 🔧 委托给cell_processor_处理
+        cell_processor_->setValue(row, col, value);
     }
     
     /**
