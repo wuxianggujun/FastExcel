@@ -133,11 +133,11 @@ void XMLStreamWriter::startElement(const char* name) {
     }
     
     if (in_element_) {
-        writeRawDirect(">", 1);
+        writeRawDirect(&XMLEscapes::TAG_CLOSE, 1);
         in_element_ = false;
     }
     
-    writeRawDirect("<", 1);
+    writeRawDirect(&XMLEscapes::TAG_OPEN, 1);
     size_t name_len = strlen(name);
     writeRawDirect(name, name_len);
     
@@ -159,7 +159,8 @@ void XMLStreamWriter::endElement() {
         FASTEXCEL_LOG_ERROR("CRITICAL: Empty element name found in stack!");
         element_stack_.pop();
         if (in_element_) {
-            writeRawDirect("/>", 2);
+            const char close_tag[] = {XMLEscapes::TAG_SLASH, XMLEscapes::TAG_CLOSE};
+            writeRawDirect(close_tag, 2);
             in_element_ = false;
         }
         return;
@@ -170,25 +171,28 @@ void XMLStreamWriter::endElement() {
     element_stack_.pop();             // 现在可以安全弹出
     
     if (in_element_) {
-        writeRawDirect("/>", 2);
+        const char close_tag[] = {XMLEscapes::TAG_SLASH, XMLEscapes::TAG_CLOSE};
+        writeRawDirect(close_tag, 2);
         in_element_ = false;
     } else {
-        writeRawDirect("</", 2);
+        const char open_end_tag[] = {XMLEscapes::TAG_OPEN, XMLEscapes::TAG_SLASH};
+        writeRawDirect(open_end_tag, 2);
         writeRawDirect(element_name.c_str(), element_name.length());
-        writeRawDirect(">", 1);
+        writeRawDirect(&XMLEscapes::TAG_CLOSE, 1);
     }
 }
 
 void XMLStreamWriter::writeEmptyElement(const char* name) {
     if (in_element_) {
-        writeRawDirect(">", 1);
+        writeRawDirect(&XMLEscapes::TAG_CLOSE, 1);
         in_element_ = false;
     }
     
-    writeRawDirect("<", 1);
+    writeRawDirect(&XMLEscapes::TAG_OPEN, 1);
     size_t name_len = strlen(name);
     writeRawDirect(name, name_len);
-    writeRawDirect("/>", 2);
+    const char close_tag[] = {XMLEscapes::TAG_SLASH, XMLEscapes::TAG_CLOSE};
+    writeRawDirect(close_tag, 2);
 }
 
 void XMLStreamWriter::writeAttribute(const char* name, const char* value) {
@@ -197,10 +201,11 @@ void XMLStreamWriter::writeAttribute(const char* name, const char* value) {
         return;
     }
     
-    writeRawDirect(" ", 1);
+    writeRawDirect(&XMLEscapes::SPACE, 1);
     size_t name_len = strlen(name);
     writeRawDirect(name, name_len);
-    writeRawDirect("=\"", 2);
+    const char attr_start[] = {XMLEscapes::CHAR_EQUAL, XMLEscapes::ATTR_QUOTE};
+    writeRawDirect(attr_start, 2);
     
     size_t value_len = strlen(value);
     // 直接进行转义写入，避免预检查
@@ -210,7 +215,7 @@ void XMLStreamWriter::writeAttribute(const char* name, const char* value) {
         escapeAttributesToBuffer(value, value_len);
     }
     
-    writeRawDirect("\"", 1);
+    writeRawDirect(&XMLEscapes::ATTR_QUOTE, 1);
 }
 
 void XMLStreamWriter::writeAttribute(const char* name, int value) {
@@ -222,11 +227,12 @@ void XMLStreamWriter::writeAttribute(const char* name, int value) {
     char buffer[32];
     int length = snprintf(buffer, sizeof(buffer), "%d", value);
     
-    writeRawDirect(" ", 1);
+    writeRawDirect(&XMLEscapes::SPACE, 1);
     writeRawDirect(name, strlen(name));
-    writeRawDirect("=\"", 2);
+    const char attr_start[] = {XMLEscapes::CHAR_EQUAL, XMLEscapes::ATTR_QUOTE};
+    writeRawDirect(attr_start, 2);
     writeRawDirect(buffer, length);
-    writeRawDirect("\"", 1);
+    writeRawDirect(&XMLEscapes::ATTR_QUOTE, 1);
 }
 
 void XMLStreamWriter::writeAttribute(const char* name, double value) {
@@ -238,11 +244,12 @@ void XMLStreamWriter::writeAttribute(const char* name, double value) {
     char buffer[64];
     int length = snprintf(buffer, sizeof(buffer), "%.6g", value);
     
-    writeRawDirect(" ", 1);
+    writeRawDirect(&XMLEscapes::SPACE, 1);
     writeRawDirect(name, strlen(name));
-    writeRawDirect("=\"", 2);
+    const char attr_start[] = {XMLEscapes::CHAR_EQUAL, XMLEscapes::ATTR_QUOTE};
+    writeRawDirect(attr_start, 2);
     writeRawDirect(buffer, length);
-    writeRawDirect("\"", 1);
+    writeRawDirect(&XMLEscapes::ATTR_QUOTE, 1);
 }
 
 void XMLStreamWriter::writeAttribute(const char* name, const std::string& value) {
@@ -251,7 +258,7 @@ void XMLStreamWriter::writeAttribute(const char* name, const std::string& value)
 
 void XMLStreamWriter::writeText(const char* text) {
     if (in_element_) {
-        writeRawDirect(">", 1);
+        writeRawDirect(&XMLEscapes::TAG_CLOSE, 1);
         in_element_ = false;
     }
     
@@ -346,9 +353,10 @@ void XMLStreamWriter::endAttributeBatch() {
     // 结束批处理模式，将所有暂存的属性一次性写入
     if (!pending_attributes_.empty()) {
         for (const auto& attr : pending_attributes_) {
-            writeRawDirect(" ", 1);
+            writeRawDirect(&XMLEscapes::SPACE, 1);
             writeRawDirect(attr.key.c_str(), attr.key.length());
-            writeRawDirect("=\"", 2);
+            const char attr_start[] = {XMLEscapes::CHAR_EQUAL, XMLEscapes::ATTR_QUOTE};
+    writeRawDirect(attr_start, 2);
             
             size_t value_len = attr.value.length();
             if (needsAttributeEscaping(attr.value.c_str(), value_len)) {
@@ -361,7 +369,7 @@ void XMLStreamWriter::endAttributeBatch() {
                 writeRawDirect(attr.value.c_str(), value_len);
             }
             
-            writeRawDirect("\"", 1);
+            writeRawDirect(&XMLEscapes::ATTR_QUOTE, 1);
         }
         pending_attributes_.clear();
     }
@@ -431,27 +439,27 @@ void XMLStreamWriter::escapeAttributesToBuffer(const char* text, size_t length) 
             size_t replacement_len = 0;
             
             switch (text[i]) {
-                case '&':
+                case XMLEscapes::CHAR_AMP:
                     replacement = XMLEscapes::AMP;
                     replacement_len = XMLEscapes::AMP_LEN;
                     break;
-                case '<':
+                case XMLEscapes::CHAR_LT:
                     replacement = XMLEscapes::LT;
                     replacement_len = XMLEscapes::LT_LEN;
                     break;
-                case '>':
+                case XMLEscapes::CHAR_GT:
                     replacement = XMLEscapes::GT;
                     replacement_len = XMLEscapes::GT_LEN;
                     break;
-                case '"':
+                case XMLEscapes::CHAR_QUOT:
                     replacement = XMLEscapes::QUOT;
                     replacement_len = XMLEscapes::QUOT_LEN;
                     break;
-                case '\'':
+                case XMLEscapes::CHAR_APOS:
                     replacement = XMLEscapes::APOS;
                     replacement_len = XMLEscapes::APOS_LEN;
                     break;
-                case '\n':
+                case XMLEscapes::CHAR_NL:
                     replacement = XMLEscapes::NL;
                     replacement_len = XMLEscapes::NL_LEN;
                     break;
@@ -492,15 +500,15 @@ void XMLStreamWriter::escapeDataToBuffer(const char* text, size_t length) {
             size_t replacement_len = 0;
             
             switch (text[i]) {
-                case '&':
+                case XMLEscapes::CHAR_AMP:
                     replacement = XMLEscapes::AMP;
                     replacement_len = XMLEscapes::AMP_LEN;
                     break;
-                case '<':
+                case XMLEscapes::CHAR_LT:
                     replacement = XMLEscapes::LT;
                     replacement_len = XMLEscapes::LT_LEN;
                     break;
-                case '>':
+                case XMLEscapes::CHAR_GT:
                     replacement = XMLEscapes::GT;
                     replacement_len = XMLEscapes::GT_LEN;
                     break;
@@ -543,27 +551,27 @@ void XMLStreamWriter::escapeAttributesToFile(const char* text, size_t length) {
             size_t replacement_len = 0;
             
             switch (text[i]) {
-                case '&':
+                case XMLEscapes::CHAR_AMP:
                     replacement = XMLEscapes::AMP;
                     replacement_len = XMLEscapes::AMP_LEN;
                     break;
-                case '<':
+                case XMLEscapes::CHAR_LT:
                     replacement = XMLEscapes::LT;
                     replacement_len = XMLEscapes::LT_LEN;
                     break;
-                case '>':
+                case XMLEscapes::CHAR_GT:
                     replacement = XMLEscapes::GT;
                     replacement_len = XMLEscapes::GT_LEN;
                     break;
-                case '"':
+                case XMLEscapes::CHAR_QUOT:
                     replacement = XMLEscapes::QUOT;
                     replacement_len = XMLEscapes::QUOT_LEN;
                     break;
-                case '\'':
+                case XMLEscapes::CHAR_APOS:
                     replacement = XMLEscapes::APOS;
                     replacement_len = XMLEscapes::APOS_LEN;
                     break;
-                case '\n':
+                case XMLEscapes::CHAR_NL:
                     replacement = XMLEscapes::NL;
                     replacement_len = XMLEscapes::NL_LEN;
                     break;
@@ -606,15 +614,15 @@ void XMLStreamWriter::escapeDataToFile(const char* text, size_t length) {
             size_t replacement_len = 0;
             
             switch (text[i]) {
-                case '&':
+                case XMLEscapes::CHAR_AMP:
                     replacement = XMLEscapes::AMP;
                     replacement_len = XMLEscapes::AMP_LEN;
                     break;
-                case '<':
+                case XMLEscapes::CHAR_LT:
                     replacement = XMLEscapes::LT;
                     replacement_len = XMLEscapes::LT_LEN;
                     break;
-                case '>':
+                case XMLEscapes::CHAR_GT:
                     replacement = XMLEscapes::GT;
                     replacement_len = XMLEscapes::GT_LEN;
                     break;
@@ -642,12 +650,12 @@ void XMLStreamWriter::escapeDataToFile(const char* text, size_t length) {
 bool XMLStreamWriter::needsAttributeEscaping(const char* text, size_t length) const {
     for (size_t i = 0; i < length; i++) {
         switch (text[i]) {
-            case '&':
-            case '\'':
-            case '<':
-            case '>':
-            case '\"':
-            case '\n':
+            case XMLEscapes::CHAR_AMP:
+            case XMLEscapes::CHAR_APOS:
+            case XMLEscapes::CHAR_LT:
+            case XMLEscapes::CHAR_GT:
+            case XMLEscapes::CHAR_QUOT:
+            case XMLEscapes::CHAR_NL:
                 return true;
         }
     }
@@ -657,9 +665,9 @@ bool XMLStreamWriter::needsAttributeEscaping(const char* text, size_t length) co
 bool XMLStreamWriter::needsDataEscaping(const char* text, size_t length) const {
     for (size_t i = 0; i < length; i++) {
         switch (text[i]) {
-            case '&':
-            case '<':
-            case '>':
+            case XMLEscapes::CHAR_AMP:
+            case XMLEscapes::CHAR_LT:
+            case XMLEscapes::CHAR_GT:
                 return true;
         }
     }

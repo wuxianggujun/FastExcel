@@ -39,6 +39,7 @@ struct XMLEscapes {
     inline static constexpr char CHAR_COLON  = ':';     // 冒号字符
     inline static constexpr char CHAR_HYPHEN = '-';     // 连字符
     inline static constexpr char CHAR_DOT    = '.';     // 句点字符
+    inline static constexpr char CHAR_NL     = '\n';    // 换行符字符
 };
 
 } // namespace xml
