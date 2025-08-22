@@ -20,6 +20,25 @@ struct XMLEscapes {
     inline static constexpr size_t QUOT_LEN = 6;
     inline static constexpr size_t APOS_LEN = 6;
     inline static constexpr size_t NL_LEN   = 5;
+
+    // XML标签构建字符（非转义用）
+    inline static constexpr char TAG_OPEN    = '<';     // 标签开始
+    inline static constexpr char TAG_CLOSE   = '>';     // 标签结束
+    inline static constexpr char TAG_SLASH   = '/';     // 闭合标签斜杠
+    inline static constexpr char ATTR_QUOTE  = '"';     // 属性引号
+    inline static constexpr char SPACE       = ' ';     // 空格
+
+    // XML字符常量（用于比较和赋值）
+    inline static constexpr char CHAR_LT     = '<';     // 小于号字符
+    inline static constexpr char CHAR_GT     = '>';     // 大于号字符
+    inline static constexpr char CHAR_AMP    = '&';     // 和号字符
+    inline static constexpr char CHAR_QUOT   = '"';     // 双引号字符
+    inline static constexpr char CHAR_APOS   = '\'';    // 单引号字符
+    inline static constexpr char CHAR_EQUAL  = '=';     // 等号字符
+    inline static constexpr char CHAR_UNDER  = '_';     // 下划线字符
+    inline static constexpr char CHAR_COLON  = ':';     // 冒号字符
+    inline static constexpr char CHAR_HYPHEN = '-';     // 连字符
+    inline static constexpr char CHAR_DOT    = '.';     // 句点字符
 };
 
 } // namespace xml

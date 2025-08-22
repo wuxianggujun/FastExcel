@@ -2,6 +2,7 @@
 
 #include <string>
 #include "fastexcel/xml/XMLEscapes.hpp"
+#include "fmt/format.h"
 
 namespace fastexcel {
 namespace utils {
@@ -30,11 +31,11 @@ public:
         
         for (char c : text) {
             switch (c) {
-                case '<': result.append(xml::XMLEscapes::LT,  xml::XMLEscapes::LT_LEN);   break;
-                case '>': result.append(xml::XMLEscapes::GT,  xml::XMLEscapes::GT_LEN);   break;
-                case '&': result.append(xml::XMLEscapes::AMP, xml::XMLEscapes::AMP_LEN);  break;
-                case '"': result.append(xml::XMLEscapes::QUOT,xml::XMLEscapes::QUOT_LEN); break;
-                case '\'': result.append(xml::XMLEscapes::APOS,xml::XMLEscapes::APOS_LEN); break;
+                case xml::XMLEscapes::CHAR_LT: result.append(xml::XMLEscapes::LT,  xml::XMLEscapes::LT_LEN);   break;
+                case xml::XMLEscapes::CHAR_GT: result.append(xml::XMLEscapes::GT,  xml::XMLEscapes::GT_LEN);   break;
+                case xml::XMLEscapes::CHAR_AMP: result.append(xml::XMLEscapes::AMP, xml::XMLEscapes::AMP_LEN);  break;
+                case xml::XMLEscapes::CHAR_QUOT: result.append(xml::XMLEscapes::QUOT,xml::XMLEscapes::QUOT_LEN); break;
+                case xml::XMLEscapes::CHAR_APOS: result.append(xml::XMLEscapes::APOS,xml::XMLEscapes::APOS_LEN); break;
                 default:
                     if (c < 0x20 && c != 0x09 && c != 0x0A && c != 0x0D) {
                         continue; // 跳过无效控制字符
@@ -57,21 +58,21 @@ public:
         result.reserve(text.size());
         
         for (size_t i = 0; i < text.length(); ++i) {
-            if (text[i] == '&' && i + 1 < text.length()) {
+            if (text[i] == xml::XMLEscapes::CHAR_AMP && i + 1 < text.length()) {
                 // 查找实体结束位置
                 size_t end = text.find(';', i + 1);
                 if (end != std::string::npos) {
                     std::string entity = text.substr(i, end - i + 1);
                     if (entity == xml::XMLEscapes::LT) {
-                        result += '<';
+                        result += xml::XMLEscapes::CHAR_LT;
                     } else if (entity == xml::XMLEscapes::GT) {
-                        result += '>';
+                        result += xml::XMLEscapes::CHAR_GT;
                     } else if (entity == xml::XMLEscapes::AMP) {
-                        result += '&';
+                        result += xml::XMLEscapes::CHAR_AMP;
                     } else if (entity == xml::XMLEscapes::QUOT) {
-                        result += '"';
+                        result += xml::XMLEscapes::CHAR_QUOT;
                     } else if (entity == xml::XMLEscapes::APOS) {
-                        result += '\'';
+                        result += xml::XMLEscapes::CHAR_APOS;
                     } else {
                         // 不认识的实体，保持原样
                         result += entity;
@@ -102,7 +103,7 @@ public:
         char first = name[0];
         if (!((first >= 'A' && first <= 'Z') || 
               (first >= 'a' && first <= 'z') || 
-              first == '_' || first == ':')) {
+              first == xml::XMLEscapes::CHAR_UNDER || first == xml::XMLEscapes::CHAR_COLON)) {
             return false;
         }
         
@@ -112,7 +113,8 @@ public:
             if (!((c >= 'A' && c <= 'Z') || 
                   (c >= 'a' && c <= 'z') || 
                   (c >= '0' && c <= '9') || 
-                  c == '-' || c == '.' || c == '_' || c == ':')) {
+                  c == xml::XMLEscapes::CHAR_HYPHEN || c == xml::XMLEscapes::CHAR_DOT || 
+                  c == xml::XMLEscapes::CHAR_UNDER || c == xml::XMLEscapes::CHAR_COLON)) {
                 return false;
             }
         }
@@ -127,7 +129,13 @@ public:
      * @return 格式化的属性字符串，如 name="value"
      */
     static std::string formatAttribute(const std::string& name, const std::string& value) {
-        return name + "=\"" + escapeXML(value) + "\"";
+        return fmt::format("{}{}{}{}{}",
+            name,
+            xml::XMLEscapes::CHAR_EQUAL,
+            xml::XMLEscapes::ATTR_QUOTE,
+            escapeXML(value),
+            xml::XMLEscapes::ATTR_QUOTE
+        );
     }
     
     /**
@@ -140,14 +148,18 @@ public:
     static std::string formatStartTag(const std::string& tagName, 
                                     const std::string& attributes = "", 
                                     bool selfClosing = false) {
-        std::string result = "<" + tagName;
+        std::string result;
+        result += xml::XMLEscapes::TAG_OPEN;
+        result += tagName;
         if (!attributes.empty()) {
-            result += " " + attributes;
+            result += xml::XMLEscapes::SPACE;
+            result += attributes;
         }
         if (selfClosing) {
-            result += "/>";
+            result += xml::XMLEscapes::TAG_SLASH;
+            result += xml::XMLEscapes::TAG_CLOSE;
         } else {
-            result += ">";
+            result += xml::XMLEscapes::TAG_CLOSE;
         }
         return result;
     }
@@ -158,7 +170,12 @@ public:
      * @return 格式化的结束标签
      */
     static std::string formatEndTag(const std::string& tagName) {
-        return "</" + tagName + ">";
+        std::string result;
+        result += xml::XMLEscapes::TAG_OPEN;
+        result += xml::XMLEscapes::TAG_SLASH;
+        result += tagName;
+        result += xml::XMLEscapes::TAG_CLOSE;
+        return result;
     }
     
     /**
@@ -173,10 +190,11 @@ public:
                                    const std::string& content, 
                                    const std::string& attributes = "",
                                    bool escapeContent = true) {
-        std::string result = formatStartTag(tagName, attributes);
-        result += escapeContent ? escapeXML(content) : content;
-        result += formatEndTag(tagName);
-        return result;
+        return fmt::format("{}{}{}",
+            formatStartTag(tagName, attributes),
+            escapeContent ? escapeXML(content) : content,
+            formatEndTag(tagName)
+        );
     }
 };
 
