@@ -14,6 +14,10 @@ XMLStreamWriter::XMLStreamWriter() {
     direct_file_mode_ = false;
     callback_mode_ = false;
     auto_flush_ = true;
+    
+    // 预分配栈空间，避免小容量时的频繁重分配
+    // 注意：std::stack基于std::deque，无法直接reserve
+    // 我们可以考虑后续优化为自定义栈实现
 }
 
 XMLStreamWriter::XMLStreamWriter(const std::function<void(const char*, size_t)>& callback) : XMLStreamWriter() {
@@ -133,29 +137,9 @@ void XMLStreamWriter::startElement(const char* name) {
     size_t name_len = strlen(name);
     writeRawDirect(name, name_len);
     
-    // 创建std::string并推入栈
-    std::string element_name(name);
-    
-    // 详细调试信息 - 记录推入前的状态
-    FASTEXCEL_LOG_DEBUG("STACK DEBUG - Before push:");
-    FASTEXCEL_LOG_DEBUG("  - Stack size: {}", element_stack_.size());
-    FASTEXCEL_LOG_DEBUG("  - Element name to push: '{}' (length: {})", element_name, element_name.length());
-    FASTEXCEL_LOG_DEBUG("  - Element name c_str(): '{}'", element_name.c_str());
-    FASTEXCEL_LOG_DEBUG("  - Element name data(): '{}'", element_name.data());
-    
-    element_stack_.push(element_name);
+    // 直接推入栈，避免额外的字符串创建
+    element_stack_.emplace(name, name_len);
     in_element_ = true;
-    
-    // 详细调试信息 - 记录推入后的状态
-    FASTEXCEL_LOG_DEBUG("STACK DEBUG - After push:");
-    FASTEXCEL_LOG_DEBUG("  - Stack size: {}", element_stack_.size());
-    if (!element_stack_.empty()) {
-        const std::string& top_element = element_stack_.top();
-        FASTEXCEL_LOG_DEBUG("  - Top element: '{}' (length: {})", top_element, top_element.length());
-        FASTEXCEL_LOG_DEBUG("  - Top element c_str(): '{}'", top_element.c_str());
-        FASTEXCEL_LOG_DEBUG("  - Top element data(): '{}'", top_element.data());
-        FASTEXCEL_LOG_DEBUG("  - Top element empty(): {}", top_element.empty());
-    }
 }
 
 void XMLStreamWriter::endElement() {
@@ -164,51 +148,29 @@ void XMLStreamWriter::endElement() {
         return;
     }
     
-    // 详细调试信息 - 记录弹出前的状态
-    FASTEXCEL_LOG_DEBUG("STACK DEBUG - Before pop:");
-    FASTEXCEL_LOG_DEBUG("  - Stack size: {}", element_stack_.size());
-    
     const std::string& name = element_stack_.top();
     
-    FASTEXCEL_LOG_DEBUG("  - Top element: '{}' (length: {})", name, name.length());
-    FASTEXCEL_LOG_DEBUG("  - Top element c_str(): '{}'", name.c_str());
-    FASTEXCEL_LOG_DEBUG("  - Top element data(): '{}'", name.data());
-    FASTEXCEL_LOG_DEBUG("  - Top element empty(): {}", name.empty());
-    
-    // 如果栈顶是空字符串，这表明有内存问题
+    // 检查栈顶元素是否有效（保留关键错误检查）
     if (name.empty()) {
         FASTEXCEL_LOG_ERROR("CRITICAL: Empty element name found in stack!");
-        FASTEXCEL_LOG_ERROR("This indicates memory corruption or stack manipulation error");
-        FASTEXCEL_LOG_ERROR("Stack size: {}, in_element_: {}", element_stack_.size(), in_element_);
-        
-        // 尝试恢复：弹出损坏的条目
         element_stack_.pop();
-        
-        // 如果我们在元素内部，输出自闭合标签
         if (in_element_) {
             writeRawDirect("/>", 2);
             in_element_ = false;
         }
-        // 如果不在元素内部，我们无法知道应该关闭什么标签
         return;
     }
     
-    // 先备份名称，然后弹出栈
-    std::string element_name = name;  // 复制一份，避免引用被销毁
-    element_stack_.pop();
-    
-    // 详细调试信息 - 记录弹出后的状态
-    FASTEXCEL_LOG_DEBUG("STACK DEBUG - After pop:");
-    FASTEXCEL_LOG_DEBUG("  - Copied element name: '{}' (length: {})", element_name, element_name.length());
-    FASTEXCEL_LOG_DEBUG("  - Stack size: {}", element_stack_.size());
-    FASTEXCEL_LOG_DEBUG("  - in_element_: {}", in_element_);
+    // 🔑 关键修复：必须先复制字符串内容，再弹出栈！
+    std::string element_name = name;  // 复制字符串内容
+    element_stack_.pop();             // 现在可以安全弹出
     
     if (in_element_) {
         writeRawDirect("/>", 2);
         in_element_ = false;
     } else {
         writeRawDirect("</", 2);
-        writeRawDirect(element_name.c_str(), element_name.size());
+        writeRawDirect(element_name.c_str(), element_name.length());
         writeRawDirect(">", 1);
     }
 }
@@ -237,14 +199,11 @@ void XMLStreamWriter::writeAttribute(const char* name, const char* value) {
     writeRawDirect("=\"", 2);
     
     size_t value_len = strlen(value);
-    if (needsAttributeEscaping(value, value_len)) {
-        if (direct_file_mode_ && output_file_) {
-            escapeAttributesToFile(value, value_len);
-        } else {
-            escapeAttributesToBuffer(value, value_len);
-        }
+    // 直接进行转义写入，避免预检查
+    if (direct_file_mode_ && output_file_) {
+        escapeAttributesToFile(value, value_len);
     } else {
-        writeRawDirect(value, value_len);
+        escapeAttributesToBuffer(value, value_len);
     }
     
     writeRawDirect("\"", 1);
@@ -293,14 +252,11 @@ void XMLStreamWriter::writeText(const char* text) {
     }
     
     size_t text_len = strlen(text);
-    if (needsDataEscaping(text, text_len)) {
-        if (direct_file_mode_ && output_file_) {
-            escapeDataToFile(text, text_len);
-        } else {
-            escapeDataToBuffer(text, text_len);
-        }
+    // 直接进行转义写入，避免预检查
+    if (direct_file_mode_ && output_file_) {
+        escapeDataToFile(text, text_len);
     } else {
-        writeRawDirect(text, text_len);
+        escapeDataToBuffer(text, text_len);
     }
 }
 
@@ -456,96 +412,186 @@ void XMLStreamWriter::writeRawDirect(const char* data, size_t length) {
 }
 
 void XMLStreamWriter::escapeAttributesToBuffer(const char* text, size_t length) {
+    size_t last_write_pos = 0;
+    
     for (size_t i = 0; i < length; i++) {
+        const char* replacement = nullptr;
+        size_t replacement_len = 0;
+        
         switch (text[i]) {
             case '&':
-                writeRawToBuffer(XMLEscapes::AMP, sizeof(XMLEscapes::AMP)-1);
+                replacement = AMP_REPLACEMENT;
+                replacement_len = AMP_LEN;
                 break;
             case '<':
-                writeRawToBuffer(XMLEscapes::LT, sizeof(XMLEscapes::LT)-1);
+                replacement = LT_REPLACEMENT;
+                replacement_len = LT_LEN;
                 break;
             case '>':
-                writeRawToBuffer(XMLEscapes::GT, sizeof(XMLEscapes::GT)-1);
+                replacement = GT_REPLACEMENT;
+                replacement_len = GT_LEN;
                 break;
-            case '\"':
-                writeRawToBuffer(XMLEscapes::QUOT, sizeof(XMLEscapes::QUOT)-1);
+            case '"':
+                replacement = QUOT_REPLACEMENT;
+                replacement_len = QUOT_LEN;
                 break;
             case '\'':
-                writeRawToBuffer(XMLEscapes::APOS, sizeof(XMLEscapes::APOS)-1);
+                replacement = APOS_REPLACEMENT;
+                replacement_len = APOS_LEN;
                 break;
             case '\n':
-                writeRawToBuffer(XMLEscapes::NL, sizeof(XMLEscapes::NL)-1);
+                replacement = NL_REPLACEMENT;
+                replacement_len = NL_LEN;
                 break;
             default:
-                writeRawToBuffer(&text[i], 1);
-                break;
+                continue; // 无需转义，继续
         }
+        
+        // 写入之前未转义的部分
+        if (i > last_write_pos) {
+            writeRawToBuffer(text + last_write_pos, i - last_write_pos);
+        }
+        
+        // 写入转义序列
+        writeRawToBuffer(replacement, replacement_len);
+        last_write_pos = i + 1;
+    }
+    
+    // 写入剩余的未转义部分
+    if (last_write_pos < length) {
+        writeRawToBuffer(text + last_write_pos, length - last_write_pos);
     }
 }
 
 void XMLStreamWriter::escapeDataToBuffer(const char* text, size_t length) {
+    size_t last_write_pos = 0;
+    
     for (size_t i = 0; i < length; i++) {
+        const char* replacement = nullptr;
+        size_t replacement_len = 0;
+        
         switch (text[i]) {
             case '&':
-                writeRawToBuffer(XMLEscapes::AMP, sizeof(XMLEscapes::AMP)-1);
+                replacement = AMP_REPLACEMENT;
+                replacement_len = AMP_LEN;
                 break;
             case '<':
-                writeRawToBuffer(XMLEscapes::LT, sizeof(XMLEscapes::LT)-1);
+                replacement = LT_REPLACEMENT;
+                replacement_len = LT_LEN;
                 break;
             case '>':
-                writeRawToBuffer(XMLEscapes::GT, sizeof(XMLEscapes::GT)-1);
+                replacement = GT_REPLACEMENT;
+                replacement_len = GT_LEN;
                 break;
             default:
-                writeRawToBuffer(&text[i], 1);
-                break;
+                continue; // 无需转义，继续
         }
+        
+        // 写入之前未转义的部分
+        if (i > last_write_pos) {
+            writeRawToBuffer(text + last_write_pos, i - last_write_pos);
+        }
+        
+        // 写入转义序列
+        writeRawToBuffer(replacement, replacement_len);
+        last_write_pos = i + 1;
+    }
+    
+    // 写入剩余的未转义部分
+    if (last_write_pos < length) {
+        writeRawToBuffer(text + last_write_pos, length - last_write_pos);
     }
 }
 
 void XMLStreamWriter::escapeAttributesToFile(const char* text, size_t length) {
+    size_t last_write_pos = 0;
+    
     for (size_t i = 0; i < length; i++) {
+        const char* replacement = nullptr;
+        size_t replacement_len = 0;
+        
         switch (text[i]) {
             case '&':
-                fwrite(XMLEscapes::AMP, 1, sizeof(XMLEscapes::AMP)-1, output_file_);
+                replacement = AMP_REPLACEMENT;
+                replacement_len = AMP_LEN;
                 break;
             case '<':
-                fwrite(XMLEscapes::LT, 1, sizeof(XMLEscapes::LT)-1, output_file_);
+                replacement = LT_REPLACEMENT;
+                replacement_len = LT_LEN;
                 break;
             case '>':
-                fwrite(XMLEscapes::GT, 1, sizeof(XMLEscapes::GT)-1, output_file_);
+                replacement = GT_REPLACEMENT;
+                replacement_len = GT_LEN;
                 break;
-            case '\"':
-                fwrite(XMLEscapes::QUOT, 1, sizeof(XMLEscapes::QUOT)-1, output_file_);
+            case '"':
+                replacement = QUOT_REPLACEMENT;
+                replacement_len = QUOT_LEN;
                 break;
             case '\'':
-                fwrite(XMLEscapes::APOS, 1, sizeof(XMLEscapes::APOS)-1, output_file_);
+                replacement = APOS_REPLACEMENT;
+                replacement_len = APOS_LEN;
                 break;
             case '\n':
-                fwrite(XMLEscapes::NL, 1, sizeof(XMLEscapes::NL)-1, output_file_);
+                replacement = NL_REPLACEMENT;
+                replacement_len = NL_LEN;
                 break;
             default:
-                fwrite(&text[i], 1, 1, output_file_);
-                break;
+                continue; // 无需转义，继续
         }
+        
+        // 写入之前未转义的部分
+        if (i > last_write_pos) {
+            fwrite(text + last_write_pos, 1, i - last_write_pos, output_file_);
+        }
+        
+        // 写入转义序列
+        fwrite(replacement, 1, replacement_len, output_file_);
+        last_write_pos = i + 1;
+    }
+    
+    // 写入剩余的未转义部分
+    if (last_write_pos < length) {
+        fwrite(text + last_write_pos, 1, length - last_write_pos, output_file_);
     }
 }
 
 void XMLStreamWriter::escapeDataToFile(const char* text, size_t length) {
+    size_t last_write_pos = 0;
+    
     for (size_t i = 0; i < length; i++) {
+        const char* replacement = nullptr;
+        size_t replacement_len = 0;
+        
         switch (text[i]) {
             case '&':
-                fwrite(XMLEscapes::AMP, 1, sizeof(XMLEscapes::AMP)-1, output_file_);
+                replacement = AMP_REPLACEMENT;
+                replacement_len = AMP_LEN;
                 break;
             case '<':
-                fwrite(XMLEscapes::LT, 1, sizeof(XMLEscapes::LT)-1, output_file_);
+                replacement = LT_REPLACEMENT;
+                replacement_len = LT_LEN;
                 break;
             case '>':
-                fwrite(XMLEscapes::GT, 1, sizeof(XMLEscapes::GT)-1, output_file_);
+                replacement = GT_REPLACEMENT;
+                replacement_len = GT_LEN;
                 break;
             default:
-                fwrite(&text[i], 1, 1, output_file_);
-                break;
+                continue; // 无需转义，继续
         }
+        
+        // 写入之前未转义的部分
+        if (i > last_write_pos) {
+            fwrite(text + last_write_pos, 1, i - last_write_pos, output_file_);
+        }
+        
+        // 写入转义序列
+        fwrite(replacement, 1, replacement_len, output_file_);
+        last_write_pos = i + 1;
+    }
+    
+    // 写入剩余的未转义部分
+    if (last_write_pos < length) {
+        fwrite(text + last_write_pos, 1, length - last_write_pos, output_file_);
     }
 }
 

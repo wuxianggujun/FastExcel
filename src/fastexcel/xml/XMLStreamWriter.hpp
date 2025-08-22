@@ -36,27 +36,27 @@ public:
     using WriteCallback = std::function<void(const std::string& chunk)>;
 private:
     //------------------------------------------------------------------------------
-    //  XML 转义常量（已修正）
+    //  XML 转义常量
     //  说明：所有长度宏均排除了结尾 '\0'，可直接用于 memcpy / fwrite 等场景。
     //------------------------------------------------------------------------------
 
     static constexpr char  AMP_REPLACEMENT[]  = "&amp;";   // &  → &amp;
-    static constexpr size_t AMP_REPLACEMENT_LEN  = sizeof(AMP_REPLACEMENT) - 1;
+    static constexpr size_t AMP_LEN  = sizeof(AMP_REPLACEMENT) - 1;
 
     static constexpr char  LT_REPLACEMENT[]   = "&lt;";    // <  → &lt;
-    static constexpr size_t LT_REPLACEMENT_LEN   = sizeof(LT_REPLACEMENT) - 1;
+    static constexpr size_t LT_LEN   = sizeof(LT_REPLACEMENT) - 1;
 
     static constexpr char  GT_REPLACEMENT[]   = "&gt;";    // >  → &gt;
-    static constexpr size_t GT_REPLACEMENT_LEN   = sizeof(GT_REPLACEMENT) - 1;
+    static constexpr size_t GT_LEN   = sizeof(GT_REPLACEMENT) - 1;
 
     static constexpr char  QUOT_REPLACEMENT[] = "&quot;";  // "  → &quot;
-    static constexpr size_t QUOT_REPLACEMENT_LEN = sizeof(QUOT_REPLACEMENT) - 1;
+    static constexpr size_t QUOT_LEN = sizeof(QUOT_REPLACEMENT) - 1;
 
     static constexpr char  APOS_REPLACEMENT[] = "&apos;";  // '  → &apos;
-    static constexpr size_t APOS_REPLACEMENT_LEN = sizeof(APOS_REPLACEMENT) - 1;
+    static constexpr size_t APOS_LEN = sizeof(APOS_REPLACEMENT) - 1;
 
     static constexpr char  NL_REPLACEMENT[] = "&#xA;";    // \n → &#xA;
-    static constexpr size_t NL_REPLACEMENT_LEN = sizeof(NL_REPLACEMENT) - 1;
+    static constexpr size_t NL_LEN = sizeof(NL_REPLACEMENT) - 1;
     
     // 固定大小缓冲区，避免动态内存分配
     static constexpr size_t BUFFER_SIZE = fastexcel::core::Constants::kIOBufferSize;
