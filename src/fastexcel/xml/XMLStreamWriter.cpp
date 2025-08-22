@@ -432,28 +432,28 @@ void XMLStreamWriter::escapeAttributesToBuffer(const char* text, size_t length) 
             
             switch (text[i]) {
                 case '&':
-                    replacement = AMP_REPLACEMENT;
-                    replacement_len = AMP_LEN;
+                    replacement = XMLEscapes::AMP;
+                    replacement_len = XMLEscapes::AMP_LEN;
                     break;
                 case '<':
-                    replacement = LT_REPLACEMENT;
-                    replacement_len = LT_LEN;
+                    replacement = XMLEscapes::LT;
+                    replacement_len = XMLEscapes::LT_LEN;
                     break;
                 case '>':
-                    replacement = GT_REPLACEMENT;
-                    replacement_len = GT_LEN;
+                    replacement = XMLEscapes::GT;
+                    replacement_len = XMLEscapes::GT_LEN;
                     break;
                 case '"':
-                    replacement = QUOT_REPLACEMENT;
-                    replacement_len = QUOT_LEN;
+                    replacement = XMLEscapes::QUOT;
+                    replacement_len = XMLEscapes::QUOT_LEN;
                     break;
                 case '\'':
-                    replacement = APOS_REPLACEMENT;
-                    replacement_len = APOS_LEN;
+                    replacement = XMLEscapes::APOS;
+                    replacement_len = XMLEscapes::APOS_LEN;
                     break;
                 case '\n':
-                    replacement = NL_REPLACEMENT;
-                    replacement_len = NL_LEN;
+                    replacement = XMLEscapes::NL;
+                    replacement_len = XMLEscapes::NL_LEN;
                     break;
                 default:
                     continue; // 无需转义，继续
@@ -493,16 +493,16 @@ void XMLStreamWriter::escapeDataToBuffer(const char* text, size_t length) {
             
             switch (text[i]) {
                 case '&':
-                    replacement = AMP_REPLACEMENT;
-                    replacement_len = AMP_LEN;
+                    replacement = XMLEscapes::AMP;
+                    replacement_len = XMLEscapes::AMP_LEN;
                     break;
                 case '<':
-                    replacement = LT_REPLACEMENT;
-                    replacement_len = LT_LEN;
+                    replacement = XMLEscapes::LT;
+                    replacement_len = XMLEscapes::LT_LEN;
                     break;
                 case '>':
-                    replacement = GT_REPLACEMENT;
-                    replacement_len = GT_LEN;
+                    replacement = XMLEscapes::GT;
+                    replacement_len = XMLEscapes::GT_LEN;
                     break;
                 default:
                     continue; // 无需转义，继续
@@ -544,28 +544,28 @@ void XMLStreamWriter::escapeAttributesToFile(const char* text, size_t length) {
             
             switch (text[i]) {
                 case '&':
-                    replacement = AMP_REPLACEMENT;
-                    replacement_len = AMP_LEN;
+                    replacement = XMLEscapes::AMP;
+                    replacement_len = XMLEscapes::AMP_LEN;
                     break;
                 case '<':
-                    replacement = LT_REPLACEMENT;
-                    replacement_len = LT_LEN;
+                    replacement = XMLEscapes::LT;
+                    replacement_len = XMLEscapes::LT_LEN;
                     break;
                 case '>':
-                    replacement = GT_REPLACEMENT;
-                    replacement_len = GT_LEN;
+                    replacement = XMLEscapes::GT;
+                    replacement_len = XMLEscapes::GT_LEN;
                     break;
                 case '"':
-                    replacement = QUOT_REPLACEMENT;
-                    replacement_len = QUOT_LEN;
+                    replacement = XMLEscapes::QUOT;
+                    replacement_len = XMLEscapes::QUOT_LEN;
                     break;
                 case '\'':
-                    replacement = APOS_REPLACEMENT;
-                    replacement_len = APOS_LEN;
+                    replacement = XMLEscapes::APOS;
+                    replacement_len = XMLEscapes::APOS_LEN;
                     break;
                 case '\n':
-                    replacement = NL_REPLACEMENT;
-                    replacement_len = NL_LEN;
+                    replacement = XMLEscapes::NL;
+                    replacement_len = XMLEscapes::NL_LEN;
                     break;
                 default:
                     continue; // 无需转义，继续
@@ -607,16 +607,16 @@ void XMLStreamWriter::escapeDataToFile(const char* text, size_t length) {
             
             switch (text[i]) {
                 case '&':
-                    replacement = AMP_REPLACEMENT;
-                    replacement_len = AMP_LEN;
+                    replacement = XMLEscapes::AMP;
+                    replacement_len = XMLEscapes::AMP_LEN;
                     break;
                 case '<':
-                    replacement = LT_REPLACEMENT;
-                    replacement_len = LT_LEN;
+                    replacement = XMLEscapes::LT;
+                    replacement_len = XMLEscapes::LT_LEN;
                     break;
                 case '>':
-                    replacement = GT_REPLACEMENT;
-                    replacement_len = GT_LEN;
+                    replacement = XMLEscapes::GT;
+                    replacement_len = XMLEscapes::GT_LEN;
                     break;
                 default:
                     continue; // 无需转义，继续
