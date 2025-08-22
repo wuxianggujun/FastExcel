@@ -384,99 +384,6 @@ void Worksheet::splitPanes(int row, int col) {
     freeze_panes_ = std::make_unique<FreezePanes>(row, col);
 }
 
-// 打印设置
-
-void Worksheet::setPrintArea(int first_row, int first_col, int last_row, int last_col) {
-    if (parent_workbook_ && parent_workbook_->getDirtyManager()) {
-        std::string sheet_path = "xl/worksheets/sheet" + std::to_string(sheet_id_) + ".xml";
-        parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::METADATA);
-    }
-    validateRange(first_row, first_col, last_row, last_col);
-    print_settings_.print_area_first_row = first_row;
-    print_settings_.print_area_first_col = first_col;
-    print_settings_.print_area_last_row = last_row;
-    print_settings_.print_area_last_col = last_col;
-}
-
-void Worksheet::setRepeatRows(int first_row, int last_row) {
-    if (parent_workbook_ && parent_workbook_->getDirtyManager()) {
-        std::string sheet_path = "xl/worksheets/sheet" + std::to_string(sheet_id_) + ".xml";
-        parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::METADATA);
-    }
-    validateRange(first_row, 0, last_row, 0);
-    print_settings_.repeat_rows_first = first_row;
-    print_settings_.repeat_rows_last = last_row;
-}
-
-void Worksheet::setRepeatColumns(int first_col, int last_col) {
-    if (parent_workbook_ && parent_workbook_->getDirtyManager()) {
-        std::string sheet_path = "xl/worksheets/sheet" + std::to_string(sheet_id_) + ".xml";
-        parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::METADATA);
-    }
-    validateRange(0, first_col, 0, last_col);
-    print_settings_.repeat_cols_first = first_col;
-    print_settings_.repeat_cols_last = last_col;
-}
-
-void Worksheet::setLandscape(bool landscape) {
-    if (parent_workbook_ && parent_workbook_->getDirtyManager()) {
-        std::string sheet_path = "xl/worksheets/sheet" + std::to_string(sheet_id_) + ".xml";
-        parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::METADATA);
-    }
-    print_settings_.landscape = landscape;
-}
-
-void Worksheet::setPaperSize(int paper_size) {
-    if (parent_workbook_ && parent_workbook_->getDirtyManager()) {
-        std::string sheet_path = "xl/worksheets/sheet" + std::to_string(sheet_id_) + ".xml";
-        parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::METADATA);
-    }
-    // 纸张大小代码的实现
-    // 这里可以根据需要添加具体的纸张大小映射
-    (void)paper_size; // 避免未使用参数警告
-}
-
-void Worksheet::setMargins(double left, double right, double top, double bottom) {
-    if (parent_workbook_ && parent_workbook_->getDirtyManager()) {
-        std::string sheet_path = "xl/worksheets/sheet" + std::to_string(sheet_id_) + ".xml";
-        parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::METADATA);
-    }
-    print_settings_.left_margin = left;
-    print_settings_.right_margin = right;
-    print_settings_.top_margin = top;
-    print_settings_.bottom_margin = bottom;
-}
-
-void Worksheet::setHeaderFooterMargins(double header, double footer) {
-    print_settings_.header_margin = header;
-    print_settings_.footer_margin = footer;
-}
-
-void Worksheet::setPrintScale(int scale) {
-    print_settings_.scale = std::max(10, std::min(400, scale));
-    print_settings_.fit_to_pages_wide = 0;
-    print_settings_.fit_to_pages_tall = 0;
-}
-
-void Worksheet::setFitToPages(int width, int height) {
-    print_settings_.fit_to_pages_wide = width;
-    print_settings_.fit_to_pages_tall = height;
-    print_settings_.scale = 100;
-}
-
-void Worksheet::setPrintGridlines(bool print) {
-    print_settings_.print_gridlines = print;
-}
-
-void Worksheet::setPrintHeadings(bool print) {
-    print_settings_.print_headings = print;
-}
-
-void Worksheet::setCenterOnPage(bool horizontal, bool vertical) {
-    print_settings_.center_horizontally = horizontal;
-    print_settings_.center_vertically = vertical;
-}
-
 // 工作表保护
 
 void Worksheet::protect(const std::string& password) {
@@ -649,36 +556,6 @@ FreezePanes Worksheet::getFreezeInfo() const {
     return FreezePanes();
 }
 
-AutoFilterRange Worksheet::getPrintArea() const {
-    return AutoFilterRange(
-        print_settings_.print_area_first_row,
-        print_settings_.print_area_first_col,
-        print_settings_.print_area_last_row,
-        print_settings_.print_area_last_col
-    );
-}
-
-std::pair<int, int> Worksheet::getRepeatRows() const {
-    return {print_settings_.repeat_rows_first, print_settings_.repeat_rows_last};
-}
-
-std::pair<int, int> Worksheet::getRepeatColumns() const {
-    return {print_settings_.repeat_cols_first, print_settings_.repeat_cols_last};
-}
-
-Worksheet::Margins Worksheet::getMargins() const {
-    return {
-        print_settings_.left_margin,
-        print_settings_.right_margin,
-        print_settings_.top_margin,
-        print_settings_.bottom_margin
-    };
-}
-
-std::pair<int, int> Worksheet::getFitToPages() const {
-    return {print_settings_.fit_to_pages_wide, print_settings_.fit_to_pages_tall};
-}
-
 // XML生成
 
 void Worksheet::generateXML(const std::function<void(const char*, size_t)>& callback) const {
@@ -762,7 +639,6 @@ void Worksheet::clear() {
     merge_ranges_.clear();
     autofilter_.reset();
     freeze_panes_.reset();
-    print_settings_ = PrintSettings{};
     sheet_view_ = SheetView{};
     protected_ = false;
     protection_password_.clear();

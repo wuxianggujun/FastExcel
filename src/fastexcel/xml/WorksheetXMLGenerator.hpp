@@ -131,24 +131,6 @@ private:
     void generateSheetProtection(XMLStreamWriter& writer);
     
     /**
-     * @brief 生成打印选项
-     * @param writer XML写入器
-     */
-    void generatePrintOptions(XMLStreamWriter& writer);
-    
-    /**
-     * @brief 生成页面设置
-     * @param writer XML写入器
-     */
-    void generatePageSetup(XMLStreamWriter& writer);
-    
-    /**
-     * @brief 生成页边距
-     * @param writer XML写入器
-     */
-    void generatePageMargins(XMLStreamWriter& writer);
-    
-    /**
      * @brief 生成图片绘图引用
      * @param writer XML写入器
      */

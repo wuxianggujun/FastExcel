@@ -253,35 +253,6 @@ TEST_F(IntegrationTest, Hyperlinks) {
     EXPECT_TRUE(std::filesystem::exists(test_filename));
 }
 
-// 测试打印设置
-TEST_F(IntegrationTest, PrintSettings) {
-    auto workbook = Workbook::create(test_filename);
-    workbook->open();
-    
-    auto worksheet = workbook->addWorksheet("打印测试");
-    
-    // 写入一些数据
-    for (int row = 0; row < 20; ++row) {
-        for (int col = 0; col < 6; ++col) {
-            worksheet->writeString(row, col, "R" + std::to_string(row) + "C" + std::to_string(col));
-        }
-    }
-    
-    // 设置打印选项
-    worksheet->setPrintArea(0, 0, 19, 5);
-    worksheet->setRepeatRows(0, 1);
-    worksheet->setRepeatColumns(0, 0);
-    worksheet->setLandscape(true);
-    worksheet->setMargins(1.0, 1.0, 1.5, 1.5);
-    worksheet->setPrintScale(90);
-    worksheet->setPrintGridlines(true);
-    worksheet->setPrintHeadings(true);
-    worksheet->setCenterOnPage(true, false);
-    
-    EXPECT_TRUE(workbook->save());
-    EXPECT_TRUE(std::filesystem::exists(test_filename));
-}
-
 // 测试工作表保护
 TEST_F(IntegrationTest, WorksheetProtection) {
     auto workbook = Workbook::create(test_filename);

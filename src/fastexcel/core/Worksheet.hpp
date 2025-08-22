@@ -3,6 +3,7 @@
 #include "fastexcel/core/Cell.hpp"
 #include "fastexcel/core/SharedStringTable.hpp"
 #include "fastexcel/core/FormatRepository.hpp"
+#include "fastexcel/core/WorksheetTypes.hpp"
 #include "fastexcel/core/CellRangeManager.hpp"
 #include "fastexcel/core/SharedFormula.hpp"
 #include "fastexcel/core/RangeFormatter.hpp"
@@ -50,55 +51,6 @@ class WorksheetChain;
 
 // 列信息结构 - 使用WorksheetLayoutManager中的定义
 // struct ColumnInfo 已在 WorksheetLayoutManager.hpp 中定义
-
-// 打印设置
-struct PrintSettings {
-    // 打印区域
-    int print_area_first_row = -1;
-    int print_area_first_col = -1;
-    int print_area_last_row = -1;
-    int print_area_last_col = -1;
-    
-    // 重复行/列
-    int repeat_rows_first = -1;
-    int repeat_rows_last = -1;
-    int repeat_cols_first = -1;
-    int repeat_cols_last = -1;
-    
-    // 页面设置
-    bool landscape = false;        // 横向打印
-    double left_margin = 0.7;      // 左边距（英寸）
-    double right_margin = 0.7;     // 右边距
-    double top_margin = 0.75;      // 上边距
-    double bottom_margin = 0.75;   // 下边距
-    double header_margin = 0.3;    // 页眉边距
-    double footer_margin = 0.3;    // 页脚边距
-    
-    // 缩放
-    int scale = 100;               // 缩放百分比
-    int fit_to_pages_wide = 0;     // 适合页面宽度
-    int fit_to_pages_tall = 0;     // 适合页面高度
-    
-    // 其他选项
-    bool print_gridlines = false;  // 打印网格线
-    bool print_headings = false;   // 打印行列标题
-    bool center_horizontally = false; // 水平居中
-    bool center_vertically = false;   // 垂直居中
-};
-
-// 页面视图设置
-struct SheetView {
-    bool show_gridlines = true;    // 显示网格线
-    bool show_row_col_headers = true; // 显示行列标题
-    bool show_zeros = true;        // 显示零值
-    bool right_to_left = false;    // 从右到左
-    bool tab_selected = false;     // 选项卡选中
-    bool show_ruler = true;        // 显示标尺
-    bool show_outline_symbols = true; // 显示大纲符号
-    bool show_white_space = true;  // 显示空白
-    int zoom_scale = 100;          // 缩放比例
-    int zoom_scale_normal = 100;   // 正常缩放比例
-};
 
 /**
  * @brief Worksheet类 - Excel工作表
@@ -164,9 +116,6 @@ private:
     
     // 冻结窗格
     std::unique_ptr<FreezePanes> freeze_panes_;
-    
-    // 打印设置
-    PrintSettings print_settings_;
     
     // 页面视图
     SheetView sheet_view_;
@@ -975,103 +924,6 @@ public:
     
     // 打印设置
     
-    /**
-     * @brief 设置打印区域
-     * @param first_row 起始行
-     * @param first_col 起始列
-     * @param last_row 结束行
-     * @param last_col 结束列
-     */
-    void setPrintArea(int first_row, int first_col, int last_row, int last_col);
-    
-    /**
-     * @brief 设置打印区域（支持多种范围格式）
-     * @param range 打印范围（支持隐式转换）
-     *   - 字符串范围: "A1:F20", "Sheet1!A1:F20"
-     *   - 坐标范围: CellRange(0, 0, 19, 5), CellRange{0, 0, 19, 5}
-     * 
-     * @example
-     * worksheet.setPrintArea("A1:F20");        // 字符串范围
-     * worksheet.setPrintArea({0, 0, 19, 5});   // 坐标范围
-     */
-    void setPrintArea(const core::CellRange& range) {
-        setPrintArea(range.getStartRow(), range.getStartCol(), range.getEndRow(), range.getEndCol());
-    }
-    
-    /**
-     * @brief 设置重复打印行
-     * @param first_row 起始行
-     * @param last_row 结束行
-     */
-    void setRepeatRows(int first_row, int last_row);
-    
-    /**
-     * @brief 设置重复打印列
-     * @param first_col 起始列
-     * @param last_col 结束列
-     */
-    void setRepeatColumns(int first_col, int last_col);
-    
-    /**
-     * @brief 设置页面方向
-     * @param landscape 是否横向
-     */
-    void setLandscape(bool landscape = true);
-    
-    /**
-     * @brief 设置纸张大小
-     * @param paper_size 纸张大小代码
-     */
-    void setPaperSize(int paper_size);
-    
-    /**
-     * @brief 设置页边距
-     * @param left 左边距
-     * @param right 右边距
-     * @param top 上边距
-     * @param bottom 下边距
-     */
-    void setMargins(double left, double right, double top, double bottom);
-    
-    /**
-     * @brief 设置页眉页脚边距
-     * @param header 页眉边距
-     * @param footer 页脚边距
-     */
-    void setHeaderFooterMargins(double header, double footer);
-    
-    /**
-     * @brief 设置打印缩放
-     * @param scale 缩放百分比
-     */
-    void setPrintScale(int scale);
-    
-    /**
-     * @brief 适合页面打印
-     * @param width 页面宽度
-     * @param height 页面高度
-     */
-    void setFitToPages(int width, int height);
-    
-    /**
-     * @brief 设置打印网格线
-     * @param print 是否打印
-     */
-    void setPrintGridlines(bool print = true);
-    
-    /**
-     * @brief 设置打印标题
-     * @param print 是否打印
-     */
-    void setPrintHeadings(bool print = true);
-    
-    /**
-     * @brief 设置页面居中
-     * @param horizontal 水平居中
-     * @param vertical 垂直居中
-     */
-    void setCenterOnPage(bool horizontal, bool vertical);
-    
     // 工作表保护
     
     /**
@@ -1368,75 +1220,6 @@ public:
      * @return 冻结窗格信息
      */
     FreezePanes getFreezeInfo() const;
-    
-    /**
-     * @brief 获取打印区域
-     * @return 打印区域
-     */
-    AutoFilterRange getPrintArea() const;
-    
-    /**
-     * @brief 获取重复行范围
-     * @return (起始行, 结束行)
-     */
-    std::pair<int, int> getRepeatRows() const;
-    
-    /**
-     * @brief 获取重复列范围
-     * @return (起始列, 结束列)
-     */
-    std::pair<int, int> getRepeatColumns() const;
-    
-    /**
-     * @brief 检查是否横向打印
-     * @return 是否横向打印
-     */
-    bool isLandscape() const { return print_settings_.landscape; }
-    
-    /**
-     * @brief 获取页边距
-     * @return 页边距结构
-     */
-    struct Margins {
-        double left, right, top, bottom;
-    };
-    Margins getMargins() const;
-    
-    /**
-     * @brief 获取打印缩放
-     * @return 缩放百分比
-     */
-    int getPrintScale() const { return print_settings_.scale; }
-    
-    /**
-     * @brief 获取适应页面设置
-     * @return (宽度, 高度)
-     */
-    std::pair<int, int> getFitToPages() const;
-    
-    /**
-     * @brief 检查是否打印网格线
-     * @return 是否打印网格线
-     */
-    bool isPrintGridlines() const { return print_settings_.print_gridlines; }
-    
-    /**
-     * @brief 检查是否打印标题
-     * @return 是否打印标题
-     */
-    bool isPrintHeadings() const { return print_settings_.print_headings; }
-    
-    /**
-     * @brief 检查是否水平居中
-     * @return 是否水平居中
-     */
-    bool isCenterHorizontally() const { return print_settings_.center_horizontally; }
-    
-    /**
-     * @brief 检查是否垂直居中
-     * @return 是否垂直居中
-     */
-    bool isCenterVertically() const { return print_settings_.center_vertically; }
     
     /**
      * @brief 获取保护密码

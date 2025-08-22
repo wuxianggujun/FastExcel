@@ -155,15 +155,6 @@ void WorksheetXMLGenerator::generateBatch(const std::function<void(const char*, 
     // 生成工作表保护
     generateSheetProtection(writer);
     
-    // 生成打印选项
-    generatePrintOptions(writer);
-    
-    // 生成页面设置
-    generatePageSetup(writer);
-    
-    // 生成页面边距
-    generatePageMargins(writer);
-    
     // 生成图片绘图引用
     generateDrawing(writer);
     
@@ -450,73 +441,6 @@ void WorksheetXMLGenerator::generateSheetProtection(XMLStreamWriter& writer) {
     writer.endElement(); // sheetProtection
 }
 
-void WorksheetXMLGenerator::generatePrintOptions(XMLStreamWriter& writer) {
-    bool has_print_options = worksheet_->isPrintGridlines() || worksheet_->isPrintHeadings() ||
-                            worksheet_->isCenterHorizontally() || worksheet_->isCenterVertically();
-    
-    if (!has_print_options) return;
-    
-    writer.startElement("printOptions");
-    
-    if (worksheet_->isPrintGridlines()) {
-        writer.writeAttribute("gridLines", "1");
-    }
-    
-    if (worksheet_->isPrintHeadings()) {
-        writer.writeAttribute("headings", "1");
-    }
-    
-    if (worksheet_->isCenterHorizontally()) {
-        writer.writeAttribute("horizontalCentered", "1");
-    }
-    
-    if (worksheet_->isCenterVertically()) {
-        writer.writeAttribute("verticalCentered", "1");
-    }
-    
-    writer.endElement(); // printOptions
-}
-
-void WorksheetXMLGenerator::generatePageSetup(XMLStreamWriter& writer) {
-    bool has_page_setup = worksheet_->isLandscape() || 
-                         worksheet_->getPrintScale() != 100 ||
-                         worksheet_->getFitToPages().first > 0 ||
-                         worksheet_->getFitToPages().second > 0;
-    
-    if (!has_page_setup) return;
-    
-    writer.startElement("pageSetup");
-    
-    if (worksheet_->isLandscape()) {
-        writer.writeAttribute("orientation", "landscape");
-    }
-    
-    if (worksheet_->getPrintScale() != 100) {
-        writer.writeAttribute("scale", fmt::format("{}", worksheet_->getPrintScale()).c_str());
-    }
-    
-    auto [fit_width, fit_height] = worksheet_->getFitToPages();
-    if (fit_width > 0 || fit_height > 0) {
-        writer.writeAttribute("fitToWidth", fmt::format("{}", fit_width).c_str());
-        writer.writeAttribute("fitToHeight", fmt::format("{}", fit_height).c_str());
-    }
-    
-    writer.endElement(); // pageSetup
-}
-
-void WorksheetXMLGenerator::generatePageMargins(XMLStreamWriter& writer) {
-    auto margins = worksheet_->getMargins();
-    
-    writer.startElement("pageMargins");
-    writer.writeAttribute("left", fmt::format("{}", margins.left).c_str());
-    writer.writeAttribute("right", fmt::format("{}", margins.right).c_str());
-    writer.writeAttribute("top", fmt::format("{}", margins.top).c_str());
-    writer.writeAttribute("bottom", fmt::format("{}", margins.bottom).c_str());
-    writer.writeAttribute("header", "0.3");
-    writer.writeAttribute("footer", "0.3");
-    writer.endElement(); // pageMargins
-}
-
 void WorksheetXMLGenerator::generateDrawing(XMLStreamWriter& writer) {
     // 检查工作表是否有图片
     if (!worksheet_->hasImages()) {
@@ -628,16 +552,6 @@ void WorksheetXMLGenerator::generateStreaming(const std::function<void(const cha
         
         writer.endElement(); // mergeCells
     }
-    
-    // 页面边距
-    writer.startElement("pageMargins");
-    writer.writeAttribute("left", "0.7");
-    writer.writeAttribute("right", "0.7");
-    writer.writeAttribute("top", "0.75");
-    writer.writeAttribute("bottom", "0.75");
-    writer.writeAttribute("header", "0.3");
-    writer.writeAttribute("footer", "0.3");
-    writer.endElement(); // pageMargins
     
     // 生成图片绘图引用（流式模式）
     generateDrawing(writer);
