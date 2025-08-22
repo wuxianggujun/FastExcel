@@ -98,6 +98,7 @@ set(FASTEXCEL_SOURCES
         src/fastexcel/xml/WorksheetXMLGenerator.cpp
         src/fastexcel/xml/DocPropsXMLGenerator.cpp
         src/fastexcel/xml/DrawingXMLGenerator.cpp  # 🚀 新增：绘图XML生成器
+        src/fastexcel/xml/XMLEscapeSIMD.cpp  # 🚀 新增：SIMD优化的XML转义处理
         src/fastexcel/theme/Theme.cpp
          src/fastexcel/theme/ThemeParser.cpp
         # OPC Repack Architecture (New)
@@ -173,6 +174,7 @@ target_include_directories(fastexcel PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/third_party/libexpat/expat/lib
         ${CMAKE_CURRENT_SOURCE_DIR}/third_party/fmt/include
         ${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb  # 🚀 新增：stb_image头文件路径
+        ${CMAKE_CURRENT_SOURCE_DIR}/third_party/utfcpp/source  # UTF8-CPP头文件路径
 )
 
 # =============================================================================
@@ -197,6 +199,12 @@ if (FASTEXCEL_LIBDEFLATE_TARGET AND NOT FASTEXCEL_LIBDEFLATE_TARGET STREQUAL "")
     message(STATUS "FastExcel: Linking with libdeflate target: ${FASTEXCEL_LIBDEFLATE_TARGET}")
 endif ()
 
+# 链接 Highway SIMD 库（如果可用）
+if (FASTEXCEL_HIGHWAY_TARGET AND NOT FASTEXCEL_HIGHWAY_TARGET STREQUAL "")
+    target_link_libraries(fastexcel PRIVATE ${FASTEXCEL_HIGHWAY_TARGET})
+    message(STATUS "FastExcel: Linking with Highway SIMD target: ${FASTEXCEL_HIGHWAY_TARGET}")
+endif ()
+
 # =============================================================================
 # 宏定义配置
 # =============================================================================
@@ -204,6 +212,12 @@ endif ()
 if(FASTEXCEL_USE_LIBDEFLATE AND FASTEXCEL_HAS_LIBDEFLATE)
     target_compile_definitions(fastexcel PRIVATE FASTEXCEL_HAS_LIBDEFLATE=1)
     message(STATUS "FastExcel: FASTEXCEL_HAS_LIBDEFLATE macro defined")
+endif()
+
+# 如果启用了 Highway，定义相应的宏
+if(FASTEXCEL_USE_HIGHWAY AND FASTEXCEL_HAS_HIGHWAY)
+    target_compile_definitions(fastexcel PRIVATE FASTEXCEL_HAS_HIGHWAY=1)
+    message(STATUS "FastExcel: FASTEXCEL_HAS_HIGHWAY macro defined")
 endif()
 
 # 🚀 新增：图片支持宏定义

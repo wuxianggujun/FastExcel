@@ -1,4 +1,5 @@
 #include "fastexcel/xml/XMLStreamWriter.hpp"
+#include "fastexcel/xml/XMLEscapeSIMD.hpp"
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
@@ -14,6 +15,9 @@ XMLStreamWriter::XMLStreamWriter() {
     direct_file_mode_ = false;
     callback_mode_ = false;
     auto_flush_ = true;
+    
+    // 初始化SIMD转义器
+    XMLEscapeSIMD::initialize();
     
     // 预分配栈空间，避免小容量时的频繁重分配
     // 注意：std::stack基于std::deque，无法直接reserve
@@ -412,186 +416,226 @@ void XMLStreamWriter::writeRawDirect(const char* data, size_t length) {
 }
 
 void XMLStreamWriter::escapeAttributesToBuffer(const char* text, size_t length) {
-    size_t last_write_pos = 0;
-    
-    for (size_t i = 0; i < length; i++) {
-        const char* replacement = nullptr;
-        size_t replacement_len = 0;
+    // 使用SIMD优化的转义函数
+    if (XMLEscapeSIMD::isSIMDSupported()) {
+        XMLEscapeSIMD::escapeAttributesSIMD(text, length, 
+            [this](const char* data, size_t len) {
+                writeRawToBuffer(data, len);
+            });
+    } else {
+        // 原始标量实现
+        size_t last_write_pos = 0;
         
-        switch (text[i]) {
-            case '&':
-                replacement = AMP_REPLACEMENT;
-                replacement_len = AMP_LEN;
-                break;
-            case '<':
-                replacement = LT_REPLACEMENT;
-                replacement_len = LT_LEN;
-                break;
-            case '>':
-                replacement = GT_REPLACEMENT;
-                replacement_len = GT_LEN;
-                break;
-            case '"':
-                replacement = QUOT_REPLACEMENT;
-                replacement_len = QUOT_LEN;
-                break;
-            case '\'':
-                replacement = APOS_REPLACEMENT;
-                replacement_len = APOS_LEN;
-                break;
-            case '\n':
-                replacement = NL_REPLACEMENT;
-                replacement_len = NL_LEN;
-                break;
-            default:
-                continue; // 无需转义，继续
+        for (size_t i = 0; i < length; i++) {
+            const char* replacement = nullptr;
+            size_t replacement_len = 0;
+            
+            switch (text[i]) {
+                case '&':
+                    replacement = AMP_REPLACEMENT;
+                    replacement_len = AMP_LEN;
+                    break;
+                case '<':
+                    replacement = LT_REPLACEMENT;
+                    replacement_len = LT_LEN;
+                    break;
+                case '>':
+                    replacement = GT_REPLACEMENT;
+                    replacement_len = GT_LEN;
+                    break;
+                case '"':
+                    replacement = QUOT_REPLACEMENT;
+                    replacement_len = QUOT_LEN;
+                    break;
+                case '\'':
+                    replacement = APOS_REPLACEMENT;
+                    replacement_len = APOS_LEN;
+                    break;
+                case '\n':
+                    replacement = NL_REPLACEMENT;
+                    replacement_len = NL_LEN;
+                    break;
+                default:
+                    continue; // 无需转义，继续
+            }
+            
+            // 写入之前未转义的部分
+            if (i > last_write_pos) {
+                writeRawToBuffer(text + last_write_pos, i - last_write_pos);
+            }
+            
+            // 写入转义序列
+            writeRawToBuffer(replacement, replacement_len);
+            last_write_pos = i + 1;
         }
         
-        // 写入之前未转义的部分
-        if (i > last_write_pos) {
-            writeRawToBuffer(text + last_write_pos, i - last_write_pos);
+        // 写入剩余的未转义部分
+        if (last_write_pos < length) {
+            writeRawToBuffer(text + last_write_pos, length - last_write_pos);
         }
-        
-        // 写入转义序列
-        writeRawToBuffer(replacement, replacement_len);
-        last_write_pos = i + 1;
-    }
-    
-    // 写入剩余的未转义部分
-    if (last_write_pos < length) {
-        writeRawToBuffer(text + last_write_pos, length - last_write_pos);
     }
 }
 
 void XMLStreamWriter::escapeDataToBuffer(const char* text, size_t length) {
-    size_t last_write_pos = 0;
-    
-    for (size_t i = 0; i < length; i++) {
-        const char* replacement = nullptr;
-        size_t replacement_len = 0;
+    // 使用SIMD优化的转义函数
+    if (XMLEscapeSIMD::isSIMDSupported()) {
+        XMLEscapeSIMD::escapeDataSIMD(text, length, 
+            [this](const char* data, size_t len) {
+                writeRawToBuffer(data, len);
+            });
+    } else {
+        // 原始标量实现
+        size_t last_write_pos = 0;
         
-        switch (text[i]) {
-            case '&':
-                replacement = AMP_REPLACEMENT;
-                replacement_len = AMP_LEN;
-                break;
-            case '<':
-                replacement = LT_REPLACEMENT;
-                replacement_len = LT_LEN;
-                break;
-            case '>':
-                replacement = GT_REPLACEMENT;
-                replacement_len = GT_LEN;
-                break;
-            default:
-                continue; // 无需转义，继续
+        for (size_t i = 0; i < length; i++) {
+            const char* replacement = nullptr;
+            size_t replacement_len = 0;
+            
+            switch (text[i]) {
+                case '&':
+                    replacement = AMP_REPLACEMENT;
+                    replacement_len = AMP_LEN;
+                    break;
+                case '<':
+                    replacement = LT_REPLACEMENT;
+                    replacement_len = LT_LEN;
+                    break;
+                case '>':
+                    replacement = GT_REPLACEMENT;
+                    replacement_len = GT_LEN;
+                    break;
+                default:
+                    continue; // 无需转义，继续
+            }
+            
+            // 写入之前未转义的部分
+            if (i > last_write_pos) {
+                writeRawToBuffer(text + last_write_pos, i - last_write_pos);
+            }
+            
+            // 写入转义序列
+            writeRawToBuffer(replacement, replacement_len);
+            last_write_pos = i + 1;
         }
         
-        // 写入之前未转义的部分
-        if (i > last_write_pos) {
-            writeRawToBuffer(text + last_write_pos, i - last_write_pos);
+        // 写入剩余的未转义部分
+        if (last_write_pos < length) {
+            writeRawToBuffer(text + last_write_pos, length - last_write_pos);
         }
-        
-        // 写入转义序列
-        writeRawToBuffer(replacement, replacement_len);
-        last_write_pos = i + 1;
-    }
-    
-    // 写入剩余的未转义部分
-    if (last_write_pos < length) {
-        writeRawToBuffer(text + last_write_pos, length - last_write_pos);
     }
 }
 
 void XMLStreamWriter::escapeAttributesToFile(const char* text, size_t length) {
-    size_t last_write_pos = 0;
-    
-    for (size_t i = 0; i < length; i++) {
-        const char* replacement = nullptr;
-        size_t replacement_len = 0;
+    // 使用SIMD优化的转义函数
+    if (XMLEscapeSIMD::isSIMDSupported()) {
+        XMLEscapeSIMD::escapeAttributesSIMD(text, length, 
+            [this](const char* data, size_t len) {
+                if (output_file_) {
+                    fwrite(data, 1, len, output_file_);
+                }
+            });
+    } else {
+        // 原始标量实现
+        size_t last_write_pos = 0;
         
-        switch (text[i]) {
-            case '&':
-                replacement = AMP_REPLACEMENT;
-                replacement_len = AMP_LEN;
-                break;
-            case '<':
-                replacement = LT_REPLACEMENT;
-                replacement_len = LT_LEN;
-                break;
-            case '>':
-                replacement = GT_REPLACEMENT;
-                replacement_len = GT_LEN;
-                break;
-            case '"':
-                replacement = QUOT_REPLACEMENT;
-                replacement_len = QUOT_LEN;
-                break;
-            case '\'':
-                replacement = APOS_REPLACEMENT;
-                replacement_len = APOS_LEN;
-                break;
-            case '\n':
-                replacement = NL_REPLACEMENT;
-                replacement_len = NL_LEN;
-                break;
-            default:
-                continue; // 无需转义，继续
+        for (size_t i = 0; i < length; i++) {
+            const char* replacement = nullptr;
+            size_t replacement_len = 0;
+            
+            switch (text[i]) {
+                case '&':
+                    replacement = AMP_REPLACEMENT;
+                    replacement_len = AMP_LEN;
+                    break;
+                case '<':
+                    replacement = LT_REPLACEMENT;
+                    replacement_len = LT_LEN;
+                    break;
+                case '>':
+                    replacement = GT_REPLACEMENT;
+                    replacement_len = GT_LEN;
+                    break;
+                case '"':
+                    replacement = QUOT_REPLACEMENT;
+                    replacement_len = QUOT_LEN;
+                    break;
+                case '\'':
+                    replacement = APOS_REPLACEMENT;
+                    replacement_len = APOS_LEN;
+                    break;
+                case '\n':
+                    replacement = NL_REPLACEMENT;
+                    replacement_len = NL_LEN;
+                    break;
+                default:
+                    continue; // 无需转义，继续
+            }
+            
+            // 写入之前未转义的部分
+            if (i > last_write_pos) {
+                fwrite(text + last_write_pos, 1, i - last_write_pos, output_file_);
+            }
+            
+            // 写入转义序列
+            fwrite(replacement, 1, replacement_len, output_file_);
+            last_write_pos = i + 1;
         }
         
-        // 写入之前未转义的部分
-        if (i > last_write_pos) {
-            fwrite(text + last_write_pos, 1, i - last_write_pos, output_file_);
+        // 写入剩余的未转义部分
+        if (last_write_pos < length) {
+            fwrite(text + last_write_pos, 1, length - last_write_pos, output_file_);
         }
-        
-        // 写入转义序列
-        fwrite(replacement, 1, replacement_len, output_file_);
-        last_write_pos = i + 1;
-    }
-    
-    // 写入剩余的未转义部分
-    if (last_write_pos < length) {
-        fwrite(text + last_write_pos, 1, length - last_write_pos, output_file_);
     }
 }
 
 void XMLStreamWriter::escapeDataToFile(const char* text, size_t length) {
-    size_t last_write_pos = 0;
-    
-    for (size_t i = 0; i < length; i++) {
-        const char* replacement = nullptr;
-        size_t replacement_len = 0;
+    // 使用SIMD优化的转义函数
+    if (XMLEscapeSIMD::isSIMDSupported()) {
+        XMLEscapeSIMD::escapeDataSIMD(text, length, 
+            [this](const char* data, size_t len) {
+                if (output_file_) {
+                    fwrite(data, 1, len, output_file_);
+                }
+            });
+    } else {
+        // 原始标量实现
+        size_t last_write_pos = 0;
         
-        switch (text[i]) {
-            case '&':
-                replacement = AMP_REPLACEMENT;
-                replacement_len = AMP_LEN;
-                break;
-            case '<':
-                replacement = LT_REPLACEMENT;
-                replacement_len = LT_LEN;
-                break;
-            case '>':
-                replacement = GT_REPLACEMENT;
-                replacement_len = GT_LEN;
-                break;
-            default:
-                continue; // 无需转义，继续
+        for (size_t i = 0; i < length; i++) {
+            const char* replacement = nullptr;
+            size_t replacement_len = 0;
+            
+            switch (text[i]) {
+                case '&':
+                    replacement = AMP_REPLACEMENT;
+                    replacement_len = AMP_LEN;
+                    break;
+                case '<':
+                    replacement = LT_REPLACEMENT;
+                    replacement_len = LT_LEN;
+                    break;
+                case '>':
+                    replacement = GT_REPLACEMENT;
+                    replacement_len = GT_LEN;
+                    break;
+                default:
+                    continue; // 无需转义，继续
+            }
+            
+            // 写入之前未转义的部分
+            if (i > last_write_pos) {
+                fwrite(text + last_write_pos, 1, i - last_write_pos, output_file_);
+            }
+            
+            // 写入转义序列
+            fwrite(replacement, 1, replacement_len, output_file_);
+            last_write_pos = i + 1;
         }
         
-        // 写入之前未转义的部分
-        if (i > last_write_pos) {
-            fwrite(text + last_write_pos, 1, i - last_write_pos, output_file_);
+        // 写入剩余的未转义部分
+        if (last_write_pos < length) {
+            fwrite(text + last_write_pos, 1, length - last_write_pos, output_file_);
         }
-        
-        // 写入转义序列
-        fwrite(replacement, 1, replacement_len, output_file_);
-        last_write_pos = i + 1;
-    }
-    
-    // 写入剩余的未转义部分
-    if (last_write_pos < length) {
-        fwrite(text + last_write_pos, 1, length - last_write_pos, output_file_);
     }
 }
 

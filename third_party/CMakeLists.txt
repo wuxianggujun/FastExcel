@@ -165,6 +165,38 @@ else()
 endif()
 
 # =============================================================================
+# Highway SIMD Library 配置
+# =============================================================================
+option(FASTEXCEL_USE_HIGHWAY "Enable Highway SIMD library for high-performance operations" ON)
+
+if(FASTEXCEL_USE_HIGHWAY)
+    # 配置 Highway 选项
+    set(HWY_ENABLE_TESTS OFF CACHE BOOL "" FORCE)
+    set(HWY_ENABLE_EXAMPLES OFF CACHE BOOL "" FORCE)
+    set(HWY_ENABLE_CONTRIB OFF CACHE BOOL "" FORCE)
+    set(HWY_ENABLE_INSTALL OFF CACHE BOOL "" FORCE)
+    
+    if(FASTEXCEL_USE_SYSTEM_LIBS)
+        find_package(hwy QUIET)
+    endif()
+    
+    if(NOT hwy_FOUND)
+        add_subdirectory(highway)
+        set(HIGHWAY_TARGET hwy)
+        message(STATUS "FastExcel: Using bundled Highway SIMD library")
+    else()
+        set(HIGHWAY_TARGET hwy::hwy)
+        message(STATUS "FastExcel: Using system Highway SIMD library")
+    endif()
+    
+    # 定义宏以启用 Highway 支持
+    set(FASTEXCEL_HAS_HIGHWAY ON PARENT_SCOPE)
+    message(STATUS "FastExcel: Highway SIMD support enabled")
+else()
+    message(STATUS "FastExcel: Highway SIMD support disabled")
+endif()
+
+# =============================================================================
 # GoogleTest 配置 (仅在需要测试时)
 # =============================================================================
 if(ENABLE_TESTS OR ENABLE_UNIT_TESTS OR FASTEXCEL_BUILD_TESTS)
@@ -211,6 +243,11 @@ if(DEFINED UTF8CPP_TARGET)
     set(FASTEXCEL_UTF8CPP_TARGET ${UTF8CPP_TARGET} PARENT_SCOPE)
 endif()
 
+# 导出 Highway 目标
+if(DEFINED HIGHWAY_TARGET)
+    set(FASTEXCEL_HIGHWAY_TARGET ${HIGHWAY_TARGET} PARENT_SCOPE)
+endif()
+
 if(DEFINED GTEST_TARGETS)
     set(FASTEXCEL_GTEST_TARGETS ${GTEST_TARGETS} PARENT_SCOPE)
 endif()
@@ -231,6 +268,15 @@ if(FASTEXCEL_USE_LIBDEFLATE AND DEFINED LIBDEFLATE_TARGET)
     set(FASTEXCEL_THIRD_PARTY_INCLUDE_DIRS
         ${FASTEXCEL_THIRD_PARTY_INCLUDE_DIRS}
         ${CMAKE_CURRENT_SOURCE_DIR}/libdeflate
+        PARENT_SCOPE
+    )
+endif()
+
+# 如果启用了 Highway，添加其包含目录
+if(FASTEXCEL_USE_HIGHWAY AND DEFINED HIGHWAY_TARGET)
+    set(FASTEXCEL_THIRD_PARTY_INCLUDE_DIRS
+        ${FASTEXCEL_THIRD_PARTY_INCLUDE_DIRS}
+        ${CMAKE_CURRENT_SOURCE_DIR}/highway
         PARENT_SCOPE
     )
 endif()

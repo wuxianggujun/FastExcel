@@ -9,6 +9,7 @@ set(EXAMPLE_SOURCES
     image_insertion_demo.cpp
     performance_demo.cpp 
         debug_test.cpp
+        simd_test_demo.cpp
 )
 
 # 为每个示例创建可执行文件
