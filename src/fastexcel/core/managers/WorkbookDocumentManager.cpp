@@ -320,9 +320,12 @@ bool WorkbookDocumentManager::isValidPropertyName(const std::string& name) const
         return false;
     }
     
-    // 检查是否包含无效字符
+    // 检查是否包含无效的控制字符（保留制表符、换行符、回车符）
+    // 允许所有可打印字符和中文等Unicode字符
     return std::all_of(name.begin(), name.end(), [](char c) {
-        return std::isalnum(c) || c == '_' || c == '-' || c == '.';
+        unsigned char uc = static_cast<unsigned char>(c);
+        // 允许：可打印ASCII字符、制表符、换行符、回车符、或高位字符（Unicode）
+        return uc >= 32 || c == '\t' || c == '\n' || c == '\r' || uc > 127;
     });
 }
 
