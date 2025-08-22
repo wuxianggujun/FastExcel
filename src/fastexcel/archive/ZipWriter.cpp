@@ -1,4 +1,4 @@
-#include "fastexcel/utils/ModuleLoggers.hpp"
+#include "fastexcel/utils/Logger.hpp"
 #include "fastexcel/archive/ZipWriter.hpp"
 #include "fastexcel/archive/ZipArchive.hpp"  // 为了使用ZipError枚举
 #include "fastexcel/utils/Logger.hpp"
@@ -69,7 +69,7 @@ bool ZipWriter::open(bool create) {
         return initializeWriter();
     } else {
         // TODO: 实现追加模式
-        ARCHIVE_ERROR("Append mode not yet implemented");
+        FASTEXCEL_LOG_ERROR("[ARCH] Append mode not yet implemented");
         return false;
     }
 }
@@ -83,11 +83,11 @@ bool ZipWriter::close() {
     if (zip_handle_) {
         int32_t result = mz_zip_writer_close(zip_handle_);
         if (result != MZ_OK) {
-            ARCHIVE_ERROR("Failed to finalize ZIP file: {}, error code: {}", filename_, result);
-            ARCHIVE_ERROR("This usually means the ZIP central directory was not written properly");
+            FASTEXCEL_LOG_ERROR("[ARCH] Failed to finalize ZIP file: {}, error code: {}", filename_, result);
+            FASTEXCEL_LOG_ERROR("[ARCH] This usually means the ZIP central directory was not written properly");
             success = false;
         } else {
-            ARCHIVE_DEBUG("ZIP file finalized successfully: {}", filename_);
+            FASTEXCEL_LOG_DEBUG("[ARCH] ZIP file finalized successfully: {}", filename_);
         }
         
         // 删除writer句柄
@@ -115,7 +115,7 @@ ZipError ZipWriter::addFile(std::string_view internal_path, const uint8_t* data,
 ZipError ZipWriter::addFile(std::string_view internal_path, const void* data, size_t size) {
     std::lock_guard<std::mutex> lock(mutex_);
     if (!is_open_ || !zip_handle_) {
-        ARCHIVE_ERROR("Zip archive not opened for writing");
+        FASTEXCEL_LOG_ERROR("[ARCH] Zip archive not opened for writing");
         return ZipError::NotOpen;
     }
     
@@ -128,7 +128,7 @@ ZipError ZipWriter::addFile(std::string_view internal_path, const void* data, si
 ZipError ZipWriter::addFiles(const std::vector<FileEntry>& files) {
     std::lock_guard<std::mutex> lock(mutex_);
     if (!is_open_ || !zip_handle_) {
-        ARCHIVE_ERROR("Zip archive not opened for writing");
+        FASTEXCEL_LOG_ERROR("[ARCH] Zip archive not opened for writing");
         return ZipError::NotOpen;
     }
     
@@ -136,7 +136,7 @@ ZipError ZipWriter::addFiles(const std::vector<FileEntry>& files) {
         return ZipError::Ok;
     }
     
-    ARCHIVE_DEBUG("Starting batch write of {} files", files.size());
+    FASTEXCEL_LOG_DEBUG("[ARCH] Starting batch write of {} files", files.size());
     
     // 批量写入所有文件
     for (const auto& file : files) {
@@ -146,14 +146,14 @@ ZipError ZipWriter::addFiles(const std::vector<FileEntry>& files) {
         }
     }
     
-    ARCHIVE_INFO("Batch write completed successfully, {} files added", files.size());
+    FASTEXCEL_LOG_INFO("[ARCH] Batch write completed successfully, {} files added", files.size());
     return ZipError::Ok;
 }
 
 ZipError ZipWriter::addFiles(std::vector<FileEntry>&& files) {
     std::lock_guard<std::mutex> lock(mutex_);
     if (!is_open_ || !zip_handle_) {
-        ARCHIVE_ERROR("Zip archive not opened for writing");
+        FASTEXCEL_LOG_ERROR("[ARCH] Zip archive not opened for writing");
         return ZipError::NotOpen;
     }
     
@@ -161,19 +161,19 @@ ZipError ZipWriter::addFiles(std::vector<FileEntry>&& files) {
         return ZipError::Ok;
     }
     
-    ARCHIVE_DEBUG("Starting batch write of {} files (move semantics)", files.size());
+    FASTEXCEL_LOG_DEBUG("[ARCH] Starting batch write of {} files (move semantics)", files.size());
     
     // 批量写入所有文件（移动语义版本）
     for (auto& file : files) {
         // 检查是否已经写入过该路径
         if (written_paths_.find(file.internal_path) != written_paths_.end()) {
-            ARCHIVE_WARN("File {} already exists in zip, skipping duplicate entry", file.internal_path);
+            FASTEXCEL_LOG_WARN("[ARCH] File {} already exists in zip, skipping duplicate entry", file.internal_path);
             continue;  // 跳过重复条目
         }
         
         // 检查文件大小
         if (file.content.size() > INT32_MAX) {
-            ARCHIVE_ERROR("File {} is too large ({} bytes), maximum size is {} bytes",
+            FASTEXCEL_LOG_ERROR("[ARCH] File {} is too large ({} bytes), maximum size is {} bytes",
                      file.internal_path, file.content.size(), INT32_MAX);
             return ZipError::TooLarge;
         }
@@ -185,7 +185,7 @@ ZipError ZipWriter::addFiles(std::vector<FileEntry>&& files) {
         // 打开条目
         int32_t result = mz_zip_writer_entry_open(zip_handle_, &file_info);
         if (result != MZ_OK) {
-            ARCHIVE_ERROR("Failed to open entry for file {} in zip, error: {}", file.internal_path, result);
+            FASTEXCEL_LOG_ERROR("[ARCH] Failed to open entry for file {} in zip, error: {}", file.internal_path, result);
             return ZipError::IoFail;
         }
         
@@ -196,7 +196,7 @@ ZipError ZipWriter::addFiles(std::vector<FileEntry>&& files) {
                                                             static_cast<int32_t>(file.content.size()));
             
             if (bytes_written != static_cast<int32_t>(file.content.size())) {
-                ARCHIVE_ERROR("Failed to write complete data for file {} to zip", file.internal_path);
+                FASTEXCEL_LOG_ERROR("[ARCH] Failed to write complete data for file {} to zip", file.internal_path);
                 mz_zip_writer_entry_close(zip_handle_);
                 return ZipError::IoFail;
             }
@@ -205,7 +205,7 @@ ZipError ZipWriter::addFiles(std::vector<FileEntry>&& files) {
         // 关闭条目
         result = mz_zip_writer_entry_close(zip_handle_);
         if (result != MZ_OK) {
-            ARCHIVE_ERROR("Failed to close entry for file {} in zip, error: {}", file.internal_path, result);
+            FASTEXCEL_LOG_ERROR("[ARCH] Failed to close entry for file {} in zip, error: {}", file.internal_path, result);
             return ZipError::IoFail;
         }
         
@@ -214,14 +214,14 @@ ZipError ZipWriter::addFiles(std::vector<FileEntry>&& files) {
         stats_.entries_written++;
         stats_.bytes_written += file.content.size();
         
-        ARCHIVE_DEBUG("Successfully added file {} to zip, size: {} bytes", file.internal_path, file.content.size());
+        FASTEXCEL_LOG_DEBUG("[ARCH] Successfully added file {} to zip, size: {} bytes", file.internal_path, file.content.size());
         
         // 清空内容以释放内存（移动语义优化）
         file.content.clear();
         file.content.shrink_to_fit();
     }
     
-    ARCHIVE_INFO("Batch write completed successfully, {} files added (move semantics)", files.size());
+    FASTEXCEL_LOG_INFO("[ARCH] Batch write completed successfully, {} files added (move semantics)", files.size());
     return ZipError::Ok;
 }
 
@@ -231,12 +231,12 @@ ZipError ZipWriter::openEntry(std::string_view internal_path) {
     std::lock_guard<std::mutex> lock(mutex_);
     
     if (!is_open_ || !zip_handle_) {
-        ARCHIVE_ERROR("Zip archive not opened for writing");
+        FASTEXCEL_LOG_ERROR("[ARCH] Zip archive not opened for writing");
         return ZipError::NotOpen;
     }
     
     if (stream_entry_open_) {
-        ARCHIVE_ERROR("Another entry is already open for streaming");
+        FASTEXCEL_LOG_ERROR("[ARCH] Another entry is already open for streaming");
         return ZipError::InvalidParameter;
     }
     
@@ -244,7 +244,7 @@ ZipError ZipWriter::openEntry(std::string_view internal_path) {
     
     // 检查是否已经写入过该路径
     if (written_paths_.find(path_str) != written_paths_.end()) {
-        ARCHIVE_WARN("File {} already exists in zip, skipping duplicate entry", path_str);
+        FASTEXCEL_LOG_WARN("File {} already exists in zip, skipping duplicate entry", path_str);
         return ZipError::Ok;
     }
     
@@ -272,7 +272,7 @@ ZipError ZipWriter::openEntry(std::string_view internal_path) {
     // 打开条目
     int32_t result = mz_zip_writer_entry_open(zip_handle_, &file_info);
     if (result != MZ_OK) {
-        ARCHIVE_ERROR("Failed to open entry for file {} in zip, error: {}", internal_path, result);
+        FASTEXCEL_LOG_ERROR("[ARCH] Failed to open entry for file {} in zip, error: {}", internal_path, result);
         return ZipError::IoFail;
     }
     
@@ -280,7 +280,7 @@ ZipError ZipWriter::openEntry(std::string_view internal_path) {
     written_paths_.insert(path_str);
     stats_.entries_written++;
     
-    ARCHIVE_DEBUG("Successfully opened entry for streaming: {}", internal_path);
+    FASTEXCEL_LOG_DEBUG("[ARCH] Successfully opened entry for streaming: {}", internal_path);
     return ZipError::Ok;
 }
 
@@ -288,12 +288,12 @@ ZipError ZipWriter::writeChunk(const void* data, size_t size) {
     std::lock_guard<std::mutex> lock(mutex_);
     
     if (!is_open_ || !zip_handle_) {
-        ARCHIVE_ERROR("Zip archive not opened for writing");
+        FASTEXCEL_LOG_ERROR("[ARCH] Zip archive not opened for writing");
         return ZipError::NotOpen;
     }
     
     if (!stream_entry_open_) {
-        ARCHIVE_ERROR("No entry is open for streaming");
+        FASTEXCEL_LOG_ERROR("[ARCH] No entry is open for streaming");
         return ZipError::InvalidParameter;
     }
     
@@ -302,7 +302,7 @@ ZipError ZipWriter::writeChunk(const void* data, size_t size) {
     }
     
     if (size > INT32_MAX) {
-        ARCHIVE_ERROR("Chunk size {} is too large", size);
+        FASTEXCEL_LOG_ERROR("[ARCH] Chunk size {} is too large", size);
         return ZipError::TooLarge;
     }
     
@@ -310,12 +310,12 @@ ZipError ZipWriter::writeChunk(const void* data, size_t size) {
     int32_t bytes_written = mz_zip_writer_entry_write(zip_handle_, data, static_cast<int32_t>(size));
     
     if (bytes_written != static_cast<int32_t>(size)) {
-        ARCHIVE_ERROR("Failed to write complete chunk to zip");
+        FASTEXCEL_LOG_ERROR("[ARCH] Failed to write complete chunk to zip");
         return ZipError::IoFail;
     }
     
     stats_.bytes_written += bytes_written;
-    ARCHIVE_DEBUG("Successfully wrote chunk of {} bytes", bytes_written);
+    FASTEXCEL_LOG_DEBUG("[ARCH] Successfully wrote chunk of {} bytes", bytes_written);
     return ZipError::Ok;
 }
 
@@ -323,24 +323,24 @@ ZipError ZipWriter::closeEntry() {
     std::lock_guard<std::mutex> lock(mutex_);
     
     if (!is_open_ || !zip_handle_) {
-        ARCHIVE_ERROR("Zip archive not opened for writing");
+        FASTEXCEL_LOG_ERROR("[ARCH] Zip archive not opened for writing");
         return ZipError::NotOpen;
     }
     
     if (!stream_entry_open_) {
-        ARCHIVE_ERROR("No entry is open for streaming");
+        FASTEXCEL_LOG_ERROR("[ARCH] No entry is open for streaming");
         return ZipError::InvalidParameter;
     }
     
     int32_t result = mz_zip_writer_entry_close(zip_handle_);
     if (result != MZ_OK) {
-        ARCHIVE_ERROR("Failed to close streaming entry, error: {}", result);
+        FASTEXCEL_LOG_ERROR("[ARCH] Failed to close streaming entry, error: {}", result);
         stream_entry_open_ = false;
         return ZipError::IoFail;
     }
     
     stream_entry_open_ = false;
-    ARCHIVE_DEBUG("Successfully closed streaming entry");
+    FASTEXCEL_LOG_DEBUG("[ARCH] Successfully closed streaming entry");
     return ZipError::Ok;
 }
 
@@ -360,7 +360,7 @@ ZipError ZipWriter::setCompressionLevel(int level) {
     std::lock_guard<std::mutex> lock(mutex_);
     
     if (level < 0 || level > 9) {
-        ARCHIVE_ERROR("Invalid compression level: {}. Valid range: 0 to 9", level);
+        FASTEXCEL_LOG_ERROR("[ARCH] Invalid compression level: {}. Valid range: 0 to 9", level);
         return ZipError::InvalidParameter;
     }
     
@@ -371,25 +371,25 @@ ZipError ZipWriter::setCompressionLevel(int level) {
         mz_zip_writer_set_compress_level(zip_handle_, static_cast<int16_t>(compression_level_));
     }
     
-    ARCHIVE_DEBUG("Set compression level to {}", level);
+    FASTEXCEL_LOG_DEBUG("[ARCH] Set compression level to {}", level);
     return ZipError::Ok;
 }
 
 // 内部辅助方法
 
 bool ZipWriter::initializeWriter() {
-    ARCHIVE_DEBUG("Initializing ZIP writer for file: {}", filename_);
+    FASTEXCEL_LOG_DEBUG("[ARCH] Initializing ZIP writer for file: {}", filename_);
     
     zip_handle_ = mz_zip_writer_create();
     if (!zip_handle_) {
-        ARCHIVE_ERROR("Failed to create zip writer");
+        FASTEXCEL_LOG_ERROR("[ARCH] Failed to create zip writer");
         return false;
     }
     
     // 设置压缩方法和级别
     mz_zip_writer_set_compress_method(zip_handle_, MZ_COMPRESS_METHOD_DEFLATE);
     mz_zip_writer_set_compress_level(zip_handle_, compression_level_);
-    ARCHIVE_DEBUG("Set compression to DEFLATE with level {}", compression_level_);
+    FASTEXCEL_LOG_DEBUG("[ARCH] Set compression to DEFLATE with level {}", compression_level_);
     
     // 设置覆盖回调函数
     mz_zip_writer_set_overwrite_cb(zip_handle_, this, [](void* handle, void* userdata, const char* filename) -> int32_t {
@@ -399,14 +399,14 @@ bool ZipWriter::initializeWriter() {
     // 如果文件已存在，先删除
     if (filepath_.exists()) {
         filepath_.remove();
-        ARCHIVE_DEBUG("Removed existing zip file: {}", filename_);
+        FASTEXCEL_LOG_DEBUG("[ARCH] Removed existing zip file: {}", filename_);
     }
     
     // 打开文件进行写入
     int32_t result = mz_zip_writer_open_file(zip_handle_, filepath_.c_str(), 0, 0);
     
     if (result != MZ_OK) {
-        ARCHIVE_ERROR("Failed to open zip file for writing: {}, error: {}", filename_, result);
+        FASTEXCEL_LOG_ERROR("[ARCH] Failed to open zip file for writing: {}, error: {}", filename_, result);
         mz_zip_writer_delete(&zip_handle_);
         zip_handle_ = nullptr;
         return false;
@@ -416,11 +416,11 @@ bool ZipWriter::initializeWriter() {
     void* zip_handle = nullptr;
     if (mz_zip_writer_get_zip_handle(zip_handle_, &zip_handle) == MZ_OK && zip_handle) {
         mz_zip_set_data_descriptor(zip_handle, 0);
-        ARCHIVE_DEBUG("Disabled Data Descriptor for compatibility");
+        FASTEXCEL_LOG_DEBUG("[ARCH] Disabled Data Descriptor for compatibility");
     }
     
     is_open_ = true;
-    ARCHIVE_DEBUG("ZIP archive successfully opened for writing: {}", filename_);
+    FASTEXCEL_LOG_DEBUG("[ARCH] ZIP archive successfully opened for writing: {}", filename_);
     return true;
 }
 
@@ -446,10 +446,10 @@ void ZipWriter::initializeFileInfo(void* file_info_ptr, const std::string& path,
     // 根据压缩级别选择压缩方法
     if (compression_level_ == 0) {
         file_info.compression_method = MZ_COMPRESS_METHOD_STORE;
-        ARCHIVE_DEBUG("Using STORE compression method");
+        FASTEXCEL_LOG_DEBUG("[ARCH] Using STORE compression method");
     } else {
         file_info.compression_method = MZ_COMPRESS_METHOD_DEFLATE;
-        ARCHIVE_DEBUG("Using DEFLATE compression method");
+        FASTEXCEL_LOG_DEBUG("[ARCH] Using DEFLATE compression method");
     }
     
     // 使用TimeUtils获取当前时间
@@ -470,13 +470,13 @@ void ZipWriter::initializeFileInfo(void* file_info_ptr, const std::string& path,
 ZipError ZipWriter::writeFileEntry(const std::string& internal_path, const void* data, size_t size) {
     // 检查是否已经写入过该路径
     if (written_paths_.find(internal_path) != written_paths_.end()) {
-        ARCHIVE_WARN("File {} already exists in zip, skipping duplicate entry", internal_path);
+        FASTEXCEL_LOG_WARN("File {} already exists in zip, skipping duplicate entry", internal_path);
         return ZipError::Ok;
     }
     
     // 检查文件大小
     if (size > INT32_MAX) {
-        ARCHIVE_ERROR("File {} is too large ({} bytes)", internal_path, size);
+        FASTEXCEL_LOG_ERROR("File {} is too large ({} bytes)", internal_path, size);
         return ZipError::TooLarge;
     }
     
@@ -487,7 +487,7 @@ ZipError ZipWriter::writeFileEntry(const std::string& internal_path, const void*
     // 打开条目
     int32_t result = mz_zip_writer_entry_open(zip_handle_, &file_info);
     if (result != MZ_OK) {
-        ARCHIVE_ERROR("Failed to open entry for file {} in zip, error: {}", internal_path, result);
+        FASTEXCEL_LOG_ERROR("Failed to open entry for file {} in zip, error: {}", internal_path, result);
         return ZipError::IoFail;
     }
     
@@ -496,7 +496,7 @@ ZipError ZipWriter::writeFileEntry(const std::string& internal_path, const void*
         int32_t bytes_written = mz_zip_writer_entry_write(zip_handle_, data, static_cast<int32_t>(size));
         
         if (bytes_written != static_cast<int32_t>(size)) {
-            ARCHIVE_ERROR("Failed to write complete data for file {} to zip", internal_path);
+            FASTEXCEL_LOG_ERROR("Failed to write complete data for file {} to zip", internal_path);
             mz_zip_writer_entry_close(zip_handle_);
             return ZipError::IoFail;
         }
@@ -505,7 +505,7 @@ ZipError ZipWriter::writeFileEntry(const std::string& internal_path, const void*
     // 关闭条目
     result = mz_zip_writer_entry_close(zip_handle_);
     if (result != MZ_OK) {
-        ARCHIVE_ERROR("Failed to close entry for file {} in zip, error: {}", internal_path, result);
+        FASTEXCEL_LOG_ERROR("Failed to close entry for file {} in zip, error: {}", internal_path, result);
         return ZipError::IoFail;
     }
     
@@ -514,7 +514,7 @@ ZipError ZipWriter::writeFileEntry(const std::string& internal_path, const void*
     stats_.entries_written++;
     stats_.bytes_written += size;
     
-    ARCHIVE_DEBUG("Successfully added file {} to zip, size: {} bytes", internal_path, size);
+    FASTEXCEL_LOG_DEBUG("Successfully added file {} to zip, size: {} bytes", internal_path, size);
     return ZipError::Ok;
 }
 

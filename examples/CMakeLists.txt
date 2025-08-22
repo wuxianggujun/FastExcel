@@ -7,7 +7,8 @@ set(EXAMPLE_SOURCES
     edit_features_demo.cpp
     formatting_features_demo.cpp
     image_insertion_demo.cpp
-    performance_demo.cpp
+    performance_demo.cpp 
+        debug_test.cpp
 )
 
 # 为每个示例创建可执行文件

@@ -330,7 +330,12 @@ std::string Logger::level_to_string(Level level) const {
 
 std::string Logger::get_timestamp() const {
     auto now = std::chrono::system_clock::now();
-    return fmt::format("{:%Y-%m-%d %H:%M:%S}", now);
+    auto local_time = fmt::localtime(std::chrono::system_clock::to_time_t(now));
+    
+    // 获取毫秒部分（只需要3位数）
+    auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()) % 1000;
+    
+    return fmt::format("{:%Y-%m-%d %H:%M:%S}.{:03d}", local_time, ms.count());
 }
 
 void Logger::flush() {

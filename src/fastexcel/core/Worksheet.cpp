@@ -1,4 +1,4 @@
-#include "fastexcel/utils/ModuleLoggers.hpp"
+#include "fastexcel/utils/Logger.hpp"
 #include "fastexcel/core/Worksheet.hpp"
 #include "fastexcel/core/WorksheetChain.hpp"
 #include "fastexcel/core/RangeFormatter.hpp"
@@ -17,7 +17,7 @@
 #include "fastexcel/xml/Relationships.hpp"
 #include "fastexcel/xml/SharedStrings.hpp"
 #include "fastexcel/utils/Logger.hpp"
-#include "fastexcel/utils/LogConfig.hpp"
+#include "fastexcel/utils/Logger.hpp"
 #include "fastexcel/utils/TimeUtils.hpp"
 #include "fastexcel/utils/CommonUtils.hpp"
 #include "fastexcel/utils/AddressParser.hpp"
@@ -1305,7 +1305,7 @@ void Worksheet::clearColumn(int col) {
 
 void Worksheet::clearAll() {
     cell_processor_->clearAll();
-    CORE_DEBUG("Cleared all cells in worksheet '{}'", name_);
+    FASTEXCEL_LOG_DEBUG("Cleared all cells in worksheet '{}'", name_);
 }
 
 // 链式调用方法实现

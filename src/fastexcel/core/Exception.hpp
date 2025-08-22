@@ -324,9 +324,13 @@ private:
 #define FASTEXCEL_THROW_IF(condition, ExceptionType, message) \
     do { if (condition) { FASTEXCEL_THROW(ExceptionType, message); } } while(0)
 
+#ifndef FASTEXCEL_HANDLE_ERROR
 #define FASTEXCEL_HANDLE_ERROR(exception) \
     fastexcel::core::ErrorManager::getInstance().handleError(exception)
+#endif
 
+#ifndef FASTEXCEL_HANDLE_WARNING
 #define FASTEXCEL_HANDLE_WARNING(message, context) \
     fastexcel::core::ErrorManager::getInstance().handleWarning(message, context)
+#endif
 

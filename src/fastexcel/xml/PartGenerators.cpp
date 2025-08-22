@@ -1,4 +1,4 @@
-#include "fastexcel/utils/ModuleLoggers.hpp"
+#include "fastexcel/utils/Logger.hpp"
 #include "IXMLPartGenerator.hpp"
 #include "UnifiedXMLGenerator.hpp"
 #include "WorksheetXMLGenerator.hpp"
@@ -22,7 +22,7 @@ static bool writeWithCallback(IFileWriter& writer,
                               const std::string& path,
                               const std::function<void(const std::function<void(const char*, size_t)>&)>& gen) {
     if (!writer.openStreamingFile(path)) {
-        XML_ERROR("Failed to open streaming file: {}", path);
+        FASTEXCEL_LOG_ERROR("Failed to open streaming file: {}", path);
         return false;
     }
     
@@ -31,7 +31,7 @@ static bool writeWithCallback(IFileWriter& writer,
         gen(cb);
         return writer.closeStreamingFile();
     } catch (const std::exception& e) {
-        XML_ERROR("Exception during streaming generation for {}: {}", path, e.what());
+        FASTEXCEL_LOG_ERROR("Exception during streaming generation for {}: {}", path, e.what());
         writer.closeStreamingFile(); // 确保清理状态
         return false;
     }
@@ -164,9 +164,10 @@ public:
                         w.endElement();
                     }
                 }
-                w.endElement();
-                w.startElement("calcPr"); w.writeAttribute("calcId", "124519"); w.writeAttribute("fullCalcOnLoad", "1"); w.endElement();
-                w.endElement(); w.flushBuffer();
+                w.endElement(); // 结束 sheets
+                w.startElement("calcPr"); w.writeAttribute("calcId", "124519"); w.writeAttribute("fullCalcOnLoad", "1"); w.endElement(); // calcPr
+                w.endElement(); // 结束 workbook
+                w.flushBuffer();
             });
         }
         return false;
@@ -272,7 +273,7 @@ public:
         try {
             idx = std::stoi(number_str) - 1;
         } catch (const std::exception&) {
-            XML_ERROR("Failed to parse sheet index from path: {}, extracted: '{}'", part, number_str);
+            FASTEXCEL_LOG_ERROR("Failed to parse sheet index from path: {}, extracted: '{}'", part, number_str);
             return false;
         }
         auto names = ctx.workbook->getSheetNames();
@@ -315,7 +316,7 @@ public:
         try {
             idx = std::stoi(number_str) - 1;
         } catch (const std::exception&) {
-            XML_ERROR("Failed to parse sheet index from rels path: {}, extracted: '{}'", part, number_str);
+            FASTEXCEL_LOG_ERROR("Failed to parse sheet index from rels path: {}, extracted: '{}'", part, number_str);
             return false;
         }
         auto ws = ctx.workbook->getSheet(static_cast<size_t>(idx));
@@ -363,20 +364,20 @@ public:
         try {
             idx = std::stoi(number_str) - 1;
         } catch (const std::exception&) {
-            XML_ERROR("Failed to parse drawing index from path: {}, extracted: '{}'", part, number_str);
+            FASTEXCEL_LOG_ERROR("Failed to parse drawing index from path: {}, extracted: '{}'", part, number_str);
             return false;
         }
         
         auto ws = ctx.workbook->getSheet(static_cast<size_t>(idx));
         if (!ws || ws->getImages().empty()) {
-            XML_DEBUG("No worksheet or no images for drawing index {}", idx);
+            FASTEXCEL_LOG_DEBUG("No worksheet or no images for drawing index {}", idx);
             return false;
         }
         
         // 使用 DrawingXMLGenerator 而非硬编码 XML
         const auto& images = ws->getImages();
         DrawingXMLGenerator gen(&images, idx + 1);
-        XML_DEBUG("Generating drawing XML for {} images using DrawingXMLGenerator", images.size());
+        FASTEXCEL_LOG_DEBUG("Generating drawing XML for {} images using DrawingXMLGenerator", images.size());
         
         return writeWithCallback(writer, part, [&gen](auto& cb){
             gen.generateDrawingXML(cb, true); // 强制生成，因为已经检查过图片存在
@@ -420,7 +421,7 @@ public:
         try {
             idx = std::stoi(number_str) - 1;
         } catch (const std::exception&) {
-            XML_ERROR("Failed to parse drawing index from rels path: {}, extracted: '{}'", part, number_str);
+            FASTEXCEL_LOG_ERROR("Failed to parse drawing index from rels path: {}, extracted: '{}'", part, number_str);
             return false;
         }
         
@@ -443,14 +444,14 @@ public:
                 // 使用动态扩展名而非硬编码 .png
                 std::string ext = images[i]->getFileExtension();
                 if (ext.empty()) {
-                    XML_ERROR("Image {} has unknown format, using png as fallback", i + 1);
+                    FASTEXCEL_LOG_ERROR("Image {} has unknown format, using png as fallback", i + 1);
                     ext = "png";
                 }
                 std::string target = "../media/image" + std::to_string(i + 1) + "." + ext;
                 w.writeAttribute("Target", target.c_str());
                 w.endElement();
                 
-                XML_DEBUG("Added drawing relationship: rId{} -> {}", i + 1, target);
+                FASTEXCEL_LOG_DEBUG("Added drawing relationship: rId{} -> {}", i + 1, target);
             }
             
             w.endElement();
@@ -477,7 +478,7 @@ public:
                 // 使用动态扩展名
                 std::string ext = image->getFileExtension();
                 if (ext.empty()) {
-                        XML_ERROR("Image has unknown format, skipping: {}", image->getId());
+                        FASTEXCEL_LOG_ERROR("Image has unknown format, skipping: {}", image->getId());
                     continue;
                 }
                 parts.emplace_back("xl/media/image" + std::to_string(image_counter++) + "." + ext);
@@ -505,7 +506,7 @@ public:
         try {
             target_idx = std::stoi(number_str);
         } catch (const std::exception&) {
-            XML_ERROR("Failed to parse image index from path: {}, extracted: '{}'", part, number_str);
+            FASTEXCEL_LOG_ERROR("Failed to parse image index from path: {}, extracted: '{}'", part, number_str);
             return false;
         }
         
@@ -522,13 +523,13 @@ public:
                         const auto& data = image->getData();
                         // 使用二进制数据写入，不要转换为字符串
                         if (!writer.openStreamingFile(part)) {
-                            XML_ERROR("Failed to open streaming file for image: {}", part);
+                            FASTEXCEL_LOG_ERROR("Failed to open streaming file for image: {}", part);
                             return false;
                         }
                         // 需要将uint8_t*转换为const char*
                         bool success = writer.writeStreamingChunk(reinterpret_cast<const char*>(data.data()), data.size());
                         if (!writer.closeStreamingFile()) {
-                            XML_ERROR("Failed to close streaming file for image: {}", part);
+                            FASTEXCEL_LOG_ERROR("Failed to close streaming file for image: {}", part);
                             return false;
                         }
                         return success;
@@ -538,7 +539,7 @@ public:
             }
         }
         
-        XML_ERROR("Image not found for path: {}", part);
+        FASTEXCEL_LOG_ERROR("Image not found for path: {}", part);
         return false;
     }
 };

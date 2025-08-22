@@ -1,4 +1,4 @@
-#include "fastexcel/utils/ModuleLoggers.hpp"
+#include "fastexcel/utils/Logger.hpp"
 #include "CompressionEngine.hpp"
 #include "ZlibEngine.hpp"
 

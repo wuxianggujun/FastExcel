@@ -21,6 +21,8 @@
 #include <atomic>
 #include <fmt/format.h>
 #include <fmt/chrono.h>
+#include <cstring>
+#include <algorithm>
 
 #ifdef ERROR
 #undef ERROR
@@ -133,6 +135,55 @@ public:
     void flush();
     void shutdown();
 
+    // 带源码位置信息的便捷接口（在宏中使用）
+    template<typename... Args>
+    inline void traceCtx(const char* file, int line, const char* func,
+                         const std::string& fmt_str, Args&&... args) {
+        if (!should_log(Level::TRACE)) return;
+        const std::string fmt_with_ctx = fmt::format("[{}:{}:{}] {}", baseFilename(file), line, extractFunctionName(func), fmt_str);
+        trace(fmt_with_ctx, std::forward<Args>(args)...);
+    }
+
+    template<typename... Args>
+    inline void debugCtx(const char* file, int line, const char* func,
+                         const std::string& fmt_str, Args&&... args) {
+        if (!should_log(Level::DEBUG)) return;
+        const std::string fmt_with_ctx = fmt::format("[{}:{}:{}] {}", baseFilename(file), line, extractFunctionName(func), fmt_str);
+        debug(fmt_with_ctx, std::forward<Args>(args)...);
+    }
+
+    template<typename... Args>
+    inline void infoCtx(const char* file, int line, const char* func,
+                        const std::string& fmt_str, Args&&... args) {
+        if (!should_log(Level::INFO)) return;
+        const std::string fmt_with_ctx = fmt::format("[{}:{}:{}] {}", baseFilename(file), line, extractFunctionName(func), fmt_str);
+        info(fmt_with_ctx, std::forward<Args>(args)...);
+    }
+
+    template<typename... Args>
+    inline void warnCtx(const char* file, int line, const char* func,
+                        const std::string& fmt_str, Args&&... args) {
+        if (!should_log(Level::WARN)) return;
+        const std::string fmt_with_ctx = fmt::format("[{}:{}:{}] {}", baseFilename(file), line, extractFunctionName(func), fmt_str);
+        warn(fmt_with_ctx, std::forward<Args>(args)...);
+    }
+
+    template<typename... Args>
+    inline void errorCtx(const char* file, int line, const char* func,
+                         const std::string& fmt_str, Args&&... args) {
+        if (!should_log(Level::ERROR)) return;
+        const std::string fmt_with_ctx = fmt::format("[{}:{}:{}] {}", baseFilename(file), line, extractFunctionName(func), fmt_str);
+        error(fmt_with_ctx, std::forward<Args>(args)...);
+    }
+
+    template<typename... Args>
+    inline void criticalCtx(const char* file, int line, const char* func,
+                            const std::string& fmt_str, Args&&... args) {
+        if (!should_log(Level::CRITICAL)) return;
+        const std::string fmt_with_ctx = fmt::format("[{}:{}:{}] {}", baseFilename(file), line, extractFunctionName(func), fmt_str);
+        critical(fmt_with_ctx, std::forward<Args>(args)...);
+    }
+
 private:
     Logger() = default;
     ~Logger();
@@ -148,6 +199,36 @@ private:
     void rotate_file_if_needed();
     std::string get_rotated_filename(size_t index) const;
     
+    // 提取文件名（去除路径）
+    static inline const char* baseFilename(const char* path) {
+        if (!path) return "";
+        const char* slash1 = std::strrchr(path, '/');
+        const char* slash2 = std::strrchr(path, '\\');
+        const char* p = (slash1 && slash2) ? (std::max(slash1, slash2)) : (slash1 ? slash1 : slash2);
+        return p ? (p + 1) : path;
+    }
+    
+    // 提取函数名（去除命名空间和参数）
+    static inline std::string extractFunctionName(const char* func_sig) {
+        if (!func_sig) return "";
+        
+        std::string sig(func_sig);
+        
+        // 找到最后一个双冒号的位置（处理命名空间）
+        size_t lastColon = sig.rfind("::");
+        if (lastColon != std::string::npos) {
+            sig = sig.substr(lastColon + 2);
+        }
+        
+        // 找到第一个括号的位置（去除参数）
+        size_t paren = sig.find('(');
+        if (paren != std::string::npos) {
+            sig = sig.substr(0, paren);
+        }
+        
+        return sig;
+    }
+    
     mutable std::mutex mutex_;
     std::atomic<Level> current_level_{Level::INFO};
     std::atomic<bool> initialized_{false};
@@ -162,11 +243,32 @@ private:
     WriteMode write_mode_ = WriteMode::TRUNCATE;
 };
 
-#define FASTEXCEL_LOG_TRACE(...)    fastexcel::Logger::getInstance().trace(__VA_ARGS__)
-#define FASTEXCEL_LOG_DEBUG(...)    fastexcel::Logger::getInstance().debug(__VA_ARGS__)
-#define FASTEXCEL_LOG_INFO(...)     fastexcel::Logger::getInstance().info(__VA_ARGS__)
-#define FASTEXCEL_LOG_WARN(...)     fastexcel::Logger::getInstance().warn(__VA_ARGS__)
-#define FASTEXCEL_LOG_ERROR(...)    fastexcel::Logger::getInstance().error(__VA_ARGS__)
-#define FASTEXCEL_LOG_CRITICAL(...) fastexcel::Logger::getInstance().critical(__VA_ARGS__)
+// 跨编译器的函数签名宏，使用简洁的函数名而不是完整签名
+#if defined(_MSC_VER)
+#  define FASTEXCEL_FUNC __FUNCTION__
+#elif defined(__GNUC__) || defined(__clang__)
+#  define FASTEXCEL_FUNC __FUNCTION__
+#else
+#  define FASTEXCEL_FUNC __func__
+#endif
 
-}
+// 统一日志宏（带源码位置信息，不包含模块前缀）
+#define FASTEXCEL_LOG_TRACE(fmt, ...)    fastexcel::Logger::getInstance().traceCtx   (__FILE__, __LINE__, FASTEXCEL_FUNC, fmt, ##__VA_ARGS__)
+#define FASTEXCEL_LOG_DEBUG(fmt, ...)    fastexcel::Logger::getInstance().debugCtx   (__FILE__, __LINE__, FASTEXCEL_FUNC, fmt, ##__VA_ARGS__)
+#define FASTEXCEL_LOG_INFO(fmt, ...)     fastexcel::Logger::getInstance().infoCtx    (__FILE__, __LINE__, FASTEXCEL_FUNC, fmt, ##__VA_ARGS__)
+#define FASTEXCEL_LOG_WARN(fmt, ...)     fastexcel::Logger::getInstance().warnCtx    (__FILE__, __LINE__, FASTEXCEL_FUNC, fmt, ##__VA_ARGS__)
+#define FASTEXCEL_LOG_ERROR(fmt, ...)    fastexcel::Logger::getInstance().errorCtx   (__FILE__, __LINE__, FASTEXCEL_FUNC, fmt, ##__VA_ARGS__)
+#define FASTEXCEL_LOG_CRITICAL(fmt, ...) fastexcel::Logger::getInstance().criticalCtx(__FILE__, __LINE__, FASTEXCEL_FUNC, fmt, ##__VA_ARGS__)
+
+// 统一的错误/告警处理宏（仅记录日志，不做额外处理）
+#ifndef FASTEXCEL_HANDLE_WARNING
+#  define FASTEXCEL_HANDLE_WARNING(message, context) \
+    do { FASTEXCEL_LOG_WARN("[ctx:{}] {}", (context), (message)); } while (0)
+#endif
+
+#ifndef FASTEXCEL_HANDLE_ERROR
+#  define FASTEXCEL_HANDLE_ERROR(ex) \
+    do { FASTEXCEL_LOG_ERROR("{}", (ex).what()); } while (0)
+#endif
+
+} 

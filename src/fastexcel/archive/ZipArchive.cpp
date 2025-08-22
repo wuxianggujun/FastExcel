@@ -1,4 +1,4 @@
-#include "fastexcel/utils/ModuleLoggers.hpp"
+#include "fastexcel/utils/Logger.hpp"
 #include "fastexcel/archive/ZipArchive.hpp"
 #include <stdexcept>
 #include <iostream>
@@ -50,7 +50,7 @@ bool ZipArchive::open(bool create) {
             }
         }
     } catch (const std::exception& e) {
-        ARCHIVE_ERROR("Failed to open ZIP archive: {}", e.what());
+        FASTEXCEL_LOG_ERROR("[ARCH] Failed to open ZIP archive: {}", e.what());
     }
     
     // 打开失败，清理

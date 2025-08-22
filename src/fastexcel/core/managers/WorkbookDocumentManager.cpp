@@ -169,7 +169,7 @@ void WorkbookDocumentManager::setCustomProperty(const std::string& name, const s
     
     if (custom_properties_.size() >= config_.max_custom_properties && 
         custom_properties_.find(name) == custom_properties_.end()) {
-        CORE_WARN("Custom property limit reached ({}), ignoring property: {}", 
+        FASTEXCEL_LOG_WARN("Custom property limit reached ({}), ignoring property: {}", 
                   config_.max_custom_properties, name);
         return;
     }
@@ -183,7 +183,7 @@ void WorkbookDocumentManager::setCustomProperty(const std::string& name, double 
     
     if (custom_properties_.size() >= config_.max_custom_properties && 
         custom_properties_.find(name) == custom_properties_.end()) {
-        CORE_WARN("Custom property limit reached ({}), ignoring property: {}", 
+        FASTEXCEL_LOG_WARN("Custom property limit reached ({}), ignoring property: {}", 
                   config_.max_custom_properties, name);
         return;
     }
@@ -197,7 +197,7 @@ void WorkbookDocumentManager::setCustomProperty(const std::string& name, bool va
     
     if (custom_properties_.size() >= config_.max_custom_properties && 
         custom_properties_.find(name) == custom_properties_.end()) {
-        CORE_WARN("Custom property limit reached ({}), ignoring property: {}", 
+        FASTEXCEL_LOG_WARN("Custom property limit reached ({}), ignoring property: {}", 
                   config_.max_custom_properties, name);
         return;
     }
@@ -211,7 +211,7 @@ void WorkbookDocumentManager::setCustomProperty(const std::string& name, const s
     
     if (custom_properties_.size() >= config_.max_custom_properties && 
         custom_properties_.find(name) == custom_properties_.end()) {
-        CORE_WARN("Custom property limit reached ({}), ignoring property: {}", 
+        FASTEXCEL_LOG_WARN("Custom property limit reached ({}), ignoring property: {}", 
                   config_.max_custom_properties, name);
         return;
     }

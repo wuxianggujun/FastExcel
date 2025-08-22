@@ -1,4 +1,4 @@
-#include "fastexcel/utils/ModuleLoggers.hpp"
+#include "fastexcel/utils/Logger.hpp"
 #include "fastexcel/opc/PackageEditor.hpp"
 #include "fastexcel/opc/PackageEditorManager.hpp"
 #include "fastexcel/tracking/StandardChangeTracker.hpp"
@@ -27,25 +27,25 @@ std::unique_ptr<PackageEditor> PackageEditor::open(const core::Path& xlsx_path) 
     // 创建ZIP读取器
     auto zip_reader = std::make_unique<archive::ZipReader>(xlsx_path);
     if (!zip_reader->open()) {
-        OPC_ERROR("Failed to open ZIP file: {}", xlsx_path.string());
+        FASTEXCEL_LOG_ERROR("Failed to open ZIP file: {}", xlsx_path.string());
         return nullptr;
     }
     
     editor->initializeServices(std::move(zip_reader), nullptr);
-    OPC_INFO("Opened Excel package: {}", xlsx_path.string());
+    FASTEXCEL_LOG_INFO("Opened Excel package: {}", xlsx_path.string());
     return editor;
 }
 
 std::unique_ptr<PackageEditor> PackageEditor::fromWorkbook(core::Workbook* workbook) {
     if (!workbook) {
-        OPC_ERROR("Cannot create PackageEditor from null Workbook");
+        FASTEXCEL_LOG_ERROR("Cannot create PackageEditor from null Workbook");
         return nullptr;
     }
     
     auto editor = std::unique_ptr<PackageEditor>(new PackageEditor());
     editor->initializeServices(nullptr, workbook);
     
-    OPC_INFO("Created PackageEditor from Workbook with {} sheets", 
+    FASTEXCEL_LOG_INFO("Created PackageEditor from Workbook with {} sheets", 
              workbook->getSheetNames().size());
     return editor;
 }
@@ -56,7 +56,7 @@ std::unique_ptr<PackageEditor> PackageEditor::create() {
     // 创建新的工作簿
     auto workbook = std::make_unique<core::Workbook>(core::Path("new_workbook.xlsx"));
     if (!workbook->open()) {
-        OPC_ERROR("Failed to create new Workbook");
+        FASTEXCEL_LOG_ERROR("Failed to create new Workbook");
         return nullptr;
     }
     
@@ -64,7 +64,7 @@ std::unique_ptr<PackageEditor> PackageEditor::create() {
     workbook->addSheet("Sheet1");
     
     editor->initializeServices(nullptr, workbook.release());
-    OPC_INFO("Created new Excel package with default sheet");
+    FASTEXCEL_LOG_INFO("Created new Excel package with default sheet");
     return editor;
 }
 
@@ -113,7 +113,7 @@ void PackageEditor::detectChanges() {
     
     // 检测工作簿是否有修改
     if (workbook_->isModified()) {
-        OPC_DEBUG("Detected workbook modifications, marking dirty parts");
+        FASTEXCEL_LOG_DEBUG("Detected workbook modifications, marking dirty parts");
         
         // 标记核心部件
         change_tracker_->markPartDirty("xl/workbook.xml");
@@ -148,18 +148,18 @@ bool PackageEditor::commit(const core::Path& target_path) {
     detectChanges();
     
     if (!change_tracker_->hasChanges()) {
-        OPC_INFO("No changes detected, fast copy to: {}", target_path.string());
+        FASTEXCEL_LOG_INFO("No changes detected, fast copy to: {}", target_path.string());
         // 快速路径：直接复制
         // TODO: 实现快速复制逻辑
         return true;
     }
     
-    OPC_INFO("Committing {} dirty parts to: {}", 
+    FASTEXCEL_LOG_INFO("Committing {} dirty parts to: {}", 
              change_tracker_->getDirtyParts().size(), target_path.string());
     
     // 设置写入路径
     if (!package_manager_->openForWriting(target_path)) {
-        OPC_ERROR("Failed to open package for writing: {}", target_path.string());
+        FASTEXCEL_LOG_ERROR("Failed to open package for writing: {}", target_path.string());
         return false;
     }
     
@@ -168,13 +168,13 @@ bool PackageEditor::commit(const core::Path& target_path) {
     for (const auto& part : dirty_parts) {
         std::string content = generatePart(part);
         if (content.empty() && isRequiredPart(part)) {
-            OPC_ERROR("Failed to generate required part: {}", part);
+            FASTEXCEL_LOG_ERROR("Failed to generate required part: {}", part);
             return false;
         }
         
         if (!content.empty()) {
             if (!package_manager_->writePart(part, content)) {
-                OPC_ERROR("Failed to write part: {}", part);
+                FASTEXCEL_LOG_ERROR("Failed to write part: {}", part);
                 return false;
             }
         }
@@ -185,7 +185,7 @@ bool PackageEditor::commit(const core::Path& target_path) {
     
     if (success) {
         change_tracker_->clearAll();
-        OPC_INFO("Successfully committed changes to: {}", target_path.string());
+        FASTEXCEL_LOG_INFO("Successfully committed changes to: {}", target_path.string());
     }
     
     return success;
@@ -193,11 +193,11 @@ bool PackageEditor::commit(const core::Path& target_path) {
 
 std::string PackageEditor::generatePart(const std::string& path) const {
     if (!xml_generator_) {
-        OPC_ERROR("No XML generator available for part: {}", path);
+        FASTEXCEL_LOG_ERROR("No XML generator available for part: {}", path);
         return "";
     }
     
-    OPC_DEBUG("Generating part: {}", path);
+    FASTEXCEL_LOG_DEBUG("Generating part: {}", path);
 
     // 以 IFileWriter 方式生成到字符串
     struct StringWriter : public core::IFileWriter {
@@ -212,7 +212,7 @@ std::string PackageEditor::generatePart(const std::string& path) const {
     } sw;
 
     if (!xml_generator_->generateParts(sw, {path})) {
-        OPC_WARN("No generator for part: {}", path);
+        FASTEXCEL_LOG_WARN("No generator for part: {}", path);
         return "";
     }
     return sw.content;
@@ -238,7 +238,7 @@ std::string PackageEditor::extractSheetNameFromPath(const std::string& path) con
             }
         }
     } catch (const std::exception& e) {
-        OPC_ERROR("Failed to parse sheet ID from path: {} - {}", path, e.what());
+        FASTEXCEL_LOG_ERROR("Failed to parse sheet ID from path: {} - {}", path, e.what());
     }
     
     return "";
@@ -273,7 +273,7 @@ std::vector<std::string> PackageEditor::getDirtyParts() const {
 bool PackageEditor::save() {
     // 目前简化实现，后续可以优化为就地更新
     if (source_path_.empty()) {
-        OPC_ERROR("No source path specified for save operation");
+        FASTEXCEL_LOG_ERROR("No source path specified for save operation");
         return false;
     }
     
@@ -319,7 +319,7 @@ bool PackageEditor::initialize(const core::Path& xlsx_path) {
     // 创建ZIP读取器
     auto zip_reader = std::make_unique<archive::ZipReader>(xlsx_path);
     if (!zip_reader->open()) {
-        OPC_ERROR("Failed to open ZIP file: {}", xlsx_path.string());
+        FASTEXCEL_LOG_ERROR("Failed to open ZIP file: {}", xlsx_path.string());
         return false;
     }
     
@@ -328,7 +328,7 @@ bool PackageEditor::initialize(const core::Path& xlsx_path) {
 
 bool PackageEditor::initializeFromWorkbook() {
     if (!workbook_) {
-        OPC_ERROR("No workbook provided for initialization");
+        FASTEXCEL_LOG_ERROR("No workbook provided for initialization");
         return false;
     }
     
@@ -338,7 +338,7 @@ bool PackageEditor::initializeFromWorkbook() {
 void PackageEditor::logOperationStats() const {
     if (change_tracker_) {
         auto dirty_parts = change_tracker_->getDirtyParts();
-        OPC_INFO("Operation stats: {} dirty parts", dirty_parts.size());
+        FASTEXCEL_LOG_INFO("Operation stats: {} dirty parts", dirty_parts.size());
     }
 }
 

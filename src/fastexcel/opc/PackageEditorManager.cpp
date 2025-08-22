@@ -1,4 +1,4 @@
-#include "fastexcel/utils/ModuleLoggers.hpp"
+#include "fastexcel/utils/Logger.hpp"
 #include "fastexcel/opc/PackageEditorManager.hpp"
 
 namespace fastexcel {
@@ -15,9 +15,9 @@ bool PackageEditorManager::openForReading(const core::Path& path) {
     readable_ = zip_reader_->open();
     
     if (!readable_) {
-        OPC_ERROR("Failed to open ZIP file for reading: {}", path.string());
+        FASTEXCEL_LOG_ERROR("Failed to open ZIP file for reading: {}", path.string());
     } else {
-        OPC_DEBUG("Opened ZIP file for reading: {} ({} parts)", 
+        FASTEXCEL_LOG_DEBUG("Opened ZIP file for reading: {} ({} parts)", 
                   path.string(), zip_reader_->listFiles().size());
     }
     
@@ -26,17 +26,17 @@ bool PackageEditorManager::openForReading(const core::Path& path) {
 
 std::string PackageEditorManager::readPart(const std::string& part_name) {
     if (!zip_reader_) {
-        OPC_ERROR("No ZIP reader available for reading part: {}", part_name);
+        FASTEXCEL_LOG_ERROR("No ZIP reader available for reading part: {}", part_name);
         return "";
     }
     
     std::string content;
     if (zip_reader_->extractFile(part_name, content) == archive::ZipError::Ok) {
-        OPC_DEBUG("Successfully read part: {} ({} bytes)", part_name, content.size());
+        FASTEXCEL_LOG_DEBUG("Successfully read part: {} ({} bytes)", part_name, content.size());
         return content;
     }
     
-    OPC_WARN("Failed to read part: {}", part_name);
+    FASTEXCEL_LOG_WARN("Failed to read part: {}", part_name);
     return "";
 }
 
@@ -49,7 +49,7 @@ bool PackageEditorManager::partExists(const std::string& part_name) const {
 
 std::vector<std::string> PackageEditorManager::listParts() const {
     if (!zip_reader_) {
-        OPC_WARN("No ZIP reader available for listing parts");
+        FASTEXCEL_LOG_WARN("No ZIP reader available for listing parts");
         return {};
     }
     
@@ -62,18 +62,18 @@ bool PackageEditorManager::openForWriting(const core::Path& path) {
     target_path_ = path;
     writable_ = true;
     
-    OPC_DEBUG("Opened for writing to: {}", path.string());
+    FASTEXCEL_LOG_DEBUG("Opened for writing to: {}", path.string());
     return true;
 }
 
 bool PackageEditorManager::writePart(const std::string& part_name, const std::string& content) {
     if (!writable_) {
-        OPC_ERROR("Package not opened for writing, cannot write part: {}", part_name);
+        FASTEXCEL_LOG_ERROR("Package not opened for writing, cannot write part: {}", part_name);
         return false;
     }
     
     pending_writes_[part_name] = content;
-    OPC_DEBUG("Queued part for writing: {} ({} bytes)", part_name, content.size());
+    FASTEXCEL_LOG_DEBUG("Queued part for writing: {} ({} bytes)", part_name, content.size());
     return true;
 }
 
@@ -81,17 +81,17 @@ bool PackageEditorManager::removePart(const std::string& part_name) {
     removed_parts_.insert(part_name);
     pending_writes_.erase(part_name); // 确保不会写入被删除的部件
     
-    OPC_DEBUG("Marked part for removal: {}", part_name);
+    FASTEXCEL_LOG_DEBUG("Marked part for removal: {}", part_name);
     return true;
 }
 
 bool PackageEditorManager::commit() {
     if (!writable_ || target_path_.empty()) {
-        OPC_ERROR("Cannot commit: package not properly opened for writing");
+        FASTEXCEL_LOG_ERROR("Cannot commit: package not properly opened for writing");
         return false;
     }
 
-    OPC_INFO("Committing {} pending writes, {} removals to: {}", 
+    FASTEXCEL_LOG_INFO("Committing {} pending writes, {} removals to: {}", 
              pending_writes_.size(), removed_parts_.size(), target_path_.string());
 
     // 使用ZipRepackWriter实现实际的写入
@@ -100,16 +100,16 @@ bool PackageEditorManager::commit() {
     // 写入所有待写入的部件
     for (const auto& [path, content] : pending_writes_) {
         if (removed_parts_.count(path)) {
-            OPC_DEBUG("Skipping removed part: {}", path);
+            FASTEXCEL_LOG_DEBUG("Skipping removed part: {}", path);
             continue;
         }
         
         if (!writer.add(path, content)) {
-            OPC_ERROR("Failed to add part to writer: {}", path);
+            FASTEXCEL_LOG_ERROR("Failed to add part to writer: {}", path);
             return false;
         }
         
-        OPC_DEBUG("Added part to writer: {} ({} bytes)", path, content.size());
+        FASTEXCEL_LOG_DEBUG("Added part to writer: {} ({} bytes)", path, content.size());
     }
     
     // 复制未修改的部件
@@ -125,9 +125,9 @@ bool PackageEditorManager::commit() {
         }
         
         if (!to_copy.empty()) {
-            OPC_DEBUG("Copying {} unchanged parts", to_copy.size());
+            FASTEXCEL_LOG_DEBUG("Copying {} unchanged parts", to_copy.size());
             if (!writer.copyBatch(zip_reader_.get(), to_copy)) {
-                OPC_ERROR("Failed to copy unchanged parts");
+                FASTEXCEL_LOG_ERROR("Failed to copy unchanged parts");
                 return false;
             }
         }
@@ -137,13 +137,13 @@ bool PackageEditorManager::commit() {
     bool success = writer.finish();
     
     if (success) {
-        OPC_INFO("Successfully committed package to: {}", target_path_.string());
+        FASTEXCEL_LOG_INFO("Successfully committed package to: {}", target_path_.string());
         
         // 清理状态
         pending_writes_.clear();
         removed_parts_.clear();
     } else {
-        OPC_ERROR("Failed to commit package to: {}", target_path_.string());
+        FASTEXCEL_LOG_ERROR("Failed to commit package to: {}", target_path_.string());
     }
     
     return success;

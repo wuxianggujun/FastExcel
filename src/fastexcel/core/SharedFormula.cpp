@@ -1,4 +1,4 @@
-#include "fastexcel/utils/ModuleLoggers.hpp"
+#include "fastexcel/utils/Logger.hpp"
 #include "fastexcel/core/SharedFormula.hpp"
 #include "fastexcel/utils/CommonUtils.hpp"
 #include "fastexcel/utils/Logger.hpp"
@@ -24,7 +24,7 @@ bool SharedFormula::isInRange(int row, int col) const {
 
 std::string SharedFormula::expandFormula(int row, int col) const {
     if (!isInRange(row, col)) {
-        CORE_WARN("请求展开公式的位置({},{})不在共享公式范围内", row, col);
+        FASTEXCEL_LOG_WARN("请求展开公式的位置({},{})不在共享公式范围内", row, col);
         return "";
     }
     
@@ -114,7 +114,7 @@ std::string SharedFormula::adjustFormula(const std::string& formula, int base_ro
                                         std::make_pair(match.length(), new_ref));
             }
         } catch (const std::exception& e) {
-            CORE_WARN("解析单元格引用失败: {} ({})", cell_ref, e.what());
+            FASTEXCEL_LOG_WARN("解析单元格引用失败: {} ({})", cell_ref, e.what());
         }
     }
     
@@ -134,7 +134,7 @@ bool SharedFormulaManager::registerSharedFormula(const SharedFormula& shared_for
     
     // 检查索引是否已被使用
     if (shared_formulas_.find(index) != shared_formulas_.end()) {
-        CORE_WARN("共享公式索引 {} 已存在，将覆盖", index);
+        FASTEXCEL_LOG_WARN("共享公式索引 {} 已存在，将覆盖", index);
     }
     
     // 注册共享公式
@@ -152,7 +152,7 @@ bool SharedFormulaManager::registerSharedFormula(const SharedFormula& shared_for
         next_shared_index_ = index + 1;
     }
     
-    CORE_DEBUG("注册共享公式成功: 索引={}, 范围={}", index, shared_formula.getRefRange());
+    FASTEXCEL_LOG_DEBUG("注册共享公式成功: 索引={}, 范围={}", index, shared_formula.getRefRange());
     return true;
 }
 
@@ -180,7 +180,7 @@ std::string SharedFormulaManager::getExpandedFormula(int row, int col) const {
     
     auto it = shared_formulas_.find(shared_index);
     if (it == shared_formulas_.end()) {
-        CORE_ERROR("找不到共享公式索引: {}", shared_index);
+        FASTEXCEL_LOG_ERROR("找不到共享公式索引: {}", shared_index);
         return "";
     }
     
@@ -276,7 +276,7 @@ int SharedFormulaManager::optimizeFormulas(const std::map<std::pair<int, int>, s
                     }
                     
                     optimized_count += static_cast<int>(pattern.matching_cells.size());
-                    CORE_DEBUG("创建共享公式: 索引={}, 模式={}, 单元格数={}", 
+                    FASTEXCEL_LOG_DEBUG("创建共享公式: 索引={}, 模式={}, 单元格数={}", 
                              shared_index, pattern.pattern_template, pattern.matching_cells.size());
                 }
             }
@@ -313,7 +313,7 @@ void SharedFormulaManager::clear() {
     shared_formulas_.clear();
     cell_to_shared_index_.clear();
     next_shared_index_ = 0;
-    CORE_DEBUG("清空所有共享公式数据");
+    FASTEXCEL_LOG_DEBUG("清空所有共享公式数据");
 }
 
 std::vector<int> SharedFormulaManager::getAllSharedIndices() const {
@@ -329,17 +329,17 @@ std::vector<int> SharedFormulaManager::getAllSharedIndices() const {
 }
 
 void SharedFormulaManager::debugPrint() const {
-    CORE_DEBUG("=== 共享公式管理器状态 ===");
-    CORE_DEBUG("共享公式总数: {}", shared_formulas_.size());
-    CORE_DEBUG("下一个可用索引: {}", next_shared_index_);
+    FASTEXCEL_LOG_DEBUG("=== 共享公式管理器状态 ===");
+    FASTEXCEL_LOG_DEBUG("共享公式总数: {}", shared_formulas_.size());
+    FASTEXCEL_LOG_DEBUG("下一个可用索引: {}", next_shared_index_);
     
     for (const auto& [index, formula] : shared_formulas_) {
         auto stats = formula.getStatistics();
-        CORE_DEBUG("索引 {}: 范围={}, 公式='{}', 影响单元格={}, 内存节省={}字节, 压缩比={:.2f}", 
+        FASTEXCEL_LOG_DEBUG("索引 {}: 范围={}, 公式='{}', 影响单元格={}, 内存节省={}字节, 压缩比={:.2f}", 
                  index, formula.getRefRange(), formula.getBaseFormula(),
                  stats.affected_cells_count, stats.memory_saved, stats.compression_ratio);
     }
-    CORE_DEBUG("========================");
+    FASTEXCEL_LOG_DEBUG("========================");
 }
 
 std::string SharedFormulaManager::generateFormulaPattern(const std::string& formula, int base_row, int base_col) const {
@@ -367,7 +367,7 @@ std::string SharedFormulaManager::generateFormulaPattern(const std::string& form
             replacements.emplace_back(match.position(), 
                                     std::make_pair(match.length(), pattern_token));
         } catch (const std::exception& e) {
-            CORE_WARN("生成公式模式时解析引用失败: {} ({})", cell_ref, e.what());
+            FASTEXCEL_LOG_WARN("生成公式模式时解析引用失败: {} ({})", cell_ref, e.what());
         }
     }
     

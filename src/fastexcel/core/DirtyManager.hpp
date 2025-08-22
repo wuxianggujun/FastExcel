@@ -1,6 +1,6 @@
 #pragma once
 
-#include "fastexcel/utils/ModuleLoggers.hpp"
+#include "fastexcel/utils/Logger.hpp"
 #include <map>
 #include <set>
 #include <string>
@@ -153,10 +153,6 @@ public:
         if (level == DirtyLevel::STRUCTURE) {
             info.requiresRegeneration = true;
         }
-        
-        CORE_DEBUG("Marked {} as dirty (level: {}, path: {})", 
-                  part, static_cast<int>(level), affectedPath);
-        
         // 传播脏标记到依赖项
         propagateDirty(part, level);
     }
@@ -378,7 +374,7 @@ private:
                         auto& depInfo = dirtyParts_[dependent];
                         if (propagatedLevel > depInfo.level) {
                             depInfo.level = propagatedLevel;
-                            CORE_DEBUG("Propagated dirty from {} to {} (level: {})",
+                            FASTEXCEL_LOG_DEBUG("Propagated dirty from {} to {} (level: {})",
                                      part, dependent, static_cast<int>(propagatedLevel));
                         }
                     }
@@ -391,7 +387,7 @@ private:
                     auto& depInfo = dirtyParts_[dependent];
                     if (propagatedLevel > depInfo.level) {
                         depInfo.level = propagatedLevel;
-                        CORE_DEBUG("Propagated dirty from {} to {} (level: {})",
+                        FASTEXCEL_LOG_DEBUG("Propagated dirty from {} to {} (level: {})",
                                  part, dependent, static_cast<int>(propagatedLevel));
                     }
                 }

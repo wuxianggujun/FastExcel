@@ -2,7 +2,6 @@
 #include "fastexcel/xml/XMLStreamWriter.hpp"
 #include <sstream>
 #include <vector>
-#include "fastexcel/utils/ModuleLoggers.hpp"
 
 using namespace fastexcel::xml;
 

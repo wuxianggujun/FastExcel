@@ -125,14 +125,14 @@ WorkbookDataManager::ImportResult WorkbookDataManager::importCSV(const std::stri
         
         if (result.success) {
             updateStatistics(result, content.size());
-            CORE_INFO("CSV imported successfully from {}: {} rows, {} cols", 
+            FASTEXCEL_LOG_INFO("CSV imported successfully from {}: {} rows, {} cols", 
                      filepath, result.rows_imported, result.cols_imported);
         }
         
     } catch (const std::exception& e) {
         result.error_message = std::string("Exception during CSV import: ") + e.what();
         stats_.failed_operations++;
-        CORE_ERROR("CSV import failed: {}", result.error_message);
+        FASTEXCEL_LOG_ERROR("CSV import failed: {}", result.error_message);
     }
     
     return result;
@@ -225,7 +225,7 @@ WorkbookDataManager::ImportResult WorkbookDataManager::importCSVString(const std
     } catch (const std::exception& e) {
         result.error_message = std::string("Exception during CSV string import: ") + e.what();
         stats_.failed_operations++;
-        CORE_ERROR("CSV string import failed: {}", result.error_message);
+        FASTEXCEL_LOG_ERROR("CSV string import failed: {}", result.error_message);
     }
     
     return result;
@@ -250,14 +250,14 @@ WorkbookDataManager::ExportResult WorkbookDataManager::exportCSV(size_t sheet_in
         
         if (result.success) {
             updateStatistics(result);
-            CORE_INFO("CSV exported successfully to {}: {} rows, {} cols", 
+            FASTEXCEL_LOG_INFO("CSV exported successfully to {}: {} rows, {} cols", 
                      filepath, result.rows_exported, result.cols_exported);
         }
         
     } catch (const std::exception& e) {
         result.error_message = std::string("Exception during CSV export: ") + e.what();
         stats_.failed_operations++;
-        CORE_ERROR("CSV export failed: {}", result.error_message);
+        FASTEXCEL_LOG_ERROR("CSV export failed: {}", result.error_message);
     }
     
     return result;
@@ -282,14 +282,14 @@ WorkbookDataManager::ExportResult WorkbookDataManager::exportCSV(const std::stri
         
         if (result.success) {
             updateStatistics(result);
-            CORE_INFO("CSV exported successfully to {}: {} rows, {} cols", 
+            FASTEXCEL_LOG_INFO("CSV exported successfully to {}: {} rows, {} cols", 
                      filepath, result.rows_exported, result.cols_exported);
         }
         
     } catch (const std::exception& e) {
         result.error_message = std::string("Exception during CSV export: ") + e.what();
         stats_.failed_operations++;
-        CORE_ERROR("CSV export failed: {}", result.error_message);
+        FASTEXCEL_LOG_ERROR("CSV export failed: {}", result.error_message);
     }
     
     return result;
@@ -299,14 +299,14 @@ std::string WorkbookDataManager::exportCSVString(size_t sheet_index, const CSVOp
     try {
         auto worksheet = workbook_->getSheet(sheet_index);
         if (!worksheet) {
-            CORE_ERROR("Invalid worksheet index for CSV string export: {}", sheet_index);
+            FASTEXCEL_LOG_ERROR("Invalid worksheet index for CSV string export: {}", sheet_index);
             return "";
         }
         
         return exportCSVString(worksheet->getName(), options);
         
     } catch (const std::exception& e) {
-        CORE_ERROR("CSV string export failed: {}", e.what());
+        FASTEXCEL_LOG_ERROR("CSV string export failed: {}", e.what());
         return "";
     }
 }
@@ -315,7 +315,7 @@ std::string WorkbookDataManager::exportCSVString(const std::string& sheet_name, 
     try {
         auto worksheet = workbook_->getSheet(sheet_name);
         if (!worksheet) {
-            CORE_ERROR("Worksheet not found for CSV string export: {}", sheet_name);
+            FASTEXCEL_LOG_ERROR("Worksheet not found for CSV string export: {}", sheet_name);
             return "";
         }
         
@@ -350,7 +350,7 @@ std::string WorkbookDataManager::exportCSVString(const std::string& sheet_name, 
         return oss.str();
         
     } catch (const std::exception& e) {
-        CORE_ERROR("CSV string export failed: {}", e.what());
+        FASTEXCEL_LOG_ERROR("CSV string export failed: {}", e.what());
         return "";
     }
 }
@@ -386,12 +386,12 @@ std::string WorkbookDataManager::generateUniqueSheetName(const std::string& base
 
 bool WorkbookDataManager::validateImportLimits(size_t rows, size_t cols) const {
     if (rows > config_.max_import_rows) {
-        CORE_WARN("Import rows ({}) exceed limit ({})", rows, config_.max_import_rows);
+        FASTEXCEL_LOG_WARN("Import rows ({}) exceed limit ({})", rows, config_.max_import_rows);
         return false;
     }
     
     if (cols > config_.max_import_cols) {
-        CORE_WARN("Import columns ({}) exceed limit ({})", cols, config_.max_import_cols);
+        FASTEXCEL_LOG_WARN("Import columns ({}) exceed limit ({})", cols, config_.max_import_cols);
         return false;
     }
     

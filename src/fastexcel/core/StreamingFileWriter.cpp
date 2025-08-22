@@ -1,4 +1,4 @@
-#include "fastexcel/utils/ModuleLoggers.hpp"
+
 #include "fastexcel/core/StreamingFileWriter.hpp"
 #include "fastexcel/utils/Logger.hpp"
 
@@ -14,18 +14,18 @@ StreamingFileWriter::StreamingFileWriter(archive::FileManager* file_manager)
 
 StreamingFileWriter::~StreamingFileWriter() {
     if (streaming_file_open_) {
-        CORE_WARN("StreamingFileWriter destroyed with open streaming file: {}", current_streaming_path_);
+        FASTEXCEL_LOG_WARN("StreamingFileWriter destroyed with open streaming file: {}", current_streaming_path_);
         forceCloseStreamingFile();
     }
 }
 
 bool StreamingFileWriter::writeFile(const std::string& path, const std::string& content) {
     if (streaming_file_open_) {
-        CORE_ERROR("Cannot write file while streaming file is open: {}", current_streaming_path_);
+        FASTEXCEL_LOG_ERROR("Cannot write file while streaming file is open: {}", current_streaming_path_);
         return false;
     }
     
-    CORE_DEBUG("Writing file directly in streaming mode: {} ({} bytes)", path, content.size());
+    FASTEXCEL_LOG_DEBUG("Writing file directly in streaming mode: {} ({} bytes)", path, content.size());
     
     bool success = file_manager_->writeFile(path, content);
     
@@ -33,9 +33,9 @@ bool StreamingFileWriter::writeFile(const std::string& path, const std::string& 
         stats_.batch_files++;
         stats_.files_written++;
         stats_.total_bytes += content.size();
-        CORE_DEBUG("Successfully wrote file: {}", path);
+        FASTEXCEL_LOG_DEBUG("Successfully wrote file: {}", path);
     } else {
-        CORE_ERROR("Failed to write file: {}", path);
+        FASTEXCEL_LOG_ERROR("Failed to write file: {}", path);
     }
     
     return success;
@@ -43,7 +43,7 @@ bool StreamingFileWriter::writeFile(const std::string& path, const std::string& 
 
 bool StreamingFileWriter::openStreamingFile(const std::string& path) {
     if (streaming_file_open_) {
-        CORE_ERROR("Streaming file already open: {}", current_streaming_path_);
+        FASTEXCEL_LOG_ERROR("Streaming file already open: {}", current_streaming_path_);
         return false;
     }
     
@@ -52,9 +52,9 @@ bool StreamingFileWriter::openStreamingFile(const std::string& path) {
     if (success) {
         streaming_file_open_ = true;
         current_streaming_path_ = path;
-        CORE_DEBUG("Opened streaming file: {}", path);
+        FASTEXCEL_LOG_DEBUG("Opened streaming file: {}", path);
     } else {
-        CORE_ERROR("Failed to open streaming file: {}", path);
+        FASTEXCEL_LOG_ERROR("Failed to open streaming file: {}", path);
     }
     
     return success;
@@ -62,7 +62,7 @@ bool StreamingFileWriter::openStreamingFile(const std::string& path) {
 
 bool StreamingFileWriter::writeStreamingChunk(const char* data, size_t size) {
     if (!streaming_file_open_) {
-        CORE_ERROR("No streaming file is open");
+        FASTEXCEL_LOG_ERROR("No streaming file is open");
         return false;
     }
     
@@ -75,7 +75,7 @@ bool StreamingFileWriter::writeStreamingChunk(const char* data, size_t size) {
     if (success) {
         stats_.total_bytes += size;
     } else {
-        CORE_ERROR("Failed to write streaming chunk to file: {} ({} bytes)", 
+        FASTEXCEL_LOG_ERROR("Failed to write streaming chunk to file: {} ({} bytes)", 
                  current_streaming_path_, size);
     }
     
@@ -84,7 +84,7 @@ bool StreamingFileWriter::writeStreamingChunk(const char* data, size_t size) {
 
 bool StreamingFileWriter::closeStreamingFile() {
     if (!streaming_file_open_) {
-        CORE_ERROR("No streaming file is open");
+        FASTEXCEL_LOG_ERROR("No streaming file is open");
         return false;
     }
     
@@ -93,9 +93,9 @@ bool StreamingFileWriter::closeStreamingFile() {
     if (success) {
         stats_.streaming_files++;
         stats_.files_written++;
-        CORE_DEBUG("Successfully closed streaming file: {}", current_streaming_path_);
+        FASTEXCEL_LOG_DEBUG("Successfully closed streaming file: {}", current_streaming_path_);
     } else {
-        CORE_ERROR("Failed to close streaming file: {}", current_streaming_path_);
+        FASTEXCEL_LOG_ERROR("Failed to close streaming file: {}", current_streaming_path_);
     }
     
     // 清理状态（无论成功与否）
@@ -110,7 +110,7 @@ bool StreamingFileWriter::forceCloseStreamingFile() {
         return true; // 没有打开的文件
     }
     
-    CORE_WARN("Force closing streaming file: {}", current_streaming_path_);
+    FASTEXCEL_LOG_WARN("Force closing streaming file: {}", current_streaming_path_);
     
     // 尝试正常关闭
     bool success = file_manager_->closeStreamingFile();

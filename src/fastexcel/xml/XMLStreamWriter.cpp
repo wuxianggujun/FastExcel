@@ -1,4 +1,3 @@
-#include "fastexcel/utils/ModuleLoggers.hpp"
 #include "fastexcel/xml/XMLStreamWriter.hpp"
 #include <algorithm>
 #include <cstdio>
@@ -32,7 +31,7 @@ XMLStreamWriter::XMLStreamWriter(const std::string& filename) : XMLStreamWriter(
     if (file) {
         setDirectFileMode(file, true);
     } else {
-        XML_ERROR("Failed to open file for writing: {}", filename);
+        FASTEXCEL_LOG_ERROR("Failed to open file for writing: {}", filename);
     }
 }
 
@@ -41,7 +40,7 @@ XMLStreamWriter::~XMLStreamWriter() {
     if (buffer_pos_ > 0 && !direct_file_mode_ && !callback_mode_) {
         // 只有在数据量较大时才记录警告，避免正常使用时的噪音
         if (buffer_pos_ > 100) {
-            XML_WARN("XMLStreamWriter destroyed with {} bytes in buffer", buffer_pos_);
+            FASTEXCEL_LOG_WARN("XMLStreamWriter destroyed with {} bytes in buffer", buffer_pos_);
         }
     }
     
@@ -59,7 +58,7 @@ void XMLStreamWriter::setDirectFileMode(FILE* file, bool take_ownership) {
     owns_file_ = take_ownership;
     direct_file_mode_ = true;
     
-    XML_DEBUG("XMLStreamWriter switched to direct file mode");
+    FASTEXCEL_LOG_DEBUG("XMLStreamWriter switched to direct file mode");
 }
 
 // 不再提供 setBufferedMode() 接口，统一使用流式写入
@@ -67,7 +66,7 @@ void XMLStreamWriter::setDirectFileMode(FILE* file, bool take_ownership) {
 
 void XMLStreamWriter::setCallbackMode(WriteCallback callback, bool auto_flush) {
     if (!callback) {
-        XML_ERROR("Invalid callback provided to setCallbackMode");
+        FASTEXCEL_LOG_ERROR("Invalid callback provided to setCallbackMode");
         return;
     }
     
@@ -79,7 +78,7 @@ void XMLStreamWriter::setCallbackMode(WriteCallback callback, bool auto_flush) {
     write_callback_ = std::move(callback);
     auto_flush_ = auto_flush;
     
-    XML_DEBUG("XMLStreamWriter switched to callback mode with auto_flush={}", auto_flush);
+    FASTEXCEL_LOG_DEBUG("XMLStreamWriter switched to callback mode with auto_flush={}", auto_flush);
 }
 
 void XMLStreamWriter::flushBuffer() {
@@ -120,6 +119,11 @@ void XMLStreamWriter::endDocument() {
 }
 
 void XMLStreamWriter::startElement(const char* name) {
+    if (!name || strlen(name) == 0) {
+        FASTEXCEL_LOG_ERROR("Attempted to start element with null or empty name");
+        return;
+    }
+    
     if (in_element_) {
         writeRawDirect(">", 1);
         in_element_ = false;
@@ -128,26 +132,83 @@ void XMLStreamWriter::startElement(const char* name) {
     writeRawDirect("<", 1);
     size_t name_len = strlen(name);
     writeRawDirect(name, name_len);
-    // 存储副本，避免外部传入临时 c_str 悬空
-    element_stack_.push(std::string(name, name_len));
+    
+    // 创建std::string并推入栈
+    std::string element_name(name);
+    
+    // 详细调试信息 - 记录推入前的状态
+    FASTEXCEL_LOG_DEBUG("STACK DEBUG - Before push:");
+    FASTEXCEL_LOG_DEBUG("  - Stack size: {}", element_stack_.size());
+    FASTEXCEL_LOG_DEBUG("  - Element name to push: '{}' (length: {})", element_name, element_name.length());
+    FASTEXCEL_LOG_DEBUG("  - Element name c_str(): '{}'", element_name.c_str());
+    FASTEXCEL_LOG_DEBUG("  - Element name data(): '{}'", element_name.data());
+    
+    element_stack_.push(element_name);
     in_element_ = true;
+    
+    // 详细调试信息 - 记录推入后的状态
+    FASTEXCEL_LOG_DEBUG("STACK DEBUG - After push:");
+    FASTEXCEL_LOG_DEBUG("  - Stack size: {}", element_stack_.size());
+    if (!element_stack_.empty()) {
+        const std::string& top_element = element_stack_.top();
+        FASTEXCEL_LOG_DEBUG("  - Top element: '{}' (length: {})", top_element, top_element.length());
+        FASTEXCEL_LOG_DEBUG("  - Top element c_str(): '{}'", top_element.c_str());
+        FASTEXCEL_LOG_DEBUG("  - Top element data(): '{}'", top_element.data());
+        FASTEXCEL_LOG_DEBUG("  - Top element empty(): {}", top_element.empty());
+    }
 }
 
 void XMLStreamWriter::endElement() {
     if (element_stack_.empty()) {
-        XML_WARN("Attempted to end element when stack is empty");
+        FASTEXCEL_LOG_WARN("Attempted to end element when stack is empty");
         return;
     }
     
+    // 详细调试信息 - 记录弹出前的状态
+    FASTEXCEL_LOG_DEBUG("STACK DEBUG - Before pop:");
+    FASTEXCEL_LOG_DEBUG("  - Stack size: {}", element_stack_.size());
+    
     const std::string& name = element_stack_.top();
+    
+    FASTEXCEL_LOG_DEBUG("  - Top element: '{}' (length: {})", name, name.length());
+    FASTEXCEL_LOG_DEBUG("  - Top element c_str(): '{}'", name.c_str());
+    FASTEXCEL_LOG_DEBUG("  - Top element data(): '{}'", name.data());
+    FASTEXCEL_LOG_DEBUG("  - Top element empty(): {}", name.empty());
+    
+    // 如果栈顶是空字符串，这表明有内存问题
+    if (name.empty()) {
+        FASTEXCEL_LOG_ERROR("CRITICAL: Empty element name found in stack!");
+        FASTEXCEL_LOG_ERROR("This indicates memory corruption or stack manipulation error");
+        FASTEXCEL_LOG_ERROR("Stack size: {}, in_element_: {}", element_stack_.size(), in_element_);
+        
+        // 尝试恢复：弹出损坏的条目
+        element_stack_.pop();
+        
+        // 如果我们在元素内部，输出自闭合标签
+        if (in_element_) {
+            writeRawDirect("/>", 2);
+            in_element_ = false;
+        }
+        // 如果不在元素内部，我们无法知道应该关闭什么标签
+        return;
+    }
+    
+    // 先备份名称，然后弹出栈
+    std::string element_name = name;  // 复制一份，避免引用被销毁
     element_stack_.pop();
+    
+    // 详细调试信息 - 记录弹出后的状态
+    FASTEXCEL_LOG_DEBUG("STACK DEBUG - After pop:");
+    FASTEXCEL_LOG_DEBUG("  - Copied element name: '{}' (length: {})", element_name, element_name.length());
+    FASTEXCEL_LOG_DEBUG("  - Stack size: {}", element_stack_.size());
+    FASTEXCEL_LOG_DEBUG("  - in_element_: {}", in_element_);
     
     if (in_element_) {
         writeRawDirect("/>", 2);
         in_element_ = false;
     } else {
         writeRawDirect("</", 2);
-        writeRawDirect(name.c_str(), name.size());
+        writeRawDirect(element_name.c_str(), element_name.size());
         writeRawDirect(">", 1);
     }
 }
@@ -166,7 +227,7 @@ void XMLStreamWriter::writeEmptyElement(const char* name) {
 
 void XMLStreamWriter::writeAttribute(const char* name, const char* value) {
     if (!in_element_) {
-        XML_WARN("Attempted to write attribute '{}' outside of element", name);
+        FASTEXCEL_LOG_WARN("Attempted to write attribute '{}' outside of element", name);
         return;
     }
     
@@ -191,7 +252,7 @@ void XMLStreamWriter::writeAttribute(const char* name, const char* value) {
 
 void XMLStreamWriter::writeAttribute(const char* name, int value) {
     if (!in_element_) {
-        XML_WARN("Attempted to write attribute '{}' outside of element", name);
+        FASTEXCEL_LOG_WARN("Attempted to write attribute '{}' outside of element", name);
         return;
     }
     
@@ -207,7 +268,7 @@ void XMLStreamWriter::writeAttribute(const char* name, int value) {
 
 void XMLStreamWriter::writeAttribute(const char* name, double value) {
     if (!in_element_) {
-        XML_WARN("Attempted to write attribute '{}' outside of element", name);
+        FASTEXCEL_LOG_WARN("Attempted to write attribute '{}' outside of element", name);
         return;
     }
     
@@ -261,9 +322,12 @@ void XMLStreamWriter::writeRaw(const std::string& data) {
 
 void XMLStreamWriter::clear() {
     buffer_pos_ = 0;
+    
+    // 清空栈 - std::stack没有clear()方法，需要逐个弹出
     while (!element_stack_.empty()) {
         element_stack_.pop();
     }
+    
     in_element_ = false;
     pending_attributes_.clear();
 }
@@ -272,7 +336,7 @@ bool XMLStreamWriter::writeToFile(const std::string& filename) {
     fastexcel::core::Path path(filename);
     FILE* file = path.openForWrite(true);
     if (!file) {
-        XML_ERROR("Failed to open file '{}' for writing", filename);
+        FASTEXCEL_LOG_ERROR("Failed to open file '{}' for writing", filename);
         return false;
     }
     
@@ -287,13 +351,13 @@ bool XMLStreamWriter::writeToFile(const std::string& filename) {
     owns_file_ = true;
     direct_file_mode_ = true;
     
-    XML_INFO("XMLStreamWriter now writing to file '{}'", filename);
+    FASTEXCEL_LOG_INFO("XMLStreamWriter now writing to file '{}'", filename);
     return true;
 }
 
 bool XMLStreamWriter::setOutputFile(FILE* file, bool take_ownership) {
     if (!file) {
-        XML_ERROR("Invalid file pointer provided");
+        FASTEXCEL_LOG_ERROR("Invalid file pointer provided");
         return false;
     }
     
@@ -308,7 +372,7 @@ bool XMLStreamWriter::setOutputFile(FILE* file, bool take_ownership) {
     owns_file_ = take_ownership;
     direct_file_mode_ = true;
     
-    XML_DEBUG("XMLStreamWriter now writing to provided file stream");
+    FASTEXCEL_LOG_DEBUG("XMLStreamWriter now writing to provided file stream");
     return true;
 }
 
@@ -357,7 +421,7 @@ void XMLStreamWriter::writeRawToBuffer(const char* data, size_t length) {
             
             // 如果刷新后仍然没有可用空间，说明有问题
             if (available_space == 0) {
-                XML_ERROR("Buffer flush failed, cannot write more data");
+                FASTEXCEL_LOG_ERROR("Buffer flush failed, cannot write more data");
                 return;
             }
         }

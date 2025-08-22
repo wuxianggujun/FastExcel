@@ -1,4 +1,4 @@
-#include "fastexcel/utils/ModuleLoggers.hpp"
+#include "fastexcel/utils/Logger.hpp"
 #pragma once
 
 #include <string>
@@ -63,7 +63,7 @@ private:
     char buffer_[BUFFER_SIZE];
     size_t buffer_pos_ = 0;
     
-    // 元素栈用于跟踪嵌套的XML元素（拷贝名称，避免悬空指针）
+    // 元素栈用于跟踪嵌套的XML元素
     std::stack<std::string> element_stack_;
     bool in_element_ = false;
     

@@ -1,4 +1,4 @@
-#include "fastexcel/utils/ModuleLoggers.hpp"
+#include "fastexcel/utils/Logger.hpp"
 //
 // Created by wuxianggujun on 25-8-4.
 //
@@ -32,25 +32,25 @@ bool WorksheetParser::parse(const std::string& xml_content,
     
     try {
         // 先解析列样式定义
-        READER_DEBUG("开始解析列样式定义");
+        FASTEXCEL_LOG_DEBUG("开始解析列样式定义");
         parseColumns(xml_content, worksheet, styles, style_id_mapping);
-        READER_DEBUG("列样式解析完成");
+        FASTEXCEL_LOG_DEBUG("列样式解析完成");
 
         // 解析合并单元格（否则编辑保存后会丢失）
-        READER_DEBUG("开始解析合并单元格");
+        FASTEXCEL_LOG_DEBUG("开始解析合并单元格");
         parseMergeCells(xml_content, worksheet);
-        READER_DEBUG("合并单元格解析完成");
+        FASTEXCEL_LOG_DEBUG("合并单元格解析完成");
         
         // 解析共享公式（在解析单元格数据之前）
-        READER_DEBUG("开始解析共享公式");
+        FASTEXCEL_LOG_DEBUG("开始解析共享公式");
         parseSharedFormulas(xml_content, worksheet);
-        READER_DEBUG("共享公式解析完成");
+        FASTEXCEL_LOG_DEBUG("共享公式解析完成");
         
         // 解析工作表数据（行/单元格），并在行级别读取行高
         return parseSheetData(xml_content, worksheet, shared_strings, styles, style_id_mapping);
         
     } catch (const std::exception& e) {
-        READER_ERROR("解析工作表时发生错误: {}", e.what());
+        FASTEXCEL_LOG_ERROR("解析工作表时发生错误: {}", e.what());
         return false;
     }
 }
@@ -109,7 +109,7 @@ bool WorksheetParser::parseSheetData(const std::string& xml_content,
         
         // 解析行
         if (!parseRow(row_xml, worksheet, shared_strings, styles, style_id_mapping)) {
-            READER_WARN("解析行失败");
+            FASTEXCEL_LOG_WARN("解析行失败");
             // 继续处理其他行
         }
         
@@ -171,7 +171,7 @@ bool WorksheetParser::parseRow(const std::string& row_xml,
         
         // 解析单元格
         if (!parseCell(cell_xml, worksheet, shared_strings, styles, style_id_mapping)) {
-            READER_WARN("解析单元格失败: {}", cell_xml);
+            FASTEXCEL_LOG_WARN("解析单元格失败: {}", cell_xml);
             // 继续处理其他单元格
         }
         
@@ -231,7 +231,7 @@ bool WorksheetParser::parseCell(const std::string& cell_xml,
                 worksheet->setValue(row, col, it->second);
             }
         } catch (const std::exception& e) {
-            READER_WARN("解析共享字符串索引失败: {}", e.what());
+            FASTEXCEL_LOG_WARN("解析共享字符串索引失败: {}", e.what());
         }
     } else if (cell_type == "inlineStr") {
         // 内联字符串
@@ -267,7 +267,7 @@ bool WorksheetParser::parseCell(const std::string& cell_xml,
             } catch (const std::exception& /*e*/) {
                 // 极少数情况：如果真的不能解析为数字（可能是Excel文件损坏）
                 // 记录警告并跳过该单元格，而不是错误地转换为字符串
-                READER_WARN("单元格{}无法解析为数字，值='{}'", 
+                FASTEXCEL_LOG_WARN("单元格{}无法解析为数字，值='{}'", 
                            utils::CommonUtils::cellReference(row, col), cell_value);
                 // 不设置任何值，保持单元格为空
             }
@@ -502,26 +502,23 @@ std::string WorksheetParser::convertExcelDateToString(double excel_date) {
     gmtime_r(&unix_time, &time_info_buf);
 #endif
     return fastexcel::utils::TimeUtils::formatTime(time_info_buf, "%Y-%m-%d");
-    
-    // 如果转换失败，返回原始数字的字符串表示
-    return std::to_string(excel_date);
 }
 
 bool WorksheetParser::parseColumns(const std::string& xml_content,
                                   core::Worksheet* worksheet,
                                   const std::unordered_map<int, std::shared_ptr<core::FormatDescriptor>>& styles,
                                   const std::unordered_map<int, int>& style_id_mapping) {
-    READER_DEBUG("parseColumns被调用，xml_content长度: {}", xml_content.length());
+    FASTEXCEL_LOG_DEBUG("parseColumns被调用，xml_content长度: {}", xml_content.length());
     
     // 查找 <cols> 标签
     size_t cols_start = xml_content.find("<cols");
     if (cols_start == std::string::npos) {
         // 没有列定义，这是正常的
-        READER_DEBUG("没有找到<cols>标签");
+        FASTEXCEL_LOG_DEBUG("没有找到<cols>标签");
         return true;
     }
     
-    READER_DEBUG("找到<cols>标签在位置: {}", cols_start);
+    FASTEXCEL_LOG_DEBUG("找到<cols>标签在位置: {}", cols_start);
     
     // 找到 <cols> 标签的结束位置
     size_t content_start = xml_content.find(">", cols_start);
@@ -583,7 +580,7 @@ bool WorksheetParser::parseColumns(const std::string& xml_content,
                 for (int col = first_col; col <= last_col; ++col) {
                     worksheet->setColumnWidth(col, width);
                 }
-                READER_DEBUG("设置列宽：列 {}-{} 宽度 {} custom_width={}", first_col, last_col, width, custom_width);
+                FASTEXCEL_LOG_DEBUG("设置列宽：列 {}-{} 宽度 {} custom_width={}", first_col, last_col, width, custom_width);
             }
             
             // 设置列样式
@@ -601,7 +598,7 @@ bool WorksheetParser::parseColumns(const std::string& xml_content,
                 if (style_it != styles.end()) {
                     // 设置列格式 ID 到工作表
                     worksheet->setColumnFormatId(first_col, last_col, mapped_style_id);
-                    READER_DEBUG("设置列样式：列 {}-{} 原始样式ID {} 映射样式ID {}", first_col, last_col, style_index, mapped_style_id);
+                    FASTEXCEL_LOG_DEBUG("设置列样式：列 {}-{} 原始样式ID {} 映射样式ID {}", first_col, last_col, style_index, mapped_style_id);
                 }
             }
             
@@ -633,7 +630,7 @@ int WorksheetParser::extractIntAttribute(const std::string& xml, const std::stri
     
     try {
         return std::stoi(xml.substr(start, end - start));
-    } catch (const std::exception& e) {
+    } catch (const std::exception& /*e*/) {
         return -1;
     }
 }
@@ -742,11 +739,11 @@ bool WorksheetParser::parseRangeRef(const std::string& ref, int& first_row, int&
 // 解析共享公式
 void WorksheetParser::parseSharedFormulas(const std::string& xml_content, core::Worksheet* worksheet) {
     if (!worksheet) {
-        READER_ERROR("Worksheet is null in parseSharedFormulas");
+        FASTEXCEL_LOG_ERROR("Worksheet is null in parseSharedFormulas");
         return;
     }
     
-    READER_DEBUG("正在解析共享公式...");
+    FASTEXCEL_LOG_DEBUG("正在解析共享公式...");
     
     // 存储共享公式主定义（si -> {formula, range}）
     std::unordered_map<int, std::pair<std::string, std::string>> shared_formulas;
@@ -777,14 +774,14 @@ void WorksheetParser::parseSharedFormulas(const std::string& xml_content, core::
             if (!ref.empty() && !formula.empty()) {
                 // 这是主公式定义
                 shared_formulas[si] = {formula, ref};
-                READER_DEBUG("发现共享公式主定义: si={}, ref={}, formula={}", si, ref, formula);
+                FASTEXCEL_LOG_DEBUG("发现共享公式主定义: si={}, ref={}, formula={}", si, ref, formula);
             }
         }
         
         pos = actual_end;
     }
     
-    READER_DEBUG("找到 {} 个共享公式主定义", shared_formulas.size());
+    FASTEXCEL_LOG_DEBUG("找到 {} 个共享公式主定义", shared_formulas.size());
     
     // 为每个共享公式创建 SharedFormulaManager 中的条目
     for (const auto& [si, formula_info] : shared_formulas) {
@@ -796,13 +793,13 @@ void WorksheetParser::parseSharedFormulas(const std::string& xml_content, core::
             // 使用 worksheet 的 createSharedFormula 方法
             int created_si = worksheet->createSharedFormula(first_row, first_col, last_row, last_col, formula);
             if (created_si >= 0) {
-                READER_DEBUG("成功创建共享公式: si={}, 范围={}:{}-{}:{}", 
+                FASTEXCEL_LOG_DEBUG("成功创建共享公式: si={}, 范围={}:{}-{}:{}", 
                          created_si, first_row, first_col, last_row, last_col);
             } else {
-                READER_ERROR("创建共享公式失败: si={}, 范围={}", si, ref);
+                FASTEXCEL_LOG_ERROR("创建共享公式失败: si={}, 范围={}", si, ref);
             }
         } else {
-            READER_ERROR("无法解析共享公式范围: {}", ref);
+            FASTEXCEL_LOG_ERROR("无法解析共享公式范围: {}", ref);
         }
     }
 }

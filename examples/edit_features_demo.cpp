@@ -8,7 +8,7 @@
 #include "fastexcel/FastExcel.hpp"
 #include "fastexcel/core/Path.hpp"
 #include "fastexcel/opc/PackageEditor.hpp"
-#include "fastexcel/utils/ModuleLoggers.hpp"
+#include "fastexcel/utils/Logger.hpp"
 #include <iostream>
 #include <vector>
 #include <chrono>
@@ -22,7 +22,7 @@ void demonstrateBasicReadWrite() {
         // 1. 创建新工作簿并写入数据（使用新API）
         auto workbook = core::Workbook::create(core::Path("sample_data.xlsx"));
         if (!workbook) {
-            EXAMPLE_ERROR("无法创建工作簿");
+            FASTEXCEL_LOG_ERROR("无法创建工作簿");
             return;
         }
         

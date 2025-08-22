@@ -1,4 +1,4 @@
-#include "fastexcel/utils/ModuleLoggers.hpp"
+#include "fastexcel/utils/Logger.hpp"
 /**
  * @file 04_formatting_example.cpp
  * @brief FastExcel格式化示例
@@ -17,14 +17,14 @@ int main() {
     try {
         // 初始化FastExcel库
         if (!fastexcel::initialize("logs/formatting_example.log", true)) {
-            EXAMPLE_ERROR("无法初始化FastExcel库");
+            FASTEXCEL_LOG_ERROR("无法初始化FastExcel库");
             return -1;
         }
         
         // 创建工作簿
         auto workbook = fastexcel::core::Workbook::create(fastexcel::core::Path("formatting_example.xlsx"));
         if (!workbook) {
-            EXAMPLE_ERROR("无法创建工作簿");
+            FASTEXCEL_LOG_ERROR("无法创建工作簿");
             return -1;
         }
         

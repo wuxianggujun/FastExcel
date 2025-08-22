@@ -1,4 +1,3 @@
-#include "fastexcel/utils/ModuleLoggers.hpp"
 #include "fastexcel/xml/Relationships.hpp"
 #include <sstream>
 

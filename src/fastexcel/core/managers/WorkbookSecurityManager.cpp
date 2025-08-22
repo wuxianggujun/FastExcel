@@ -21,13 +21,13 @@ WorkbookSecurityManager::WorkbookSecurityManager(Workbook* workbook)
 
 bool WorkbookSecurityManager::protect(const ProtectionOptions& options) {
     if (is_protected_) {
-        CORE_WARN("Workbook is already protected");
+        FASTEXCEL_LOG_WARN("Workbook is already protected");
         return false;
     }
     
     // 验证密码（如果提供了密码）
     if (!options.password.empty() && !isPasswordValid(options.password)) {
-        CORE_ERROR("Password does not meet security policy requirements");
+        FASTEXCEL_LOG_ERROR("Password does not meet security policy requirements");
         return false;
     }
     
@@ -42,7 +42,7 @@ bool WorkbookSecurityManager::protect(const ProtectionOptions& options) {
     }
     
     markAsModified();
-    CORE_INFO("Workbook protection enabled");
+    FASTEXCEL_LOG_INFO("Workbook protection enabled");
     return true;
 }
 
@@ -66,7 +66,7 @@ bool WorkbookSecurityManager::unprotect(const std::string& password) {
     // 如果设置了密码，验证密码
     if (!protection_password_hash_.empty()) {
         if (password.empty() || !verifyPasswordHash(password, protection_password_hash_)) {
-            CORE_ERROR("Invalid password for workbook unprotection");
+            FASTEXCEL_LOG_ERROR("Invalid password for workbook unprotection");
             return false;
         }
     }
@@ -78,7 +78,7 @@ bool WorkbookSecurityManager::unprotect(const std::string& password) {
     protection_password_hash_.clear();
     
     markAsModified();
-    CORE_INFO("Workbook protection removed");
+    FASTEXCEL_LOG_INFO("Workbook protection removed");
     return true;
 }
 
@@ -91,19 +91,19 @@ bool WorkbookSecurityManager::verifyPassword(const std::string& password) const 
 
 bool WorkbookSecurityManager::changePassword(const std::string& old_password, const std::string& new_password) {
     if (!is_protected_) {
-        CORE_ERROR("Cannot change password: workbook is not protected");
+        FASTEXCEL_LOG_ERROR("Cannot change password: workbook is not protected");
         return false;
     }
     
     // 验证旧密码
     if (!verifyPassword(old_password)) {
-        CORE_ERROR("Invalid old password");
+        FASTEXCEL_LOG_ERROR("Invalid old password");
         return false;
     }
     
     // 验证新密码
     if (!new_password.empty() && !isPasswordValid(new_password)) {
-        CORE_ERROR("New password does not meet security policy requirements");
+        FASTEXCEL_LOG_ERROR("New password does not meet security policy requirements");
         return false;
     }
     
@@ -115,7 +115,7 @@ bool WorkbookSecurityManager::changePassword(const std::string& old_password, co
     }
     
     markAsModified();
-    CORE_INFO("Workbook password changed successfully");
+    FASTEXCEL_LOG_INFO("Workbook password changed successfully");
     return true;
 }
 
@@ -126,13 +126,13 @@ void WorkbookSecurityManager::setReadOnlyRecommended(bool recommend) {
 
 bool WorkbookSecurityManager::addVbaProject(const std::string& vba_project_path) {
     if (vba_project_path.empty()) {
-        CORE_ERROR("VBA project path cannot be empty");
+        FASTEXCEL_LOG_ERROR("VBA project path cannot be empty");
         return false;
     }
     
     Path project_path(vba_project_path);
     if (!project_path.exists()) {
-        CORE_ERROR("VBA project file does not exist: {}", vba_project_path);
+        FASTEXCEL_LOG_ERROR("VBA project file does not exist: {}", vba_project_path);
         return false;
     }
     
@@ -141,7 +141,7 @@ bool WorkbookSecurityManager::addVbaProject(const std::string& vba_project_path)
     }
     
     markAsModified();
-    CORE_INFO("VBA project added: {}", vba_project_path);
+    FASTEXCEL_LOG_INFO("VBA project added: {}", vba_project_path);
     return true;
 }
 
@@ -152,18 +152,18 @@ bool WorkbookSecurityManager::removeVbaProject() {
     
     vba_project_.reset();
     markAsModified();
-    CORE_INFO("VBA project removed");
+    FASTEXCEL_LOG_INFO("VBA project removed");
     return true;
 }
 
 bool WorkbookSecurityManager::protectVbaProject(const std::string& password) {
     if (!hasVbaProject()) {
-        CORE_ERROR("No VBA project to protect");
+        FASTEXCEL_LOG_ERROR("No VBA project to protect");
         return false;
     }
     
     if (!isPasswordValid(password)) {
-        CORE_ERROR("VBA protection password does not meet security requirements");
+        FASTEXCEL_LOG_ERROR("VBA protection password does not meet security requirements");
         return false;
     }
     
@@ -171,7 +171,7 @@ bool WorkbookSecurityManager::protectVbaProject(const std::string& password) {
     vba_project_->protection_password = hashPassword(password);
     
     markAsModified();
-    CORE_INFO("VBA project protection enabled");
+    FASTEXCEL_LOG_INFO("VBA project protection enabled");
     return true;
 }
 
@@ -181,7 +181,7 @@ bool WorkbookSecurityManager::unprotectVbaProject(const std::string& password) {
     }
     
     if (!verifyPasswordHash(password, vba_project_->protection_password)) {
-        CORE_ERROR("Invalid VBA project password");
+        FASTEXCEL_LOG_ERROR("Invalid VBA project password");
         return false;
     }
     
@@ -189,7 +189,7 @@ bool WorkbookSecurityManager::unprotectVbaProject(const std::string& password) {
     vba_project_->protection_password.clear();
     
     markAsModified();
-    CORE_INFO("VBA project protection removed");
+    FASTEXCEL_LOG_INFO("VBA project protection removed");
     return true;
 }
 
@@ -400,7 +400,7 @@ bool WorkbookSecurityManager::loadVbaProjectInfo(const std::string& path) {
         
         return true;
     } catch (const std::exception& e) {
-        CORE_ERROR("Failed to load VBA project info: {}", e.what());
+        FASTEXCEL_LOG_ERROR("Failed to load VBA project info: {}", e.what());
         vba_project_.reset();
         return false;
     }

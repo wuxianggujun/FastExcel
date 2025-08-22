@@ -1,4 +1,3 @@
-#include "fastexcel/utils/ModuleLoggers.hpp"
 #include "UnifiedXMLGenerator.hpp"
 #include "fastexcel/core/Workbook.hpp"
 #include "fastexcel/core/Worksheet.hpp"

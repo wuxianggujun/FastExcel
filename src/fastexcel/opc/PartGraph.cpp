@@ -1,4 +1,4 @@
-#include "fastexcel/utils/ModuleLoggers.hpp"
+#include "fastexcel/utils/Logger.hpp"
 #include "fastexcel/opc/PartGraph.hpp"
 #include "fastexcel/archive/ZipReader.hpp"
 #include "fastexcel/archive/ZipArchive.hpp"  // For ZipError enum
@@ -20,13 +20,13 @@ PartGraph::~PartGraph() = default;
 
 bool PartGraph::buildFromZipReader(archive::ZipReader* reader) {
     if (!reader || !reader->isOpen()) {
-        OPC_ERROR("Invalid or closed ZipReader");
+        FASTEXCEL_LOG_ERROR("Invalid or closed ZipReader");
         return false;
     }
     
     // Get all files in the ZIP
     auto files = reader->listFiles();
-    OPC_DEBUG("Building part graph from {} files", files.size());
+    FASTEXCEL_LOG_DEBUG("Building part graph from {} files", files.size());
     
     // Add all files as parts
     for (const auto& file : files) {
@@ -63,7 +63,7 @@ bool PartGraph::buildFromZipReader(archive::ZipReader* reader) {
         }
     }
     
-    OPC_INFO("Part graph built with {} parts", parts_.size());
+    FASTEXCEL_LOG_INFO("Part graph built with {} parts", parts_.size());
     return true;
 }
 
@@ -199,14 +199,14 @@ std::unordered_set<std::string> PartGraph::getDirtyRels(const std::unordered_set
 
 bool PartGraph::parseRels(const std::string& rels_content, const std::string& base_path) {
     if (rels_content.empty()) {
-        OPC_DEBUG("Empty rels content for base_path: {}", base_path);
+        FASTEXCEL_LOG_DEBUG("Empty rels content for base_path: {}", base_path);
         return true;
     }
 
     // 使用专门的RelationshipsParser，遵循单一职责原则和DRY原则
     reader::RelationshipsParser parser;
     if (!parser.parse(rels_content)) {
-        OPC_ERROR("Failed to parse relationships for base_path: {}", base_path);
+        FASTEXCEL_LOG_ERROR("Failed to parse relationships for base_path: {}", base_path);
         return false;
     }
     
@@ -223,7 +223,7 @@ bool PartGraph::parseRels(const std::string& rels_content, const std::string& ba
         addRelationship(base_path, rel);
     }
     
-    OPC_DEBUG("Successfully parsed {} relationships for base_path: {}", relationships.size(), base_path);
+    FASTEXCEL_LOG_DEBUG("Successfully parsed {} relationships for base_path: {}", relationships.size(), base_path);
     return true;
 }
 
@@ -259,7 +259,7 @@ ContentTypes::~ContentTypes() = default;
 
 bool ContentTypes::parse(const std::string& xml) {
     if (xml.empty()) {
-        OPC_DEBUG("Empty ContentTypes XML content");
+        FASTEXCEL_LOG_DEBUG("Empty ContentTypes XML content");
         return true;
     }
 
@@ -270,7 +270,7 @@ bool ContentTypes::parse(const std::string& xml) {
     // 使用专门的ContentTypesParser，遵循单一职责原则和DRY原则
     reader::ContentTypesParser parser;
     if (!parser.parse(xml)) {
-        OPC_ERROR("Failed to parse content types XML");
+        FASTEXCEL_LOG_ERROR("Failed to parse content types XML");
         return false;
     }
     
@@ -285,7 +285,7 @@ bool ContentTypes::parse(const std::string& xml) {
         addOverride(overrideType.part_name, overrideType.content_type);
     }
     
-    OPC_DEBUG("ContentTypes parsed via specialized parser: {} defaults, {} overrides", defaults_.size(), overrides_.size());
+    FASTEXCEL_LOG_DEBUG("ContentTypes parsed via specialized parser: {} defaults, {} overrides", defaults_.size(), overrides_.size());
     return true;
 }
 

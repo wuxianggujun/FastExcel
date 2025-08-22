@@ -1,4 +1,4 @@
-#include "fastexcel/utils/ModuleLoggers.hpp"
+#include "fastexcel/utils/Logger.hpp"
 //
 // Created by wuxianggujun on 25-8-4.
 //
@@ -55,7 +55,7 @@ bool SharedStringsParser::parse(const std::string& xml_content) {
         return true;
         
     } catch (const std::exception& e) {
-        READER_ERROR("解析共享字符串时发生错误: {}", e.what());
+        FASTEXCEL_LOG_ERROR("解析共享字符串时发生错误: {}", e.what());
         return false;
     }
 }

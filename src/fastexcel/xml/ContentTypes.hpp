@@ -1,4 +1,4 @@
-#include "fastexcel/utils/ModuleLoggers.hpp"
+#include "fastexcel/utils/Logger.hpp"
 #pragma once
 
 #include "fastexcel/xml/XMLStreamWriter.hpp"
