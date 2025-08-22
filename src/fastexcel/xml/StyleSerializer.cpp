@@ -723,9 +723,7 @@ std::string StyleSerializer::createFillHashKey(const core::FormatDescriptor& for
     }
     
     // 生成填充哈希键：模式|背景色|前景色
-    return std::to_string(static_cast<int>(format.getPattern())) + "|" +
-           format.getBackgroundColor().toHex(false) + "|" +
-           format.getForegroundColor().toHex(false);
+    return fmt::format("{}|{}|{}", static_cast<int>(format.getPattern()), format.getBackgroundColor().toHex(false), format.getForegroundColor().toHex(false));
 }
 
 std::string StyleSerializer::createFontHashKey(const core::FormatDescriptor& format) {

@@ -13,6 +13,7 @@
 #include "fastexcel/theme/Theme.hpp"
 #include "fastexcel/xml/XMLStreamWriter.hpp"
 #include "fastexcel/utils/Logger.hpp"
+#include <fmt/format.h>
 
 using fastexcel::core::IFileWriter;
 
@@ -67,7 +68,7 @@ public:
                 auto sheet_names = ctx.workbook->getSheetNames();
                 for (size_t i = 0; i < sheet_names.size(); ++i) {
                     w.startElement("Override");
-                    w.writeAttribute("PartName", (std::string("/xl/worksheets/sheet") + std::to_string(i+1) + ".xml").c_str());
+                    w.writeAttribute("PartName", fmt::format("/xl/worksheets/sheet{}.xml", i+1).c_str());
                     w.writeAttribute("ContentType", "application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml");
                     w.endElement();
                     
@@ -75,7 +76,7 @@ public:
                     auto ws = ctx.workbook->getSheet(static_cast<size_t>(i));
                     if (ws && !ws->getImages().empty()) {
                         w.startElement("Override");
-                        w.writeAttribute("PartName", (std::string("/xl/drawings/drawing") + std::to_string(i+1) + ".xml").c_str());
+                        w.writeAttribute("PartName", fmt::format("/xl/drawings/drawing{}.xml", i+1).c_str());
                         w.writeAttribute("ContentType", "application/vnd.openxmlformats-officedocument.drawing+xml");
                         w.endElement();
                     }
@@ -130,15 +131,15 @@ public:
                     auto sheet_names = ctx.workbook->getSheetNames();
                     for (size_t i = 0; i < sheet_names.size(); ++i) {
                         w.startElement("Relationship");
-                        w.writeAttribute("Id", (std::string("rId") + std::to_string(rId++)).c_str());
+                        w.writeAttribute("Id", fmt::format("rId{}", rId++).c_str());
                         w.writeAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet");
-                        w.writeAttribute("Target", (std::string("worksheets/sheet") + std::to_string(i+1) + ".xml").c_str());
+                        w.writeAttribute("Target", fmt::format("worksheets/sheet{}.xml", i+1).c_str());
                         w.endElement();
                     }
                 }
-                w.startElement("Relationship"); w.writeAttribute("Id", (std::string("rId") + std::to_string(rId++)).c_str()); w.writeAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles"); w.writeAttribute("Target", "styles.xml"); w.endElement();
+                w.startElement("Relationship"); w.writeAttribute("Id", fmt::format("rId{}", rId++).c_str()); w.writeAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles"); w.writeAttribute("Target", "styles.xml"); w.endElement();
                 if (ctx.workbook && ctx.workbook->getOptions().use_shared_strings) {
-                    w.startElement("Relationship"); w.writeAttribute("Id", (std::string("rId") + std::to_string(rId++)).c_str()); w.writeAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings"); w.writeAttribute("Target", "sharedStrings.xml"); w.endElement();
+                    w.startElement("Relationship"); w.writeAttribute("Id", fmt::format("rId{}", rId++).c_str()); w.writeAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings"); w.writeAttribute("Target", "sharedStrings.xml"); w.endElement();
                 }
                 w.endElement(); w.flushBuffer();
             });
@@ -159,8 +160,8 @@ public:
                         w.startElement("sheet");
                         w.writeAttribute("name", sheet_names[i].c_str());
                         int sheetId = ws ? ws->getSheetId() : static_cast<int>(i+1);
-                        w.writeAttribute("sheetId", std::to_string(sheetId).c_str());
-                        w.writeAttribute("r:id", (std::string("rId") + std::to_string(i+1)).c_str());
+                        w.writeAttribute("sheetId", fmt::format("{}", sheetId).c_str());
+                        w.writeAttribute("r:id", fmt::format("rId{}", i+1).c_str());
                         w.endElement();
                     }
                 }
@@ -250,7 +251,7 @@ public:
         if (!ctx.workbook) return parts;
         auto names = ctx.workbook->getSheetNames();
         for (size_t i = 0; i < names.size(); ++i) {
-            parts.emplace_back("xl/worksheets/sheet" + std::to_string(i + 1) + ".xml");
+            parts.emplace_back(fmt::format("xl/worksheets/sheet{}.xml", i + 1));
         }
         return parts;
     }
@@ -295,7 +296,7 @@ public:
         if (!ctx.workbook) return parts;
         auto names = ctx.workbook->getSheetNames();
         for (size_t i = 0; i < names.size(); ++i) {
-            parts.emplace_back("xl/worksheets/_rels/sheet" + std::to_string(i + 1) + ".xml.rels");
+            parts.emplace_back(fmt::format("xl/worksheets/_rels/sheet{}.xml.rels", i + 1));
         }
         return parts;
     }

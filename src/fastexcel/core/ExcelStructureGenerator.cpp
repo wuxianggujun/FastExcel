@@ -6,6 +6,7 @@
 #include "fastexcel/core/Exception.hpp"
 #include "fastexcel/xml/UnifiedXMLGenerator.hpp"
 #include "fastexcel/xml/DocPropsXMLGenerator.hpp"
+#include <fmt/format.h>
 #include <sstream>
 #include <chrono>
 
@@ -173,7 +174,7 @@ bool ExcelStructureGenerator::generateWorksheets() {
             return false;
         }
         
-        std::string worksheet_path = "xl/worksheets/sheet" + std::to_string(i + 1) + ".xml";
+        std::string worksheet_path = fmt::format("xl/worksheets/sheet{}.xml", i + 1);
 
         // 若为透传编辑且该sheet未变更，则跳过生成，保留透传版本
         if (!workbook_->shouldGenerateSheet(i)) {
@@ -189,7 +190,7 @@ bool ExcelStructureGenerator::generateWorksheets() {
         
         // 生成工作表关系文件（如有超链接等），交由 orchestrator 封装生成
         if (workbook_->shouldGenerateSheetRels(i) && xml_generator) {
-            std::string rels_path = "xl/worksheets/_rels/sheet" + std::to_string(i + 1) + ".xml.rels";
+            std::string rels_path = fmt::format("xl/worksheets/_rels/sheet{}.xml.rels", i + 1);
             if (!xml_generator->generateParts(*writer_, {rels_path})) {
                 FASTEXCEL_LOG_ERROR("Failed to generate worksheet relations file via orchestrator: {}", rels_path);
                 return false;
@@ -201,7 +202,7 @@ bool ExcelStructureGenerator::generateWorksheets() {
             FASTEXCEL_LOG_DEBUG("Worksheet {} contains {} images, generating drawing files", i + 1, worksheet->getImages().size());
             
             // 生成drawing XML文件
-            std::string drawing_path = "xl/drawings/drawing" + std::to_string(i + 1) + ".xml";
+            std::string drawing_path = fmt::format("xl/drawings/drawing{}.xml", i + 1);
             if (!xml_generator->generateParts(*writer_, {drawing_path})) {
                 FASTEXCEL_LOG_ERROR("Failed to generate drawing file: {}", drawing_path);
                 return false;

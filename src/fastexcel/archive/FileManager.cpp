@@ -3,6 +3,7 @@
 #include "fastexcel/utils/Logger.hpp"
 #include "fastexcel/xml/ContentTypes.hpp"
 #include "fastexcel/xml/Relationships.hpp"
+#include <fmt/format.h>
 
 #include <chrono>
 #include <iomanip>
@@ -487,11 +488,11 @@ std::string FileManager::getImagePath(const std::string& image_id, core::ImageFo
 }
 
 std::string FileManager::getDrawingPath(int drawing_id) {
-    return "xl/drawings/drawing" + std::to_string(drawing_id) + ".xml";
+    return fmt::format("xl/drawings/drawing{}.xml", drawing_id);
 }
 
 std::string FileManager::getDrawingRelsPath(int drawing_id) {
-    return "xl/drawings/_rels/drawing" + std::to_string(drawing_id) + ".xml.rels";
+    return fmt::format("xl/drawings/_rels/drawing{}.xml.rels", drawing_id);
 }
 
 }} // namespace fastexcel::archive

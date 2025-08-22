@@ -1,4 +1,5 @@
 #include "fastexcel/xml/SharedStrings.hpp"
+#include <fmt/format.h>
 
 namespace fastexcel {
 namespace xml {
@@ -36,10 +37,8 @@ void SharedStrings::generate(const std::function<void(const char*, size_t)>& cal
     writer.startDocument();
     writer.startElement("sst");
     writer.writeAttribute("xmlns", "http://schemas.openxmlformats.org/spreadsheetml/2006/main");
-    std::string count_str = std::to_string(strings_.size());
-    writer.writeAttribute("count", count_str.c_str());
-    std::string unique_count_str = std::to_string(strings_.size());
-    writer.writeAttribute("uniqueCount", unique_count_str.c_str());
+    writer.writeAttribute("count", fmt::format("{}", strings_.size()).c_str());
+    writer.writeAttribute("uniqueCount", fmt::format("{}", strings_.size()).c_str());
     
     for (const auto& str : strings_) {
         writer.startElement("si");
@@ -58,10 +57,8 @@ void SharedStrings::generateToFile(const std::string& filename) const {
     writer.startDocument();
     writer.startElement("sst");
     writer.writeAttribute("xmlns", "http://schemas.openxmlformats.org/spreadsheetml/2006/main");
-    std::string count_str = std::to_string(strings_.size());
-    writer.writeAttribute("count", count_str.c_str());
-    std::string unique_count_str = std::to_string(strings_.size());
-    writer.writeAttribute("uniqueCount", unique_count_str.c_str());
+    writer.writeAttribute("count", fmt::format("{}", strings_.size()).c_str());
+    writer.writeAttribute("uniqueCount", fmt::format("{}", strings_.size()).c_str());
     
     for (const auto& str : strings_) {
         writer.startElement("si");
