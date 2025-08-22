@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include "fastexcel/xml/XMLEscapes.hpp"
 
 namespace fastexcel {
 namespace utils {
@@ -29,11 +30,11 @@ public:
         
         for (char c : text) {
             switch (c) {
-                case '<': result += "&lt;"; break;
-                case '>': result += "&gt;"; break;
-                case '&': result += "&amp;"; break;
-                case '"': result += "&quot;"; break;
-                case '\'': result += "&apos;"; break;
+                case '<': result.append(xml::XMLEscapes::LT,  xml::XMLEscapes::LT_LEN);   break;
+                case '>': result.append(xml::XMLEscapes::GT,  xml::XMLEscapes::GT_LEN);   break;
+                case '&': result.append(xml::XMLEscapes::AMP, xml::XMLEscapes::AMP_LEN);  break;
+                case '"': result.append(xml::XMLEscapes::QUOT,xml::XMLEscapes::QUOT_LEN); break;
+                case '\'': result.append(xml::XMLEscapes::APOS,xml::XMLEscapes::APOS_LEN); break;
                 default:
                     if (c < 0x20 && c != 0x09 && c != 0x0A && c != 0x0D) {
                         continue; // 跳过无效控制字符
@@ -61,15 +62,15 @@ public:
                 size_t end = text.find(';', i + 1);
                 if (end != std::string::npos) {
                     std::string entity = text.substr(i, end - i + 1);
-                    if (entity == "&lt;") {
+                    if (entity == xml::XMLEscapes::LT) {
                         result += '<';
-                    } else if (entity == "&gt;") {
+                    } else if (entity == xml::XMLEscapes::GT) {
                         result += '>';
-                    } else if (entity == "&amp;") {
+                    } else if (entity == xml::XMLEscapes::AMP) {
                         result += '&';
-                    } else if (entity == "&quot;") {
+                    } else if (entity == xml::XMLEscapes::QUOT) {
                         result += '"';
-                    } else if (entity == "&apos;") {
+                    } else if (entity == xml::XMLEscapes::APOS) {
                         result += '\'';
                     } else {
                         // 不认识的实体，保持原样
