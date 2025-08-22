@@ -50,8 +50,6 @@ namespace opc {
  * ```
  */
 class PackageEditor {
-    // 前向声明友元类
-    friend class WorkbookXMLGenerator;
     
 private:
     // 核心服务组件（依赖注入）
