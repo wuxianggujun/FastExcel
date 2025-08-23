@@ -609,23 +609,14 @@ bool UnifiedXMLGenerator::generateParts(IFileWriter& writer,
     view.sst = context_.sst;
     view.theme = context_.workbook ? context_.workbook->getTheme() : nullptr;
 
-    FASTEXCEL_LOG_DEBUG("generateParts called with {} parts to generate", parts_to_generate.size());
     for (const auto& target : parts_to_generate) {
-        FASTEXCEL_LOG_DEBUG("Generating part: {}", target);
         bool handled = false;
-        for (size_t i = 0; i < parts_.size(); ++i) {
-            auto& p = parts_[i];
+        for (auto& p : parts_) {
             // 查询该生成器可生成的部件集合
             auto names = p->partNames(view);
-            FASTEXCEL_LOG_DEBUG("Generator {} can handle {} parts", i, names.size());
             for (const auto& n : names) {
-                FASTEXCEL_LOG_DEBUG("  Available part: {}", n);
                 if (n == target) {
-                    FASTEXCEL_LOG_DEBUG("Found matching generator for: {}", target);
-                    if (!p->generatePart(target, view, writer)) {
-                        FASTEXCEL_LOG_ERROR("Failed to generate part: {}", target);
-                        return false;
-                    }
+                    if (!p->generatePart(target, view, writer)) return false;
                     handled = true;
                     break;
                 }
@@ -633,7 +624,6 @@ bool UnifiedXMLGenerator::generateParts(IFileWriter& writer,
             if (handled) break;
         }
         if (!handled) {
-            FASTEXCEL_LOG_ERROR("No generator found for part: {}", target);
             return false;
         }
     }

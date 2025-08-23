@@ -1071,9 +1071,8 @@ bool Workbook::shouldGenerateDocPropsApp() const {
 }
 
 bool Workbook::shouldGenerateDocPropsCustom() const {
-    auto* dirty_manager = getDirtyManager();
-    if (!dirty_manager) return true;
-    return dirty_manager->shouldUpdate("docProps/custom.xml");
+    // 只有在真正有自定义属性时才需要生成 custom.xml
+    return !getAllProperties().empty();
 }
 
 bool Workbook::shouldGenerateSheet(size_t index) const {
