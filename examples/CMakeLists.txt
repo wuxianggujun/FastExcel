@@ -12,6 +12,7 @@ set(EXAMPLE_SOURCES
         simd_test_demo.cpp
         minimal_test.cpp
         step_test.cpp
+        debug_xml_generation.cpp
 )
 
 # 为每个示例创建可执行文件

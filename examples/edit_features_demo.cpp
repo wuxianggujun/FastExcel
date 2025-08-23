@@ -7,12 +7,14 @@
 
 #include "fastexcel/FastExcel.hpp"
 #include "fastexcel/core/Workbook.hpp"
+#include "fastexcel/core/CellAddress.hpp"
 #include "fastexcel/utils/Logger.hpp"
 #include <iostream>
 #include <vector>
 #include <chrono>
 
 using namespace fastexcel;
+using fastexcel::core::Address;
 
 void demonstrateBasicReadWrite() {
     std::cout << "\n=== 基本读写功能演示 ===" << std::endl;
@@ -27,12 +29,12 @@ void demonstrateBasicReadWrite() {
         
         auto worksheet = workbook->addSheet("员工数据");
         
-        // 写入表头（使用新的模板化API）
-        worksheet->setValue(0, 0, std::string("姓名"));
-        worksheet->setValue(0, 1, std::string("年龄"));
-        worksheet->setValue(0, 2, std::string("部门"));
-        worksheet->setValue(0, 3, std::string("薪资"));
-        worksheet->setValue(0, 4, std::string("入职日期"));
+        // 写入表头 - 展示Address类统一API的多种调用方式
+        worksheet->setValue("A1", std::string("姓名"));          // 字符串地址
+        worksheet->setValue(Address(0, 1), std::string("年龄")); // Address对象
+        worksheet->setValue({0, 2}, std::string("部门"));        // 列表初始化 
+        worksheet->setValue("D1", std::string("薪资"));          // 字符串地址
+        worksheet->setValue("E1", std::string("入职日期"));      // 字符串地址
         
         // 写入数据（使用新的模板化API）
         std::vector<std::vector<std::string>> employee_data = {
@@ -55,9 +57,9 @@ void demonstrateBasicReadWrite() {
             }
         }
         
-        // 添加公式
-        worksheet->setValue(6, 0, std::string("平均薪资"));
-        worksheet->getCell(6, 3).setFormula("AVERAGE(D2:D6)");
+        // 添加公式（展示字符串地址API）
+        worksheet->setValue("A7", std::string("平均薪资"));
+        worksheet->getCell("D7").setFormula("AVERAGE(D2:D6)");
         
         // 设置文档属性（使用新API）
         workbook->setDocumentProperties(
@@ -179,10 +181,10 @@ void demonstrateEditingFeatures() {
             return;
         }
         
-        // 1. 编辑单元格值（使用新的模板化API）
+        // 1. 编辑单元格值（展示字符串地址API的便捷性）
         std::cout << "✓ 编辑单元格数据..." << std::endl;
-        worksheet->setValue(1, 3, 13000.0); // 修改张三的薪资
-        worksheet->setValue(2, 2, std::string("市场部")); // 修改李四的部门
+        worksheet->setValue("D2", 13000.0); // 修改张三的薪资
+        worksheet->setValue("C3", std::string("市场部")); // 修改李四的部门
         
         // 2. 查找并替换
         std::cout << "✓ 执行查找替换..." << std::endl;
@@ -220,15 +222,43 @@ void demonstrateEditingFeatures() {
         std::cout << "✓ 按薪资排序..." << std::endl;
         worksheet->sortRange(1, 0, new_row + 1, 4, 3, false, false); // 按薪资列降序排序
         
-        // 6. 添加新工作表
+        // 排序后重新确保数字类型（修复排序可能导致的数据类型问题）
+        std::cout << "✓ 修复排序后的数据类型..." << std::endl;
+        auto [final_max_row, final_max_col] = worksheet->getUsedRange();
+        for (int row = 1; row <= final_max_row; ++row) { // 跳过表头行
+            if (worksheet->hasCellAt(row, 1)) { // 年龄列
+                auto cell_value = worksheet->getCell(row, 1).asString();
+                if (!cell_value.empty() && cell_value != "年龄") {
+                    try {
+                        double age = std::stod(cell_value);
+                        worksheet->setValue(row, 1, age);
+                    } catch (...) {
+                        // 忽略转换错误
+                    }
+                }
+            }
+            if (worksheet->hasCellAt(row, 3)) { // 薪资列
+                auto cell_value = worksheet->getCell(row, 3).asString();
+                if (!cell_value.empty() && cell_value != "薪资") {
+                    try {
+                        double salary = std::stod(cell_value);
+                        worksheet->setValue(row, 3, salary);
+                    } catch (...) {
+                        // 忽略转换错误
+                    }
+                }
+            }
+        }
+        
+        // 6. 添加新工作表（展示字符串地址API）
         std::cout << "✓ 添加新工作表..." << std::endl;
         auto summary_sheet = workbook->addSheet("薪资统计");
-        summary_sheet->setValue(0, 0, std::string("部门"));
-        summary_sheet->setValue(0, 1, std::string("平均薪资"));
-        summary_sheet->setValue(1, 0, std::string("研发部"));
-        summary_sheet->getCell(1, 1).setFormula("AVERAGEIF('员工数据'!C:C,\"研发部\",'员工数据'!D:D)");
-        summary_sheet->setValue(2, 0, std::string("市场部"));
-        summary_sheet->getCell(2, 1).setFormula("AVERAGEIF('员工数据'!C:C,\"市场部\",'员工数据'!D:D)");
+        summary_sheet->setValue("A1", std::string("部门"));
+        summary_sheet->setValue("B1", std::string("平均薪资"));
+        summary_sheet->setValue("A2", std::string("研发部"));
+        summary_sheet->getCell("B2").setFormula("AVERAGEIF('员工数据'!C:C,\"研发部\",'员工数据'!D:D)");
+        summary_sheet->setValue("A3", std::string("市场部"));
+        summary_sheet->getCell("B3").setFormula("AVERAGEIF('员工数据'!C:C,\"市场部\",'员工数据'!D:D)");
         
         // 7. 全局查找
         std::cout << "✓ 执行全局查找..." << std::endl;

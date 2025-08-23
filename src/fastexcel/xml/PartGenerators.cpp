@@ -235,8 +235,15 @@ public:
 // DocProps core/app
 class DocPropsGenerator : public IXMLPartGenerator {
 public:
-    std::vector<std::string> partNames(const XMLContextView&) const override {
-        return {"docProps/core.xml", "docProps/app.xml", "docProps/custom.xml"};
+    std::vector<std::string> partNames(const XMLContextView& ctx) const override {
+        std::vector<std::string> parts = {"docProps/core.xml", "docProps/app.xml"};
+        
+        // 只有在有自定义属性时才包含 custom.xml
+        if (ctx.workbook && !ctx.workbook->getAllProperties().empty()) {
+            parts.push_back("docProps/custom.xml");
+        }
+        
+        return parts;
     }
     bool generatePart(const std::string& part, const XMLContextView& ctx, IFileWriter& writer) override {
         if (part == "docProps/core.xml") {
@@ -602,20 +609,23 @@ bool UnifiedXMLGenerator::generateParts(IFileWriter& writer,
     view.sst = context_.sst;
     view.theme = context_.workbook ? context_.workbook->getTheme() : nullptr;
 
+    FASTEXCEL_LOG_DEBUG("generateParts called with {} parts to generate", parts_to_generate.size());
     for (const auto& target : parts_to_generate) {
         FASTEXCEL_LOG_DEBUG("Generating part: {}", target);
         bool handled = false;
-        for (auto& p : parts_) {
+        for (size_t i = 0; i < parts_.size(); ++i) {
+            auto& p = parts_[i];
             // 查询该生成器可生成的部件集合
             auto names = p->partNames(view);
+            FASTEXCEL_LOG_DEBUG("Generator {} can handle {} parts", i, names.size());
             for (const auto& n : names) {
+                FASTEXCEL_LOG_DEBUG("  Available part: {}", n);
                 if (n == target) {
-                    FASTEXCEL_LOG_DEBUG("Found generator for part: {}", target);
+                    FASTEXCEL_LOG_DEBUG("Found matching generator for: {}", target);
                     if (!p->generatePart(target, view, writer)) {
                         FASTEXCEL_LOG_ERROR("Failed to generate part: {}", target);
                         return false;
                     }
-                    FASTEXCEL_LOG_DEBUG("Successfully generated part: {}", target);
                     handled = true;
                     break;
                 }

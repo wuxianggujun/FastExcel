@@ -273,6 +273,22 @@ public:
     }
     
     /**
+     * @brief 模板化获取单元格值（统一地址接口）
+     * @tparam T 返回值类型
+     * @param address 单元格地址（支持隐式转换）
+     * @return 单元格值
+     * 
+     * 示例：
+     * auto name = worksheet.getValue<std::string>("A1");
+     * auto age = worksheet.getValue<int>("B2");
+     * auto salary = worksheet.getValue<double>(Address(1, 3));
+     */
+    template<typename T>
+    T getValue(const core::Address& address) const {
+        return getValue<T>(address.getRow(), address.getCol());
+    }
+    
+    /**
      * @brief 模板化设置单元格值
      * @tparam T 值类型
      * @param row 行号（0开始）
@@ -287,6 +303,25 @@ public:
     template<typename T>
     void setValue(int row, int col, const T& value) {
         cell_processor_->setValue(row, col, value);
+    }
+    
+    /**
+     * @brief 模板化设置单元格值（统一地址接口）
+     * @tparam T 值类型
+     * @param address 单元格地址（支持多种格式的隐式转换）
+     *   - 行列坐标: Address(0, 0) 或直接 (0, 0)
+     *   - 字符串: Address("A1") 或直接 "A1" 
+     *   - C字符串: "A1"
+     * @param value 要设置的值
+     * 
+     * 示例：
+     * worksheet.setValue("A1", std::string("Hello"));  // 字符串地址
+     * worksheet.setValue("B2", 123.45);                // 字符串地址
+     * worksheet.setValue(Address(0, 0), "Hello");      // Address对象
+     */
+    template<typename T>
+    void setValue(const core::Address& address, const T& value) {
+        setValue<T>(address.getRow(), address.getCol(), value);
     }
     
     /**
@@ -314,6 +349,28 @@ public:
     void setCellFormat(int row, int col, std::shared_ptr<const core::FormatDescriptor> format);
     void setCellFormat(int row, int col, const core::StyleBuilder& builder);
     
+    /**
+     * @brief 设置单元格格式（统一地址接口）
+     * @param address 单元格地址（支持隐式转换）
+     * @param format 格式描述符
+     * 
+     * 示例：
+     * worksheet.setCellFormat("A1", format);           // 字符串地址
+     * worksheet.setCellFormat({0, 1}, format);         // 坐标地址
+     * worksheet.setCellFormat(Address("B2"), format);  // Address对象
+     */
+    void setCellFormat(const core::Address& address, const core::FormatDescriptor& format) {
+        setCellFormat(address.getRow(), address.getCol(), format);
+    }
+    
+    void setCellFormat(const core::Address& address, std::shared_ptr<const core::FormatDescriptor> format) {
+        setCellFormat(address.getRow(), address.getCol(), format);
+    }
+    
+    void setCellFormat(const core::Address& address, const core::StyleBuilder& builder) {
+        setCellFormat(address.getRow(), address.getCol(), builder);
+    }
+    
     // 范围格式化API
     
     /**
@@ -338,6 +395,21 @@ public:
      * @return RangeFormatter对象，支持链式调用
      */
     RangeFormatter rangeFormatter(int start_row, int start_col, int end_row, int end_col);
+    
+    /**
+     * @brief 创建范围格式化器（统一范围接口）
+     * @param range 范围地址（支持隐式转换）
+     *   - 字符串范围: "A1:C10", "Sheet1!A1:C10"
+     *   - 坐标范围: CellRange(0, 0, 9, 2), CellRange{0, 0, 9, 2}
+     * @return RangeFormatter对象，支持链式调用
+     * 
+     * 示例：
+     * worksheet.rangeFormatter("A1:C10").backgroundColor(Color::YELLOW).apply();
+     * worksheet.rangeFormatter({0, 0, 9, 2}).allBorders().apply();
+     */
+    RangeFormatter rangeFormatter(const core::CellRange& range) {
+        return rangeFormatter(range.getStartRow(), range.getStartCol(), range.getEndRow(), range.getEndCol());
+    }
     
     /**
      * @brief 安全获取单元格格式
@@ -418,6 +490,23 @@ public:
     }
     
     /**
+     * @brief 安全获取单元格值（统一地址接口）
+     * @tparam T 返回值类型
+     * @param address 单元格地址（支持隐式转换）
+     * @return 可选值，失败时返回std::nullopt
+     * 
+     * 示例：
+     * auto value = worksheet.tryGetValue<std::string>("A1");
+     * if (value.has_value()) {
+     *     std::cout << value.value() << std::endl;
+     * }
+     */
+    template<typename T>
+    std::optional<T> tryGetValue(const core::Address& address) const noexcept {
+        return tryGetValue<T>(address.getRow(), address.getCol());
+    }
+    
+    /**
      * @brief 获取单元格值或默认值
      * @tparam T 返回值类型
      * @param row 行号（0开始）
@@ -433,80 +522,21 @@ public:
         return getCell(row, col).getValueOr<T>(default_value);
     }
     
-    // Excel地址格式支持
     /**
-     * @brief 通过Excel地址获取单元格值
+     * @brief 获取单元格值或默认值（统一地址接口）
      * @tparam T 返回值类型
-     * @param address Excel地址（如"A1", "B2"）
-     * @return 指定类型的值
-     * 
-     * @example
-     * auto value = worksheet.getValue<std::string>("A1");  // 获取A1的字符串值
-     * auto value = worksheet.getValue<double>("B2");       // 获取B2的数字值
-     */
-    template<typename T>
-    T getValue(const std::string& address) const {
-        auto [sheet, row, col] = utils::AddressParser::parseAddress(address);
-        return getValue<T>(row, col);
-    }
-    
-    /**
-     * @brief 通过Excel地址设置单元格值
-     * @tparam T 值类型
-     * @param address Excel地址（如"A1", "B2"）
-     * @param value 要设置的值
-     * 
-     * @example
-     * worksheet.setValue("A1", std::string("Hello"));  // 设置A1为字符串
-     * worksheet.setValue("B2", 123.45);                // 设置B2为数字
-     */
-    template<typename T>
-    void setValue(const std::string& address, const T& value) {
-        auto [sheet, row, col] = utils::AddressParser::parseAddress(address);
-        setValue<T>(row, col, value);
-    }
-    
-    /**
-     * @brief setCellValue - setValue的语义化别名（字符串地址版本）
-     */
-    template<typename T>
-    void setCellValue(const std::string& address, const T& value) {
-        setValue<T>(address, value);
-    }
-    
-    /**
-     * @brief 通过Excel地址安全获取单元格值
-     * @tparam T 返回值类型
-     * @param address Excel地址（如"A1", "B2"）
-     * @return 可选值，失败时返回std::nullopt
-     */
-    template<typename T>
-    std::optional<T> tryGetValue(const std::string& address) const noexcept {
-        try {
-            auto [sheet, row, col] = utils::AddressParser::parseAddress(address);
-            return tryGetValue<T>(row, col);
-        } catch (...) {
-            return std::nullopt;
-        }
-    }
-    
-    /**
-     * @brief 通过Excel地址获取单元格值或默认值
-     * @tparam T 返回值类型
-     * @param address Excel地址（如"A1", "B2"）
+     * @param address 单元格地址（支持隐式转换）
      * @param default_value 默认值
      * @return 单元格值或默认值
+     * 
+     * 示例：
+     * auto value = worksheet.getValueOr<std::string>("A1", "默认值");
+     * auto number = worksheet.getValueOr<double>({0, 1}, 0.0);
      */
     template<typename T>
-    T getValueOr(const std::string& address, const T& default_value) const noexcept {
-        try {
-            auto [sheet, row, col] = utils::AddressParser::parseAddress(address);
-            return getValueOr<T>(row, col, default_value);
-        } catch (...) {
-            return default_value;
-        }
+    T getValueOr(const core::Address& address, const T& default_value) const noexcept {
+        return getValueOr<T>(address.getRow(), address.getCol(), default_value);
     }
-    
     
     /**
      * @brief 写入日期时间
@@ -517,6 +547,19 @@ public:
     void writeDateTime(int row, int col, const std::tm& datetime);
     
     /**
+     * @brief 写入日期时间（统一地址接口）
+     * @param address 单元格地址（支持隐式转换）
+     * @param datetime 日期时间
+     * 
+     * 示例：
+     * worksheet.writeDateTime("A1", datetime);     // 字符串地址
+     * worksheet.writeDateTime({0, 0}, datetime);   // 坐标地址
+     */
+    void writeDateTime(const core::Address& address, const std::tm& datetime) {
+        writeDateTime(address.getRow(), address.getCol(), datetime);
+    }
+    
+    /**
      * @brief 写入URL链接
      * @param row 行号
      * @param col 列号
@@ -524,6 +567,20 @@ public:
      * @param string 显示文本（可选）
      */
     void writeUrl(int row, int col, const std::string& url, const std::string& string = "");
+    
+    /**
+     * @brief 写入URL链接（统一地址接口）
+     * @param address 单元格地址（支持隐式转换）
+     * @param url URL地址
+     * @param string 显示文本（可选）
+     * 
+     * 示例：
+     * worksheet.writeUrl("A1", "https://example.com", "点击这里");
+     * worksheet.writeUrl({0, 0}, "https://example.com");
+     */
+    void writeUrl(const core::Address& address, const std::string& url, const std::string& string = "") {
+        writeUrl(address.getRow(), address.getCol(), url, string);
+    }
     
     // 批量数据操作
     
@@ -570,6 +627,23 @@ public:
     }
     
     /**
+     * @brief 获取范围内的所有值（统一范围接口）
+     * @tparam T 返回值类型
+     * @param range 范围地址（支持隐式转换）
+     *   - 字符串范围: "A1:C3", "Sheet1!A1:C3"
+     *   - 坐标范围: CellRange(0, 0, 2, 2), CellRange{0, 0, 2, 2}
+     * @return 二维数组，包含范围内的所有值
+     * 
+     * 示例：
+     * auto data = worksheet.getRange<std::string>("A1:C3");    // 字符串范围
+     * auto numbers = worksheet.getRange<double>({0, 0, 2, 2}); // 坐标范围
+     */
+    template<typename T>
+    std::vector<std::vector<T>> getRange(const core::CellRange& range) const {
+        return getRange<T>(range.getStartRow(), range.getStartCol(), range.getEndRow(), range.getEndCol());
+    }
+    
+    /**
      * @brief 通过Excel地址获取范围内的所有值
      * @tparam T 返回值类型
      * @param range Excel范围地址（如"A1:C3"）
@@ -605,6 +679,24 @@ public:
                 setValue<T>(target_row, target_col, data[row_idx][col_idx]);
             }
         }
+    }
+    
+    /**
+     * @brief 设置范围内的所有值（统一范围接口）
+     * @tparam T 值类型
+     * @param range 范围地址（支持隐式转换）
+     *   - 字符串范围: "A1:B2", "Sheet1!A1:B2"
+     *   - 坐标范围: CellRange(0, 0, 1, 1), CellRange{0, 0, 1, 1}
+     * @param data 二维数据数组
+     * 
+     * 示例：
+     * std::vector<std::vector<std::string>> data = {{"A", "B"}, {"C", "D"}};
+     * worksheet.setRange("A1:B2", data);          // 字符串范围
+     * worksheet.setRange({0, 0, 1, 1}, data);     // 坐标范围
+     */
+    template<typename T>
+    void setRange(const core::CellRange& range, const std::vector<std::vector<T>>& data) {
+        setRange<T>(range.getStartRow(), range.getStartCol(), data);
     }
     
     /**
@@ -926,6 +1018,18 @@ public:
      * @param col 分割列位置
      */
     void splitPanes(int row, int col);
+    
+    /**
+     * @brief 分割窗格（统一地址接口）
+     * @param address 分割位置（支持隐式转换）
+     * 
+     * 示例：
+     * worksheet.splitPanes("B2");         // 字符串地址
+     * worksheet.splitPanes({1, 1});       // 坐标地址
+     */
+    void splitPanes(const core::Address& address) {
+        splitPanes(address.getRow(), address.getCol());
+    }
     
     // 打印设置
     
@@ -1352,6 +1456,28 @@ public:
     void editCellValue(int row, int col, bool value, bool preserve_format = true);
     
     /**
+     * @brief 修改现有单元格的值（统一地址接口）
+     * @param address 单元格地址（支持隐式转换）
+     * @param value 新值
+     * @param preserve_format 是否保留原有格式
+     * 
+     * 示例：
+     * worksheet.editCellValue("A1", "新值", true);      // 字符串地址
+     * worksheet.editCellValue({0, 0}, 123.45, false);  // 坐标地址
+     */
+    void editCellValue(const core::Address& address, const std::string& value, bool preserve_format = true) {
+        editCellValue(address.getRow(), address.getCol(), value, preserve_format);
+    }
+    
+    void editCellValue(const core::Address& address, double value, bool preserve_format = true) {
+        editCellValue(address.getRow(), address.getCol(), value, preserve_format);
+    }
+    
+    void editCellValue(const core::Address& address, bool value, bool preserve_format = true) {
+        editCellValue(address.getRow(), address.getCol(), value, preserve_format);
+    }
+    
+    /**
      * @brief 修改单元格格式（新架构 - 推荐）
      * @param row 行号
      * @param col 列号
@@ -1359,6 +1485,23 @@ public:
      */
     void editCellFormat(int row, int col, const core::FormatDescriptor& format);
     void editCellFormat(int row, int col, std::shared_ptr<const core::FormatDescriptor> format);
+    
+    /**
+     * @brief 修改单元格格式（统一地址接口）
+     * @param address 单元格地址（支持隐式转换）
+     * @param format 新格式描述符
+     * 
+     * 示例：
+     * worksheet.editCellFormat("A1", format);      // 字符串地址
+     * worksheet.editCellFormat({0, 0}, format);    // 坐标地址
+     */
+    void editCellFormat(const core::Address& address, const core::FormatDescriptor& format) {
+        editCellFormat(address.getRow(), address.getCol(), format);
+    }
+    
+    void editCellFormat(const core::Address& address, std::shared_ptr<const core::FormatDescriptor> format) {
+        editCellFormat(address.getRow(), address.getCol(), format);
+    }
     
     /**
      * @deprecated 使用 FormatDescriptor 版本替代
@@ -1858,6 +2001,19 @@ public:
      * @return 单元格的字符串表示
      */
     std::string getCellDisplayValue(int row, int col) const;
+    
+    /**
+     * @brief 获取单元格的显示值（统一地址接口）
+     * @param address 单元格地址（支持隐式转换）
+     * @return 单元格的字符串表示
+     * 
+     * 示例：
+     * auto display = worksheet.getCellDisplayValue("A1");     // 字符串地址
+     * auto display = worksheet.getCellDisplayValue({0, 0});   // 坐标地址
+     */
+    std::string getCellDisplayValue(const core::Address& address) const {
+        return getCellDisplayValue(address.getRow(), address.getCol());
+    }
 
 private:
     // 模板化的单元格操作辅助方法
