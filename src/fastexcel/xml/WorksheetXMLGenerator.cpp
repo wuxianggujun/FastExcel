@@ -57,52 +57,43 @@ void WorksheetXMLGenerator::generate(const std::function<void(const char*, size_
 void WorksheetXMLGenerator::generateRelationships(const std::function<void(const char*, size_t)>& callback) {
     if (!worksheet_) return;
     
-    // 检查是否有超链接
-    bool has_hyperlinks = false;
+    // 使用专用的Relationships类生成XML（与Worksheet原来逻辑保持一致）
+    xml::Relationships relationships;
+    
+    // 添加超链接关系
     auto [max_row, max_col] = worksheet_->getUsedRange();
-    
-    for (int row = 0; row <= max_row && !has_hyperlinks; ++row) {
-        for (int col = 0; col <= max_col; ++col) {
-            if (worksheet_->hasCellAt(row, col)) {
-                const auto& cell = worksheet_->getCell(row, col);
-                if (cell.hasHyperlink()) {
-                    has_hyperlinks = true;
-                    break;
-                }
-            }
-        }
-    }
-    
-    if (!has_hyperlinks) {
-        return; // 没有关系需要生成
-    }
-    
-    // 生成关系XML
-    XMLStreamWriter writer(callback);
-    writer.startDocument();
-    writer.startElement("Relationships");
-    writer.writeAttribute("xmlns", "http://schemas.openxmlformats.org/package/2006/relationships");
-    
-    int rel_id = 1;
     for (int row = 0; row <= max_row; ++row) {
         for (int col = 0; col <= max_col; ++col) {
             if (worksheet_->hasCellAt(row, col)) {
                 const auto& cell = worksheet_->getCell(row, col);
                 if (cell.hasHyperlink()) {
-                    writer.startElement("Relationship");
-                    writer.writeAttribute("Id", fmt::format("rId{}", rel_id).c_str());
-                    writer.writeAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink");
-                    writer.writeAttribute("Target", cell.getHyperlink().c_str());
-                    writer.writeAttribute("TargetMode", "External");
-                    writer.endElement(); // Relationship
-                    rel_id++;
+                    relationships.addAutoRelationship(
+                        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink",
+                        cell.getHyperlink(),
+                        "External"
+                    );
                 }
             }
         }
     }
     
-    writer.endElement(); // Relationships
-    writer.endDocument();
+    // 添加图片关系（如果有图片）
+    const auto& images = worksheet_->getImages();
+    if (!images.empty()) {
+        std::string drawing_target = "../drawings/drawing" + std::to_string(worksheet_->getSheetId()) + ".xml";
+        relationships.addAutoRelationship(
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing",
+            drawing_target
+        );
+    }
+    
+    // 如果没有关系，不生成任何内容
+    if (relationships.size() == 0) {
+        return;
+    }
+    
+    // 使用Relationships类生成XML到回调
+    relationships.generate(callback);
 }
 
 // 批量模式生成方法

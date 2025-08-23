@@ -545,12 +545,12 @@ public:
      * auto number = workbook.getValue<double>(1, 1, 1);      // 获取第二个工作表B2的数字值
      */
     template<typename T>
-    T getValue(size_t sheet_index, int row, int col) const {
+    T getValue(size_t sheet_index, const Address& address) const {
         auto worksheet = getSheet(sheet_index);
         if (!worksheet) {
             throw std::runtime_error("Invalid worksheet index: " + std::to_string(sheet_index));
         }
-        return worksheet->getValue<T>(row, col);
+        return worksheet->getValue<T>(address);
     }
     
     /**
@@ -566,12 +566,12 @@ public:
      * workbook.setValue("Data", 1, 1, 123.45);                  // 在Data工作表的B2设置数字
      */
     template<typename T>
-    void setValue(const std::string& sheet_name, int row, int col, const T& value) {
+    void setValue(const std::string& sheet_name, const Address& address, const T& value) {
         auto worksheet = getSheet(sheet_name);
         if (!worksheet) {
             throw std::runtime_error("Worksheet not found: " + sheet_name);
         }
-        worksheet->setValue<T>(row, col, value);
+        worksheet->setValue<T>(address, value);
     }
     
     /**
@@ -583,12 +583,12 @@ public:
      * @param value 要设置的值
      */
     template<typename T>
-    void setValue(size_t sheet_index, int row, int col, const T& value) {
+    void setValue(size_t sheet_index, const Address& address, const T& value) {
         auto worksheet = getSheet(sheet_index);
         if (!worksheet) {
             throw std::runtime_error("Invalid worksheet index: " + std::to_string(sheet_index));
         }
-        worksheet->setValue<T>(row, col, value);
+        worksheet->setValue<T>(address, value);
     }
     
     // 安全版本的跨工作表访问方法（不抛异常）
@@ -629,13 +629,13 @@ public:
      * @return 可选值，失败时返回std::nullopt
      */
     template<typename T>
-    std::optional<T> tryGetValue(const std::string& sheet_name, int row, int col) const noexcept {
+    std::optional<T> tryGetValue(const std::string& sheet_name, const Address& address) const noexcept {
         try {
             auto worksheet = findSheet(sheet_name);
             if (!worksheet) {
                 return std::nullopt;
             }
-            return worksheet->tryGetValue<T>(row, col);
+            return worksheet->tryGetValue<T>(address);
         } catch (...) {
             return std::nullopt;
         }
@@ -650,7 +650,7 @@ public:
      * @return 可选值，失败时返回std::nullopt
      */
     template<typename T>
-    std::optional<T> tryGetValue(size_t sheet_index, int row, int col) const noexcept {
+    std::optional<T> tryGetValue(size_t sheet_index, const Address& address) const noexcept {
         try {
             if (sheet_index >= worksheets_.size()) {
                 return std::nullopt;
@@ -659,7 +659,7 @@ public:
             if (!worksheet) {
                 return std::nullopt;
             }
-            return worksheet->tryGetValue<T>(row, col);
+            return worksheet->tryGetValue<T>(address);
         } catch (...) {
             return std::nullopt;
         }
@@ -675,13 +675,13 @@ public:
      * @return 是否成功设置
      */
     template<typename T>
-    bool trySetValue(const std::string& sheet_name, int row, int col, const T& value) noexcept {
+    bool trySetValue(const std::string& sheet_name, const Address& address, const T& value) noexcept {
         try {
             auto worksheet = findSheet(sheet_name);
             if (!worksheet) {
                 return false;
             }
-            worksheet->setValue<T>(row, col, value);
+            worksheet->setValue<T>(address, value);
             return true;
         } catch (...) {
             return false;
@@ -703,14 +703,14 @@ public:
         auto [sheet_name, row, col] = utils::AddressParser::parseAddress(full_address);
         if (sheet_name.empty()) {
             // 如果没有工作表名，使用第一个工作表
-            return getValue<T>(0, row, col);
+            return getValue<T>(0, Address(row, col));
         }
         
         auto worksheet = getSheet(sheet_name);
         if (!worksheet) {
             throw std::runtime_error("Worksheet not found: " + sheet_name);
         }
-        return worksheet->getValue<T>(row, col);
+        return worksheet->getValue<T>(Address(row, col));
     }
     
     /**
@@ -728,7 +728,7 @@ public:
         auto [sheet_name, row, col] = utils::AddressParser::parseAddress(full_address);
         if (sheet_name.empty()) {
             // 如果没有工作表名，使用第一个工作表
-            setValue<T>(0, row, col, value);
+            setValue<T>(0, Address(row, col), value);
             return;
         }
         
@@ -736,7 +736,7 @@ public:
         if (!worksheet) {
             throw std::runtime_error("Worksheet not found: " + sheet_name);
         }
-        worksheet->setValue<T>(row, col, value);
+        worksheet->setValue<T>(Address(row, col), value);
     }
     
     // 样式管理

@@ -219,10 +219,10 @@ int CellDataProcessor::findAndReplace(const std::string& find_text, const std::s
             }
         } else {
             // 部分匹配替换
-            size_t pos = 0;
-            while ((pos = cell_text.find(find_text, pos)) != std::string::npos) {
-                cell_text.replace(pos, find_text.length(), replace_text);
-                pos += replace_text.length();
+            size_t search_pos = 0;
+            while ((search_pos = cell_text.find(find_text, search_pos)) != std::string::npos) {
+                cell_text.replace(search_pos, find_text.length(), replace_text);
+                search_pos += replace_text.length();
                 replaced = true;
             }
             

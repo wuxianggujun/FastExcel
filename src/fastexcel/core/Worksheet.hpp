@@ -67,6 +67,131 @@ class WorksheetChain;
  */
 class Worksheet {
     friend class ::fastexcel::xml::WorksheetXMLGenerator;  // 让XML生成器能访问private方法
+public:
+    // 友元类需要访问的方法
+    const std::vector<std::unique_ptr<Image>>& getImages() const { 
+        return images_; 
+    }
+    
+    std::pair<int, int> getUsedRange() const;
+    std::tuple<int, int, int, int> getUsedRangeFull() const;
+    
+    bool hasCellAt(int row, int col) const;
+    
+    Cell& getCell(int row, int col);
+    const Cell& getCell(int row, int col) const;
+    
+    void setCellFormat(int row, int col, const core::FormatDescriptor& format);
+    void setCellFormat(int row, int col, std::shared_ptr<const core::FormatDescriptor> format);
+    void setCellFormat(int row, int col, const core::StyleBuilder& builder);
+    
+    const std::string& getName() const { return name_; }
+    void setName(const std::string& name) { name_ = name; }
+    
+    /**
+     * @brief 获取父工作簿
+     * @return 父工作簿指针
+     */
+    std::shared_ptr<Workbook> getParentWorkbook() const { return parent_workbook_; }
+    
+    int findAndReplace(const std::string& find_text, const std::string& replace_text,
+                       bool match_case = false, bool match_entire_cell = false);
+    
+    std::vector<std::pair<int, int>> findCells(const std::string& search_text,
+                                               bool match_case = false,
+                                               bool match_entire_cell = false) const;
+    
+    size_t getCellCount() const { return cells_.size(); }
+    
+    /**
+     * @brief 获取工作表ID
+     * @return 工作表ID
+     */
+    int getSheetId() const { return sheet_id_; }
+    
+    /**
+     * @brief 获取总行数（有数据的行）
+     * @return 总行数
+     */
+    int getRowCount() const;
+    
+    /**
+     * @brief 获取总列数（有数据的列）
+     * @return 总列数
+     */
+    int getColumnCount() const;
+    
+    /**
+     * @brief 检查选项卡是否选中
+     * @return 选项卡是否选中
+     */
+    bool isTabSelected() const { return sheet_view_.tab_selected; }
+    
+    /**
+     * @brief 复制单元格
+     * @param src_row 源行号
+     * @param src_col 源列号
+     * @param dst_row 目标行号
+     * @param dst_col 目标列号
+     * @param copy_format 是否复制格式
+     * @param copy_row_height 是否复制行高
+     */
+    void copyCell(int src_row, int src_col, int dst_row, int dst_col, bool copy_format = true, bool copy_row_height = false);
+    
+    /**
+     * @brief 复制范围
+     * @param src_first_row 源起始行
+     * @param src_first_col 源起始列
+     * @param src_last_row 源结束行
+     * @param src_last_col 源结束列
+     * @param dst_row 目标起始行
+     * @param dst_col 目标起始列
+     * @param copy_format 是否复制格式
+     */
+    void copyRange(int src_first_row, int src_first_col, int src_last_row, int src_last_col,
+                   int dst_row, int dst_col, bool copy_format = true);
+    
+    /**
+     * @brief 排序范围
+     * @param first_row 起始行
+     * @param first_col 起始列
+     * @param last_row 结束行
+     * @param last_col 结束列
+     * @param sort_column 排序列（相对于范围的列索引）
+     * @param ascending 是否升序
+     * @param has_header 是否有标题行
+     */
+    void sortRange(int first_row, int first_col, int last_row, int last_col,
+                   int sort_column = 0, bool ascending = true, bool has_header = false);
+    
+    /**
+     * @brief 设置单元格公式
+     * @param row 行号（0基索引）
+     * @param col 列号（0基索引） 
+     * @param formula 公式字符串
+     * @param result 公式计算结果（可选，默认0.0）
+     */
+    void setFormula(int row, int col, const std::string& formula, double result = 0.0);
+    
+    /**
+     * @brief 设置单元格公式（地址版本）
+     * @param address 单元格地址
+     * @param formula 公式字符串
+     * @param result 公式计算结果（可选，默认0.0）
+     */
+    void setFormula(const Address& address, const std::string& formula, double result = 0.0);
+    
+    /**
+     * @brief 创建共享公式
+     * @param first_row 起始行
+     * @param first_col 起始列
+     * @param last_row 结束行
+     * @param last_col 结束列
+     * @param formula 基础公式
+     * @return 共享索引，失败返回-1
+     */
+    int createSharedFormula(int first_row, int first_col, int last_row, int last_col, const std::string& formula);
+
 private:
     std::string name_;
     std::map<std::pair<int, int>, Cell> cells_; // (row, col) -> Cell
@@ -231,8 +356,8 @@ public:
      * @param col 列号（0开始）
      * @return 单元格引用
      */
-    Cell& getCell(int row, int col);
-    const Cell& getCell(int row, int col) const;
+private:
+public:
     
     /**
      * @brief 获取单元格（支持多种地址格式）
@@ -246,13 +371,8 @@ public:
      * auto& cell2 = worksheet.getCell({0, 1});      // 坐标地址
      * auto value = worksheet.getCell("B2").getValue<std::string>();
      */
-    Cell& getCell(const core::Address& address) {
-        return getCell(address.getRow(), address.getCol());
-    }
-    
-    const Cell& getCell(const core::Address& address) const {
-        return getCell(address.getRow(), address.getCol());
-    }
+    Cell& getCell(const core::Address& address);
+    const Cell& getCell(const core::Address& address) const;
     
     // 模板化的单元格值获取和设置
     /**
@@ -267,10 +387,25 @@ public:
      * auto num_value = worksheet.getValue<double>(1, 1);       // 获取B2的数字值
      * auto bool_value = worksheet.getValue<bool>(2, 2);        // 获取C3的布尔值
      */
+public:
+    
+    /**
+     * @brief 模板化获取单元格值
+     * @tparam T 返回值类型（支持int, double, string, bool等基础类型）
+     * @param row 行号（0开始）
+     * @param col 列号（0开始）
+     * @return 指定类型的值
+     * 
+     * @example
+     * auto str_value = worksheet.getValue<std::string>(0, 0);  // 获取A1的字符串值
+     * auto num_value = worksheet.getValue<double>(1, 1);       // 获取B2的数字值
+     * auto bool_value = worksheet.getValue<bool>(2, 2);        // 获取C3的布尔值
+     */
     template<typename T>
     T getValue(int row, int col) const {
         return getCell(row, col).getValue<T>();
     }
+public:
     
     /**
      * @brief 模板化获取单元格值（统一地址接口）
@@ -300,10 +435,25 @@ public:
      * worksheet.setValue(1, 1, 123.45);                // 设置B2为数字
      * worksheet.setValue(2, 2, true);                   // 设置C3为布尔值
      */
+public:
+    
+    /**
+     * @brief 设置单元格值（模板化方法）
+     * @tparam T 值类型（支持int, double, string, bool等基础类型）
+     * @param row 行号（0开始）
+     * @param col 列号（0开始）  
+     * @param value 要设置的值
+     * 
+     * @example
+     * worksheet.setValue(0, 0, std::string("Hello"));  // 设置A1为字符串
+     * worksheet.setValue(1, 1, 123.45);                // 设置B2为数字
+     * worksheet.setValue(2, 2, true);                   // 设置C3为布尔值
+     */
     template<typename T>
     void setValue(int row, int col, const T& value) {
         cell_processor_->setValue(row, col, value);
     }
+public:
     
     /**
      * @brief 模板化设置单元格值（统一地址接口）
@@ -332,6 +482,7 @@ public:
     void setCellValue(int row, int col, const T& value) {
         setValue<T>(row, col, value);
     }
+public:
     
     // 智能单元格格式设置 API
     
@@ -345,9 +496,8 @@ public:
      *          格式可能被多个单元格共享以节省内存。
      * @example worksheet.setCellFormat(0, 0, format);
      */
-    void setCellFormat(int row, int col, const core::FormatDescriptor& format);
-    void setCellFormat(int row, int col, std::shared_ptr<const core::FormatDescriptor> format);
-    void setCellFormat(int row, int col, const core::StyleBuilder& builder);
+private:
+public:
     
     /**
      * @brief 设置单元格格式（统一地址接口）
@@ -359,17 +509,9 @@ public:
      * worksheet.setCellFormat({0, 1}, format);         // 坐标地址
      * worksheet.setCellFormat(Address("B2"), format);  // Address对象
      */
-    void setCellFormat(const core::Address& address, const core::FormatDescriptor& format) {
-        setCellFormat(address.getRow(), address.getCol(), format);
-    }
-    
-    void setCellFormat(const core::Address& address, std::shared_ptr<const core::FormatDescriptor> format) {
-        setCellFormat(address.getRow(), address.getCol(), format);
-    }
-    
-    void setCellFormat(const core::Address& address, const core::StyleBuilder& builder) {
-        setCellFormat(address.getRow(), address.getCol(), builder);
-    }
+    void setCellFormat(const core::Address& address, const core::FormatDescriptor& format);
+    void setCellFormat(const core::Address& address, std::shared_ptr<const core::FormatDescriptor> format);
+    void setCellFormat(const core::Address& address, const core::StyleBuilder& builder);
     
     // 范围格式化API
     
@@ -394,7 +536,9 @@ public:
      * @param end_col 结束列（0-based，包含）
      * @return RangeFormatter对象，支持链式调用
      */
+private:
     RangeFormatter rangeFormatter(int start_row, int start_col, int end_row, int end_col);
+public:
     
     /**
      * @brief 创建范围格式化器（统一范围接口）
@@ -417,6 +561,7 @@ public:
      * @param col 列号（0开始）
      * @return 格式描述符的可选值，失败时返回std::nullopt
      */
+private:
     std::optional<std::shared_ptr<const FormatDescriptor>> tryGetCellFormat(int row, int col) const noexcept {
         try {
             if (!hasCellAt(row, col)) {
@@ -429,12 +574,14 @@ public:
             return std::nullopt;
         }
     }
+public:
     
     /**
      * @brief 安全获取列宽
      * @param col 列号（0开始）
      * @return 列宽的可选值，失败时返回std::nullopt
      */
+private:
     std::optional<double> tryGetColumnWidth(int col) const noexcept {
         try {
             if (col < 0) return std::nullopt;
@@ -443,12 +590,14 @@ public:
             return std::nullopt;
         }
     }
+public:
     
     /**
      * @brief 安全获取行高
      * @param row 行号（0开始）
      * @return 行高的可选值，失败时返回std::nullopt
      */
+private:
     std::optional<double> tryGetRowHeight(int row) const noexcept {
         try {
             if (row < 0) return std::nullopt;
@@ -457,6 +606,7 @@ public:
             return std::nullopt;
         }
     }
+public:
     
     /**
      * @brief 安全获取使用范围
@@ -481,6 +631,7 @@ public:
      * @param col 列号（0开始）
      * @return 可选值，失败时返回std::nullopt
      */
+private:
     template<typename T>
     std::optional<T> tryGetValue(int row, int col) const noexcept {
         if (!hasCellAt(row, col)) {
@@ -488,6 +639,7 @@ public:
         }
         return getCell(row, col).tryGetValue<T>();
     }
+public:
     
     /**
      * @brief 安全获取单元格值（统一地址接口）
@@ -514,6 +666,14 @@ public:
      * @param default_value 默认值
      * @return 单元格值或默认值
      */
+    /**
+     * @brief 获取单元格值或默认值（兼容旧版接口）
+     * @tparam T 返回值类型
+     * @param row 行号
+     * @param col 列号
+     * @param default_value 默认值
+     * @return 单元格值或默认值
+     */
     template<typename T>
     T getValueOr(int row, int col, const T& default_value) const noexcept {
         if (!hasCellAt(row, col)) {
@@ -521,6 +681,7 @@ public:
         }
         return getCell(row, col).getValueOr<T>(default_value);
     }
+public:
     
     /**
      * @brief 获取单元格值或默认值（统一地址接口）
@@ -544,7 +705,9 @@ public:
      * @param col 列号
      * @param datetime 日期时间
      */
+private:
     void writeDateTime(int row, int col, const std::tm& datetime);
+public:
     
     /**
      * @brief 写入日期时间（统一地址接口）
@@ -555,9 +718,7 @@ public:
      * worksheet.writeDateTime("A1", datetime);     // 字符串地址
      * worksheet.writeDateTime({0, 0}, datetime);   // 坐标地址
      */
-    void writeDateTime(const core::Address& address, const std::tm& datetime) {
-        writeDateTime(address.getRow(), address.getCol(), datetime);
-    }
+    void writeDateTime(const core::Address& address, const std::tm& datetime);
     
     /**
      * @brief 写入URL链接
@@ -566,7 +727,9 @@ public:
      * @param url URL地址
      * @param string 显示文本（可选）
      */
+private:
     void writeUrl(int row, int col, const std::string& url, const std::string& string = "");
+public:
     
     /**
      * @brief 写入URL链接（统一地址接口）
@@ -578,9 +741,28 @@ public:
      * worksheet.writeUrl("A1", "https://example.com", "点击这里");
      * worksheet.writeUrl({0, 0}, "https://example.com");
      */
-    void writeUrl(const core::Address& address, const std::string& url, const std::string& string = "") {
-        writeUrl(address.getRow(), address.getCol(), url, string);
-    }
+    void writeUrl(const core::Address& address, const std::string& url, const std::string& string = "");
+
+    // 视图与窗格（统一地址接口）
+    void freezePanes(const core::Address& split_cell);
+    void freezePanes(const core::Address& split_cell, const core::Address& top_left_cell);
+    
+    /**
+     * @brief 冻结窗格（使用行列坐标）
+     * @param row 分割行
+     * @param col 分割列
+     */
+    void freezePanes(int row, int col);
+    
+    /**
+     * @brief 冻结窗格（使用行列坐标，指定左上角单元格）
+     * @param row 分割行
+     * @param col 分割列
+     * @param top_left_row 左上角行
+     * @param top_left_col 左上角列
+     */
+    void freezePanes(int row, int col, int top_left_row, int top_left_col);
+    void splitPanes(const core::Address& split_cell);
     
     // 批量数据操作
     
@@ -981,55 +1163,7 @@ public:
     
     // 冻结窗格
     
-    /**
-     * @brief 冻结窗格
-     * @param row 冻结行位置
-     * @param col 冻结列位置
-     */
-    void freezePanes(int row, int col);
-    
-    /**
-     * @brief 冻结窗格（支持多种地址格式）
-     * @param address 冻结位置（支持隐式转换）
-     *   - 字符串: "B2", "C3", "Sheet1!D4"
-     *   - 坐标: Address(1, 1), Address{2, 2}
-     * 
-     * @example
-     * worksheet.freezePanes("B2");             // 字符串地址，冻结在B2
-     * worksheet.freezePanes({1, 2});           // 坐标地址，冻结在第2行第3列
-     * worksheet.freezePanes("A3");             // 冻结前2行
-     */
-    void freezePanes(const core::Address& address) {
-        freezePanes(address.getRow(), address.getCol());
-    }
-    
-    /**
-     * @brief 冻结窗格（指定左上角单元格）
-     * @param row 冻结行位置
-     * @param col 冻结列位置
-     * @param top_left_row 左上角行
-     * @param top_left_col 左上角列
-     */
-    void freezePanes(int row, int col, int top_left_row, int top_left_col);
-    
-    /**
-     * @brief 分割窗格
-     * @param row 分割行位置
-     * @param col 分割列位置
-     */
-    void splitPanes(int row, int col);
-    
-    /**
-     * @brief 分割窗格（统一地址接口）
-     * @param address 分割位置（支持隐式转换）
-     * 
-     * 示例：
-     * worksheet.splitPanes("B2");         // 字符串地址
-     * worksheet.splitPanes({1, 1});       // 坐标地址
-     */
-    void splitPanes(const core::Address& address) {
-        splitPanes(address.getRow(), address.getCol());
-    }
+    // 冻结窗格和分割窗格已在上面声明
     
     // 打印设置
     
@@ -1089,6 +1223,7 @@ public:
      * @param row 行号
      * @param col 列号
      */
+private:
     void setActiveCell(int row, int col);
     
     /**
@@ -1101,8 +1236,19 @@ public:
      * worksheet.setActiveCell("B2");           // 字符串地址
      * worksheet.setActiveCell({1, 1});         // 坐标地址
      */
-    void setActiveCell(const core::Address& address) {
-        setActiveCell(address.getRow(), address.getCol());
+    void setActiveCell(const core::Address& address);
+
+    // 图片插入（统一地址/范围接口）
+    std::string insertImage(const core::Address& address, const std::string& image_path) {
+        return insertImage(address.getRow(), address.getCol(), image_path);
+    }
+
+    std::string insertImage(const core::Address& address, std::unique_ptr<Image> image) {
+        return insertImage(address.getRow(), address.getCol(), std::move(image));
+    }
+
+    std::string insertImage(const core::CellRange& range, const std::string& image_path) {
+        return insertImage(range.getStartRow(), range.getStartCol(), range.getEndRow(), range.getEndCol(), image_path);
     }
     
     /**
@@ -1132,47 +1278,9 @@ public:
     
     // 获取信息
     
-    /**
-     * @brief 获取工作表名称
-     * @return 工作表名称
-     */
-    const std::string& getName() const { return name_; }
+    // 其他原本在private的方法已移动到public区域
     
-    /**
-     * @brief 设置工作表名称
-     * @param name 新名称
-     */
-    void setName(const std::string& name) { name_ = name; }
-    
-    /**
-     * @brief 获取工作表ID
-     * @return 工作表ID
-     */
-    int getSheetId() const { return sheet_id_; }
-    
-    /**
-     * @brief 获取父工作簿
-     * @return 父工作簿指针
-     */
-    std::shared_ptr<Workbook> getParentWorkbook() const { return parent_workbook_; }
-    
-    /**
-     * @brief 获取使用范围
-     * @return (最大行, 最大列)
-     */
-    std::pair<int, int> getUsedRange() const;
-    
-    /**
-     * @brief 获取完整的使用范围
-     * @return (最小行, 最大行, 最小列, 最大列)
-     */
-    std::tuple<int, int, int, int> getUsedRangeFull() const;
-    
-    /**
-     * @brief 获取单元格数量
-     * @return 单元格数量
-     */
-    size_t getCellCount() const { return cells_.size(); }
+    // getUsedRange, hasCellAt, getCellCount 已在 public 区域声明
     
     // 便捷的工作表状态检查方法
     /**
@@ -1192,17 +1300,7 @@ public:
      */
     bool hasData() const { return !cells_.empty(); }
     
-    /**
-     * @brief 获取总行数（有数据的行）
-     * @return 总行数
-     */
-    int getRowCount() const;
-    
-    /**
-     * @brief 获取总列数（有数据的列）
-     * @return 总列数
-     */
-    int getColumnCount() const;
+    // getRowCount 和 getColumnCount 已在 public 区域声明
     
     /**
      * @brief 获取指定行的单元格数量
@@ -1218,13 +1316,7 @@ public:
      */
     int getCellCountInColumn(int col) const;
     
-    /**
-     * @brief 检查单元格是否存在
-     * @param row 行号
-     * @param col 列号
-     * @return 是否存在
-     */
-    bool hasCellAt(int row, int col) const;
+    // hasCellAt 已在 public 区域声明
     
     /**
      * @brief 检查指定地址是否存在单元格（支持多种地址格式）
@@ -1241,8 +1333,12 @@ public:
      *     // 处理B1单元格
      * }
      */
-    bool hasCellAt(const core::Address& address) const {
-        return hasCellAt(address.getRow(), address.getCol());
+    bool hasCellAt(const core::Address& address) const { return hasCellAt(address.getRow(), address.getCol()); }
+
+    // 统一地址版：安全获取单元格格式
+    std::optional<std::shared_ptr<const FormatDescriptor>>
+    tryGetCellFormat(const core::Address& address) const noexcept {
+        return tryGetCellFormat(address.getRow(), address.getCol());
     }
     
     /**
@@ -1360,11 +1456,7 @@ public:
      */
     bool isRightToLeft() const { return sheet_view_.right_to_left; }
     
-    /**
-     * @brief 检查选项卡是否选中
-     * @return 选项卡是否选中
-     */
-    bool isTabSelected() const { return sheet_view_.tab_selected; }
+    // isTabSelected 已在 public 区域声明
     
     /**
      * @brief 获取活动单元格
@@ -1385,18 +1477,6 @@ public:
      * @param callback 数据写入回调函数
      */
     void generateXML(const std::function<void(const char*, size_t)>& callback) const;
-    
-    /**
-     * @brief 生成工作表关系XML到回调函数（流式写入）
-     * @param callback 数据写入回调函数
-     */
-    void generateRelsXML(const std::function<void(const char*, size_t)>& callback) const;
-    
-    /**
-     * @brief 生成工作表关系XML到文件（流式写入）
-     * @param filename 输出文件名
-     */
-    void generateRelsXMLToFile(const std::string& filename) const;
     
     // 工具方法
     
@@ -1513,16 +1593,7 @@ public:
     [[deprecated("Use FormatDescriptor version instead")]]
     void editCellFormat(int row, int col, std::shared_ptr<Format> format);
     
-    /**
-     * @brief 复制单元格
-     * @param src_row 源行号
-     * @param src_col 源列号
-     * @param dst_row 目标行号
-     * @param dst_col 目标列号
-     * @param copy_format 是否复制格式
-     * @param copy_row_height 是否复制行高
-     */
-    void copyCell(int src_row, int src_col, int dst_row, int dst_col, bool copy_format = true, bool copy_row_height = false);
+    // copyCell, copyRange, sortRange 已移动到 public 区域
     
     /**
      * @brief 移动单元格
@@ -1533,18 +1604,7 @@ public:
      */
     void moveCell(int src_row, int src_col, int dst_row, int dst_col);
     
-    /**
-     * @brief 复制范围
-     * @param src_first_row 源起始行
-     * @param src_first_col 源起始列
-     * @param src_last_row 源结束行
-     * @param src_last_col 源结束列
-     * @param dst_row 目标起始行
-     * @param dst_col 目标起始列
-     * @param copy_format 是否复制格式
-     */
-    void copyRange(int src_first_row, int src_first_col, int src_last_row, int src_last_col,
-                   int dst_row, int dst_col, bool copy_format = true);
+    // copyRange 已移动到 public 区域
     
     /**
      * @brief 移动范围
@@ -1566,8 +1626,6 @@ public:
      * @param match_entire_cell 是否匹配整个单元格
      * @return 替换的数量
      */
-    int findAndReplace(const std::string& find_text, const std::string& replace_text,
-                       bool match_case = false, bool match_entire_cell = false);
     
     /**
      * @brief 查找单元格
@@ -1576,58 +1634,10 @@ public:
      * @param match_entire_cell 是否匹配整个单元格
      * @return 匹配的单元格位置列表 (row, col)
      */
-    std::vector<std::pair<int, int>> findCells(const std::string& search_text,
-                                               bool match_case = false,
-                                               bool match_entire_cell = false) const;
     
-    /**
-     * @brief 排序范围
-     * @param first_row 起始行
-     * @param first_col 起始列
-     * @param last_row 结束行
-     * @param last_col 结束列
-     * @param sort_column 排序列（相对于范围的列索引）
-     * @param ascending 是否升序
-     * @param has_header 是否有标题行
-     */
-    void sortRange(int first_row, int first_col, int last_row, int last_col,
-                   int sort_column = 0, bool ascending = true, bool has_header = false);
+    // sortRange 已移动到 public 区域
     
     // 共享公式管理
-    
-    /**
-     * @brief 创建共享公式
-     * @param first_row 起始行
-     * @param first_col 起始列
-     * @param last_row 结束行
-     * @param last_col 结束列
-     * @param formula 基础公式
-     * @return 共享索引，失败返回-1
-     */
-    int createSharedFormula(int first_row, int first_col, int last_row, int last_col, const std::string& formula);
-    
-    // 便捷的公式设置方法（使用地址类）
-    /**
-     * @brief 设置单元格公式 - 支持地址类
-     * @param address 单元格地址（支持 Address("A1") 或 Address(0, 0)）
-     * @param formula 公式字符串
-     * @param result 公式计算结果（可选，默认0.0）
-     * 
-     * @example
-     * worksheet->setFormula("A1", "SUM(B1:B10)");           // 字符串地址
-     * worksheet->setFormula(Address(0, 0), "B1*C1");        // 地址对象
-     * worksheet->setFormula({0, 0}, "AVERAGE(D:D)", 100.5); // 列表初始化 + 结果
-     */
-    void setFormula(const Address& address, const std::string& formula, double result = 0.0);
-    
-    /**
-     * @brief 设置单元格公式 - 传统坐标方式（兼容性）
-     * @param row 行号（0基索引）
-     * @param col 列号（0基索引） 
-     * @param formula 公式字符串
-     * @param result 公式计算结果（可选，默认0.0）
-     */
-    void setFormula(int row, int col, const std::string& formula, double result = 0.0);
     
     /**
      * @brief 创建共享公式 - 支持地址范围类
@@ -1871,9 +1881,6 @@ public:
      * @brief 获取所有图片
      * @return 图片列表的常量引用
      */
-    const std::vector<std::unique_ptr<Image>>& getImages() const { 
-        return images_; 
-    }
     
     /**
      * @brief 获取图片数量

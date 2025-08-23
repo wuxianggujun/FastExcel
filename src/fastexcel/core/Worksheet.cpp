@@ -47,6 +47,14 @@ Worksheet::Worksheet(const std::string& name, std::shared_ptr<Workbook> workbook
 
 // 基本单元格操作
 
+Cell& Worksheet::getCell(const core::Address& address) {
+    return cell_processor_->getCell(address.getRow(), address.getCol());
+}
+
+const Cell& Worksheet::getCell(const core::Address& address) const {
+    return cell_processor_->getCell(address.getRow(), address.getCol());
+}
+
 Cell& Worksheet::getCell(int row, int col) {
     return cell_processor_->getCell(row, col);
 }
@@ -57,20 +65,20 @@ const Cell& Worksheet::getCell(int row, int col) const {
 
 // 基本写入方法
 
-void Worksheet::writeDateTime(int row, int col, const std::tm& datetime) {
+void Worksheet::writeDateTime(const core::Address& address, const std::tm& datetime) {
     if (parent_workbook_ && parent_workbook_->getDirtyManager()) {
         std::string sheet_path = "xl/worksheets/sheet" + std::to_string(sheet_id_) + ".xml";
         parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::CONTENT);
     }
-    this->validateCellPosition(row, col);
+    this->validateCellPosition(address.getRow(), address.getCol());
     
     // 使用 TimeUtils 将日期时间转换为Excel序列号
     double excel_serial = utils::TimeUtils::toExcelSerialNumber(datetime);
-    this->setValue(row, col, excel_serial);
+    this->setValue(address, excel_serial);
 }
 
-void Worksheet::writeUrl(int row, int col, const std::string& url, const std::string& string) {
-    cell_processor_->setHyperlink(row, col, url, string);
+void Worksheet::writeUrl(const core::Address& address, const std::string& url, const std::string& string) {
+    cell_processor_->setHyperlink(address.getRow(), address.getCol(), url, string);
 }
 
 
@@ -421,39 +429,42 @@ void Worksheet::removeAutoFilter() {
 
 // 冻结窗格
 
-void Worksheet::freezePanes(int row, int col) {
+
+void Worksheet::freezePanes(const core::Address& split_cell) {
     if (parent_workbook_ && parent_workbook_->getDirtyManager()) {
         std::string sheet_path = "xl/worksheets/sheet" + std::to_string(sheet_id_) + ".xml";
         parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::METADATA);
     }
-    
-    // 直接操作本地数据
-    validateCellPosition(row, col);
-    freeze_panes_ = std::make_unique<FreezePanes>(row, col);
+    validateCellPosition(split_cell.getRow(), split_cell.getCol());
+    freeze_panes_ = std::make_unique<FreezePanes>(split_cell.getRow(), split_cell.getCol());
+}
+
+void Worksheet::splitPanes(const core::Address& split_cell) {
+    if (parent_workbook_ && parent_workbook_->getDirtyManager()) {
+        std::string sheet_path = "xl/worksheets/sheet" + std::to_string(sheet_id_) + ".xml";
+        parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::METADATA);
+    }
+    validateCellPosition(split_cell.getRow(), split_cell.getCol());
+    freeze_panes_ = std::make_unique<FreezePanes>(split_cell.getRow(), split_cell.getCol());
+}
+
+void Worksheet::freezePanes(const core::Address& split_cell, const core::Address& top_left_cell) {
+    if (parent_workbook_ && parent_workbook_->getDirtyManager()) {
+        std::string sheet_path = "xl/worksheets/sheet" + std::to_string(sheet_id_) + ".xml";
+        parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::METADATA);
+    }
+    validateCellPosition(split_cell.getRow(), split_cell.getCol());
+    validateCellPosition(top_left_cell.getRow(), top_left_cell.getCol());
+    freeze_panes_ = std::make_unique<FreezePanes>(split_cell.getRow(), split_cell.getCol(),
+                                                  top_left_cell.getRow(), top_left_cell.getCol());
+}
+
+void Worksheet::freezePanes(int row, int col) {
+    freezePanes(core::Address(row, col));
 }
 
 void Worksheet::freezePanes(int row, int col, int top_left_row, int top_left_col) {
-    if (parent_workbook_ && parent_workbook_->getDirtyManager()) {
-        std::string sheet_path = "xl/worksheets/sheet" + std::to_string(sheet_id_) + ".xml";
-        parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::METADATA);
-    }
-    
-    // 直接操作本地数据
-    validateCellPosition(row, col);
-    validateCellPosition(top_left_row, top_left_col);
-    freeze_panes_ = std::make_unique<FreezePanes>(row, col, top_left_row, top_left_col);
-}
-
-void Worksheet::splitPanes(int row, int col) {
-    if (parent_workbook_ && parent_workbook_->getDirtyManager()) {
-        std::string sheet_path = "xl/worksheets/sheet" + std::to_string(sheet_id_) + ".xml";
-        parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::METADATA);
-    }
-    
-    // 直接操作本地数据
-    validateCellPosition(row, col);
-    // 分割窗格的实现与冻结窗格类似，但使用不同的XML属性
-    freeze_panes_ = std::make_unique<FreezePanes>(row, col);
+    freezePanes(core::Address(row, col), core::Address(top_left_row, top_left_col));
 }
 
 // 工作表保护
@@ -490,10 +501,11 @@ void Worksheet::setTabSelected(bool selected) {
     sheet_view_.tab_selected = selected;
 }
 
-void Worksheet::setActiveCell(int row, int col) {
-    validateCellPosition(row, col);
-    active_cell_ = utils::CommonUtils::cellReference(row, col);
+void Worksheet::setActiveCell(const core::Address& address) {
+    validateCellPosition(address.getRow(), address.getCol());
+    active_cell_ = utils::CommonUtils::cellReference(address.getRow(), address.getCol());
 }
+
 
 void Worksheet::setSelection(int first_row, int first_col, int last_row, int last_col) {
     validateRange(first_row, first_col, last_row, last_col);
@@ -546,7 +558,7 @@ double Worksheet::getRowHeight(int row) const {
 
 // 统一样式API实现
 
-void Worksheet::setColumnFormat(int col, const FormatDescriptor& format) {
+void Worksheet::setColumnFormat(int col, const core::FormatDescriptor& format) {
     validateCellPosition(0, col);
     
     if (!parent_workbook_) {
@@ -565,7 +577,7 @@ void Worksheet::setColumnFormat(int col, const FormatDescriptor& format) {
     }
 }
 
-void Worksheet::setRowFormat(int row, const FormatDescriptor& format) {
+void Worksheet::setRowFormat(int row, const core::FormatDescriptor& format) {
     validateCellPosition(row, 0);
     
     if (!parent_workbook_) {
@@ -584,7 +596,7 @@ void Worksheet::setRowFormat(int row, const FormatDescriptor& format) {
     }
 }
 
-std::shared_ptr<const FormatDescriptor> Worksheet::getColumnFormat(int col) const {
+std::shared_ptr<const core::FormatDescriptor> Worksheet::getColumnFormat(int col) const {
     auto it = column_info_.find(col);
     if (it != column_info_.end() && it->second.format_id >= 0) {
         if (parent_workbook_) {
@@ -594,7 +606,7 @@ std::shared_ptr<const FormatDescriptor> Worksheet::getColumnFormat(int col) cons
     return nullptr;
 }
 
-std::shared_ptr<const FormatDescriptor> Worksheet::getRowFormat(int row) const {
+std::shared_ptr<const core::FormatDescriptor> Worksheet::getRowFormat(int row) const {
     auto it = row_info_.find(row);
     if (it != row_info_.end() && it->second.format_id >= 0) {
         if (parent_workbook_) {
@@ -644,62 +656,6 @@ void Worksheet::generateXMLBatch(const std::function<void(const char*, size_t)>&
 void Worksheet::generateXMLStreaming(const std::function<void(const char*, size_t)>& callback) const {
     auto generator = xml::WorksheetXMLGeneratorFactory::createStreaming(this);
     generator->generate(callback);
-}
-
-void Worksheet::generateRelsXML(const std::function<void(const char*, size_t)>& callback) const {
-    // 使用专用的Relationships类生成XML
-    xml::Relationships relationships;
-    
-    // 添加超链接关系
-    for (const auto& [pos, cell] : cells_) {
-        if (cell.hasHyperlink()) {
-            relationships.addAutoRelationship(
-                "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink",
-                cell.getHyperlink(),
-                "External"
-            );
-        }
-    }
-    
-    if (!images_.empty()) {
-        std::string drawing_target = "../drawings/drawing" + std::to_string(sheet_id_) + ".xml";
-        relationships.addAutoRelationship(
-            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing",
-            drawing_target
-        );
-    }
-    
-    // 如果没有关系，不生成任何内容
-    if (relationships.size() == 0) {
-        return;
-    }
-    
-    // 使用Relationships类生成XML到回调
-    relationships.generate(callback);
-}
-
-void Worksheet::generateRelsXMLToFile(const std::string& filename) const {
-    // 使用专用的Relationships类生成XML
-    xml::Relationships relationships;
-    
-    // 添加超链接关系
-    for (const auto& [pos, cell] : cells_) {
-        if (cell.hasHyperlink()) {
-            relationships.addAutoRelationship(
-                "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink",
-                cell.getHyperlink(),
-                "External"
-            );
-        }
-    }
-    
-    // 如果没有关系，不生成文件
-    if (relationships.size() == 0) {
-        return;
-    }
-    
-    // 使用Relationships类生成XML文件
-    relationships.generateToFile(filename);
 }
 
 // 工具方法
@@ -1041,8 +997,8 @@ void Worksheet::editCellValue(int row, int col, bool value, bool preserve_format
 
 // 智能单元格格式设置方法
 
-void Worksheet::setCellFormat(int row, int col, const core::FormatDescriptor& format) {
-    validateCellPosition(row, col);
+void Worksheet::setCellFormat(const core::Address& address, const core::FormatDescriptor& format) {
+    validateCellPosition(address.getRow(), address.getCol());
     
     if (!parent_workbook_) {
         throw std::runtime_error("工作簿未初始化，无法进行智能格式优化");
@@ -1055,22 +1011,17 @@ void Worksheet::setCellFormat(int row, int col, const core::FormatDescriptor& fo
     auto optimizedFormat = parent_workbook_->getStyle(styleId);
     
     // 直接应用到指定单元格
-    getCell(row, col).setFormat(optimizedFormat);
+    getCell(address).setFormat(optimizedFormat);
 }
 
-void Worksheet::setCellFormat(int row, int col, std::shared_ptr<const core::FormatDescriptor> format) {
-    if (!format) {
-        // 清除单元格格式
-        getCell(row, col).setFormat(nullptr);
-        return;
-    }
-    
-    // 调用值版本
-    setCellFormat(row, col, *format);
+
+void Worksheet::setCellFormat(const core::Address& address, std::shared_ptr<const core::FormatDescriptor> format) {
+    if (!format) { getCell(address).setFormat(nullptr); return; }
+    setCellFormat(address, *format);
 }
 
-void Worksheet::setCellFormat(int row, int col, const core::StyleBuilder& builder) {
-    validateCellPosition(row, col);
+void Worksheet::setCellFormat(const core::Address& address, const core::StyleBuilder& builder) {
+    validateCellPosition(address.getRow(), address.getCol());
     
     if (!parent_workbook_) {
         throw std::runtime_error("工作簿未初始化，无法进行智能格式优化");
@@ -1079,7 +1030,19 @@ void Worksheet::setCellFormat(int row, int col, const core::StyleBuilder& builde
     // 🎯 一步到位：构建、优化、应用到指定单元格
     int styleId = parent_workbook_->addStyle(builder);
     auto optimizedFormat = parent_workbook_->getStyle(styleId);
-    getCell(row, col).setFormat(optimizedFormat);
+    getCell(address).setFormat(optimizedFormat);
+}
+
+void Worksheet::setCellFormat(int row, int col, const core::FormatDescriptor& format) {
+    setCellFormat(core::Address(row, col), format);
+}
+
+void Worksheet::setCellFormat(int row, int col, std::shared_ptr<const core::FormatDescriptor> format) {
+    setCellFormat(core::Address(row, col), format);
+}
+
+void Worksheet::setCellFormat(int row, int col, const core::StyleBuilder& builder) {
+    setCellFormat(core::Address(row, col), builder);
 }
 
 // 范围格式化API方法
@@ -1409,10 +1372,6 @@ CSVOptions Worksheet::detectCSVOptions(const std::string& filepath) {
 
 bool Worksheet::isCSVFile(const std::string& filepath) {
     return WorksheetCSVHandler::isCSVFile(filepath);
-}
-
-std::string Worksheet::getCellDisplayValue(int row, int col) const {
-    return csv_handler_->getCellDisplayValue(row, col);
 }
 
 } // namespace core

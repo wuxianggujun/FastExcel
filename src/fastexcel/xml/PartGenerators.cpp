@@ -338,8 +338,14 @@ public:
         }
         auto ws = ctx.workbook->getSheet(static_cast<size_t>(idx));
         if (!ws) return true; // nothing to do
+        
+        // 使用专门的WorksheetXMLGenerator来生成关系XML
+        WorksheetXMLGenerator generator(ws.get());
         std::string rels_xml;
-        ws->generateRelsXML([&rels_xml](const char* data, size_t size){ rels_xml.append(data, size); });
+        generator.generateRelationships([&rels_xml](const char* data, size_t size){ 
+            rels_xml.append(data, size); 
+        });
+        
         if (rels_xml.empty()) return true; // 无关系则不写文件
         return writer.writeFile(part, rels_xml);
     }
