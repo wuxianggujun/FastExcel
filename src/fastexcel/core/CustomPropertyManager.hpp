@@ -2,6 +2,7 @@
 
 #include <string>
 #include <vector>
+#include <fmt/format.h>
 #include <unordered_map>
 #include <algorithm>
 
@@ -24,7 +25,7 @@ struct CustomProperty {
     
     CustomProperty() = default;
     CustomProperty(const std::string& n, const std::string& v) : name(n), value(v), type(String) {}
-    CustomProperty(const std::string& n, double v) : name(n), value(std::to_string(v)), type(Number) {}
+    CustomProperty(const std::string& n, double v) : name(n), value(fmt::format("{}", v)), type(Number) {}
     CustomProperty(const std::string& n, bool v) : name(n), value(v ? "true" : "false"), type(Boolean) {}
 };
 

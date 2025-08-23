@@ -3,6 +3,7 @@
 #include <string>
 #include <vector>
 #include <unordered_map>
+#include <fmt/format.h>
 #include <algorithm>
 
 namespace fastexcel {
@@ -79,7 +80,7 @@ public:
     void define(const std::string& name, const std::string& formula, const std::string& scope = "") {
         // 验证名称是否有效
         if (!isValidName(name)) {
-            throw std::invalid_argument("Invalid defined name: " + name);
+            throw std::invalid_argument(fmt::format("Invalid defined name: {}", name));
         }
         
         auto it = findDefinition(name, scope);
@@ -166,7 +167,7 @@ public:
         std::unordered_map<std::string, std::string> result;
         for (const auto& def : defined_names_) {
             // 对于有作用域的名称，使用 "scope!name" 作为键
-            std::string key = def.scope.empty() ? def.name : (def.scope + "!" + def.name);
+            std::string key = def.scope.empty() ? def.name : fmt::format("{}!{}", def.scope, def.name);
             result[key] = def.formula;
         }
         return result;

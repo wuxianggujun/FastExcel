@@ -215,7 +215,7 @@ bool ExcelStructureGenerator::generateWorksheets() {
             }
             
             // 生成drawing关系文件
-            std::string drawing_rels_path = "xl/drawings/_rels/drawing" + std::to_string(i + 1) + ".xml.rels";
+            std::string drawing_rels_path = fmt::format("xl/drawings/_rels/drawing{}.xml.rels", i + 1);
             if (!xml_generator->generateParts(*writer_, {drawing_rels_path})) {
                 FASTEXCEL_LOG_ERROR("Failed to generate drawing relations file: {}", drawing_rels_path);
                 return false;
@@ -253,7 +253,7 @@ bool ExcelStructureGenerator::generateWorksheets() {
                     if (images[j]->getFormat() == core::ImageFormat::JPEG) {
                         ext = ".jpg";
                     }
-                    std::string media_path = "xl/media/image" + std::to_string(image_counter++) + ext;
+                    std::string media_path = fmt::format("xl/media/image{}{}", image_counter++, ext);
                     
                     if (!xml_generator->generateParts(*writer_, {media_path})) {
                         FASTEXCEL_LOG_ERROR("Failed to generate media file: {}", media_path);

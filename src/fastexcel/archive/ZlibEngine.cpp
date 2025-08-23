@@ -3,6 +3,7 @@
 #include <stdexcept>
 #include <algorithm>
 #include <cstring>
+#include <fmt/format.h>
 
 namespace fastexcel {
 namespace archive {
@@ -37,7 +38,7 @@ VoidResult ZlibEngine::initializeStream() {
                           -15, 8, Z_DEFAULT_STRATEGY);
     
     if (ret != Z_OK) {
-        return makeError(ErrorCode::ZipError, "Failed to initialize zlib deflate: " + std::to_string(ret));
+        return makeError(ErrorCode::ZipError, fmt::format("Failed to initialize zlib deflate: {}", ret));
     }
     
     initialized_ = true;
@@ -80,7 +81,7 @@ Result<size_t> ZlibEngine::compress(
     // 执行压缩
     ret = deflate(stream_.get(), Z_FINISH);
     if (ret != Z_STREAM_END) {
-        return makeError(ErrorCode::ZipError, "Deflate failed with code: " + std::to_string(ret));
+        return makeError(ErrorCode::ZipError, fmt::format("Deflate failed with code: {}", ret));
     }
     
     // 获取压缩后的大小

@@ -126,7 +126,7 @@ MemoryPool::Block* MemoryPool::findAvailableBlock(size_t size) {
 VoidResult MemoryPool::addNewBlock(size_t size) {
     auto result = Block::create(size);
     if (result.hasError()) {
-        return makeError(result.error().code, "Failed to create new memory block: " + result.error().message);
+        return makeError(result.error().code, fmt::format("Failed to create new memory block: {}", result.error().message));
     }
     blocks_.emplace_back(std::move(result.value()));
     return VoidResult();

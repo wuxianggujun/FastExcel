@@ -46,8 +46,8 @@ void CellDataProcessor::setHyperlink(int row, int col, const std::string& url, c
     
     // 超链接需要特殊的DirtyManager处理，涉及关系文件
     if (parent_workbook_ && parent_workbook_->getDirtyManager() && sheet_id_ >= 0) {
-        std::string sheet_path = "xl/worksheets/sheet" + std::to_string(sheet_id_) + ".xml";
-        std::string rels_path = "xl/worksheets/_rels/sheet" + std::to_string(sheet_id_) + ".xml.rels";
+        std::string sheet_path = fmt::format("xl/worksheets/sheet{}.xml", sheet_id_);
+        std::string rels_path = fmt::format("xl/worksheets/_rels/sheet{}.xml.rels", sheet_id_);
         parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::CONTENT);
         parent_workbook_->getDirtyManager()->markDirty(rels_path, DirtyManager::DirtyLevel::CONTENT);
     }
@@ -401,7 +401,7 @@ void CellDataProcessor::updateUsedRange(int row, int col) {
 
 void CellDataProcessor::markDirty() const {
     if (parent_workbook_ && parent_workbook_->getDirtyManager() && sheet_id_ >= 0) {
-        std::string sheet_path = "xl/worksheets/sheet" + std::to_string(sheet_id_) + ".xml";
+        std::string sheet_path = fmt::format("xl/worksheets/sheet{}.xml", sheet_id_);
         parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::CONTENT);
     }
 }

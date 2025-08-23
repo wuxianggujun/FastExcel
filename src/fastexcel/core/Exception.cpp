@@ -6,6 +6,7 @@
 #include "Exception.hpp"
 #include "fastexcel/utils/CommonUtils.hpp"
 #include <sstream>
+#include <fmt/format.h>
 #include <iostream>
 #include <mutex>
 
@@ -75,7 +76,7 @@ void FastExcelException::addContext(const std::string& context) {
 // FileException 实现
 FileException::FileException(const std::string& message, const std::string& filename,
                            ErrorCode code, const char* file, int line)
-    : FastExcelException(message + " (file: " + filename + ")", code, file, line)
+    : FastExcelException(fmt::format("{} (file: {})", message, filename), code, file, line)
     , filename_(filename) {
 }
 
@@ -96,7 +97,7 @@ MemoryException::MemoryException(const std::string& message,
 ParameterException::ParameterException(const std::string& message,
                                      const std::string& parameter_name,
                                      const char* file, int line)
-    : FastExcelException(message + " (parameter: " + parameter_name + ")", 
+    : FastExcelException(fmt::format("{} (parameter: {})", message, parameter_name), 
                         ErrorCode::InvalidArgument, file, line)
     , parameter_name_(parameter_name) {
 }
@@ -105,7 +106,7 @@ ParameterException::ParameterException(const std::string& message,
 OperationException::OperationException(const std::string& message,
                                      const std::string& operation,
                                      ErrorCode code, const char* file, int line)
-    : FastExcelException(message + " (operation: " + operation + ")", code, file, line)
+    : FastExcelException(fmt::format("{} (operation: {})", message, operation), code, file, line)
     , operation_(operation) {
 }
 
@@ -113,7 +114,7 @@ OperationException::OperationException(const std::string& message,
 WorksheetException::WorksheetException(const std::string& message,
                                      const std::string& worksheet_name,
                                      ErrorCode code, const char* file, int line)
-    : FastExcelException(message + " (worksheet: " + worksheet_name + ")", code, file, line)
+    : FastExcelException(fmt::format("{} (worksheet: {})", message, worksheet_name), code, file, line)
     , worksheet_name_(worksheet_name) {
 }
 

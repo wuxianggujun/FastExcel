@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <fmt/format.h>
 #include <utility>
 #include <limits>
 
@@ -45,7 +46,7 @@ private:
      * @return Excel单元格引用（如"A1"）
      */
     std::string cellReference(int row, int col) const {
-        return columnToExcelName(col) + std::to_string(row + 1);
+        return fmt::format("{}{}", columnToExcelName(col), row + 1);
     }
 
 public:
@@ -167,7 +168,7 @@ public:
             return cellReference(min_row_, min_col_);
         } else {
             // 范围
-            return cellReference(min_row_, min_col_) + ":" + cellReference(max_row_, max_col_);
+            return fmt::format("{}:{}", cellReference(min_row_, min_col_), cellReference(max_row_, max_col_));
         }
     }
     

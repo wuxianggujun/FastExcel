@@ -7,6 +7,7 @@
 #include <random>
 #include <chrono>
 #include <sstream>
+#include <fmt/format.h>
 
 namespace fs = std::filesystem;
 
@@ -77,7 +78,7 @@ bool ResourceManager::open(bool create_if_not_exists) {
     bool file_exists = fs::exists(filename_);
     
     if (!file_exists && !create_if_not_exists) {
-        FASTEXCEL_LOG_ERROR("File does not exist: " + filename_);
+        FASTEXCEL_LOG_ERROR("File does not exist: {}", filename_);
         return false;
     }
     
@@ -88,7 +89,7 @@ bool ResourceManager::open(bool create_if_not_exists) {
     
     // 延迟写入模式下，仅标记为已打开
     is_open_ = true;
-    FASTEXCEL_LOG_DEBUG("ResourceManager opened in delayed mode for: " + filename_);
+    FASTEXCEL_LOG_DEBUG("ResourceManager opened in delayed mode for: {}", filename_);
     return true;
 }
 
@@ -102,9 +103,9 @@ bool ResourceManager::openInternal(bool for_writing) {
     
     if (success) {
         is_open_ = true;
-        FASTEXCEL_LOG_DEBUG("FileManager opened: " + filename_);
+        FASTEXCEL_LOG_DEBUG("FileManager opened: {}", filename_);
     } else {
-        FASTEXCEL_LOG_ERROR("Failed to open FileManager: " + filename_);
+        FASTEXCEL_LOG_ERROR("Failed to open FileManager: {}", filename_);
     }
     
     return success;
@@ -123,7 +124,7 @@ bool ResourceManager::close() {
     is_open_ = false;
     file_manager_.reset();
     
-    FASTEXCEL_LOG_DEBUG("ResourceManager closed: " + filename_);
+    FASTEXCEL_LOG_DEBUG("ResourceManager closed: {}", filename_);
     return success;
 }
 
@@ -139,7 +140,7 @@ bool ResourceManager::prepareForEditing(const Path& path, const std::string& ori
     
     // 延迟打开模式
     is_open_ = true;
-    FASTEXCEL_LOG_DEBUG("Prepared for editing: " + filename_ + " (original: " + original_path + ")");
+    FASTEXCEL_LOG_DEBUG("Prepared for editing: {} (original: {})", filename_, original_path);
     return true;
 }
 
@@ -214,11 +215,11 @@ bool ResourceManager::saveInternal(const Workbook* workbook, const SaveStrategy&
             return false;
         }
         
-        FASTEXCEL_LOG_INFO("Successfully saved: " + filename_);
+        FASTEXCEL_LOG_INFO("Successfully saved: {}", filename_);
         return true;
         
     } catch (const std::exception& e) {
-        FASTEXCEL_LOG_ERROR("Exception during save: " + std::string(e.what()));
+        FASTEXCEL_LOG_ERROR("Exception during save: {}", e.what());
         return false;
     }
 }
@@ -231,7 +232,7 @@ bool ResourceManager::handleSameFileSave(const SaveStrategy& strategy) {
     
     // 使用临时文件进行原子保存
     std::string temp_path = createTempPath(filename_);
-    std::string backup_path = filename_ + ".bak";
+    std::string backup_path = fmt::format("{}.bak", filename_);
     
     try {
         // 1. 保存到临时文件
@@ -266,11 +267,11 @@ bool ResourceManager::handleSameFileSave(const SaveStrategy& strategy) {
             fs::remove(backup_path);
         }
         
-        FASTEXCEL_LOG_INFO("Successfully saved with atomic replace: " + filename_);
+        FASTEXCEL_LOG_INFO("Successfully saved with atomic replace: {}", filename_);
         return true;
         
     } catch (const std::exception& e) {
-        FASTEXCEL_LOG_ERROR("Exception during atomic save: " + std::string(e.what()));
+        FASTEXCEL_LOG_ERROR("Exception during atomic save: {}", e.what());
         cleanupTempFiles({temp_path, backup_path});
         return false;
     }
@@ -287,7 +288,7 @@ bool ResourceManager::copyFromOriginalPackage(const Path& source_path,
         // 打开源文件进行读取
         archive::FileManager source_manager(source_path);
         if (!source_manager.open(false)) { // false = don't create, just open for reading
-            FASTEXCEL_LOG_ERROR("Failed to open source package: " + source_path.string());
+            FASTEXCEL_LOG_ERROR("Failed to open source package: {}", source_path.string());
             return false;
         }
         
@@ -302,7 +303,7 @@ bool ResourceManager::copyFromOriginalPackage(const Path& source_path,
             for (const auto& prefix : skip_prefixes) {
                 if (file.find(prefix) == 0) {
                     should_skip = true;
-                    FASTEXCEL_LOG_DEBUG("Skipping: " + file);
+                    FASTEXCEL_LOG_DEBUG("Skipping: {}", file);
                     break;
                 }
             }
@@ -312,17 +313,17 @@ bool ResourceManager::copyFromOriginalPackage(const Path& source_path,
                 std::string content;
                 if (source_manager.readFile(file, content)) {
                     file_manager_->writeFile(file, content);
-                    FASTEXCEL_LOG_DEBUG("Copied: " + file);
+                    FASTEXCEL_LOG_DEBUG("Copied: {}", file);
                 }
             }
         }
         
         source_manager.close();
-        FASTEXCEL_LOG_INFO("Successfully copied non-core components from: " + source_path.string());
+        FASTEXCEL_LOG_INFO("Successfully copied non-core components from: {}", source_path.string());
         return true;
         
     } catch (const std::exception& e) {
-        FASTEXCEL_LOG_ERROR("Exception during passthrough copy: " + std::string(e.what()));
+        FASTEXCEL_LOG_ERROR("Exception during passthrough copy: {}", e.what());
         return false;
     }
 }
@@ -381,7 +382,7 @@ bool ResourceManager::writeFiles(const std::vector<std::pair<std::string, std::s
     bool all_success = true;
     for (const auto& [path, content] : files) {
         if (!file_manager_->writeFile(path, content)) {
-            FASTEXCEL_LOG_ERROR("Failed to write file: " + path);
+            FASTEXCEL_LOG_ERROR("Failed to write file: {}", path);
             all_success = false;
         }
     }
@@ -392,13 +393,13 @@ bool ResourceManager::writeFiles(const std::vector<std::pair<std::string, std::s
 std::unique_ptr<IFileWriter> ResourceManager::createFileWriter(bool use_streaming) {
     // 这里需要实现文件写入器的创建逻辑
     // 由于IFileWriter的具体实现不在当前文件中，我们返回nullptr作为占位符
-    FASTEXCEL_LOG_DEBUG("Creating file writer (streaming: " + std::to_string(use_streaming) + ")");
+    FASTEXCEL_LOG_DEBUG("Creating file writer (streaming: {})", use_streaming);
     return nullptr; // 需要具体的IFileWriter实现
 }
 
 bool ResourceManager::setCompressionLevel(int level) {
     if (level < 0 || level > 9) {
-        FASTEXCEL_LOG_ERROR("Invalid compression level: " + std::to_string(level));
+        FASTEXCEL_LOG_ERROR("Invalid compression level: {}", level);
         return false;
     }
     
@@ -407,7 +408,7 @@ bool ResourceManager::setCompressionLevel(int level) {
     }
     
     file_manager_->setCompressionLevel(level);
-    FASTEXCEL_LOG_DEBUG("Set compression level to: " + std::to_string(level));
+    FASTEXCEL_LOG_DEBUG("Set compression level to: {}", level);
     return true;
 }
 
@@ -433,7 +434,7 @@ bool ResourceManager::atomicReplace(const Path& temp_path, const Path& target_pa
 #ifdef _WIN32
         // Windows下使用MoveFileEx进行原子替换
         if (!fs::exists(temp_path.string())) {
-            FASTEXCEL_LOG_ERROR("Temp file does not exist: " + temp_path.string());
+            FASTEXCEL_LOG_ERROR("Temp file does not exist: {}", temp_path.string());
             return false;
         }
         
@@ -448,11 +449,11 @@ bool ResourceManager::atomicReplace(const Path& temp_path, const Path& target_pa
         fs::rename(temp_path.string(), target_path.string());
 #endif
         
-        FASTEXCEL_LOG_DEBUG("Atomic replace successful: " + target_path.string());
+        FASTEXCEL_LOG_DEBUG("Atomic replace successful: {}", target_path.string());
         return true;
         
     } catch (const std::exception& e) {
-        FASTEXCEL_LOG_ERROR("Atomic replace failed: " + std::string(e.what()));
+        FASTEXCEL_LOG_ERROR("Atomic replace failed: {}", e.what());
         return false;
     }
 }
@@ -478,10 +479,10 @@ void ResourceManager::cleanupTempFiles(const std::vector<std::string>& temp_file
         try {
             if (fs::exists(file)) {
                 fs::remove(file);
-                FASTEXCEL_LOG_DEBUG("Cleaned up temp file: " + file);
+                FASTEXCEL_LOG_DEBUG("Cleaned up temp file: {}", file);
             }
         } catch (const std::exception& e) {
-            FASTEXCEL_LOG_WARN("Failed to clean up temp file: " + file + " - " + e.what());
+            FASTEXCEL_LOG_WARN("Failed to clean up temp file: {} - {}", file, e.what());
         }
     }
 }

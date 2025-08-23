@@ -5,6 +5,7 @@
 #include <regex>
 #include <sstream>
 #include <algorithm>
+#include <fmt/format.h>
 
 namespace fastexcel {
 namespace core {
@@ -260,8 +261,9 @@ int SharedFormulaManager::optimizeFormulas(const std::map<std::pair<int, int>, s
             }
             
             // 创建共享公式
-            std::string range = utils::CommonUtils::cellReference(min_row, min_col) + ":" +
-                               utils::CommonUtils::cellReference(max_row, max_col);
+            std::string range = fmt::format("{}:{}",
+                                 utils::CommonUtils::cellReference(min_row, min_col),
+                                 utils::CommonUtils::cellReference(max_row, max_col));
             
             // 使用第一个匹配公式作为基础公式
             auto first_pos = pattern.matching_cells[0];
@@ -363,7 +365,7 @@ std::string SharedFormulaManager::generateFormulaPattern(const std::string& form
             int row_offset = row - base_row;
             int col_offset = col - base_col;
             
-            std::string pattern_token = "{R" + std::to_string(row_offset) + "C" + std::to_string(col_offset) + "}";
+            std::string pattern_token = fmt::format("{R{}C{}}", row_offset, col_offset);
             replacements.emplace_back(match.position(), 
                                     std::make_pair(match.length(), pattern_token));
         } catch (const std::exception& e) {

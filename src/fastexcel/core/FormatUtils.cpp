@@ -2,6 +2,7 @@
 #include "StyleBuilder.hpp"
 #include <sstream>
 #include <regex>
+#include <fmt/format.h>
 #include <algorithm>
 #include <stdexcept>
 
@@ -363,7 +364,7 @@ std::pair<int, int> FormatUtils::parseCell(const std::string& cell_address) {
         return {row, col};
     }
     
-    throw std::invalid_argument("无效的单元格地址: " + cell_address);
+    throw std::invalid_argument(fmt::format("无效的单元格地址: {}", cell_address));
 }
 
 std::pair<std::pair<int, int>, std::pair<int, int>> FormatUtils::parseRange(const std::string& range) {
@@ -377,7 +378,7 @@ std::pair<std::pair<int, int>, std::pair<int, int>> FormatUtils::parseRange(cons
         return {start, end};
     }
     
-    throw std::invalid_argument("无效的范围地址: " + range);
+    throw std::invalid_argument(fmt::format("无效的范围地址: {}", range));
 }
 
 bool FormatUtils::isValidCellPosition(int row, int col) {

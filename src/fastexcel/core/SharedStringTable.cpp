@@ -1,6 +1,7 @@
 #include "fastexcel/core/SharedStringTable.hpp"
 #include "fastexcel/xml/XMLStreamWriter.hpp"
 #include "fastexcel/core/Exception.hpp"
+#include <fmt/format.h>
 
 namespace fastexcel {
 namespace core {
@@ -28,7 +29,7 @@ int32_t SharedStringTable::addString(const std::string& str) {
 
 const std::string& SharedStringTable::getString(int32_t id) const {
     if (id < 0 || static_cast<size_t>(id) >= id_to_string_.size()) {
-        FASTEXCEL_THROW_PARAM("Invalid string ID: " + std::to_string(id));
+        FASTEXCEL_THROW_PARAM(fmt::format("Invalid string ID: {}", id));
     }
     return id_to_string_[id];
 }

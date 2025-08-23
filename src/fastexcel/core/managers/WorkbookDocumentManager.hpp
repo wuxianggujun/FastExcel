@@ -2,6 +2,7 @@
 
 #include "fastexcel/utils/TimeUtils.hpp"
 #include <string>
+#include <fmt/format.h>
 #include <unordered_map>
 #include <vector>
 #include <ctime>
@@ -59,7 +60,7 @@ public:
         
         CustomProperty() : type(PropertyType::STRING) {}
         explicit CustomProperty(const std::string& val) : type(PropertyType::STRING), value(val) {}
-        explicit CustomProperty(double val) : type(PropertyType::DOUBLE), value(std::to_string(val)) {}
+        explicit CustomProperty(double val) : type(PropertyType::DOUBLE), value(fmt::format("{}", val)) {}
         explicit CustomProperty(bool val) : type(PropertyType::BOOLEAN), value(val ? "true" : "false") {}
         explicit CustomProperty(const std::tm& val) : type(PropertyType::DATE), value(utils::TimeUtils::formatTimeISO8601(val)) {}
         

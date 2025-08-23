@@ -28,6 +28,7 @@
 #include <functional>
 #include <iomanip>
 #include <sstream>
+#include <fmt/format.h>
 
 namespace fastexcel {
 namespace core {
@@ -271,7 +272,7 @@ bool Workbook::save() {
                 // 保存到同一文件：先关闭当前FileManager，复制原文件到临时位置
                 FASTEXCEL_LOG_DEBUG("Saving to same file, creating temporary backup for resource preservation");
                 
-                std::string temp_backup = original_package_path_ + ".tmp_backup_" + std::to_string(std::time(nullptr));
+                std::string temp_backup = fmt::format("{}.tmp_backup_{}", original_package_path_, static_cast<long long>(std::time(nullptr)));
                 core::Path source_path(original_package_path_);
                 core::Path temp_path(temp_backup);
                 
@@ -368,7 +369,7 @@ bool Workbook::saveAs(const std::string& filename) {
         FASTEXCEL_LOG_INFO("Saving to same file, creating temporary backup for resource preservation");
         
         // 创建临时文件路径
-        std::string temp_backup = original_source + ".tmp_backup";
+        std::string temp_backup = fmt::format("{}.tmp_backup", original_source);
         core::Path source_path(original_source);
         core::Path temp_path(temp_backup);
         
@@ -1078,14 +1079,14 @@ bool Workbook::shouldGenerateDocPropsCustom() const {
 bool Workbook::shouldGenerateSheet(size_t index) const {
     auto* dirty_manager = getDirtyManager();
     if (!dirty_manager) return true;
-    std::string sheetPart = "xl/worksheets/sheet" + std::to_string(index + 1) + ".xml";
+    std::string sheetPart = fmt::format("xl/worksheets/sheet{}.xml", index + 1);
     return dirty_manager->shouldUpdate(sheetPart);
 }
 
 bool Workbook::shouldGenerateSheetRels(size_t index) const {
     auto* dirty_manager = getDirtyManager();
     if (!dirty_manager) return true;
-    std::string sheetRelsPart = "xl/worksheets/_rels/sheet" + std::to_string(index + 1) + ".xml.rels";
+    std::string sheetRelsPart = fmt::format("xl/worksheets/_rels/sheet{}.xml.rels", index + 1);
     return dirty_manager->shouldUpdate(sheetRelsPart);
 }
 
@@ -1181,18 +1182,18 @@ std::string Workbook::generateUniqueSheetName(const std::string& base_name) cons
     // 如果base_name是"Sheet1"，从"Sheet2"开始尝试
     if (base_name == "Sheet1") {
         int counter = 2;
-        std::string name = "Sheet" + std::to_string(counter);
+        std::string name = fmt::format("Sheet{}", counter);
         while (getSheet(name) != nullptr) {
-            name = "Sheet" + std::to_string(++counter);
+            name = fmt::format("Sheet{}", ++counter);
         }
         return name;
     }
     
     // 对于其他base_name，添加数字后缀
     int suffix_counter = 1;
-    std::string name = base_name + std::to_string(suffix_counter);
+    std::string name = fmt::format("{}{}", base_name, suffix_counter);
     while (getSheet(name) != nullptr) {
-        name = base_name + std::to_string(++suffix_counter);
+        name = fmt::format("{}{}", base_name, ++suffix_counter);
     }
     
     return name;
@@ -1248,11 +1249,11 @@ void Workbook::collectSharedStrings() {
 
 
 std::string Workbook::getWorksheetPath(int sheet_id) const {
-    return "xl/worksheets/sheet" + std::to_string(sheet_id) + ".xml";
+    return fmt::format("xl/worksheets/sheet{}.xml", sheet_id);
 }
 
 std::string Workbook::getWorksheetRelPath(int sheet_id) const {
-    return "worksheets/sheet" + std::to_string(sheet_id) + ".xml";
+    return fmt::format("worksheets/sheet{}.xml", sheet_id);
 }
 
 

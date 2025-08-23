@@ -45,7 +45,7 @@ void QuickFormat::formatAsPercentage(Worksheet& worksheet, const std::string& ra
 void QuickFormat::formatAsAccounting(Worksheet& worksheet, const std::string& range,
                                     const std::string& symbol) {
     // 会计格式：左对齐货币符号，右对齐数字
-    std::string format = "_(" + symbol + "* #,##0.00_);_(" + symbol + "* (#,##0.00);_(" + symbol + "* \"-\"??_);_(@_)";
+    std::string format = fmt::format("_({}* #,##0.00_);_({}* (#,##0.00);_({}* \"-\"??_);_(@_)", symbol, symbol, symbol);
     
     auto formatter = worksheet.rangeFormatter(range);
     formatter.applyStyle(StyleBuilder()

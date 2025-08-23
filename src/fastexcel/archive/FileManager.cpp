@@ -484,7 +484,7 @@ std::string FileManager::getImagePath(const std::string& image_id, core::ImageFo
         default: extension = "bin"; break;
     }
     
-    return "xl/media/" + image_id + "." + extension;
+    return fmt::format("xl/media/{}.{}", image_id, extension);
 }
 
 std::string FileManager::getDrawingPath(int drawing_id) {

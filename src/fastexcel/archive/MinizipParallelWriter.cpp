@@ -1,6 +1,7 @@
 #include "fastexcel/utils/Logger.hpp"
 #include "MinizipParallelWriter.hpp"
 #include <iostream>
+#include <fmt/format.h>
 #include <chrono>
 #include <algorithm>
 #include <cstring>
@@ -82,7 +83,7 @@ bool MinizipParallelWriter::compressAndWrite(
                 compressed_files.push_back(std::move(result));
                 stats_.completed_tasks++;
             } else {
-                std::cerr << "Failed to compress file: " << result.filename << '\n';
+                FASTEXCEL_LOG_ERROR("Failed to compress file: {}", result.filename);
                 return false;
             }
         }
@@ -100,7 +101,7 @@ bool MinizipParallelWriter::compressAndWrite(
         return success;
         
     } catch (const std::exception& e) {
-        std::cerr << "Exception in compressAndWrite: " << e.what() << '\n';
+        FASTEXCEL_LOG_ERROR("Exception in compressAndWrite: {}", e.what());
         return false;
     }
 }

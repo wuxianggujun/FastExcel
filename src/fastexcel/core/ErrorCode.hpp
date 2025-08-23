@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <string>
 #include <system_error>
+#include <fmt/format.h>
 
 namespace fastexcel {
 namespace core {
@@ -84,7 +85,7 @@ struct Error {
         if (context.empty()) {
             return message;
         }
-        return message + " (Context: " + context + ")";
+        return fmt::format("{} (Context: {})", message, context);
     }
 };
 

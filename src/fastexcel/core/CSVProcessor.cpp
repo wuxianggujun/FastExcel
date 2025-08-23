@@ -1,6 +1,7 @@
 #include "fastexcel/core/CSVProcessor.hpp"
 #include <fstream>
 #include <sstream>
+#include <fmt/format.h>
 #include <regex>
 #include <algorithm>
 #include <locale>
@@ -270,7 +271,7 @@ CSVOptions detectCSVOptions(const std::string& filepath) {
     const int max_lines = 5; // 只读前5行进行检测
     
     while (std::getline(file, line) && lines_read < max_lines) {
-        sample += line + "\n";
+        sample += fmt::format("{}\n", line);
         lines_read++;
     }
     file.close();

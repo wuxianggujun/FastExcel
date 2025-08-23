@@ -9,6 +9,7 @@
 #include <stdexcept>
 #include <algorithm>
 #include <vector>
+#include <fmt/format.h>
 
 namespace fastexcel {
 namespace archive {
@@ -37,7 +38,7 @@ Result<std::unique_ptr<CompressionEngine>> CompressionEngine::create(Backend bac
                 return makeError(ErrorCode::InvalidArgument, "Unknown compression backend");
         }
     } catch (const std::exception& e) {
-        return makeError(ErrorCode::InternalError, "Failed to create compression engine: " + std::string(e.what()));
+        return makeError(ErrorCode::InternalError, fmt::format("Failed to create compression engine: {}", e.what()));
     }
 }
 
@@ -75,7 +76,7 @@ Result<CompressionEngine::Backend> CompressionEngine::stringToBackend(const std:
     } else if (lower_name == "libdeflate") {
         return makeExpected(Backend::LIBDEFLATE);
     } else {
-        return makeError(ErrorCode::InvalidArgument, "Unknown backend name: " + name);
+        return makeError(ErrorCode::InvalidArgument, fmt::format("Unknown backend name: {}", name));
     }
 }
 

@@ -3,6 +3,7 @@
 #include "fastexcel/utils/AddressParser.hpp"
 #include <stdexcept>
 #include <sstream>
+#include <fmt/format.h>
 #include <algorithm>
 #include <regex>
 
@@ -36,7 +37,7 @@ RangeFormatter& RangeFormatter::setRange(int start_row, int start_col, int end_r
 
 RangeFormatter& RangeFormatter::setRange(const std::string& range) {
     if (!parseRange(range)) {
-        throw std::invalid_argument("无效的Excel地址格式: " + range);
+        throw std::invalid_argument(fmt::format("无效的Excel地址格式: {}", range));
     }
     return *this;
 }

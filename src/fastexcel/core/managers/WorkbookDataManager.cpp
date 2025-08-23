@@ -52,7 +52,7 @@ WorkbookDataManager::exportAllSheetsAsCSV(const std::string& output_directory,
         auto ws = workbook_->getSheet(i);
         if (!ws) continue;
         std::string name = ws->getName();
-        std::string filename = output_directory + "/" + (filename_prefix.empty() ? name : filename_prefix + name) + ".csv";
+        std::string filename = fmt::format("{}/{}{}.csv", output_directory, filename_prefix.empty() ? std::string("") : filename_prefix, name);
         results.emplace_back(exportCSV(i, filename, options, progress));
     }
     return results;
@@ -94,14 +94,14 @@ WorkbookDataManager::ImportResult WorkbookDataManager::importCSV(const std::stri
     
     try {
         if (!isCSVFile(filepath)) {
-            result.error_message = "File is not a valid CSV file: " + filepath;
+            result.error_message = fmt::format("File is not a valid CSV file: {}", filepath);
             stats_.failed_operations++;
             return result;
         }
         
         Path csv_path(filepath);
         if (!csv_path.exists()) {
-            result.error_message = "CSV file not found: " + filepath;
+            result.error_message = fmt::format("CSV file not found: {}", filepath);
             stats_.failed_operations++;
             return result;
         }
@@ -109,7 +109,7 @@ WorkbookDataManager::ImportResult WorkbookDataManager::importCSV(const std::stri
         // 读取文件内容
         std::ifstream file(filepath);
         if (!file.is_open()) {
-            result.error_message = "Cannot open CSV file: " + filepath;
+            result.error_message = fmt::format("Cannot open CSV file: {}", filepath);
             stats_.failed_operations++;
             return result;
         }
@@ -172,7 +172,7 @@ WorkbookDataManager::ImportResult WorkbookDataManager::importCSVString(const std
         // 创建工作表
         auto worksheet = workbook_->addSheet(sheet_name);
         if (!worksheet) {
-            result.error_message = "Failed to create worksheet: " + sheet_name;
+            result.error_message = fmt::format("Failed to create worksheet: {}", sheet_name);
             stats_.failed_operations++;
             return result;
         }
@@ -181,7 +181,7 @@ WorkbookDataManager::ImportResult WorkbookDataManager::importCSVString(const std
         size_t processed_rows = 0;
         for (size_t row = 0; row < data.size(); ++row) {
             if (progress && row % config_.batch_size == 0) {
-                progress(row, data.size(), "Importing row " + std::to_string(row));
+                progress(row, data.size(), fmt::format("Importing row {}", row));
             }
             
             // 跳过空行（如果配置要求）
@@ -241,7 +241,7 @@ WorkbookDataManager::ExportResult WorkbookDataManager::exportCSV(size_t sheet_in
     try {
         auto worksheet = workbook_->getSheet(sheet_index);
         if (!worksheet) {
-            result.error_message = "Invalid worksheet index: " + std::to_string(sheet_index);
+            result.error_message = fmt::format("Invalid worksheet index: {}", sheet_index);
             stats_.failed_operations++;
             return result;
         }
@@ -273,7 +273,7 @@ WorkbookDataManager::ExportResult WorkbookDataManager::exportCSV(const std::stri
     try {
         auto worksheet = workbook_->getSheet(sheet_name);
         if (!worksheet) {
-            result.error_message = "Worksheet not found: " + sheet_name;
+            result.error_message = fmt::format("Worksheet not found: {}", sheet_name);
             stats_.failed_operations++;
             return result;
         }
@@ -378,7 +378,7 @@ std::string WorkbookDataManager::generateUniqueSheetName(const std::string& base
     std::string final_name = name;
     int counter = 1;
     while (workbook_->hasSheet(final_name)) {
-        final_name = name + "_" + std::to_string(counter++);
+        final_name = fmt::format("{}_{}", name, counter++);
     }
     
     return final_name;
@@ -427,7 +427,7 @@ WorkbookDataManager::ExportResult WorkbookDataManager::exportData(std::shared_pt
     try {
         std::ofstream file(filepath);
         if (!file.is_open()) {
-            result.error_message = "Cannot create output file: " + filepath;
+            result.error_message = fmt::format("Cannot create output file: {}", filepath);
             return result;
         }
         
@@ -447,7 +447,7 @@ WorkbookDataManager::ExportResult WorkbookDataManager::exportData(std::shared_pt
         
         for (int row = first_row2; row <= last_row2; ++row) {
             if (progress && processed_rows % config_.batch_size == 0) {
-                progress(processed_rows, total_rows, "Exporting row " + std::to_string(row));
+                progress(processed_rows, total_rows, fmt::format("Exporting row {}", row));
             }
             
             std::vector<std::string> row_data;

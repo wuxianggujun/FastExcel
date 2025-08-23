@@ -33,7 +33,7 @@ CSVParseInfo WorksheetCSVHandler::loadFromCSV(const std::string& filepath, const
     std::ifstream file(filepath);
     if (!file.is_open()) {
         CSVParseInfo info(false);
-        info.error_message = "Failed to open file: " + filepath;
+        info.error_message = fmt::format("Failed to open file: {}", filepath);
         return info;
     }
     
@@ -43,7 +43,7 @@ CSVParseInfo WorksheetCSVHandler::loadFromCSV(const std::string& filepath, const
     
     if (content.empty()) {
         CSVParseInfo info(false);
-        info.error_message = "File is empty: " + filepath;
+        info.error_message = fmt::format("File is empty: {}", filepath);
         return info;
     }
     
@@ -189,7 +189,7 @@ CSVParseInfo WorksheetCSVHandler::previewCSV(const std::string& filepath, const 
     std::ifstream file(filepath);
     if (!file.is_open()) {
         CSVParseInfo info(false);
-        info.error_message = "Failed to open file: " + filepath;
+        info.error_message = fmt::format("Failed to open file: {}", filepath);
         return info;
     }
     
@@ -240,7 +240,7 @@ std::string WorksheetCSVHandler::getCellDisplayValue(int row, int col) const {
                 {
                     double value = cell.getValue<double>();
                     if (value == std::floor(value) && std::abs(value) < 1e15) {
-                        return std::to_string(static_cast<long long>(value));
+                        return fmt::format("{}", static_cast<long long>(value));
                     } else {
                         std::ostringstream oss;
                         oss << std::fixed << std::setprecision(10) << value;
@@ -262,7 +262,7 @@ std::string WorksheetCSVHandler::getCellDisplayValue(int row, int col) const {
                 try {
                     double result = cell.getFormulaResult();
                     if (result == std::floor(result) && std::abs(result) < 1e15) {
-                        return std::to_string(static_cast<long long>(result));
+                        return fmt::format("{}", static_cast<long long>(result));
                     } else {
                         std::ostringstream oss;
                         oss << std::fixed << std::setprecision(10) << result;
@@ -274,7 +274,7 @@ std::string WorksheetCSVHandler::getCellDisplayValue(int row, int col) const {
                 } catch (...) {
                     try {
                         std::string formula = cell.getFormula();
-                        return formula.empty() ? "=" : "=" + formula;
+                        return formula.empty() ? "=" : fmt::format("={}", formula);
                     } catch (...) {
                         return "#FORMULA_ERROR";
                     }

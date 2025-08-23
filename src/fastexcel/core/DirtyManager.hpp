@@ -6,6 +6,7 @@
 #include <string>
 #include <vector>
 #include <optional>
+#include <fmt/format.h>
 #include "fastexcel/utils/Logger.hpp"
 
 namespace fastexcel {
@@ -161,7 +162,7 @@ public:
      * @brief 标记工作表相关部件为脏
      */
     void markWorksheetDirty(size_t index, DirtyLevel level = DirtyLevel::CONTENT) {
-        std::string sheetPart = "xl/worksheets/sheet" + std::to_string(index + 1) + ".xml";
+        std::string sheetPart = fmt::format("xl/worksheets/sheet{}.xml", index + 1);
         markDirty(sheetPart, level);
         
         // 如果是结构变更，也要更新workbook
