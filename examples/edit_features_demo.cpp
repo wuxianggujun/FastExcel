@@ -189,10 +189,23 @@ void demonstrateEditingFeatures() {
         int replacements = worksheet->findAndReplace("技术部", "研发部", false, false);
         std::cout << "  替换了 " << replacements << " 处 '技术部' -> '研发部'" << std::endl;
         
-        // 3. 添加新数据（使用新的便捷方法）
+        // 3. 添加新数据（确保正确的数据类型）
         std::cout << "✓ 添加新员工数据..." << std::endl;
         std::vector<std::string> new_employee = {"孙八", "26", "研发部", "11000", "2023-08-01"};
-        int new_row = worksheet->appendRow(new_employee);
+        
+        // 找到下一个空行
+        auto [max_row, max_col] = worksheet->getUsedRange();
+        int new_row = max_row + 1;
+        
+        // 逐个设置单元格，确保数据类型正确
+        for (size_t j = 0; j < new_employee.size(); ++j) {
+            if (j == 1 || j == 3) { // 年龄和薪资作为数字
+                worksheet->setValue(new_row, static_cast<int>(j), std::stod(new_employee[j]));
+            } else {
+                worksheet->setValue(new_row, static_cast<int>(j), new_employee[j]);
+            }
+        }
+        
         std::cout << "  新员工添加到第 " << new_row + 1 << " 行" << std::endl;
         
         // 4. 复制单元格
@@ -213,9 +226,9 @@ void demonstrateEditingFeatures() {
         summary_sheet->setValue(0, 0, std::string("部门"));
         summary_sheet->setValue(0, 1, std::string("平均薪资"));
         summary_sheet->setValue(1, 0, std::string("研发部"));
-        summary_sheet->getCell(1, 1).setFormula("AVERAGEIF(员工数据.C:C,\"研发部\",员工数据.D:D)");
+        summary_sheet->getCell(1, 1).setFormula("AVERAGEIF('员工数据'!C:C,\"研发部\",'员工数据'!D:D)");
         summary_sheet->setValue(2, 0, std::string("市场部"));
-        summary_sheet->getCell(2, 1).setFormula("AVERAGEIF(员工数据.C:C,\"市场部\",员工数据.D:D)");
+        summary_sheet->getCell(2, 1).setFormula("AVERAGEIF('员工数据'!C:C,\"市场部\",'员工数据'!D:D)");
         
         // 7. 全局查找
         std::cout << "✓ 执行全局查找..." << std::endl;

@@ -28,9 +28,19 @@ static bool writeWithCallback(IFileWriter& writer,
     }
     
     try {
-        auto cb = [&writer](const char* data, size_t sz){ writer.writeStreamingChunk(data, sz); };
+        auto cb = [&writer](const char* data, size_t sz){
+            if (sz == 0 || data == nullptr) return; // 忽略空块
+            if (!writer.writeStreamingChunk(data, sz)) {
+                FASTEXCEL_LOG_ERROR("Failed to write streaming chunk ({} bytes)", sz);
+                throw std::runtime_error("writeStreamingChunk failed");
+            }
+        };
         gen(cb);
-        return writer.closeStreamingFile();
+        if (!writer.closeStreamingFile()) {
+            FASTEXCEL_LOG_ERROR("Failed to close streaming file: {}", path);
+            return false;
+        }
+        return true;
     } catch (const std::exception& e) {
         FASTEXCEL_LOG_ERROR("Exception during streaming generation for {}: {}", path, e.what());
         writer.closeStreamingFile(); // 确保清理状态
@@ -156,11 +166,10 @@ public:
                 if (ctx.workbook) {
                     auto sheet_names = ctx.workbook->getSheetNames();
                     for (size_t i = 0; i < sheet_names.size(); ++i) {
-                        auto ws = ctx.workbook->getSheet(sheet_names[i]);
                         w.startElement("sheet");
                         w.writeAttribute("name", sheet_names[i].c_str());
-                        int sheetId = ws ? ws->getSheetId() : static_cast<int>(i+1);
-                        w.writeAttribute("sheetId", fmt::format("{}", sheetId).c_str());
+                        // 使用连续的 sheetId（1-based）。某些旧接口可能没有 getSheetId，统一递增以保持兼容
+                        w.writeAttribute("sheetId", fmt::format("{}", i + 1).c_str());
                         w.writeAttribute("r:id", fmt::format("rId{}", i+1).c_str());
                         w.endElement();
                     }
@@ -594,13 +603,19 @@ bool UnifiedXMLGenerator::generateParts(IFileWriter& writer,
     view.theme = context_.workbook ? context_.workbook->getTheme() : nullptr;
 
     for (const auto& target : parts_to_generate) {
+        FASTEXCEL_LOG_DEBUG("Generating part: {}", target);
         bool handled = false;
         for (auto& p : parts_) {
             // 查询该生成器可生成的部件集合
             auto names = p->partNames(view);
             for (const auto& n : names) {
                 if (n == target) {
-                    if (!p->generatePart(target, view, writer)) return false;
+                    FASTEXCEL_LOG_DEBUG("Found generator for part: {}", target);
+                    if (!p->generatePart(target, view, writer)) {
+                        FASTEXCEL_LOG_ERROR("Failed to generate part: {}", target);
+                        return false;
+                    }
+                    FASTEXCEL_LOG_DEBUG("Successfully generated part: {}", target);
                     handled = true;
                     break;
                 }
@@ -608,6 +623,7 @@ bool UnifiedXMLGenerator::generateParts(IFileWriter& writer,
             if (handled) break;
         }
         if (!handled) {
+            FASTEXCEL_LOG_ERROR("No generator found for part: {}", target);
             return false;
         }
     }

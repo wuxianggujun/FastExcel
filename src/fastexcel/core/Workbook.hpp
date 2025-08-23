@@ -1246,7 +1246,7 @@ public:
     WorkbookDataManager* getDataManager() { return data_manager_.get(); }
     const WorkbookDataManager* getDataManager() const { return data_manager_.get(); }
     
-    // 同步方法（保持遗留系统兼容）
+    // 脏数据管理器访问
     DirtyManager* getDirtyManager() { return document_manager_ ? document_manager_->getDirtyManager() : nullptr; }
     const DirtyManager* getDirtyManager() const { return document_manager_ ? document_manager_->getDirtyManager() : nullptr; }
     
@@ -1497,6 +1497,10 @@ private:
     // 生成Excel文件结构
     bool generateExcelStructure();
     bool generateWithGenerator(bool use_streaming_writer);
+
+    // DirtyManager 访问（由 WorkbookDocumentManager 持有）
+public:
+    // 注意：避免重复声明 getDirtyManager（MSVC C2535）
     
     
     // 辅助函数

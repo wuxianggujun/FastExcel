@@ -338,11 +338,12 @@ void WorksheetXMLGenerator::generateSheetData(XMLStreamWriter& writer) {
                                 
                                 writer.endElement(); // f
                                 
-                                // 共享公式单元格必须始终包含<v>元素，即使值为0
-                                double result = cell.getFormulaResult();
-                                writer.startElement("v");
-                                writer.writeText(fmt::format("{}", result).c_str());
-                                writer.endElement(); // v
+                                // ⚠️ 修复：不输出共享公式缓存值，让Excel重新计算
+                                // Excel打开文件时会自动计算所有公式，避免缓存值不一致导致"需要修复"提示
+                                // double result = cell.getFormulaResult();
+                                // writer.startElement("v");
+                                // writer.writeText(fmt::format("{}", result).c_str());
+                                // writer.endElement(); // v
                             }
                         }
                     } else {
@@ -351,11 +352,12 @@ void WorksheetXMLGenerator::generateSheetData(XMLStreamWriter& writer) {
                         writer.writeText(cell.getFormula().c_str());
                         writer.endElement(); // f
                         
-                        // 公式单元格必须始终包含<v>元素，即使值为0
-                        double result = cell.getFormulaResult();
-                        writer.startElement("v");
-                        writer.writeText(fmt::format("{}", result).c_str());
-                        writer.endElement(); // v
+                        // ⚠️ 修复：不输出普通公式缓存值，让Excel重新计算
+                        // Excel打开文件时会自动计算所有公式，避免缓存值不一致导致"需要修复"提示
+                        // double result = cell.getFormulaResult();
+                        // writer.startElement("v");
+                        // writer.writeText(fmt::format("{}", result).c_str());
+                        // writer.endElement(); // v
                     }
                 } else if (cell.isString()) {
                     if (workbook_ && workbook_->getOptions().use_shared_strings && sst_) {
@@ -683,11 +685,12 @@ void WorksheetXMLGenerator::generateCellXMLStreaming(XMLStreamWriter& writer, in
                 writer.writeText(cell.getFormula().c_str());
                 writer.endElement(); // f
                 
-                // 公式单元格必须始终包含<v>元素，即使值为0
-                double result = cell.getFormulaResult();
-                writer.startElement("v");
-                writer.writeText(fmt::format("{}", result).c_str());
-                writer.endElement(); // v
+                // ⚠️ 修复：不输出公式缓存值，让Excel重新计算
+                // Excel打开文件时会自动计算所有公式，避免缓存值不一致导致"需要修复"提示
+                // double result = cell.getFormulaResult();
+                // writer.startElement("v");
+                // writer.writeText(fmt::format("{}", result).c_str());
+                // writer.endElement(); // v
             }
         } else if (cell.isString()) {
             if (workbook_ && workbook_->getOptions().use_shared_strings && sst_) {

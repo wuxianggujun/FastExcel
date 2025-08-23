@@ -77,23 +77,26 @@ bool ZipWriter::open(bool create) {
 bool ZipWriter::close() {
     std::lock_guard<std::mutex> lock(mutex_);
     
+    // 幂等性检查：如果已经关闭，直接返回成功
+    if (!is_open_ || !zip_handle_) {
+        return true;  // 已经关闭，避免重复关闭
+    }
+    
     bool success = true;
     
     // 严格检查 mz_zip_writer_close() 的返回值
-    if (zip_handle_) {
-        int32_t result = mz_zip_writer_close(zip_handle_);
-        if (result != MZ_OK) {
-            FASTEXCEL_LOG_ERROR("[ARCH] Failed to finalize ZIP file: {}, error code: {}", filename_, result);
-            FASTEXCEL_LOG_ERROR("[ARCH] This usually means the ZIP central directory was not written properly");
-            success = false;
-        } else {
-            FASTEXCEL_LOG_DEBUG("[ARCH] ZIP file finalized successfully: {}", filename_);
-        }
-        
-        // 删除writer句柄
-        mz_zip_writer_delete(&zip_handle_);
-        zip_handle_ = nullptr;
+    int32_t result = mz_zip_writer_close(zip_handle_);
+    if (result != MZ_OK) {
+        FASTEXCEL_LOG_ERROR("[ARCH] Failed to finalize ZIP file: {}, error code: {}", filename_, result);
+        FASTEXCEL_LOG_ERROR("[ARCH] This usually means the ZIP central directory was not written properly");
+        success = false;
+    } else {
+        FASTEXCEL_LOG_DEBUG("[ARCH] ZIP file finalized successfully: {}", filename_);
     }
+    
+    // 删除writer句柄
+    mz_zip_writer_delete(&zip_handle_);
+    zip_handle_ = nullptr;
     
     is_open_ = false;
     stream_entry_open_ = false;
@@ -425,8 +428,11 @@ bool ZipWriter::initializeWriter() {
 }
 
 void ZipWriter::cleanup() {
-    if (zip_handle_) {
-        mz_zip_writer_close(zip_handle_);
+    // 如果still open，先正常关闭
+    if (is_open_ && zip_handle_) {
+        close();  // 使用幂等的close方法
+    } else if (zip_handle_) {
+        // 如果句柄存在但状态异常，强制清理句柄
         mz_zip_writer_delete(&zip_handle_);
         zip_handle_ = nullptr;
     }

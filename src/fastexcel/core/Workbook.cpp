@@ -92,11 +92,9 @@ std::unique_ptr<Workbook> Workbook::openReadOnly(const std::string& filepath) {
         loaded_workbook->transitionToState(WorkbookState::READING, "Workbook::openReadOnly");
         loaded_workbook->original_package_path_ = filepath;
         
-        // 为可能的另存为操作准备FileManager
-        if (!loaded_workbook->open()) {
-            FASTEXCEL_LOG_ERROR("Failed to prepare FileManager for workbook: {}", filepath);
-            return nullptr;
-        }
+        // ⚠️ 修复：只读模式不应该调用open()方法，因为这会覆盖原文件
+        // 只读模式下不需要打开FileManager进行写入操作
+        // 如果后续需要另存为，可以在saveAs时再打开FileManager
         
         return loaded_workbook;
         
@@ -138,15 +136,16 @@ std::unique_ptr<Workbook> Workbook::openEditable(const std::string& filepath) {
             loaded_workbook->original_package_path_ = filepath;
             loaded_workbook->file_source_ = FileSource::EXISTING_FILE;
             
-            // 为编辑模式准备FileManager
+            // 为编辑模式准备FileManager（但不立即打开写入，避免覆盖原文件）
             loaded_workbook->filename_ = filepath;
             loaded_workbook->file_manager_ = std::make_unique<archive::FileManager>(path);
             
-            // 打开FileManager用于后续的保存操作
-            if (!loaded_workbook->file_manager_->open(true)) {
-                FASTEXCEL_LOG_ERROR("Failed to open FileManager for editing: {}", filepath);
-                return nullptr;
-            }
+            // ⚠️ 重要修复：编辑模式不应该立即覆盖原文件！
+            // 只有在调用save()或saveAs()时才打开FileManager进行写入
+            // if (!loaded_workbook->file_manager_->open(true)) {
+            //     FASTEXCEL_LOG_ERROR("Failed to open FileManager for editing: {}", filepath);
+            //     return nullptr;
+            // }
         }
         
         FASTEXCEL_LOG_INFO("Successfully loaded workbook for editing: {}", filepath);
@@ -224,6 +223,15 @@ bool Workbook::save() {
             document_manager_->updateModifiedTime();
         }
         
+        // 确保FileManager已打开，如果没有则打开它
+        if (file_manager_ && !file_manager_->isOpen()) {
+            FASTEXCEL_LOG_DEBUG("FileManager not open, opening for save operation");
+            if (!file_manager_->open(true)) {
+                FASTEXCEL_LOG_ERROR("Failed to open FileManager for save operation");
+                return false;
+            }
+        }
+        
         // 设置ZIP压缩级别 (添加空指针检查)
         if (file_manager_ && file_manager_->isOpen()) {
             if (!file_manager_->setCompressionLevel(options_.compression_level)) {
@@ -245,6 +253,12 @@ bool Workbook::save() {
         } else {
             FASTEXCEL_LOG_DEBUG("SharedStrings disabled for performance");
             if (shared_string_table_) shared_string_table_->clear();
+        }
+        // 标记需要生成共享字符串，避免DirtyManager不知情导致跳过生成
+        if (options_.use_shared_strings) {
+            if (auto* dm = getDirtyManager()) {
+                dm->markSharedStringsDirty();
+            }
         }
         
         // 编辑模式下，先将原包中未被我们生成的条目拷贝过来（绘图、图片、打印设置等）
@@ -329,7 +343,7 @@ bool Workbook::save() {
             FASTEXCEL_LOG_ERROR("Failed to generate Excel structure");
             return false;
         }
-        
+
         FASTEXCEL_LOG_INFO("Workbook saved successfully: {}", filename_);
         return true;
     } catch (const std::exception& e) {
@@ -420,6 +434,11 @@ bool Workbook::isOpen() const {
 }
 
 bool Workbook::close() {
+    // 幂等性检查：避免重复关闭
+    if (state_ == WorkbookState::CLOSED) {
+        return true;  // 已经关闭，直接返回成功
+    }
+    
     // 内存模式只需要重置状态
     if (!file_manager_) {
         FASTEXCEL_LOG_DEBUG("Memory workbook closed: {}", filename_);
@@ -428,6 +447,9 @@ bool Workbook::close() {
         file_manager_->close();
         FASTEXCEL_LOG_INFO("Workbook closed: {}", filename_);
     }
+    
+    // 设置为已关闭状态，防止重复关闭
+    state_ = WorkbookState::CLOSED;
     return true;
 }
 
@@ -1137,6 +1159,7 @@ bool Workbook::generateExcelStructure() {
         FASTEXCEL_LOG_INFO("Constant memory mode enabled, forcing streaming mode");
     }
     
+    // 实际生成写入
     return generateWithGenerator(use_streaming);
 }
 

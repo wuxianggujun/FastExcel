@@ -152,6 +152,12 @@ bool ExcelStructureGenerator::generateBasicFiles() {
     }
 
     FASTEXCEL_LOG_DEBUG("Successfully generated basic Excel files");
+    // 基础部件至少应包含 [Content_Types].xml 和 _rels/.rels 以及 xl/workbook.xml
+    // 若 writer 统计显示没有任何文件写入，记录错误日志，便于排查
+    auto stats = writer_->getStats();
+    if (stats.files_written == 0 && stats.streaming_files == 0 && stats.batch_files == 0) {
+        FASTEXCEL_LOG_ERROR("No basic parts were written by writer. The resulting ZIP may be empty.");
+    }
     return true;
 }
 
