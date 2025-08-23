@@ -11,8 +11,7 @@
 #include "fastexcel/core/CSVProcessor.hpp"
 #include "fastexcel/core/ColumnWidthManager.hpp"
 #include "fastexcel/core/managers/CellDataProcessor.hpp"
-#include "fastexcel/core/managers/WorksheetLayoutManager.hpp"
-#include "fastexcel/core/managers/WorksheetImageManager.hpp"
+// WorksheetLayoutManager和WorksheetImageManager功能已直接集成到Worksheet类中
 #include "fastexcel/core/managers/WorksheetCSVHandler.hpp"
 #include "fastexcel/utils/CommonUtils.hpp"
 #include "fastexcel/utils/AddressParser.hpp"
@@ -98,23 +97,21 @@ private:
     // 使用范围跟踪
     CellRangeManager range_manager_;
     
-    // 管理器委托模式
+    // 管理器委托模式（简化后）
     std::unique_ptr<CellDataProcessor> cell_processor_;
-    std::unique_ptr<WorksheetLayoutManager> layout_manager_;
-    std::unique_ptr<WorksheetImageManager> image_manager_;
     std::unique_ptr<WorksheetCSVHandler> csv_handler_;
     
-    // 行列信息
+    // 行列信息（直接管理，不再通过Manager）
     std::unordered_map<int, ColumnInfo> column_info_;
     std::unordered_map<int, RowInfo> row_info_;
     
-    // 合并单元格
+    // 合并单元格（直接管理）
     std::vector<MergeRange> merge_ranges_;
     
-    // 自动筛选
+    // 自动筛选（直接管理）
     std::unique_ptr<AutoFilterRange> autofilter_;
     
-    // 冻结窗格
+    // 冻结窗格（直接管理）
     std::unique_ptr<FreezePanes> freeze_panes_;
     
     // 页面视图
@@ -134,7 +131,7 @@ private:
     // 活动单元格
     std::string active_cell_ = "A1";
     
-    // 图片管理
+    // 图片管理（直接管理，不再通过Manager）
     std::vector<std::unique_ptr<Image>> images_;
     int next_image_id_ = 1;
     
@@ -144,6 +141,14 @@ private:
     // 字体信息获取辅助方法
     std::string getWorkbookDefaultFont() const;
     double getWorkbookDefaultFontSize() const;
+    
+    // 内部辅助方法（从Manager类移过来）
+    void validateCellPosition(int row, int col) const;
+    void validateRange(int first_row, int first_col, int last_row, int last_col) const;
+    std::string generateNextImageId();
+    
+    // 内部状态管理
+    void syncLayoutManagerState(); // 用于向后兼容，如果需要
 
 public:
     explicit Worksheet(const std::string& name, std::shared_ptr<Workbook> workbook, int sheet_id = 1);
@@ -1724,7 +1729,7 @@ public:
      * @return 图片列表的常量引用
      */
     const std::vector<std::unique_ptr<Image>>& getImages() const { 
-        return image_manager_->getImages(); 
+        return images_; 
     }
     
     /**
@@ -1732,7 +1737,7 @@ public:
      * @return 图片数量
      */
     size_t getImageCount() const { 
-        return image_manager_->getImageCount(); 
+        return images_.size(); 
     }
     
     /**
@@ -1766,7 +1771,7 @@ public:
      * @return 是否包含图片
      */
     bool hasImages() const { 
-        return image_manager_->hasImages(); 
+        return !images_.empty(); 
     }
     
     /**
@@ -1855,10 +1860,6 @@ public:
     std::string getCellDisplayValue(int row, int col) const;
 
 private:
-    // 内部辅助方法
-    void validateCellPosition(int row, int col) const;
-    void validateRange(int first_row, int first_col, int last_row, int last_col) const;
-    
     // 模板化的单元格操作辅助方法
     template<typename T>
     void editCellValueImpl(int row, int col, T&& value, bool preserve_format);

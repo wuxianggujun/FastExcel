@@ -15,66 +15,47 @@ namespace core {
  * - 双通道模型：可选择抛异常或返回错误码
  * - 性能优先：热路径完全无异常
  */
-enum class ErrorCode : uint16_t {
+/**
+ * @brief 简化的FastExcel错误码 - 专注于Excel处理核心错误
+ * 
+ * 架构优化原则：
+ * - 只包含Excel处理相关的错误
+ * - 移除网络、并发等不相关错误
+ * - 使用更紧凑的编码
+ */
+enum class ErrorCode : uint8_t {
     // 成功
     Ok = 0,
     
-    // 通用错误 (1-99)
+    // 通用错误 (1-19)
     InvalidArgument = 1,
     OutOfMemory = 2,
-    NotImplemented = 3,
-    InternalError = 4,
-    Timeout = 5,
+    InternalError = 3,
     
-    // 文件操作错误 (100-199)
-    FileNotFound = 100,
-    FileAccessDenied = 101,
-    FileCorrupted = 102,
-    FileAlreadyExists = 103,
-    FileWriteError = 104,
-    FileReadError = 105,
-    FileTooLarge = 106,
+    // 文件操作错误 (20-39)
+    FileNotFound = 20,
+    FileAccessDenied = 21,
+    FileCorrupted = 22,
+    FileWriteError = 23,
+    FileReadError = 24,
     
-    // ZIP/压缩错误 (200-299)
-    ZipCreateError = 200,
-    ZipWriteError = 201,
-    ZipReadError = 202,
-    ZipCorrupted = 203,
-    ZipCompressionError = 204,
-    ZipExtractionError = 205,
+    // Excel格式错误 (40-59)
+    InvalidWorkbook = 40,
+    InvalidWorksheet = 41,
+    InvalidCellReference = 42,
+    InvalidFormat = 43,
+    InvalidFormula = 44,
+    CorruptedStyles = 45,
+    CorruptedSharedStrings = 46,
     
-    // XML解析错误 (300-399)
-    XmlParseError = 300,
-    XmlInvalidFormat = 301,
-    XmlMissingElement = 302,
-    XmlInvalidAttribute = 303,
-    XmlEncodingError = 304,
+    // ZIP/XML处理错误 (60-79)
+    ZipError = 60,
+    XmlParseError = 61,
+    XmlInvalidFormat = 62,
+    XmlMissingElement = 63,
     
-    // Excel格式错误 (400-499)
-    InvalidWorkbook = 400,
-    InvalidWorksheet = 401,
-    InvalidCellReference = 402,
-    InvalidFormat = 403,
-    InvalidFormula = 404,
-    UnsupportedFeature = 405,
-    CorruptedStyles = 406,
-    CorruptedSharedStrings = 407,
-    
-    // 内存/性能错误 (500-599)
-    MemoryPoolExhausted = 500,
-    CacheOverflow = 501,
-    BufferOverflow = 502,
-    ResourceExhausted = 503,
-    
-    // 并发错误 (600-699)
-    ThreadPoolError = 600,
-    LockTimeout = 601,
-    ConcurrencyError = 602,
-    
-    // 网络/IO错误 (700-799)
-    NetworkError = 700,
-    IoError = 701,
-    StreamError = 702
+    // 功能实现状态 (80-89)
+    NotImplemented = 80
 };
 
 /**

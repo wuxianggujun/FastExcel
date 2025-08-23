@@ -37,7 +37,7 @@ VoidResult ZlibEngine::initializeStream() {
                           -15, 8, Z_DEFAULT_STRATEGY);
     
     if (ret != Z_OK) {
-        return makeError(ErrorCode::ZipCompressionError, "Failed to initialize zlib deflate: " + std::to_string(ret));
+        return makeError(ErrorCode::ZipError, "Failed to initialize zlib deflate: " + std::to_string(ret));
     }
     
     initialized_ = true;
@@ -68,7 +68,7 @@ Result<size_t> ZlibEngine::compress(
     // 重置流状态以重用
     int ret = deflateReset(stream_.get());
     if (ret != Z_OK) {
-        return makeError(ErrorCode::ZipCompressionError, "Failed to reset deflate stream");
+        return makeError(ErrorCode::ZipError, "Failed to reset deflate stream");
     }
     
     // 设置输入和输出
@@ -80,7 +80,7 @@ Result<size_t> ZlibEngine::compress(
     // 执行压缩
     ret = deflate(stream_.get(), Z_FINISH);
     if (ret != Z_STREAM_END) {
-        return makeError(ErrorCode::ZipCompressionError, "Deflate failed with code: " + std::to_string(ret));
+        return makeError(ErrorCode::ZipError, "Deflate failed with code: " + std::to_string(ret));
     }
     
     // 获取压缩后的大小

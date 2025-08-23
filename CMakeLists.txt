@@ -116,8 +116,6 @@ set(FASTEXCEL_SOURCES
         
         # Worksheet Responsibility Separation (Manager Classes)
         src/fastexcel/core/managers/CellDataProcessor.cpp
-        src/fastexcel/core/managers/WorksheetLayoutManager.cpp
-        src/fastexcel/core/managers/WorksheetImageManager.cpp
         src/fastexcel/core/managers/WorksheetCSVHandler.cpp
         
         # Workbook Responsibility Separation (Manager Classes)
