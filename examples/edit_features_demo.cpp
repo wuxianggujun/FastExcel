@@ -6,8 +6,7 @@
  */
 
 #include "fastexcel/FastExcel.hpp"
-#include "fastexcel/core/Path.hpp"
-#include "fastexcel/opc/PackageEditor.hpp"
+#include "fastexcel/core/Workbook.hpp"
 #include "fastexcel/utils/Logger.hpp"
 #include <iostream>
 #include <vector>
@@ -20,7 +19,7 @@ void demonstrateBasicReadWrite() {
     
     try {
         // 1. 创建新工作簿并写入数据（使用新API）
-        auto workbook = core::Workbook::create(core::Path("sample_data.xlsx"));
+        auto workbook = core::Workbook::create("sample_data.xlsx");
         if (!workbook) {
             FASTEXCEL_LOG_ERROR("无法创建工作簿");
             return;
@@ -86,7 +85,7 @@ void demonstrateFileReading() {
     
     try {
         // 读取刚才创建的文件（使用新API）
-        auto workbook = core::Workbook::openForReading(core::Path("sample_data.xlsx"));
+        auto workbook = core::Workbook::openReadOnly("sample_data.xlsx");
         if (!workbook) {
             std::cerr << "无法打开文件进行读取" << std::endl;
             return;
@@ -167,18 +166,10 @@ void demonstrateEditingFeatures() {
     std::cout << "\n=== 编辑功能演示 ===" << std::endl;
     
     try {
-        // 使用PackageEditor进行高效编辑
-        auto editor = opc::PackageEditor::open(core::Path("sample_data.xlsx"));
-        if (!editor) {
-            std::cerr << "无法创建PackageEditor" << std::endl;
-            return;
-        }
-        
-        std::cout << "✓ 成功创建PackageEditor进行编辑" << std::endl;
-        
-        auto workbook = editor->getWorkbook();
+        // 使用新的统一API进行编辑
+        auto workbook = core::Workbook::openEditable("sample_data.xlsx");
         if (!workbook) {
-            std::cerr << "无法获取工作簿" << std::endl;
+            std::cerr << "无法打开文件进行编辑" << std::endl;
             return;
         }
         
@@ -245,14 +236,8 @@ void demonstrateEditingFeatures() {
         std::cout << "  格式数量: " << stats.total_formats << std::endl;
         std::cout << "  内存使用: " << stats.memory_usage / 1024 << " KB" << std::endl;
         
-        // 检查变更
-        if (editor->isDirty()) {
-            auto dirty_parts = editor->getDirtyParts();
-            std::cout << "✓ 检测到 " << dirty_parts.size() << " 个需要更新的部件" << std::endl;
-        }
-        
         // 保存编辑后的文件
-        if (editor->commit(core::Path("edited_sample_data.xlsx"))) {
+        if (workbook->saveAs("edited_sample_data.xlsx")) {
             std::cout << "✓ 成功保存编辑后的文件: edited_sample_data.xlsx" << std::endl;
         }
         
@@ -266,7 +251,7 @@ void demonstrateAdvancedFeatures() {
     
     try {
         // 创建一个复杂的工作簿
-        auto workbook = core::Workbook::create(core::Path("advanced_example.xlsx"));
+        auto workbook = core::Workbook::create("advanced_example.xlsx");
         if (!workbook) {
             std::cerr << "无法创建高级示例工作簿" << std::endl;
             return;

@@ -112,67 +112,25 @@ private:
 
 public:
     /**
-     * @brief 创建工作簿（直接可用，无需再调用open）
-     * @param path 文件路径
-     * @return 工作簿智能指针，失败返回nullptr
-     */
-    static std::unique_ptr<Workbook> create(const Path& path);
-    
-    /**
-     * @brief 创建工作簿（字符串重载版本）
+     * @brief 创建新的Excel文件
      * @param filepath 文件路径字符串
      * @return 工作簿智能指针，失败返回nullptr
      */
     static std::unique_ptr<Workbook> create(const std::string& filepath);
     
     /**
-     * @brief 只读方式打开Excel文件（新API - 推荐）
-     * @param path 文件路径
+     * @brief 只读方式打开Excel文件
+     * @param filepath 文件路径字符串  
      * @return 工作簿智能指针，失败返回nullptr
-     * 
-     * 特点：
-     * - 轻量级：内存占用小，加载速度快
-     * - 安全：编译期和运行期防止意外修改
-     * - 高性能：针对只读场景优化，支持懒加载
-     * 
-     * 使用场景：
-     * - 数据分析和统计
-     * - 大文件处理
-     * - 模板数据提取
-     * - 数据转换和导入
      */
-    static std::unique_ptr<Workbook> openForReading(const Path& path);
+    static std::unique_ptr<Workbook> openReadOnly(const std::string& filepath);
     
     /**
-     * @brief 只读方式打开Excel文件（字符串重载版本）
+     * @brief 编辑方式打开Excel文件
      * @param filepath 文件路径字符串
      * @return 工作簿智能指针，失败返回nullptr
      */
-    static std::unique_ptr<Workbook> openForReading(const std::string& filepath);
-    
-    /**
-     * @brief 编辑方式打开Excel文件（新API - 推荐）
-     * @param path 文件路径
-     * @return 工作簿智能指针，失败返回nullptr
-     * 
-     * 特点：
-     * - 完整功能：支持所有编辑操作
-     * - 变更追踪：精确跟踪修改状态
-     * - 格式支持：完整的样式和格式处理
-     * 
-     * 使用场景：
-     * - 修改现有Excel文件
-     * - 复杂的格式设置
-     * - 需要保存更改的场景
-     */
-    static std::unique_ptr<Workbook> openForEditing(const Path& path);
-    
-    /**
-     * @brief 编辑方式打开Excel文件（字符串重载版本）
-     * @param filepath 文件路径字符串
-     * @return 工作簿智能指针，失败返回nullptr
-     */
-    static std::unique_ptr<Workbook> openForEditing(const std::string& filepath);
+    static std::unique_ptr<Workbook> openEditable(const std::string& filepath);
     
 
     

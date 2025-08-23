@@ -338,13 +338,11 @@ void WorksheetXMLGenerator::generateSheetData(XMLStreamWriter& writer) {
                                 
                                 writer.endElement(); // f
                                 
-                                // 输出结果值
+                                // 共享公式单元格必须始终包含<v>元素，即使值为0
                                 double result = cell.getFormulaResult();
-                                if (result != 0.0) {
-                                    writer.startElement("v");
-                                    writer.writeText(fmt::format("{}", result).c_str());
-                                    writer.endElement(); // v
-                                }
+                                writer.startElement("v");
+                                writer.writeText(fmt::format("{}", result).c_str());
+                                writer.endElement(); // v
                             }
                         }
                     } else {
@@ -352,12 +350,12 @@ void WorksheetXMLGenerator::generateSheetData(XMLStreamWriter& writer) {
                         writer.startElement("f");
                         writer.writeText(cell.getFormula().c_str());
                         writer.endElement(); // f
+                        
+                        // 公式单元格必须始终包含<v>元素，即使值为0
                         double result = cell.getFormulaResult();
-                        if (result != 0.0) {
-                            writer.startElement("v");
-                            writer.writeText(fmt::format("{}", result).c_str());
-                            writer.endElement(); // v
-                        }
+                        writer.startElement("v");
+                        writer.writeText(fmt::format("{}", result).c_str());
+                        writer.endElement(); // v
                     }
                 } else if (cell.isString()) {
                     if (workbook_ && workbook_->getOptions().use_shared_strings && sst_) {
@@ -684,12 +682,12 @@ void WorksheetXMLGenerator::generateCellXMLStreaming(XMLStreamWriter& writer, in
                 writer.startElement("f");
                 writer.writeText(cell.getFormula().c_str());
                 writer.endElement(); // f
+                
+                // 公式单元格必须始终包含<v>元素，即使值为0
                 double result = cell.getFormulaResult();
-                if (result != 0.0) {
-                    writer.startElement("v");
-                    writer.writeText(fmt::format("{}", result).c_str());
-                    writer.endElement(); // v
-                }
+                writer.startElement("v");
+                writer.writeText(fmt::format("{}", result).c_str());
+                writer.endElement(); // v
             }
         } else if (cell.isString()) {
             if (workbook_ && workbook_->getOptions().use_shared_strings && sst_) {

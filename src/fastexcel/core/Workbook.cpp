@@ -34,8 +34,8 @@ namespace core {
 
 // Workbook 实现
 
-std::unique_ptr<Workbook> Workbook::create(const Path& path) {
-    auto workbook = std::make_unique<Workbook>(path);
+std::unique_ptr<Workbook> Workbook::create(const std::string& filepath) {
+    auto workbook = std::make_unique<Workbook>(Path(filepath));
     
     // 创建工作簿时设置正确的状态
     workbook->file_source_ = FileSource::NEW_FILE;
@@ -49,15 +49,113 @@ std::unique_ptr<Workbook> Workbook::create(const Path& path) {
     
     // 🎯 API修复：自动打开工作簿，返回可直接使用的对象
     if (!workbook->open()) {
-        FASTEXCEL_LOG_ERROR("Failed to open workbook after creation: {}", path.string());
+        FASTEXCEL_LOG_ERROR("Failed to open workbook after creation: {}", filepath);
         return nullptr;
     }
     
     return workbook;
 }
 
-std::unique_ptr<Workbook> Workbook::create(const std::string& filepath) {
-    return create(Path(filepath));
+std::unique_ptr<Workbook> Workbook::openReadOnly(const std::string& filepath) {
+    try {
+        Path path(filepath);
+        if (!path.exists()) {
+            FASTEXCEL_LOG_ERROR("File not found for read-only access: {}", filepath);
+            return nullptr;
+        }
+        
+        // 使用XLSXReader读取现有文件
+        reader::XLSXReader reader(path);
+        auto result = reader.open();
+        if (result != core::ErrorCode::Ok) {
+            FASTEXCEL_LOG_ERROR("Failed to open XLSX file for reading: {}, error code: {}", filepath, static_cast<int>(result));
+            return nullptr;
+        }
+        
+        // 加载工作簿
+        std::unique_ptr<core::Workbook> loaded_workbook;
+        result = reader.loadWorkbook(loaded_workbook);
+        reader.close();
+        
+        if (result != core::ErrorCode::Ok) {
+            FASTEXCEL_LOG_ERROR("Failed to load workbook content: error code: {}", static_cast<int>(result));
+            return nullptr;
+        }
+        
+        if (!loaded_workbook) {
+            FASTEXCEL_LOG_ERROR("loadWorkbook returned Ok but workbook is nullptr");
+            return nullptr;
+        }
+        
+        // 设置读取模式相关标志
+        loaded_workbook->file_source_ = FileSource::EXISTING_FILE;
+        loaded_workbook->transitionToState(WorkbookState::READING, "Workbook::openReadOnly");
+        loaded_workbook->original_package_path_ = filepath;
+        
+        // 为可能的另存为操作准备FileManager
+        if (!loaded_workbook->open()) {
+            FASTEXCEL_LOG_ERROR("Failed to prepare FileManager for workbook: {}", filepath);
+            return nullptr;
+        }
+        
+        return loaded_workbook;
+        
+    } catch (const std::exception& e) {
+        FASTEXCEL_LOG_ERROR("Exception while loading workbook for reading: {}, error: {}", filepath, e.what());
+        return nullptr;
+    }
+}
+
+std::unique_ptr<Workbook> Workbook::openEditable(const std::string& filepath) {
+    try {
+        Path path(filepath);
+        if (!path.exists()) {
+            FASTEXCEL_LOG_ERROR("File not found for editing: {}", filepath);
+            return nullptr;
+        }
+        
+        // 使用XLSXReader读取现有文件
+        reader::XLSXReader reader(path);
+        auto result = reader.open();
+        if (result != core::ErrorCode::Ok) {
+            FASTEXCEL_LOG_ERROR("Failed to open XLSX file for editing: {}, error code: {}", filepath, static_cast<int>(result));
+            return nullptr;
+        }
+        
+        // 加载工作簿
+        std::unique_ptr<core::Workbook> loaded_workbook;
+        result = reader.loadWorkbook(loaded_workbook);
+        reader.close();
+        
+        if (result != core::ErrorCode::Ok) {
+            FASTEXCEL_LOG_ERROR("Failed to load workbook from file: {}, error code: {}", filepath, static_cast<int>(result));
+            return nullptr;
+        }
+        
+        // 标记来源以便保存时进行未修改部件的保真写回
+        if (loaded_workbook) {
+            loaded_workbook->transitionToState(WorkbookState::EDITING, "openEditable()");
+            loaded_workbook->original_package_path_ = filepath;
+            loaded_workbook->file_source_ = FileSource::EXISTING_FILE;
+            
+            // 为编辑模式准备FileManager
+            loaded_workbook->filename_ = filepath;
+            loaded_workbook->file_manager_ = std::make_unique<archive::FileManager>(path);
+            
+            // 打开FileManager用于后续的保存操作
+            if (!loaded_workbook->file_manager_->open(true)) {
+                FASTEXCEL_LOG_ERROR("Failed to open FileManager for editing: {}", filepath);
+                return nullptr;
+            }
+        }
+        
+        FASTEXCEL_LOG_INFO("Successfully loaded workbook for editing: {}", filepath);
+        return loaded_workbook;
+        
+    } catch (const std::exception& e) {
+        FASTEXCEL_LOG_ERROR("Exception while loading workbook for editing: {}, error: {}", filepath, e.what());
+        return nullptr;
+    }
 }
 
 Workbook::Workbook(const Path& path) : filename_(path.string()) {
@@ -1229,120 +1327,6 @@ std::unique_ptr<Workbook> Workbook::open(const Path& path) {
 
 std::unique_ptr<Workbook> Workbook::open(const std::string& filepath) {
     return open(Path(filepath));
-}
-
-// 语义化 API 实现
-
-std::unique_ptr<Workbook> Workbook::openForReading(const Path& path) {
-    try {
-        if (!path.exists()) {
-            FASTEXCEL_LOG_ERROR("File not found for reading: {}", path.string());
-            return nullptr;
-        }
-        
-        // 使用XLSXReader读取现有文件
-        reader::XLSXReader reader(path);
-        auto result = reader.open();
-        if (result != core::ErrorCode::Ok) {
-            FASTEXCEL_LOG_ERROR("Failed to open XLSX file for reading: {}, error code: {}", path.string(), static_cast<int>(result));
-            return nullptr;
-        }
-        
-        // 加载工作簿
-        std::unique_ptr<core::Workbook> loaded_workbook;
-        result = reader.loadWorkbook(loaded_workbook);
-        reader.close();
-        
-        if (result != core::ErrorCode::Ok) {
-            FASTEXCEL_LOG_ERROR("Failed to load workbook from file: {}, error code: {}", path.string(), static_cast<int>(result));
-            return nullptr;
-        }
-        
-        // 设置为只读模式
-        if (loaded_workbook) {
-            loaded_workbook->file_source_ = FileSource::EXISTING_FILE;
-            loaded_workbook->transitionToState(WorkbookState::READING, "openForReading()");
-            loaded_workbook->original_package_path_ = path.string();
-            
-            // 🎯 API修复：为保存功能准备FileManager（即使是只读模式，也可能需要另存为）
-            if (!loaded_workbook->open()) {
-                FASTEXCEL_LOG_ERROR("Failed to prepare FileManager for workbook: {}", path.string());
-                return nullptr;
-            }
-            
-            // 只读模式优化：后续可增加更细粒度的追踪开关，这里不额外操作
-        }
-        
-        FASTEXCEL_LOG_INFO("Successfully loaded workbook for reading: {}", path.string());
-        return loaded_workbook;
-        
-    } catch (const std::exception& e) {
-        FASTEXCEL_LOG_ERROR("Exception while loading workbook for reading: {}, error: {}", path.string(), e.what());
-        return nullptr;
-    }
-}
-
-std::unique_ptr<Workbook> Workbook::openForReading(const std::string& filepath) {
-    return openForReading(Path(filepath));
-}
-
-std::unique_ptr<Workbook> Workbook::openForEditing(const Path& path) {
-    // 编辑模式就是原有的open方法实现
-    try {
-        if (!path.exists()) {
-            FASTEXCEL_LOG_ERROR("File not found for editing: {}", path.string());
-            return nullptr;
-        }
-        
-        // 使用XLSXReader读取现有文件
-        reader::XLSXReader reader(path);
-        auto result = reader.open();
-        if (result != core::ErrorCode::Ok) {
-            FASTEXCEL_LOG_ERROR("Failed to open XLSX file for editing: {}, error code: {}", path.string(), static_cast<int>(result));
-            return nullptr;
-        }
-        
-        // 加载工作簿
-        std::unique_ptr<core::Workbook> loaded_workbook;
-        result = reader.loadWorkbook(loaded_workbook);
-        reader.close();
-        
-        if (result != core::ErrorCode::Ok) {
-            FASTEXCEL_LOG_ERROR("Failed to load workbook from file: {}, error code: {}", path.string(), static_cast<int>(result));
-            return nullptr;
-        }
-        
-        // 设置为编辑模式
-        if (loaded_workbook) {
-            loaded_workbook->file_source_ = FileSource::EXISTING_FILE;
-            loaded_workbook->transitionToState(WorkbookState::EDITING, "openForEditing()");
-            loaded_workbook->original_package_path_ = path.string();
-            
-            // 为编辑模式准备 FileManager
-            loaded_workbook->filename_ = path.string();
-            loaded_workbook->file_manager_ = std::make_unique<archive::FileManager>(path);
-            
-            // 打开FileManager用于后续的保存操作
-            // 使用create=true允许覆盖原文件
-            if (!loaded_workbook->file_manager_->open(true)) {
-                FASTEXCEL_LOG_ERROR("Failed to open FileManager for editing: {}", path.string());
-                return nullptr;
-            }
-            
-            FASTEXCEL_LOG_INFO("Prepared workbook for editing: {}", path.string());
-        }
-        
-        FASTEXCEL_LOG_INFO("Successfully loaded workbook for editing: {}", path.string());
-        return loaded_workbook;
-        
-    } catch (const std::exception& e) {
-        FASTEXCEL_LOG_ERROR("Exception while loading workbook for editing: {}, error: {}", path.string(), e.what());
-        return nullptr;
-    }
-}
-
-std::unique_ptr<Workbook> Workbook::openForEditing(const std::string& filepath) {
-    return openForEditing(Path(filepath));
 }
 
 bool Workbook::refresh() {
