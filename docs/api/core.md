@@ -19,49 +19,105 @@
   - 可持有 `std::unique_ptr<SharedStringTable>`、`std::unique_ptr<theme::Theme>`
   - 友元：`opc::PackageEditor`、`reader::XLSXReader`、`xml::DocPropsXMLGenerator`
 - 主要 API：
-  - 生命周期/IO：`create(path)`、`openForReading(path)`、`openForEditing(path)`、`save()`、`saveAs(filename)`、`close()`、`isOpen()`
-  - 模式与保真：`setPreserveUnknownParts(bool)`、`getPreserveUnknownParts()`
-  - 工作表管理：`addSheet(name)`、`insertSheet(index,name)`、`removeSheet(name/index)`、`getSheet(name/index)`（含 const 版本）、`operator[]`（索引/名称）、`getSheetCount()`、`getSheetNames()`、`hasSheet(name)`、`findSheet(name)`、`getAllSheets()`、`clearAllSheets()`、`renameSheet(old,new)`
-  - 单元格便捷：`getValue<T>("Sheet!A1")`、`setValue<T>("Sheet!A1", value)`、`tryGetValue<T>(sheet,row,col)`、`trySetValue<T>(sheet,row,col,value)`
-  - 样式：`addStyle(const FormatDescriptor&)`、`addStyle(const StyleBuilder&)`、`addNamedStyle(...)`、`createStyleBuilder()`、`getStyle(id)`、`getDefaultStyleId()`、`isValidStyleId(id)`、`getStyleCount()`、`getStyles()`、`copyStylesFrom(other)`、`getStyleStats()`
-  - 主题：`setThemeXML(xml)`、`setOriginalThemeXML(xml)`、`setTheme(theme)`、`getTheme()`、`setThemeName(name)`、`setThemeColor(type,color)`、`setThemeColorByName(name,color)`、`setThemeMajorFont*`/`setThemeMinorFont*`、`getThemeXML()`
-  - 批处理/工具：`mergeWorkbook(other, options)`、`exportWorksheets(names, out)`、`batchRenameWorksheets(map)`、`batchRemoveWorksheets(names)`、`reorderWorksheets(order)`
-  - 查找替换：`findAndReplaceAll(find, replace, options)`、`findAll(text, options)`
-  - 统计与优化：`getStatistics()`、`isModified()`、`getTotalMemoryUsage()`、`optimize()`
+  - **生命周期/IO**：
+    - `create(filepath)` - 创建新Excel文件
+    - `openReadOnly(filepath)` - 只读方式打开Excel文件
+    - `openEditable(filepath)` - 编辑方式打开Excel文件  
+    - `save()` - 保存工作簿
+    - `saveAs(filename)` - 另存为
+  - **CSV集成**：
+    - `loadCSV(filepath, sheet_name, options)` - 从CSV文件创建工作表
+    - `loadCSVString(csv_content, sheet_name, options)` - 从CSV字符串创建工作表
+  - **工作表管理**：
+    - `addSheet(name)` - 添加新工作表
+    - `insertSheet(index, name)` - 在指定位置插入工作表
+    - `getSheet(name/index)` - 获取工作表（含const版本）
+    - `operator[](index/name)` - 工作表访问操作符
+    - `getFirstSheet()` / `getLastSheet()` - 获取首个/最后工作表
+    - `findSheet(name)` - 查找工作表
+    - `getAllSheets()` - 获取所有工作表
+    - `copyWorksheet(source_name, new_name)` - 复制工作表
+    - `getActiveWorksheet()` - 获取活动工作表
+    - `tryGetSheet(name/index)` - 安全获取工作表（返回optional）
+    - `removeSheet(name/index)` - 删除工作表
+    - `getSheetCount()` - 获取工作表数量
+    - `hasSheet(name)` - 检查工作表是否存在
+  - **样式系统**：
+    - `createStyleBuilder()` - 创建样式构建器
+    - `getFormatRepository()` - 获取格式仓库
+  - **工作簿模式**：
+    - `setWorkbookMode(mode)` - 设置工作簿模式（AUTO/BATCH/STREAMING）
 
 使用建议：只读处理用 `openForReading`；编辑保存用 `openForEditing` 或 `create`。
 
 ---
 
 ## class fastexcel::core::Worksheet
-- 职责：表示 Excel 工作表，管理单元格数据、行列/合并/筛选/打印/视图等设置；提供模板化数据访问与范围格式化。
+- 职责：表示 Excel 工作表，管理单元格数据、样式、图片、CSV集成等功能；提供现代化的数据访问接口。
 - 关键关系：
-  - 拥有 `std::map<(row,col), Cell>` 数据；弱引用父 `Workbook`
+  - 拥有单元格数据管理；弱引用父 `Workbook`
   - 使用 `SharedStringTable`、`FormatRepository` 进行字符串/样式复用
-  - 协作 `SharedFormulaManager`、`CellRangeManager` 进行公式与使用范围管理
-  - 与 `xml::WorksheetXMLGenerator` 为友元（序列化）
-- 主要 API（选摘常用）：
-  - 值读写（模板/地址）：`getValue<T>(row,col)`、`setValue<T>(row,col,val)`、`getValue<T>("A1")`、`setValue<T>("A1",val)`、`tryGetValue<T>(row,col)`、`getValueOr<T>(row,col,def)`
-  - 日期/链接：`writeDateTime(row,col,tm)`、`writeUrl(row,col,url, text)`
-  - 单元格格式：`setCellFormat(row,col,const FormatDescriptor&)`、`setCellFormat(row,col,std::shared_ptr<const FormatDescriptor>)`、`setCellFormat(row,col,const StyleBuilder&)`、`tryGetCellFormat(row,col)`
-  - 范围格式化：`rangeFormatter("A1:C10")`、`rangeFormatter(sr,sc,er,ec)` 返回 `RangeFormatter`
-  - 行列/外观：列宽/行高/隐藏/大纲层级、网格线与标题显示、右到左、选中范围/活动单元格、默认行高列宽等（见源码注释：`showGridlines`、`showRowColHeaders`、`setRightToLeft`、`setActiveCell`、`setSelection` 等）
-  - 合并/筛选/冻结/打印：`mergeRange`（见实现）、`setAutoFilter`、`freezePanes`、打印区域/重复行列/页边距/缩放等访问器
-  - 查询统计：`getUsedRange()`、`isEmpty()`、`hasData()`、`getRowCount()`、`getColumnCount()`、`getCellCountInRow/Column()`、`hasCellAt(row,col)`、`getCellCount()`
-  - 基本信息：`getName()/setName()`、`getSheetId()`、`getParentWorkbook()`
+  - 集成 `CellDataProcessor`、`WorksheetCSVHandler` 等管理器
+  - 与 `xml::WorksheetXMLGenerator` 协作进行XML序列化
+- 主要 API：
+  - **单元格访问**：
+    - `getCell(row, col)` / `getCell("A1")` / `getCell(Address)` - 获取单元格引用
+    - `getValue<T>(row, col)` / `getValue<T>("A1")` - 泛型值获取
+    - `setValue<T>(row, col, value)` / `setValue<T>("A1", value)` - 泛型值设置
+    - `tryGetValue<T>()` / `getValueOr<T>()` - 安全访问方法
+  - **公式支持**：
+    - `setFormula(row, col, formula, result)` - 设置单元格公式
+    - `setFormula(Address, formula, result)` - 使用地址设置公式
+  - **批量操作**：
+    - `writeRange(start_addr, data)` - 批量写入数据范围
+    - `writeRow(row, start_col, data)` - 写入行数据
+    - `writeColumn(col, start_row, data)` - 写入列数据
+    - `setRangeFormat(range, format)` - 批量设置范围格式
+  - **图片操作**：
+    - `insertImage(row, col, image_path)` - 插入图片
+    - `insertImage(Address, image)` - 使用地址插入图片
+    - `insertImage(range, image_path)` - 在范围内插入图片
+  - **CSV集成**：
+    - `importCSV(file_path, options)` - 导入CSV数据
+    - `exportCSV(file_path, options)` - 导出为CSV文件
+  - **工作表信息**：
+    - `getName()` / `setName(name)` - 工作表名称管理
+    - `getUsedRange()` - 获取已使用范围
+    - `getCellCount()` - 获取单元格数量
+    - `isEmpty()` / `hasData()` - 数据状态查询
+  - **链式操作**（通过WorksheetChain）：
+    - 支持流畅的链式API调用模式
 
 ---
 
 ## class fastexcel::core::Cell
-- 职责：表示单元格及其值/类型/公式/格式/超链接/批注；提供模板化的强类型访问与安全访问封装。
+- 职责：表示单元格及其值/类型/公式/格式；提供类型安全的数据访问和格式设置。
 - 关键关系：
   - 由 `Worksheet` 管理；格式指向不可变 `FormatDescriptor`
-  - 与 `xml::WorksheetXMLGenerator` 为友元（序列化）
+  - 与 `xml::WorksheetXMLGenerator` 协作进行XML序列化
+  - 支持7种Excel数据类型：数字、字符串、布尔、公式、日期时间、错误值、空值
 - 主要 API：
-  - 类型与值：`CellType getType()`、`template<typename T> T getValue()`、`setValue(const T&)`、`tryGetValue<T>()`、`getValueOr<T>(def)`、`asString/asNumber/asBool/asInt`
-  - 公式：`setFormula(str, result)`、共享公式 `setSharedFormula(idx, result)`、`setSharedFormulaReference(idx)`、`getFormula()`、`getFormulaResult()`、`isSharedFormula()`
-  - 格式：`setFormat(std::shared_ptr<const FormatDescriptor>)`、`getFormatDescriptor()`、`hasFormat()`
-  - 超链接/批注：`setHyperlink(url)`、`getHyperlink()`、`hasHyperlink()`、`setComment(str)`、`getComment()`、`hasComment()`
+  - **值操作**：
+    - `setValue<T>(value)` - 泛型值设置，支持自动类型推导
+    - `getValue<T>()` - 泛型值获取，支持类型转换
+    - `tryGetValue<T>()` - 安全获取，返回optional
+    - `getValueOr<T>(default_value)` - 获取值或返回默认值
+  - **类型便捷访问**：
+    - `asString()` - 作为字符串获取
+    - `asNumber()` - 作为数字获取  
+    - `asBool()` - 作为布尔值获取
+    - `asInt()` - 作为整数获取
+  - **公式支持**：
+    - `setFormula(formula, result)` - 设置公式和缓存结果
+    - `getFormula()` - 获取公式字符串
+    - `hasFormula()` - 检查是否包含公式
+  - **格式设置**：
+    - `setFormat(FormatDescriptor)` - 设置单元格格式
+    - `getFormatDescriptor()` - 获取格式描述符
+  - **状态查询**：
+    - `isEmpty()` - 检查是否为空
+    - `getType()` - 获取数据类型
+    - `isModified()` - 检查是否被修改
 
 ---
 
@@ -89,16 +145,49 @@
 ---
 
 ## class fastexcel::core::StyleBuilder
-- 职责：以链式/流式 API 构建 `FormatDescriptor`；支持从已有 `FormatDescriptor` 派生修改。
+- 职责：通过流畅的链式API构建不可变的`FormatDescriptor`；支持从现有格式创建修改版本。
 - 关键关系：
-  - 输出 `FormatDescriptor`，供 `FormatRepository/Worksheet/RangeFormatter` 使用
-- 主要 API（链式）：
-  - 字体：`fontName/Size/Color/bold/italic/underline/strikeout/superscript/subscript`
-  - 对齐：`horizontalAlign/verticalAlign/leftAlign/centerAlign/rightAlign/vcenterAlign/textWrap/rotation`
-  - 边框：各边与颜色、对角线类型（见头文件）
-  - 填充：`backgroundColor/fg_color/pattern`
-  - 数字格式：`num_format/num_format_index`
-  - 保护：`locked/hidden`
+  - 输出 `FormatDescriptor`，供 `FormatRepository/Cell/Worksheet` 使用
+  - 隐藏底层格式系统复杂性，提供用户友好的接口
+- 主要 API（所有方法都支持链式调用）：
+  - **字体设置**：
+    - `fontName(name)` - 设置字体名称
+    - `fontSize(size)` - 设置字体大小（1.0-409.0）
+    - `font(name, size)` - 同时设置名称和大小
+    - `font(name, size, bold)` - 设置字体和粗体
+    - `bold(is_bold)` - 设置粗体
+    - `italic(is_italic)` - 设置斜体
+    - `underline(type)` - 设置下划线类型
+    - `strikeout(is_strike)` - 设置删除线
+    - `fontColor(color)` - 设置字体颜色
+    - `script(type)` - 设置上标/下标
+  - **对齐方式**：
+    - `horizontalAlign(align)` - 水平对齐
+    - `verticalAlign(align)` - 垂直对齐
+    - `textWrap(wrap)` - 文本换行
+    - `rotation(degrees)` - 旋转角度
+    - `indent(level)` - 缩进级别
+    - `shrinkToFit(shrink)` - 收缩适应
+  - **边框设置**：
+    - `leftBorder(style, color)` - 左边框
+    - `rightBorder(style, color)` - 右边框
+    - `topBorder(style, color)` - 上边框
+    - `bottomBorder(style, color)` - 下边框
+    - `allBorders(style, color)` - 所有边框
+    - `diagonalBorder(style, color, type)` - 对角线边框
+  - **填充样式**：
+    - `backgroundColor(color)` - 背景色
+    - `foregroundColor(color)` - 前景色
+    - `pattern(type)` - 图案类型
+    - `solidFill(color)` - 纯色填充
+  - **数字格式**：
+    - `numberFormat(format)` - 自定义数字格式
+    - `numberFormat(type)` - 内置数字格式类型
+  - **保护设置**：
+    - `locked(is_locked)` - 单元格锁定
+    - `hidden(is_hidden)` - 公式隐藏
+  - **构建方法**：
+    - `build()` - 生成最终的FormatDescriptor对象
 
 ---
 
