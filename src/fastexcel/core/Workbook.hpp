@@ -24,8 +24,8 @@
 #include "StyleTransferContext.hpp"
 #include "StyleBuilder.hpp"
 #include "SharedStringTable.hpp"
-// 内存优化组件
-#include "fastexcel/memory/MemoryPoolOptimized.hpp"
+// 内存管理组件
+#include "fastexcel/memory/WorkbookMemoryManager.hpp"
 #include "fastexcel/utils/SafeConstruction.hpp"
 #include "fastexcel/utils/StringViewOptimized.hpp"
 #include <string>
@@ -103,10 +103,8 @@ private:
     std::unique_ptr<WorkbookDocumentManager> document_manager_;
     std::unique_ptr<WorkbookSecurityManager> security_manager_;
     
-    // 内存优化组件
-    utils::LazyInitializer<memory::FixedSizePool<Cell, 2048>> cell_pool_;
-    utils::LazyInitializer<memory::FixedSizePool<FormatDescriptor, 512>> format_pool_;
-    mutable utils::StringPool string_pool_;
+    // 统一内存管理器
+    std::unique_ptr<memory::WorkbookMemoryManager> memory_manager_;
     
     // 性能统计
     mutable size_t cell_allocations_ = 0;
@@ -1527,14 +1525,12 @@ public:
      */
     template<typename... Args>
     std::unique_ptr<Cell> createOptimizedCell(Args&&... args) {
-        if (!cell_pool_.isInitialized()) {
-            cell_pool_.initialize();
+        if (!memory_manager_) {
+            memory_manager_ = std::make_unique<memory::WorkbookMemoryManager>();
         }
         
-        Cell* cell = cell_pool_.get().allocate(std::forward<Args>(args)...);
         ++cell_allocations_;
-        
-        return std::unique_ptr<Cell>(cell);
+        return memory_manager_->createOptimizedCell(std::forward<Args>(args)...);
     }
     
     /**
@@ -1542,14 +1538,24 @@ public:
      */
     template<typename... Args>
     std::unique_ptr<FormatDescriptor> createOptimizedFormat(Args&&... args) {
-        if (!format_pool_.isInitialized()) {
-            format_pool_.initialize();
+        if (!memory_manager_) {
+            memory_manager_ = std::make_unique<memory::WorkbookMemoryManager>();
         }
         
-        FormatDescriptor* format = format_pool_.get().allocate(std::forward<Args>(args)...);
         ++format_allocations_;
+        return memory_manager_->createOptimizedFormat(std::forward<Args>(args)...);
+    }
+    
+    /**
+     * @brief 创建默认格式的FormatDescriptor对象
+     */
+    std::unique_ptr<FormatDescriptor> createDefaultFormat() {
+        if (!memory_manager_) {
+            memory_manager_ = std::make_unique<memory::WorkbookMemoryManager>();
+        }
         
-        return std::unique_ptr<FormatDescriptor>(format);
+        ++format_allocations_;
+        return memory_manager_->createDefaultFormat();
     }
     
     /**
@@ -1596,8 +1602,12 @@ public:
      * @brief 字符串优化的设置方法
      */
     void setCellValueOptimized(int row, int col, std::string_view value) {
+        if (!memory_manager_) {
+            memory_manager_ = std::make_unique<memory::WorkbookMemoryManager>();
+        }
+        
         // 使用字符串池避免重复分配
-        const std::string* pooled_string = string_pool_.intern(value);
+        const std::string* pooled_string = memory_manager_->internString(value);
         ++string_optimizations_;
         
         // 使用优化的值设置
@@ -1641,6 +1651,8 @@ public:
         size_t cell_pool_usage;
         size_t format_pool_usage;
         size_t string_pool_size;
+        size_t total_memory_usage;
+        double string_deduplication_ratio;
     };
     
     MemoryStats getMemoryStats() const {
@@ -1649,15 +1661,14 @@ public:
         stats.format_allocations = format_allocations_;
         stats.string_optimizations = string_optimizations_;
         
-        if (cell_pool_.isInitialized()) {
-            stats.cell_pool_usage = cell_pool_.get().getCurrentUsage();
+        if (memory_manager_) {
+            auto memory_stats = memory_manager_->getMemoryStatistics();
+            stats.cell_pool_usage = memory_stats.cell_stats.current_usage;
+            stats.format_pool_usage = memory_stats.format_stats.current_usage;
+            stats.string_pool_size = memory_stats.string_stats.total_unique_strings;
+            stats.total_memory_usage = memory_stats.total_memory_usage;
+            stats.string_deduplication_ratio = memory_stats.string_stats.deduplication_ratio;
         }
-        
-        if (format_pool_.isInitialized()) {
-            stats.format_pool_usage = format_pool_.get().getCurrentUsage();
-        }
-        
-        stats.string_pool_size = string_pool_.size();
         
         return stats;
     }
@@ -1666,17 +1677,10 @@ public:
      * @brief 内存收缩（释放未使用的内存）
      */
     void shrinkMemory() {
-        if (cell_pool_.isInitialized()) {
-            cell_pool_.get().shrink();
+        if (memory_manager_) {
+            memory_manager_->shrinkAll();
+            FASTEXCEL_LOG_DEBUG("Memory shrinking completed for Workbook");
         }
-        
-        if (format_pool_.isInitialized()) {
-            format_pool_.get().shrink();
-        }
-        
-        string_pool_.clear();
-        
-        FASTEXCEL_LOG_DEBUG("Memory shrinking completed for Workbook");
     }
 
 private:

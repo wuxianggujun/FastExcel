@@ -248,6 +248,13 @@ public:
             FASTEXCEL_LOG_DEBUG("Pool shrunk to 1 page");
         }
     }
+    
+    /**
+     * @brief 清理所有内存
+     */
+    void clear() {
+        cleanup();
+    }
 
 private:
     mutable std::mutex mutex_;
@@ -392,7 +399,7 @@ private:
         return detail::aligned_alloc_impl(size_class->alignment, size_class->size);
     }
     
-    void deallocateToPool(SizeClass* size_class, void* ptr) {
+    void deallocateToPool(SizeClass* /*size_class*/, void* ptr) {
         // 简化实现：直接释放
         detail::aligned_free_impl(ptr);
     }

@@ -227,10 +227,10 @@ Workbook::~Workbook() {
         
         close();
         
-        // 清理内存池（LazyInitializer会自动处理）
-        cell_pool_.reset();
-        format_pool_.reset();
-        string_pool_.clear();
+        // 清理内存池（统一内存管理器会自动处理）
+        if (memory_manager_) {
+            memory_manager_->clear();
+        }
         
     } catch (...) {
         // 析构函数中不抛出异常
