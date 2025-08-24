@@ -89,7 +89,7 @@ public:
      * @return unique_ptr<Cell>
      */
     template<typename... Args>
-    std::unique_ptr<core::Cell> createOptimizedCell(Args&&... args) {
+    ::fastexcel::pool_ptr<core::Cell> createOptimizedCell(Args&&... args) {
         return cell_pool_->createCell(std::forward<Args>(args)...);
     }
     
@@ -99,7 +99,7 @@ public:
      * @return unique_ptr<FormatDescriptor>
      */
     template<typename... Args>
-    std::unique_ptr<core::FormatDescriptor> createOptimizedFormat(Args&&... args) {
+    ::fastexcel::pool_ptr<core::FormatDescriptor> createOptimizedFormat(Args&&... args) {
         return format_pool_->createFormat(std::forward<Args>(args)...);
     }
     
@@ -107,7 +107,7 @@ public:
      * @brief 创建基于默认格式的FormatDescriptor对象
      * @return unique_ptr<FormatDescriptor>
      */
-    std::unique_ptr<core::FormatDescriptor> createDefaultFormat() {
+    ::fastexcel::pool_ptr<core::FormatDescriptor> createDefaultFormat() {
         return format_pool_->createDefaultFormat();
     }
     

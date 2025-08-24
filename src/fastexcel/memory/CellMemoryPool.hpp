@@ -7,6 +7,7 @@
 
 #include "FixedSizePool.hpp"
 #include "LazyInitializer.hpp"
+#include "PoolAllocator.hpp"
 #include "fastexcel/core/Cell.hpp"
 #include <memory>
 #include <atomic>
@@ -66,9 +67,10 @@ public:
      * @return unique_ptr<Cell>
      */
     template<typename... Args>
-    std::unique_ptr<core::Cell> createCell(Args&&... args) {
+    ::fastexcel::pool_ptr<core::Cell> createCell(Args&&... args) {
         core::Cell* cell = allocate(std::forward<Args>(args)...);
-        return std::unique_ptr<core::Cell>(cell);
+        auto deleter = [this](core::Cell* p){ this->deallocate(p); };
+        return ::fastexcel::pool_ptr<core::Cell>(cell, deleter);
     }
     
     /**

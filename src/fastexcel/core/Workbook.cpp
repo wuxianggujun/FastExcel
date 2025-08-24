@@ -188,6 +188,9 @@ Workbook::Workbook(const Path& path) : filename_(path.string()) {
         security_manager_ = std::make_unique<WorkbookSecurityManager>(this);
         resource_manager.addResource(security_manager_);
         
+        // 初始化工作表管理器（避免空指针访问）
+        worksheet_manager_ = std::make_unique<WorksheetManager>(this);
+
         data_manager_ = std::make_unique<WorkbookDataManager>(this);
         resource_manager.addResource(data_manager_);
         

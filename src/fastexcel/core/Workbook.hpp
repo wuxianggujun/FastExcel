@@ -1521,7 +1521,7 @@ public:
      * @brief 内存池优化的Cell创建
      */
     template<typename... Args>
-    std::unique_ptr<Cell> createOptimizedCell(Args&&... args) {
+    ::fastexcel::pool_ptr<Cell> createOptimizedCell(Args&&... args) {
         if (!memory_manager_) {
             memory_manager_ = std::make_unique<memory::WorkbookMemoryManager>();
         }
@@ -1533,7 +1533,7 @@ public:
      * @brief 内存池优化的FormatDescriptor创建
      */
     template<typename... Args>
-    std::unique_ptr<FormatDescriptor> createOptimizedFormat(Args&&... args) {
+    ::fastexcel::pool_ptr<FormatDescriptor> createOptimizedFormat(Args&&... args) {
         if (!memory_manager_) {
             memory_manager_ = std::make_unique<memory::WorkbookMemoryManager>();
         }
@@ -1544,7 +1544,7 @@ public:
     /**
      * @brief 创建默认格式的FormatDescriptor对象
      */
-    std::unique_ptr<FormatDescriptor> createDefaultFormat() {
+    ::fastexcel::pool_ptr<FormatDescriptor> createDefaultFormat() {
         if (!memory_manager_) {
             memory_manager_ = std::make_unique<memory::WorkbookMemoryManager>();
         }
@@ -1556,22 +1556,34 @@ public:
      * @brief 基础单元格值设置方法
      */
     void setCellValue(int row, int col, const std::string& value) {
-        // Get the first worksheet if available, or throw error
-        if (worksheet_manager_->count() == 0) {
+        // 深度集成：字符串池去重
+        const std::string* pooled = &value;
+        if (!value.empty()) {
+            if (!memory_manager_) {
+                memory_manager_ = std::make_unique<memory::WorkbookMemoryManager>();
+            }
+            pooled = memory_manager_->internString(value);
+        }
+        // 确保至少存在一个工作表
+        size_t sheet_count = worksheet_manager_ ? worksheet_manager_->count() : worksheets_.size();
+        if (sheet_count == 0) {
             addSheet("Sheet1");
         }
-        auto sheet = worksheet_manager_->getByIndex(0);
+        // 获取第一个工作表
+        auto sheet = worksheet_manager_ ? worksheet_manager_->getByIndex(0)
+                                        : (worksheets_.empty() ? nullptr : worksheets_[0]);
         if (sheet) {
-            sheet->setCellValue(row, col, value);
+            sheet->setCellValue(row, col, *pooled);
         }
     }
     
     void setCellValue(int row, int col, double value) {
-        // Get the first worksheet if available, or throw error
-        if (worksheet_manager_->count() == 0) {
+        size_t sheet_count = worksheet_manager_ ? worksheet_manager_->count() : worksheets_.size();
+        if (sheet_count == 0) {
             addSheet("Sheet1");
         }
-        auto sheet = worksheet_manager_->getByIndex(0);
+        auto sheet = worksheet_manager_ ? worksheet_manager_->getByIndex(0)
+                                        : (worksheets_.empty() ? nullptr : worksheets_[0]);
         if (sheet) {
             sheet->setCellValue(row, col, value);
         }
@@ -1582,30 +1594,18 @@ public:
     }
     
     void setCellValue(int row, int col, bool value) {
-        // Get the first worksheet if available, or throw error
-        if (worksheet_manager_->count() == 0) {
+        size_t sheet_count = worksheet_manager_ ? worksheet_manager_->count() : worksheets_.size();
+        if (sheet_count == 0) {
             addSheet("Sheet1");
         }
-        auto sheet = worksheet_manager_->getByIndex(0);
+        auto sheet = worksheet_manager_ ? worksheet_manager_->getByIndex(0)
+                                        : (worksheets_.empty() ? nullptr : worksheets_[0]);
         if (sheet) {
             sheet->setCellValue(row, col, value);
         }
     }
     
-    /**
-     * @brief 字符串优化的设置方法
-     */
-    void setCellValueOptimized(int row, int col, std::string_view value) {
-        if (!memory_manager_) {
-            memory_manager_ = std::make_unique<memory::WorkbookMemoryManager>();
-        }
-        
-        // 使用字符串池避免重复分配
-        const std::string* pooled_string = memory_manager_->internString(value);
-        
-        // 使用优化的值设置
-        setCellValue(row, col, *pooled_string);
-    }
+    // 已移除：显式“优化版”接口；优化已深度集成到 setCellValue
     
     /**
      * @brief 使用StringJoiner优化的复合值设置
@@ -1622,7 +1622,7 @@ public:
             result += part;
             first = false;
         }
-        setCellValueOptimized(row, col, std::string_view(result));
+        setCellValue(row, col, result);
     }
     
     /**
@@ -1631,7 +1631,7 @@ public:
     template<typename... Args>
     void setCellFormattedValue(int row, int col, const char* format, Args&&... args) {
         std::string formatted = utils::StringViewOptimized::format(format, std::forward<Args>(args)...);
-        setCellValueOptimized(row, col, formatted);
+        setCellValue(row, col, formatted);
     }
     
     // 已移除：Workbook 级别内存使用统计接口（统一使用内存池统计）

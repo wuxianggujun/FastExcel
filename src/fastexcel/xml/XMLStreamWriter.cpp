@@ -362,7 +362,8 @@ void XMLStreamWriter::writeAttribute(const std::string& name, double value) {
 }
 
 void XMLStreamWriter::writeAttribute(const std::string& name, bool value) {
-    writeAttribute(name, value ? "true" : "false");
+    // 显式转发到 string_view 重载，避免 const char* 到 bool 的标准转换导致递归
+    writeAttribute(name, std::string_view(value ? "true" : "false"));
 }
 
 void XMLStreamWriter::writeAttribute(const std::string& name, std::string_view value) {

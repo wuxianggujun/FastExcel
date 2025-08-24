@@ -7,6 +7,7 @@
 
 #include "FixedSizePool.hpp"
 #include "LazyInitializer.hpp"
+#include "PoolAllocator.hpp"
 #include "fastexcel/core/FormatDescriptor.hpp"
 #include <memory>
 #include <atomic>
@@ -109,16 +110,17 @@ public:
      * @return unique_ptr<FormatDescriptor>
      */
     template<typename... Args>
-    std::unique_ptr<core::FormatDescriptor> createFormat(Args&&... args) {
+    ::fastexcel::pool_ptr<core::FormatDescriptor> createFormat(Args&&... args) {
         core::FormatDescriptor* format = allocate(std::forward<Args>(args)...);
-        return std::unique_ptr<core::FormatDescriptor>(format);
+        auto deleter = [this](core::FormatDescriptor* p){ this->deallocate(p); };
+        return ::fastexcel::pool_ptr<core::FormatDescriptor>(format, deleter);
     }
     
     /**
      * @brief 基于默认格式创建新的格式描述符
      * @return unique_ptr<FormatDescriptor>
      */
-    std::unique_ptr<core::FormatDescriptor> createDefaultFormat() {
+    ::fastexcel::pool_ptr<core::FormatDescriptor> createDefaultFormat() {
         const auto& defaultFormat = core::FormatDescriptor::getDefault();
         return createFormat(
             defaultFormat.getFontName(),
