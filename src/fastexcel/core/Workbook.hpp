@@ -121,6 +121,14 @@ private:
 
 public:
     /**
+     * @brief 设置工作簿选项（含是否使用共享字符串SST）。
+     */
+    void setOptions(const WorkbookOptions& opts) {
+        options_ = opts;
+    }
+
+    // 注意：getOptions() 与 const 重载在类后部已定义，此处不再重复定义
+    /**
      * @brief 创建新的Excel文件
      * @param filepath 文件路径字符串
      * @return 工作簿智能指针，失败返回nullptr
@@ -1556,14 +1564,6 @@ public:
      * @brief 基础单元格值设置方法
      */
     void setCellValue(int row, int col, const std::string& value) {
-        // 深度集成：字符串池去重
-        const std::string* pooled = &value;
-        if (!value.empty()) {
-            if (!memory_manager_) {
-                memory_manager_ = std::make_unique<memory::WorkbookMemoryManager>();
-            }
-            pooled = memory_manager_->internString(value);
-        }
         // 确保至少存在一个工作表
         size_t sheet_count = worksheet_manager_ ? worksheet_manager_->count() : worksheets_.size();
         if (sheet_count == 0) {
@@ -1573,7 +1573,7 @@ public:
         auto sheet = worksheet_manager_ ? worksheet_manager_->getByIndex(0)
                                         : (worksheets_.empty() ? nullptr : worksheets_[0]);
         if (sheet) {
-            sheet->setCellValue(row, col, *pooled);
+            sheet->setCellValue(row, col, value);
         }
     }
     

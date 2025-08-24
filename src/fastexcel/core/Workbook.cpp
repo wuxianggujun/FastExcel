@@ -203,6 +203,9 @@ Workbook::Workbook(const Path& path) : filename_(path.string()) {
         
         // 已移除：Workbook 层面的内存统计（统一使用内存池统计）
         
+        // 共享字符串默认开启（WorkbookOptions 默认 use_shared_strings = true）
+        FASTEXCEL_LOG_DEBUG("Workbook options: use_shared_strings={} (default)", options_.use_shared_strings);
+
         // 成功构造，取消清理
         resource_manager.release();
         

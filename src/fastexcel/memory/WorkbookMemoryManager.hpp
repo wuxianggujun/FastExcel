@@ -7,7 +7,6 @@
 
 #include "CellMemoryPool.hpp"
 #include "FormatMemoryPool.hpp"
-#include "StringMemoryPool.hpp"
 #include "MultiSizePool.hpp"
 #include <memory>
 
@@ -24,7 +23,7 @@ class WorkbookMemoryManager {
 private:
     std::unique_ptr<CellMemoryPool> cell_pool_;
     std::unique_ptr<FormatMemoryPool> format_pool_;
-    std::unique_ptr<StringMemoryPool> string_pool_;
+    // 字符串池移除：依赖共享字符串表进行落盘去重
     // 统一原始分配：多大小内存池
     std::unique_ptr<MultiSizePool> raw_pool_;
     
@@ -35,7 +34,6 @@ public:
     WorkbookMemoryManager() 
         : cell_pool_(std::make_unique<CellMemoryPool>())
         , format_pool_(std::make_unique<FormatMemoryPool>())
-        , string_pool_(std::make_unique<StringMemoryPool>())
         , raw_pool_(std::make_unique<MultiSizePool>()) {
     }
     
@@ -65,8 +63,7 @@ public:
      * @brief 获取字符串内存池
      * @return StringMemoryPool引用
      */
-    StringMemoryPool& getStringPool() { return *string_pool_; }
-    const StringMemoryPool& getStringPool() const { return *string_pool_; }
+    // 字符串池已移除
 
     /**
      * @brief 原始字节分配（高性能多大小池）。
@@ -116,18 +113,7 @@ public:
      * @param value 要池化的字符串
      * @return 指向池化字符串的指针
      */
-    const std::string* internString(const std::string& value) const {
-        return string_pool_->intern(value);
-    }
-    
-    /**
-     * @brief 将string_view加入字符串池
-     * @param value 要池化的字符串视图
-     * @return 指向池化字符串的指针
-     */
-    const std::string* internString(std::string_view value) const {
-        return string_pool_->intern(value);
-    }
+    // 字符串池相关API移除
     
     /**
      * @brief 统一的内存统计信息
@@ -135,7 +121,7 @@ public:
     struct MemoryStatistics {
         CellMemoryPool::Statistics cell_stats;
         FormatMemoryPool::Statistics format_stats;
-        StringMemoryPool::Statistics string_stats;
+        // String pool removed
         
         // 总计信息
         size_t total_memory_usage = 0;
@@ -152,20 +138,17 @@ public:
         
         stats.cell_stats = cell_pool_->getStatistics();
         stats.format_stats = format_pool_->getStatistics();
-        stats.string_stats = string_pool_->getStatistics();
+        // string stats removed
         
         // 计算总计
         stats.total_allocations = stats.cell_stats.total_allocations + 
-                                 stats.format_stats.total_allocations +
-                                 stats.string_stats.total_interns;
+                                 stats.format_stats.total_allocations;
         
         stats.total_active_objects = stats.cell_stats.active_objects + 
-                                   stats.format_stats.active_objects +
-                                   stats.string_stats.total_unique_strings;
+                                   stats.format_stats.active_objects;
         
         stats.total_memory_usage = stats.cell_stats.current_usage + 
-                                 stats.format_stats.current_usage +
-                                 stats.string_stats.memory_saved_bytes;
+                                 stats.format_stats.current_usage;
         
         return stats;
     }
@@ -179,7 +162,7 @@ public:
     void reserve(size_t cell_capacity, size_t format_capacity, size_t string_capacity) {
         cell_pool_->reserve(cell_capacity);
         format_pool_->reserve(format_capacity);
-        string_pool_->reserve(string_capacity);
+        (void)string_capacity; // no-op
     }
     
     /**
@@ -188,7 +171,7 @@ public:
     void shrinkAll() {
         cell_pool_->shrink();
         format_pool_->shrink();
-        string_pool_->shrink();
+        // no-op
         if (raw_pool_) raw_pool_->shrink();
     }
     
@@ -198,7 +181,7 @@ public:
     void clearAll() {
         cell_pool_->clear();
         format_pool_->clear();
-        string_pool_->clear();
+        // no-op
         if (raw_pool_) raw_pool_->clear();
     }
     
@@ -225,10 +208,7 @@ public:
         report += "  - Active objects: " + std::to_string(stats.format_stats.active_objects) + "\\n";
         report += "  - Peak usage: " + std::to_string(stats.format_stats.peak_usage) + " bytes\\n";
         
-        report += "String Pool:\\n";
-        report += "  - Unique strings: " + std::to_string(stats.string_stats.total_unique_strings) + "\\n";
-        report += "  - Deduplication ratio: " + std::to_string(stats.string_stats.deduplication_ratio * 100) + "%\\n";
-        report += "  - Memory saved: " + std::to_string(stats.string_stats.memory_saved_bytes) + " bytes\\n";
+        // String pool removed
         
         report += "Total:\\n";
         report += "  - Total allocations: " + std::to_string(stats.total_allocations) + "\\n";
