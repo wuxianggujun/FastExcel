@@ -2,57 +2,57 @@
 
 本文档提供 FastExcel 项目所有文档的快速索引和导航。
 
-**🎉 最新更新（2025-08-13）：P0 优先级架构修复全部完成，文档已全面更新！**
+**🎉 最新更新（2025-08-24）：文档全面更新，删除过时内容，基于当前源码结构（v2.0）重写API文档！**
 
 ## 📖 文档分类
 
 ### 🚀 快速开始
-- **[README.md](README.md)** - 项目概述、P0修复成果和完整功能介绍
+- **[README.md](README.md)** - 项目概述、架构设计和完整功能介绍
 - **[根目录README.md](../README.md)** - 项目主页文档，包含快速开始和基本示例
 - **[guides/quick-start.md](guides/quick-start.md)** - 详细的快速开始指南
-- **[examples-tutorial.md](examples-tutorial.md)** 🆕 - 基于实际代码的完整实例教程
+- **[guides/installation.md](guides/installation.md)** - 安装和构建指南
+- **[examples-tutorial.md](examples-tutorial.md)** - 基于实际代码的完整实例教程
+
+### 📚 API 参考
+- **[api/Quick_Reference.md](api/Quick_Reference.md)** ⚡ - FastExcel API 快速参考（v2.0）
+- **[api/core-api.md](api/core-api.md)** ⚡ - 完整的核心 API 文档（v2.0）
+- **[api/README.md](api/README.md)** - API 文档索引和模块概览
 
 ### 🏗️ 架构设计
-- **[architecture-design.md](architecture-design.md)** - 完整的项目架构设计和优化方案
-- **[streaming-vs-batch-architecture-explained.md](streaming-vs-batch-architecture-explained.md)** - 批量与流式模式的详细实现机制和对比分析
+- **[architecture/overview.md](architecture/overview.md)** - 完整的系统架构概览
 
 ### ⚡ 性能优化
-- **[performance-optimization-guide.md](performance-optimization-guide.md)** - 性能优化最佳实践和实施方案
-- **[shared-formula-optimization-roadmap.md](shared-formula-optimization-roadmap.md)** - 共享公式优化策略和路线图
+- **[performance-optimization-guide.md](performance-optimization-guide.md)** - 性能优化最佳实践
 
-### 🔧 实现指南
-- **[xml-generation-guide.md](xml-generation-guide.md)** - XML 生成的统一规范和实施指引
-- **[theme-implementation-guide.md](theme-implementation-guide.md)** - Excel 主题功能的实现指南
-- **[XML生成架构文档.md](XML生成架构文档.md)** - XML生成系统的架构文档
-- **[XML类关系详解.md](XML类关系详解.md)** - XML处理类的关系详解
 
-### 🔄 项目演进与迁移
-- **[P0-Migration-Guide.md](P0-Migration-Guide.md)** 🆕 - P0架构修复的完整迁移指南
-- **[code-improvements-and-roadmap.md](code-improvements-and-roadmap.md)** - 项目改进计划和P0修复完成状态
-- **[Format_Setting_Methods_Guide.md](Format_Setting_Methods_Guide.md)** 🆕 - 格式设置方法完整指南
+
+### 🔄 项目演进
+- **[P0-Migration-Guide.md](P0-Migration-Guide.md)** - P0架构修复迁移指南
+- **[code-improvements-and-roadmap.md](code-improvements-and-roadmap.md)** - 项目改进和发展路线
+- **[Format_Setting_Methods_Guide.md](Format_Setting_Methods_Guide.md)** - 格式设置方法完整指南
 
 ## 🎯 按用途查找文档
 
-### 我想了解项目概况
-👉 从 [README.md](README.md) 开始，了解FastExcel的P0修复成果和统一架构设计
+### 我想快速上手使用
+👉 从 [api/Quick_Reference.md](api/Quick_Reference.md) 开始，10分钟掌握核心API
 
-### 我想迁移到新架构
-👉 查看 [P0-Migration-Guide.md](P0-Migration-Guide.md) 获取完整的迁移指南和示例代码
+### 我想了解完整API
+👉 查看 [api/core-api.md](api/core-api.md) 获取详细的API参考文档
 
-### 我想理解架构设计
-👉 阅读 [architecture-design.md](architecture-design.md) 和 [streaming-vs-batch-architecture-explained.md](streaming-vs-batch-architecture-explained.md)
+### 我想了解项目架构
+👉 阅读 [architecture/overview.md](architecture/overview.md)
 
 ### 我想优化性能
-👉 查看 [performance-optimization-guide.md](performance-optimization-guide.md) 和 [shared-formula-optimization-roadmap.md](shared-formula-optimization-roadmap.md)
+👉 查看 [performance-optimization-guide.md](performance-optimization-guide.md)
 
-### 我想了解实现细节
-👉 参考 [xml-generation-guide.md](xml-generation-guide.md) 和 [theme-implementation-guide.md](theme-implementation-guide.md)
+### 我想学习使用示例
+👉 参考 [examples-tutorial.md](examples-tutorial.md) 获取完整的使用示例
 
-### 我想了解共享公式优化
-👉 阅读 [shared-formula-optimization-roadmap.md](shared-formula-optimization-roadmap.md) 了解智能公式优化技术
+### 我想了解安装和构建
+👉 参考 [guides/installation.md](guides/installation.md)
 
-### 我想了解OPC包编辑
-👉 查看架构文档中的PackageEditor和增量编辑相关章节
+### 我想了解格式设置
+👉 查看 [Format_Setting_Methods_Guide.md](Format_Setting_Methods_Guide.md)
 
 ### 我想了解项目状态
 👉 查看 [code-improvements-and-roadmap.md](code-improvements-and-roadmap.md) 中的P0修复完成状态
@@ -87,57 +87,49 @@
 
 | 文档 | 状态 | 最后更新 | 描述 |
 |------|------|----------|------|
-| README.md | ✅ 最新 | 2025-08-23 | 完整项目文档，P0修复成果详解 |
+| README.md | ✅ 最新 | 2025-08-24 | 完整项目文档，P0修复成果详解 |
 | ../README.md | ✅ 最新 | 2025-08-13 | 项目主页文档 |
-| INDEX.md | ✅ 最新 | 2025-08-23 | 文档索引（本文档） |
+| INDEX.md | ✅ 最新 | 2025-08-24 | 文档索引（本文档） |
+| api/Quick_Reference.md | ✅ 最新 | 2025-08-24 | API快速参考 |
+| api/core-api.md | ✅ 最新 | 2025-08-24 | 核心API详细文档 |
+| api/README.md | ✅ 最新 | 2025-08-24 | API文档索引 |
+| architecture/overview.md | ✅ 最新 | 2025-08-24 | 系统架构概览 |
 | P0-Migration-Guide.md | ✅ 最新 | 2025-08-23 | P0架构修复迁移指南 |
 | Format_Setting_Methods_Guide.md | ✅ 最新 | 2025-08-23 | 格式设置方法完整指南 |
 | examples-tutorial.md | ✅ 最新 | 2025-08-23 | 基于实际代码的实例教程 |
-| guides/quick-start.md | ✅ 最新 | 2025-08-23 | 快速开始指南（已更新API） |
-| code-improvements-and-roadmap.md | ✅ 最新 | 2025-08-13 | P0修复完成状态更新 |
-| architecture-design.md | ✅ 最新 | 2025-01-08 | 架构设计文档 |
-| streaming-vs-batch-architecture-explained.md | ✅ 最新 | 2025-01-08 | 批量流式架构详解 |
+| guides/quick-start.md | ✅ 最新 | 2025-08-23 | 快速开始指南 |
+| guides/installation.md | ✅ 最新 | 2025-08-24 | 安装和构建指南 |
 | performance-optimization-guide.md | ✅ 最新 | 2025-01-08 | 性能优化指南 |
-| xml-generation-guide.md | ✅ 最新 | 2025-01-08 | XML 生成规范 |
-| theme-implementation-guide.md | ✅ 最新 | 2025-08-10 | 主题实现指南 |
-| shared-formula-optimization-roadmap.md | ✅ 最新 | 2025-01-08 | 共享公式优化策略 |
-| XML生成架构文档.md | 📋 参考 | 2025-01-08 | XML架构参考文档 |
-| XML类关系详解.md | 📋 参考 | 2025-01-08 | XML类关系参考 |
+| code-improvements-and-roadmap.md | ✅ 最新 | 2025-08-13 | P0修复完成状态更新 |
 
 ## 🔄 文档维护
 
 ### 最近更新
+- **2025-08-24**: 🧹 **文档大幅精简，删除过时和重复文档**
+  - 精简文档结构：从十几个文档缩减到核心8个文档
+  - 删除重复的架构文档、过时的实现指南和技术细节文档
+  - 保留最重要的API参考、快速入门、迁移指南和性能优化文档
+  - 更新INDEX.md：反映精简后的文档结构
+  
 - **2025-08-23**: 🎉 **文档系统全面更新，补充缺失的关键文档**
-  - 新增P0-Migration-Guide.md：完整的P0架构修复迁移指南，包含API对照表和最佳实践
-  - 新增Format_Setting_Methods_Guide.md：格式设置的完整方法指南，涵盖所有样式功能
-  - 新增examples-tutorial.md：基于实际代码的完整实例教程，从初级到高级
+  - 新增P0-Migration-Guide.md：完整的P0架构修复迁移指南
+  - 新增Format_Setting_Methods_Guide.md：格式设置的完整方法指南
+  - 新增examples-tutorial.md：基于实际代码的完整实例教程
   - 更新guides/quick-start.md：修正API调用，与当前代码保持一致
-  - 更新INDEX.md：反映所有文档更新状态和新增内容
-  
-- **2025-08-10**: 📝 全面更新文档内容，反映FastExcel完整功能实现
-  - 更新README.md：展示双架构设计、完整功能清单、性能指标
-  - 更新INDEX.md：完善文档索引和功能特性索引
-  - 补充共享公式、OPC包编辑、主题系统等高级功能文档
-  
-- **2025-01-08**: 🏗️ 完成架构文档整理和技术规范制定
-  - 完成文档整理，删除重复文档，更新主要文档内容
-  - 新增批量与流式架构详解文档
-  - 修复编译错误，更新实施状态文档
 
 ### 已删除的过时文档
-- ❌ `fastexcel-refactor-unified.md` - 重构方案已实施完成
-- ❌ `immediate-optimization-tasks.md` - 优化任务已完成
-- ❌ `edit-save-architecture-zh.md` - 架构已统一，文档过时
-- ❌ `optimized-edit-save-architecture-zh.md` - 优化方案已实施
-- ❌ `zip_architecture_design.md` - ZIP架构已稳定，文档合并
+- ❌ **架构设计类**: `architecture-design.md`, `streaming-vs-batch-architecture-explained.md` 等 - 架构已稳定，合并至overview.md
+- ❌ **实现指南类**: `xml-generation-guide.md`, `theme-implementation-guide.md`, `XML生成架构文档.md` 等 - 过于技术化，开发者很少需要
+- ❌ **优化策略类**: `shared-formula-optimization-roadmap.md` 等 - 具体优化已实施完成
+- ❌ **重复API文档**: 多个重复的API参考文档 - 统一为核心3个API文档
+- ❌ **历史重构文档**: `fastexcel-refactor-unified.md`, `immediate-optimization-tasks.md` 等 - 重构已完成，文档过时
 
 ### 待办事项
-- [x] **API参考文档** - ✅ 已完成基础API指南和格式设置完整指南
+- [x] **API参考文档** - ✅ 已完成核心API文档和快速参考
 - [x] **实战教程系列** - ✅ 已完成基于examples的完整教程
+- [x] **文档精简优化** - ✅ 已完成，删除过时和重复文档
 - [ ] **性能基准报告** - 详细的性能测试报告和对比分析
-- [ ] **最佳实践指南** - OPC包编辑最佳实践和常见陷阱
 - [ ] **故障排除指南** - 常见问题解决方案和调试技巧
-- [ ] **自动化API文档生成** - 基于源码注释自动生成API参考
 
 ### 文档质量保证
 - ✅ **代码示例验证** - 所有示例代码经过实际测试
@@ -185,13 +177,13 @@ P0修复过程中新增的重要文档，提供迁移指南和最新特性说明
 | 我想... | 推荐文档 | 预计阅读时间 |
 |---------|----------|--------------|
 | 快速上手 | [guides/quick-start.md](guides/quick-start.md) | 15分钟 |
+| API快速参考 | [api/Quick_Reference.md](api/Quick_Reference.md) | 10分钟 |
 | 学习实例 | [examples-tutorial.md](examples-tutorial.md) | 30分钟 |
 | 迁移到新架构 | [P0-Migration-Guide.md](P0-Migration-Guide.md) | 10分钟 |
 | 学习格式设置 | [Format_Setting_Methods_Guide.md](Format_Setting_Methods_Guide.md) | 20分钟 |
-| 深入理解架构 | [architecture-design.md](architecture-design.md) | 30分钟 |
+| 深入理解架构 | [architecture/overview.md](architecture/overview.md) | 25分钟 |
 | 优化性能 | [performance-optimization-guide.md](performance-optimization-guide.md) | 20分钟 |
-| 实现特定功能 | [xml-generation-guide.md](xml-generation-guide.md) + [theme-implementation-guide.md](theme-implementation-guide.md) | 25分钟 |
-| 了解公式优化 | [shared-formula-optimization-roadmap.md](shared-formula-optimization-roadmap.md) | 15分钟 |
+| 安装和构建 | [guides/installation.md](guides/installation.md) | 15分钟 |
 | 查看项目状态 | [code-improvements-and-roadmap.md](code-improvements-and-roadmap.md) | 10分钟 |
 
 ---
@@ -217,4 +209,4 @@ P0修复过程中新增的重要文档，提供迁移指南和最新特性说明
 
 **FastExcel 文档中心** - 为您提供全面、准确、最新的技术文档，反映P0架构修复的完整成果
 
-*文档索引最后更新: 2025-08-13*
+*文档索引最后更新: 2025-08-24*
