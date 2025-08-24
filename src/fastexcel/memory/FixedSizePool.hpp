@@ -1,53 +1,26 @@
 /**
- * @file MemoryPoolOptimized.hpp
- * @brief 高性能内存池实现，针对FastExcel的使用模式优化
+ * @file FixedSizePool.hpp
+ * @brief 固定大小对象内存池实现
  */
 
 #pragma once
 
+#include "AlignedAllocator.hpp"
+#include "fastexcel/utils/Logger.hpp"
+#include "fastexcel/core/Exception.hpp"
 #include <memory>
 #include <vector>
 #include <mutex>
 #include <atomic>
-#include <cstdint>
-#include <cstring>
 #include <type_traits>
-#include <unordered_map>
-#include "fastexcel/utils/Logger.hpp"
-#include "fastexcel/core/Exception.hpp"
-
-#ifdef _WIN32
-#include <malloc.h>
-#endif
 
 namespace fastexcel {
 namespace memory {
 
 /**
- * @brief Platform-compatible aligned memory allocation
- */
-namespace detail {
-    inline void* aligned_alloc_impl(size_t alignment, size_t size) {
-#ifdef _WIN32
-        return _aligned_malloc(size, alignment);
-#else
-        return std::aligned_alloc(alignment, size);
-#endif
-    }
-    
-    inline void aligned_free_impl(void* ptr) {
-#ifdef _WIN32
-        _aligned_free(ptr);
-#else
-        std::free(ptr);
-#endif
-    }
-}
-
-/**
  * @brief 固定大小对象的内存池
  * 
- * 专为频繁分配/释放相同大小对象设计
+ * 专为频繁分配/释放相同大小对象设计，提供高性能的内存管理
  */
 template<typename T, size_t PoolSize = 1024>
 class FixedSizePool {
@@ -311,256 +284,4 @@ private:
     }
 };
 
-/**
- * @brief 多大小内存池
- * 
- * 支持多种对象大小的内存分配
- */
-class MultiSizePool {
-private:
-    struct SizeClass {
-        size_t size;
-        size_t alignment;
-        std::unique_ptr<void, void(*)(void*)> pool;
-        
-        SizeClass(size_t s, size_t align) 
-            : size(s), alignment(align), pool(nullptr, [](void*){}) {}
-    };
-
-public:
-    /**
-     * @brief 构造函数
-     */
-    MultiSizePool() {
-        // 初始化常用大小类
-        initializeSizeClasses();
-        
-        FASTEXCEL_LOG_DEBUG("Created MultiSizePool with {} size classes", size_classes_.size());
-    }
-    
-    /**
-     * @brief 分配指定大小的内存
-     */
-    void* allocate(size_t size, size_t alignment = alignof(std::max_align_t)) {
-        SizeClass* size_class = findSizeClass(size, alignment);
-        
-        if (size_class) {
-            // 从对应的池中分配
-            return allocateFromPool(size_class);
-        } else {
-            // 直接分配
-            return detail::aligned_alloc_impl(alignment, size);
-        }
-    }
-    
-    /**
-     * @brief 释放内存
-     */
-    void deallocate(void* ptr, size_t size, size_t alignment = alignof(std::max_align_t)) {
-        if (!ptr) return;
-        
-        SizeClass* size_class = findSizeClass(size, alignment);
-        
-        if (size_class) {
-            // 归还到对应的池
-            deallocateToPool(size_class, ptr);
-        } else {
-            // 直接释放
-            detail::aligned_free_impl(ptr);
-        }
-    }
-
-private:
-    std::vector<SizeClass> size_classes_;
-    mutable std::mutex mutex_;
-    
-    void initializeSizeClasses() {
-        // 常用大小：8, 16, 32, 64, 128, 256, 512, 1024 bytes
-        std::vector<size_t> common_sizes = {8, 16, 32, 64, 128, 256, 512, 1024};
-        
-        for (size_t size : common_sizes) {
-            size_classes_.emplace_back(size, std::max(size_t(8), size));
-        }
-    }
-    
-    SizeClass* findSizeClass(size_t size, size_t alignment) {
-        std::lock_guard<std::mutex> lock(mutex_);
-        
-        for (auto& sc : size_classes_) {
-            if (sc.size >= size && sc.alignment >= alignment) {
-                return &sc;
-            }
-        }
-        return nullptr;
-    }
-    
-    void* allocateFromPool(SizeClass* size_class) {
-        // 简化实现：直接分配
-        return detail::aligned_alloc_impl(size_class->alignment, size_class->size);
-    }
-    
-    void deallocateToPool(SizeClass* /*size_class*/, void* ptr) {
-        // 简化实现：直接释放
-        detail::aligned_free_impl(ptr);
-    }
-};
-
-/**
- * @brief 内存池管理器
- * 
- * 全局管理所有内存池
- */
-class PoolManager {
-public:
-    /**
-     * @brief 获取单例
-     */
-    static PoolManager& getInstance() {
-        static PoolManager instance;
-        return instance;
-    }
-    
-    /**
-     * @brief 获取指定类型的内存池
-     */
-    template<typename T>
-    FixedSizePool<T>& getPool() {
-        std::lock_guard<std::mutex> lock(mutex_);
-        
-        auto it = pools_.find(typeid(T).hash_code());
-        if (it == pools_.end()) {
-            auto pool = std::make_unique<FixedSizePool<T>>();
-            auto& pool_ref = *pool;
-            pools_[typeid(T).hash_code()] = std::move(pool);
-            return pool_ref;
-        }
-        
-        return *static_cast<FixedSizePool<T>*>(it->second.get());
-    }
-    
-    /**
-     * @brief 获取多大小内存池
-     */
-    MultiSizePool& getMultiSizePool() {
-        return multi_size_pool_;
-    }
-    
-    /**
-     * @brief 清理所有池
-     */
-    void cleanup() {
-        std::lock_guard<std::mutex> lock(mutex_);
-        pools_.clear();
-        FASTEXCEL_LOG_DEBUG("All memory pools cleaned up");
-    }
-    
-    /**
-     * @brief 收缩所有池
-     */
-    void shrinkAll() {
-        std::lock_guard<std::mutex> lock(mutex_);
-        
-        for (auto& [hash, pool] : pools_) {
-            // 这里需要类型转换，简化处理
-            FASTEXCEL_LOG_DEBUG("Shrinking pool for type hash: {}", hash);
-        }
-    }
-
-private:
-    PoolManager() = default;
-    ~PoolManager() = default;
-    
-    mutable std::mutex mutex_;
-    std::unordered_map<size_t, std::unique_ptr<void, void(*)(void*)>> pools_;
-    MultiSizePool multi_size_pool_;
-    
-    // 禁用拷贝和移动
-    PoolManager(const PoolManager&) = delete;
-    PoolManager& operator=(const PoolManager&) = delete;
-    PoolManager(PoolManager&&) = delete;
-    PoolManager& operator=(PoolManager&&) = delete;
-};
-
-} // namespace memory
-} // namespace fastexcel
-
-/**
- * @brief 内存池分配器
- * 
- * 标准库兼容的分配器
- */
-template<typename T>
-class PoolAllocator {
-public:
-    using value_type = T;
-    using pointer = T*;
-    using const_pointer = const T*;
-    using reference = T&;
-    using const_reference = const T&;
-    using size_type = std::size_t;
-    using difference_type = std::ptrdiff_t;
-    
-    template<typename U>
-    struct rebind {
-        using other = PoolAllocator<U>;
-    };
-    
-    PoolAllocator() noexcept = default;
-    
-    template<typename U>
-    PoolAllocator(const PoolAllocator<U>&) noexcept {}
-    
-    pointer allocate(size_type n) {
-        if (n == 1) {
-            // 使用内存池
-            auto& pool = fastexcel::memory::PoolManager::getInstance().getPool<T>();
-            return pool.allocate();
-        } else {
-            // 直接分配
-            return static_cast<pointer>(std::malloc(n * sizeof(T)));
-        }
-    }
-    
-    void deallocate(pointer p, size_type n) noexcept {
-        if (n == 1) {
-            // 归还到内存池
-            auto& pool = fastexcel::memory::PoolManager::getInstance().getPool<T>();
-            pool.deallocate(p);
-        } else {
-            // 直接释放
-            std::free(p);
-        }
-    }
-    
-    template<typename U, typename... Args>
-    void construct(U* p, Args&&... args) {
-        new (p) U(std::forward<Args>(args)...);
-    }
-    
-    template<typename U>
-    void destroy(U* p) {
-        p->~U();
-    }
-    
-    bool operator==(const PoolAllocator&) const noexcept { return true; }
-    bool operator!=(const PoolAllocator&) const noexcept { return false; }
-};
-
-// 便捷的类型别名
-namespace fastexcel {
-    template<typename T>
-    using PoolVector = std::vector<T, PoolAllocator<T>>;
-    
-    template<typename T>
-    using pool_ptr = std::unique_ptr<T, std::function<void(T*)>>;
-    
-    template<typename T, typename... Args>
-    pool_ptr<T> make_pool_ptr(Args&&... args) {
-        auto& pool = memory::PoolManager::getInstance().getPool<T>();
-        T* obj = pool.allocate(std::forward<Args>(args)...);
-        
-        return pool_ptr<T>(obj, [&pool](T* p) {
-            pool.deallocate(p);
-        });
-    }
-}
+}} // namespace fastexcel::memory
