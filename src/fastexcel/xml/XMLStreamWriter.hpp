@@ -153,10 +153,12 @@ public:
      * @brief 属性操作
      */
     void writeAttribute(const std::string& name, const std::string& value);
+    void writeAttribute(const std::string& name, std::string_view value);
     void writeAttribute(const std::string& name, int value);
     void writeAttribute(const std::string& name, double value);
     void writeAttribute(const std::string& name, bool value);
-    void writeAttribute(const std::string& name, std::string_view value);
+    // 直接写入 string_view（避免在调用处构造 std::string）
+    // 注意：内部会在写入缓冲前处理转义，不会悬挂引用
     
     /**
      * @brief 文本内容操作

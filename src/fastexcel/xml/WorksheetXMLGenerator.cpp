@@ -227,8 +227,8 @@ void WorksheetXMLGenerator::generateSheetViews(XMLStreamWriter& writer) {
         // Excel 常见行为：冻结首行时 topLeftCell = A2；冻结首列时 = B1；同时冻结 = B2
         int top_left_row = freeze_info.row > 0 ? freeze_info.row : 0;
         int top_left_col = freeze_info.col > 0 ? freeze_info.col : 0;
-        std::string top_left = utils::CommonUtils::cellReference(top_left_row, top_left_col);
-        writer.writeAttribute("topLeftCell", top_left.c_str());
+        char tb[16]; size_t lt=0; auto tv = utils::CommonUtils::cellReferenceFast(top_left_row, top_left_col, tb, sizeof(tb), lt);
+        writer.writeAttribute("topLeftCell", std::string_view(tv.data(), tv.size()));
         
         writer.writeAttribute("state", "frozen");
         writer.endElement(); // pane
@@ -319,7 +319,7 @@ void WorksheetXMLGenerator::generateSheetData(XMLStreamWriter& writer) {
             {
                 char cref[16]; size_t clen=0;
                 auto v = utils::CommonUtils::cellReferenceFast(row, col, cref, sizeof(cref), clen);
-                writer.writeAttribute("r", std::string(v));
+                writer.writeAttribute("r", std::string_view(v.data(), v.size()));
             }
             
             // 应用单元格格式
@@ -347,13 +347,18 @@ void WorksheetXMLGenerator::generateSheetData(XMLStreamWriter& writer) {
                                 
                                 writer.startElement("f");
                                 writer.writeAttribute("t", "shared");
-                                writer.writeAttribute("si", fmt::format("{}", shared_index).c_str());
+                                writer.writeAttribute("si", shared_index);
                                 
                                 if (is_master_cell) {
                                     // 主单元格：输出完整公式和范围
-                                    std::string range_ref = utils::CommonUtils::cellReference(range_first_row, range_first_col) + ":" +
-                                                          utils::CommonUtils::cellReference(range_last_row, range_last_col);
-                                    writer.writeAttribute("ref", range_ref.c_str());
+                                    char ra[16], rb[16]; size_t la=0, lb=0;
+                                    auto rfa = utils::CommonUtils::cellReferenceFast(range_first_row, range_first_col, ra, sizeof(ra), la);
+                                    auto rfb = utils::CommonUtils::cellReferenceFast(range_last_row, range_last_col, rb, sizeof(rb), lb);
+                                    char rbuf[40]; size_t rpos=0;
+                                    std::memcpy(rbuf+rpos, rfa.data(), rfa.size()); rpos += rfa.size();
+                                    rbuf[rpos++] = ':';
+                                    std::memcpy(rbuf+rpos, rfb.data(), rfb.size()); rpos += rfb.size();
+                                    writer.writeAttribute("ref", std::string(rbuf, rpos));
                                     writer.writeText(cell.getFormula());
                                 }
                                 // 其他单元格：只输出 si 属性，无内容
@@ -389,7 +394,7 @@ void WorksheetXMLGenerator::generateSheetData(XMLStreamWriter& writer) {
                         if (sst_index < 0) {
                             sst_index = const_cast<core::SharedStringTable*>(sst_)->addString(cell.getStringValue());
                         }
-                        writer.writeText(fmt::format("{}", sst_index).c_str());
+                        writer.writeText(sst_index);
                         writer.endElement(); // v
                     } else {
                         writer.writeAttribute("t", "inlineStr");
@@ -401,7 +406,7 @@ void WorksheetXMLGenerator::generateSheetData(XMLStreamWriter& writer) {
                     }
                 } else if (cell.isNumber()) {
                     writer.startElement("v");
-                    writer.writeText(fmt::format("{}", cell.getNumberValue()).c_str());
+                    writer.writeText(cell.getNumberValue());
                     writer.endElement(); // v
                 } else if (cell.isBoolean()) {
                     writer.writeAttribute("t", "b");
@@ -425,13 +430,18 @@ void WorksheetXMLGenerator::generateMergeCells(XMLStreamWriter& writer) {
     if (merge_ranges.empty()) return;
     
     writer.startElement("mergeCells");
-    writer.writeAttribute("count", fmt::format("{}", merge_ranges.size()).c_str());
+    writer.writeAttribute("count", static_cast<int>(merge_ranges.size()));
     
     for (const auto& range : merge_ranges) {
         writer.startElement("mergeCell");
-        std::string range_ref = utils::CommonUtils::cellReference(range.first_row, range.first_col) + ":" +
-                               utils::CommonUtils::cellReference(range.last_row, range.last_col);
-        writer.writeAttribute("ref", range_ref.c_str());
+        char a[16], b[16]; size_t la=0, lb=0;
+        auto ra = utils::CommonUtils::cellReferenceFast(range.first_row, range.first_col, a, sizeof(a), la);
+        auto rb = utils::CommonUtils::cellReferenceFast(range.last_row, range.last_col, b, sizeof(b), lb);
+        char buf[40]; size_t pos=0;
+        std::memcpy(buf+pos, ra.data(), ra.size()); pos += ra.size();
+        buf[pos++] = ':';
+        std::memcpy(buf+pos, rb.data(), rb.size()); pos += rb.size();
+        writer.writeAttribute("ref", std::string_view(buf, pos));
         writer.endElement(); // mergeCell
     }
     
@@ -443,9 +453,16 @@ void WorksheetXMLGenerator::generateAutoFilter(XMLStreamWriter& writer) {
     
     auto filter_range = worksheet_->getAutoFilterRange();
     writer.startElement("autoFilter");
-    std::string ref = utils::CommonUtils::cellReference(filter_range.first_row, filter_range.first_col) + ":" +
-                     utils::CommonUtils::cellReference(filter_range.last_row, filter_range.last_col);
-    writer.writeAttribute("ref", ref.c_str());
+    {
+        char a[16], b[16]; size_t la=0, lb=0;
+        auto ra = utils::CommonUtils::cellReferenceFast(filter_range.first_row, filter_range.first_col, a, sizeof(a), la);
+        auto rb = utils::CommonUtils::cellReferenceFast(filter_range.last_row, filter_range.last_col, b, sizeof(b), lb);
+        char buf[40]; size_t pos=0;
+        std::memcpy(buf+pos, ra.data(), ra.size()); pos += ra.size();
+        buf[pos++] = ':';
+        std::memcpy(buf+pos, rb.data(), rb.size()); pos += rb.size();
+        writer.writeAttribute("ref", std::string_view(buf, pos));
+    }
     writer.endElement(); // autoFilter
 }
 
@@ -490,7 +507,14 @@ void WorksheetXMLGenerator::generateSheetProtection(XMLStreamWriter& writer) {
             writer.writeAttribute("password", upper.c_str());
         } else {
             unsigned short hash = hashExcelPassword(password);
-            writer.writeAttribute("password", fmt::format("{:04X}", hash).c_str());
+            char hex[5];
+            static const char* hexd = "0123456789ABCDEF";
+            hex[0] = hexd[(hash >> 12) & 0xF];
+            hex[1] = hexd[(hash >> 8) & 0xF];
+            hex[2] = hexd[(hash >> 4) & 0xF];
+            hex[3] = hexd[(hash) & 0xF];
+            hex[4] = '\0';
+            writer.writeAttribute("password", std::string_view(hex, 4));
         }
     }
 
@@ -551,9 +575,14 @@ void WorksheetXMLGenerator::generateStreaming(const std::function<void(const std
     }
     writer.startElement("dimension");
     if (dim_last_row2 >= 0 && dim_last_col2 >= 0) {
-        std::string ref2 = utils::CommonUtils::cellReference(0, 0) + ":" +
-                          utils::CommonUtils::cellReference(dim_last_row2, dim_last_col2);
-        writer.writeAttribute("ref", ref2.c_str());
+        char a2[16], b2[16]; size_t la2=0, lb2=0;
+        auto ra2 = utils::CommonUtils::cellReferenceFast(0, 0, a2, sizeof(a2), la2);
+        auto rb2 = utils::CommonUtils::cellReferenceFast(dim_last_row2, dim_last_col2, b2, sizeof(b2), lb2);
+        char buf2[40]; size_t pos2=0;
+        std::memcpy(buf2+pos2, ra2.data(), ra2.size()); pos2 += ra2.size();
+        buf2[pos2++] = ':';
+        std::memcpy(buf2+pos2, rb2.data(), rb2.size()); pos2 += rb2.size();
+        writer.writeAttribute("ref", std::string_view(buf2, pos2));
     } else {
         writer.writeAttribute("ref", "A1");
     }
@@ -582,10 +611,10 @@ void WorksheetXMLGenerator::generateStreaming(const std::function<void(const std
         writer.startElement("cols");
         for (const auto& [col_num, info] : col_info) {
             writer.startElement("col");
-            writer.writeAttribute("min", fmt::format("{}", col_num + 1).c_str());
-            writer.writeAttribute("max", fmt::format("{}", col_num + 1).c_str());
+            writer.writeAttribute("min", col_num + 1);
+            writer.writeAttribute("max", col_num + 1);
             if (info.width > 0) {
-                writer.writeAttribute("width", fmt::format("{}", info.width).c_str());
+                writer.writeAttribute("width", info.width);
                 writer.writeAttribute("customWidth", "1");
             }
             if (info.hidden) {
@@ -607,7 +636,7 @@ void WorksheetXMLGenerator::generateStreaming(const std::function<void(const std
     const auto& merge_ranges = worksheet_->getMergeRanges();
     if (!merge_ranges.empty()) {
         writer.startElement("mergeCells");
-        writer.writeAttribute("count", fmt::format("{}", merge_ranges.size()).c_str());
+    writer.writeAttribute("count", static_cast<int>(merge_ranges.size()));
         
         for (const auto& range : merge_ranges) {
             writer.startElement("mergeCell");
@@ -702,7 +731,7 @@ void WorksheetXMLGenerator::generateCellXMLStreaming(XMLStreamWriter& writer, in
     writer.startElement("c");
     {
         char cref[16]; size_t clen=0; auto v = utils::CommonUtils::cellReferenceFast(row, col, cref, sizeof(cref), clen);
-        writer.writeAttribute("r", std::string(v));
+        writer.writeAttribute("r", std::string_view(v.data(), v.size()));
     }
     
     // 应用单元格格式
@@ -736,9 +765,14 @@ void WorksheetXMLGenerator::generateCellXMLStreaming(XMLStreamWriter& writer, in
                         
                         if (is_master_cell) {
                             // 主单元格：输出完整公式和范围
-                            std::string range_ref = utils::CommonUtils::cellReference(range_first_row, range_first_col) + ":" +
-                                                  utils::CommonUtils::cellReference(range_last_row, range_last_col);
-                        writer.writeAttribute("ref", range_ref.c_str());
+                            char ra[16], rb[16]; size_t la=0, lb=0;
+                            auto rfa = utils::CommonUtils::cellReferenceFast(range_first_row, range_first_col, ra, sizeof(ra), la);
+                            auto rfb = utils::CommonUtils::cellReferenceFast(range_last_row, range_last_col, rb, sizeof(rb), lb);
+                            char rbuf[40]; size_t rpos=0;
+                            std::memcpy(rbuf+rpos, rfa.data(), rfa.size()); rpos += rfa.size();
+                            rbuf[rpos++] = ':';
+                            std::memcpy(rbuf+rpos, rfb.data(), rfb.size()); rpos += rfb.size();
+                            writer.writeAttribute("ref", std::string_view(rbuf, rpos));
                             writer.writeText(cell.getFormula());
                         }
                         // 其他单元格：只输出 si 属性，无内容
@@ -785,7 +819,7 @@ void WorksheetXMLGenerator::generateCellXMLStreaming(XMLStreamWriter& writer, in
             }
         } else if (cell.isNumber()) {
             writer.startElement("v");
-            writer.writeText(fmt::format("{}", cell.getNumberValue()).c_str());
+            writer.writeText(cell.getNumberValue());
             writer.endElement(); // v
         } else if (cell.isBoolean()) {
             writer.writeAttribute("t", "b");

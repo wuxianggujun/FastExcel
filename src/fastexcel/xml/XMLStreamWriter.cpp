@@ -372,7 +372,23 @@ void XMLStreamWriter::writeAttribute(const std::string& name, bool value) {
 }
 
 void XMLStreamWriter::writeAttribute(const std::string& name, std::string_view value) {
-    writeAttribute(name, std::string(value));
+    if (!in_element_) {
+        throw core::OperationException(
+            "Cannot write attribute outside of element",
+            "writeAttribute",
+            core::ErrorCode::InvalidArgument,
+            __FILE__, __LINE__
+        );
+    }
+    if (name.empty()) {
+        throw core::ParameterException(
+            "Attribute name cannot be empty",
+            "name",
+            __FILE__, __LINE__
+        );
+    }
+    // 直接存储到 pending_attributes_ 为 std::string，集中一次性分配
+    pending_attributes_.emplace_back(name, std::string(value));
 }
 
 void XMLStreamWriter::writeText(const std::string& text) {
