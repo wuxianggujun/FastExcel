@@ -38,7 +38,7 @@ public:
      * @param callback XML输出回调函数
      */
     static void generateCoreXML(const core::Workbook* workbook, 
-                                const std::function<void(const char*, size_t)>& callback);
+                                const std::function<void(const std::string&)>& callback);
 
     /**
      * @brief 生成docProps/app.xml - 应用程序属性
@@ -50,7 +50,7 @@ public:
      * @param callback XML输出回调函数
      */
     static void generateAppXML(const core::Workbook* workbook,
-                              const std::function<void(const char*, size_t)>& callback);
+                              const std::function<void(const std::string&)>& callback);
 
     /**
      * @brief 生成docProps/custom.xml - 自定义属性
@@ -61,7 +61,7 @@ public:
      * @param callback XML输出回调函数
      */
     static void generateCustomXML(const core::Workbook* workbook,
-                                 const std::function<void(const char*, size_t)>& callback);
+                                 const std::function<void(const std::string&)>& callback);
 
 private:
     /**

@@ -1,5 +1,5 @@
 /**
- * @file XMLStreamWriter.hpp  
+ * @file XMLStreamWriterOptimized.hpp  
  * @brief 内存安全优化的XML流写入器
  * 
  * 主要改进：
@@ -12,7 +12,6 @@
 #pragma once
 
 #include <string>
-#include <string_view>
 #include <vector>
 #include <stack>
 #include <memory>
@@ -40,7 +39,7 @@ namespace xml {
  * - 异常安全的构造和析构
  * - 支持多种输出模式：文件、回调、内存
  */
-class XMLStreamWriter {
+class XMLStreamWriterOptimized {
 public:
     using WriteCallback = std::function<void(const std::string& chunk)>;
     
@@ -96,38 +95,38 @@ private:
     // 转义方法
     void writeEscapedAttribute(const std::string& value);
     void writeEscapedText(const std::string& text);
-    
+
 public:
     /**
      * @brief 默认构造函数（内存缓冲模式）
      */
-    XMLStreamWriter();
+    XMLStreamWriterOptimized();
     
     /**
      * @brief 文件输出构造函数
      * @param filename 输出文件名
      * @throws FileException 文件创建失败
      */
-    explicit XMLStreamWriter(const std::string& filename);
+    explicit XMLStreamWriterOptimized(const std::string& filename);
     
     /**
      * @brief 回调输出构造函数  
      * @param callback 输出回调函数
      * @throws ParameterException 回调为空
      */
-    explicit XMLStreamWriter(WriteCallback callback);
+    explicit XMLStreamWriterOptimized(WriteCallback callback);
     
     /**
      * @brief 析构函数，确保资源正确释放
      */
-    ~XMLStreamWriter();
+    ~XMLStreamWriterOptimized();
     
     // 禁用拷贝，允许移动
-    XMLStreamWriter(const XMLStreamWriter&) = delete;
-    XMLStreamWriter& operator=(const XMLStreamWriter&) = delete;
+    XMLStreamWriterOptimized(const XMLStreamWriterOptimized&) = delete;
+    XMLStreamWriterOptimized& operator=(const XMLStreamWriterOptimized&) = delete;
     
-    XMLStreamWriter(XMLStreamWriter&& other) noexcept;
-    XMLStreamWriter& operator=(XMLStreamWriter&& other) noexcept;
+    XMLStreamWriterOptimized(XMLStreamWriterOptimized&& other) noexcept;
+    XMLStreamWriterOptimized& operator=(XMLStreamWriterOptimized&& other) noexcept;
     
     /**
      * @brief 模式切换方法
@@ -156,7 +155,6 @@ public:
     void writeAttribute(const std::string& name, int value);
     void writeAttribute(const std::string& name, double value);
     void writeAttribute(const std::string& name, bool value);
-    void writeAttribute(const std::string& name, std::string_view value);
     
     /**
      * @brief 文本内容操作
@@ -203,4 +201,36 @@ private:
     void cleanupInternal() noexcept;
 };
 
-}} // namespace fastexcel::xml
+/**
+ * @brief XML写入器工厂类
+ * 
+ * 提供便捷的创建方法
+ */
+class XMLWriterFactory {
+public:
+    /**
+     * @brief 创建文件输出的XML写入器
+     */
+    static std::unique_ptr<XMLStreamWriterOptimized> createFileWriter(const std::string& filename);
+    
+    /**
+     * @brief 创建回调输出的XML写入器
+     */
+    static std::unique_ptr<XMLStreamWriterOptimized> createCallbackWriter(XMLStreamWriterOptimized::WriteCallback callback);
+    
+    /**
+     * @brief 创建内存缓冲的XML写入器
+     */
+    static std::unique_ptr<XMLStreamWriterOptimized> createMemoryWriter();
+    
+    /**
+     * @brief 创建临时文件XML写入器
+     * @param prefix 临时文件前缀
+     * @return 写入器和临时文件路径的pair
+     */
+    static std::pair<std::unique_ptr<XMLStreamWriterOptimized>, std::string> 
+        createTempFileWriter(const std::string& prefix = "fastexcel_xml_");
+};
+
+} // namespace xml
+} // namespace fastexcel

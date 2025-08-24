@@ -12,7 +12,7 @@ void ContentTypes::addOverride(const std::string& part_name, const std::string& 
     override_types_.push_back({part_name, content_type});
 }
 
-void ContentTypes::generate(const std::function<void(const char*, size_t)>& callback) const {
+void ContentTypes::generate(const std::function<void(const std::string&)>& callback) const {
     XMLStreamWriter writer(callback);
     writer.startDocument();
     writer.startElement("Types");

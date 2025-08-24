@@ -25,7 +25,7 @@ public:
     std::string getString(int index) const;
     
     // 生成XML内容到回调函数（流式写入）
-    void generate(const std::function<void(const char*, size_t)>& callback) const;
+    void generate(const std::function<void(const std::string&)>& callback) const;
     
     // 生成XML内容到文件（流式写入）
     void generateToFile(const std::string& filename) const;

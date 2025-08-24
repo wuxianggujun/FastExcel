@@ -159,35 +159,83 @@ std::unique_ptr<Workbook> Workbook::openEditable(const std::string& filepath) {
 }
 
 Workbook::Workbook(const Path& path) : filename_(path.string()) {
-    // 检查是否为内存模式（任何以::memory::开头的路径）
-    if (path.string().find("::memory::") == 0) {
-        // 内存模式：不创建FileManager，保持纯内存操作
-        file_manager_ = nullptr;
-        FASTEXCEL_LOG_DEBUG("Created workbook in memory mode: {}", filename_);
-    } else {
-        // 文件模式：创建FileManager处理文件操作
-        file_manager_ = std::make_unique<archive::FileManager>(path);
+    // 使用异常安全的构造模式
+    utils::ResourceManager resource_manager;
+    
+    try {
+        // 检查是否为内存模式（任何以::memory::开头的路径）
+        if (path.string().find("::memory::") == 0) {
+            // 内存模式：不创建FileManager，保持纯内存操作
+            file_manager_ = nullptr;
+            FASTEXCEL_LOG_DEBUG("Created workbook in memory mode: {}", filename_);
+        } else {
+            // 文件模式：创建FileManager处理文件操作
+            file_manager_ = std::make_unique<archive::FileManager>(path);
+            resource_manager.addResource(file_manager_);
+        }
+        
+        format_repo_ = std::make_unique<FormatRepository>();
+        resource_manager.addResource(format_repo_);
+        
+        // 初始化共享字符串表
+        shared_string_table_ = std::make_unique<SharedStringTable>();
+        resource_manager.addResource(shared_string_table_);
+        
+        // 初始化专门管理器（职责分离）
+        document_manager_ = std::make_unique<WorkbookDocumentManager>(this);
+        resource_manager.addResource(document_manager_);
+        
+        security_manager_ = std::make_unique<WorkbookSecurityManager>(this);
+        resource_manager.addResource(security_manager_);
+        
+        data_manager_ = std::make_unique<WorkbookDataManager>(this);
+        resource_manager.addResource(data_manager_);
+        
+        // 初始化DocumentManager的DirtyManager
+        document_manager_->getDirtyManager()->setIsNewFile(!path.exists()); // 如果文件不存在，则是新文件
+        
+        // 设置默认文档属性
+        document_manager_->setAuthor("FastExcel");
+        document_manager_->setCompany("FastExcel Library");
+        
+        // 初始化内存优化组件的统计
+        cell_allocations_ = 0;
+        format_allocations_ = 0;
+        string_optimizations_ = 0;
+        
+        // 成功构造，取消清理
+        resource_manager.release();
+        
+        FASTEXCEL_LOG_DEBUG("Workbook constructed with memory optimizations: {}", filename_);
+        
+    } catch (...) {
+        // resource_manager会自动清理已分配的资源
+        FASTEXCEL_LOG_ERROR("Failed to construct Workbook: {}", path.string());
+        throw;
     }
-    
-    format_repo_ = std::make_unique<FormatRepository>();
-    // 初始化共享字符串表
-    shared_string_table_ = std::make_unique<SharedStringTable>();
-    
-    // 初始化专门管理器（职责分离）
-    document_manager_ = std::make_unique<WorkbookDocumentManager>(this);
-    security_manager_ = std::make_unique<WorkbookSecurityManager>(this);
-    data_manager_ = std::make_unique<WorkbookDataManager>(this);
-    
-    // 初始化DocumentManager的DirtyManager
-    document_manager_->getDirtyManager()->setIsNewFile(!path.exists()); // 如果文件不存在，则是新文件
-    
-    // 设置默认文档属性
-    document_manager_->setAuthor("FastExcel");
-    document_manager_->setCompany("FastExcel Library");
 }
 
 Workbook::~Workbook() {
-    close();
+    try {
+        // 打印内存使用统计
+        if (cell_allocations_ > 0 || format_allocations_ > 0 || string_optimizations_ > 0) {
+            FASTEXCEL_LOG_DEBUG("Workbook destroyed. Memory stats - "
+                              "Cell allocations: {}, Format allocations: {}, "
+                              "String optimizations: {}",
+                              cell_allocations_, format_allocations_, string_optimizations_);
+        }
+        
+        close();
+        
+        // 清理内存池（LazyInitializer会自动处理）
+        cell_pool_.reset();
+        format_pool_.reset();
+        string_pool_.clear();
+        
+    } catch (...) {
+        // 析构函数中不抛出异常
+        FASTEXCEL_LOG_ERROR("Error during Workbook destruction");
+    }
 }
 
 // 文件操作

@@ -50,7 +50,7 @@ public:
      * @param callback 数据写入回调函数
      * @param forceGenerate 强制生成XML（即使hasImages()返回false）
      */
-    void generateDrawingXML(const std::function<void(const char*, size_t)>& callback, 
+    void generateDrawingXML(const std::function<void(const std::string&)>& callback, 
                            bool forceGenerate = false) const;
     
     /**
@@ -63,7 +63,7 @@ public:
      * @brief 生成绘图关系XML
      * @param callback 数据写入回调函数
      */
-    void generateDrawingRelsXML(const std::function<void(const char*, size_t)>& callback) const;
+    void generateDrawingRelsXML(const std::function<void(const std::string&)>& callback) const;
     
     /**
      * @brief 生成绘图关系XML文件

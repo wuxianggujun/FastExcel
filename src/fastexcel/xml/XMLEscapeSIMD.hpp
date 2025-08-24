@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <functional>
+#include <string>
 
 namespace fastexcel {
 namespace xml {
@@ -14,7 +15,7 @@ namespace xml {
 class XMLEscapeSIMD {
 public:
     // 写入回调类型
-    using WriteCallback = std::function<void(const char*, size_t)>;
+    using WriteCallback = std::function<void(const std::string&)>;
     
     /**
      * @brief 初始化SIMD转义器并检测CPU特性

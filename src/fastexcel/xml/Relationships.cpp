@@ -24,7 +24,7 @@ std::string Relationships::addAutoRelationship(const std::string& type, const st
     return id;
 }
 
-void Relationships::generate(const std::function<void(const char*, size_t)>& callback) const {
+void Relationships::generate(const std::function<void(const std::string&)>& callback) const {
     XMLStreamWriter writer(callback);
     writer.startDocument();
     writer.startElement("Relationships");

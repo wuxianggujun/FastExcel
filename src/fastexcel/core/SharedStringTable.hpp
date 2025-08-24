@@ -87,7 +87,7 @@ public:
      * @brief 生成SharedStrings.xml到回调函数（流式写入）
      * @param callback 数据写入回调函数
      */
-    void generateXML(const std::function<void(const char*, size_t)>& callback) const;
+    void generateXML(const std::function<void(const std::string&)>& callback) const;
     
     /**
      * @brief 获取内存使用统计

@@ -22,8 +22,8 @@ int main() {
     
     // 测试XMLStreamWriter的SIMD集成
     std::string result;
-    XMLStreamWriter writer([&result](const char* data, size_t len) {
-        result.append(data, len);
+    XMLStreamWriter writer([&result](const std::string& data) {
+        result.append(data);
     });
     
     // 开始计时
@@ -65,8 +65,8 @@ int main() {
     for (int i = 0; i < iterations; i++) {
         simd_result.clear();
         XMLEscapeSIMD::escapeAttributesSIMD(test_data.c_str(), test_data.length(),
-            [&simd_result](const char* data, size_t len) {
-                simd_result.append(data, len);
+            [&simd_result](const std::string& data) {
+                simd_result.append(data);
             });
     }
     

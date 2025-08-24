@@ -7,6 +7,12 @@
 #include <functional>
 
 namespace fastexcel {
+
+// 前向声明
+namespace memory {
+    template<typename T, size_t PoolSize> class FixedSizePool;
+}
+
 namespace core {
 
 /**
@@ -117,10 +123,15 @@ private:
 public:
     // 友元类Builder可以访问私有构造函数
     friend class StyleBuilder;
+    // 允许内存池访问私有构造函数
+    template<typename T, size_t PoolSize> friend class memory::FixedSizePool;
     
     // 拷贝和移动构造函数（由于const成员需要显式定义）
     FormatDescriptor(const FormatDescriptor& other) = default;
     FormatDescriptor(FormatDescriptor&& other) = default;
+    
+    // Add virtual destructor for memory pool compatibility
+    virtual ~FormatDescriptor() = default;
     
     // 赋值操作符无法实现（因为所有成员都是const的）
     FormatDescriptor& operator=(const FormatDescriptor& other) = delete;

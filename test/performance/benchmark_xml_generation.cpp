@@ -47,9 +47,9 @@ TEST_F(XMLGenerationBenchmark, XMLGenerationPerformance) {
     auto start = std::chrono::high_resolution_clock::now();
     
     // 使用标准XML生成
-    worksheet_->generateXML([&](const char* data, size_t size) {
-        xml_output.append(data, size);
-        total_size += size;
+    worksheet_->generateXML([&](const std::string& data) {
+        xml_output.append(data);
+        total_size += data.size();
     });
     
     auto end = std::chrono::high_resolution_clock::now();
@@ -86,9 +86,9 @@ TEST_F(XMLGenerationBenchmark, LargeDataXMLPerformance) {
     auto start = std::chrono::high_resolution_clock::now();
     
     // 使用标准XML生成
-    worksheet_->generateXML([&](const char* data, size_t size) {
-        xml_output.append(data, size);
-        total_size += size;
+    worksheet_->generateXML([&](const std::string& data) {
+        xml_output.append(data);
+        total_size += data.size();
     });
     
     auto end = std::chrono::high_resolution_clock::now();
@@ -121,9 +121,9 @@ TEST_F(XMLGenerationBenchmark, SharedFormulaXMLPerformance) {
     auto start = std::chrono::high_resolution_clock::now();
     
     // 生成包含共享公式的XML
-    worksheet_->generateXML([&](const char* data, size_t size) {
-        xml_output.append(data, size);
-        total_size += size;
+    worksheet_->generateXML([&](const std::string& data) {
+        xml_output.append(data);
+        total_size += data.size();
     });
     
     auto end = std::chrono::high_resolution_clock::now();
@@ -145,8 +145,8 @@ TEST_F(XMLGenerationBenchmark, XMLStreamWriterPerformance) {
     auto start = std::chrono::high_resolution_clock::now();
     
     {
-        fastexcel::xml::XMLStreamWriter writer([&](const char* data, size_t size) {
-            output_stream.write(data, size);
+        fastexcel::xml::XMLStreamWriter writer([&](const std::string& data) {
+            output_stream << data;
         });
         
         writer.startDocument();

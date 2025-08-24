@@ -23,7 +23,14 @@ WorksheetXMLGenerator::WorksheetXMLGenerator(const core::Worksheet* worksheet)
     , workbook_(nullptr)
     , sst_(nullptr)
     , format_repo_(nullptr)
-    , mode_(GenerationMode::BATCH) {
+    , mode_(GenerationMode::BATCH)
+    , string_builder_(1024) {  // 初始化StringBuilder为1KB
+    
+    // 设置安全缓冲区的刷新回调
+    safe_buffer_.setFlushCallback([this](const char* data, size_t length) {
+        // 这里可以添加具体的刷新逻辑
+        FASTEXCEL_LOG_TRACE("Flushed {} bytes from safe buffer", length);
+    });
     
     if (worksheet_) {
         workbook_ = worksheet_->getParentWorkbook().get();
@@ -38,11 +45,13 @@ WorksheetXMLGenerator::WorksheetXMLGenerator(const core::Worksheet* worksheet)
             }
         }
     }
+    
+    FASTEXCEL_LOG_DEBUG("WorksheetXMLGenerator created with optimizations");
 }
 
 // 主要生成方法
 
-void WorksheetXMLGenerator::generate(const std::function<void(const char*, size_t)>& callback) {
+void WorksheetXMLGenerator::generate(const std::function<void(const std::string&)>& callback) {
     if (!worksheet_) {
         FASTEXCEL_LOG_ERROR("WorksheetXMLGenerator::generate - worksheet is null");
         return;
@@ -55,7 +64,7 @@ void WorksheetXMLGenerator::generate(const std::function<void(const char*, size_
     }
 }
 
-void WorksheetXMLGenerator::generateRelationships(const std::function<void(const char*, size_t)>& callback) {
+void WorksheetXMLGenerator::generateRelationships(const std::function<void(const std::string&)>& callback) {
     if (!worksheet_) return;
     
     // 使用专用的Relationships类生成XML（与Worksheet原来逻辑保持一致）
@@ -99,7 +108,7 @@ void WorksheetXMLGenerator::generateRelationships(const std::function<void(const
 
 // 批量模式生成方法
 
-void WorksheetXMLGenerator::generateBatch(const std::function<void(const char*, size_t)>& callback) {
+void WorksheetXMLGenerator::generateBatch(const std::function<void(const std::string&)>& callback) {
     // 使用XMLStreamWriter来正确生成XML
     XMLStreamWriter writer(callback);
     
@@ -120,8 +129,11 @@ void WorksheetXMLGenerator::generateBatch(const std::function<void(const char*, 
     }
     writer.startElement("dimension");
     if (dim_last_row >= 0 && dim_last_col >= 0) {
-        std::string ref = utils::CommonUtils::cellReference(0, 0) + ":" +
-                         utils::CommonUtils::cellReference(dim_last_row, dim_last_col);
+        // 使用StringJoiner优化单元格范围生成
+        utils::StringViewOptimized::StringJoiner range_joiner(":");
+        range_joiner.add(utils::CommonUtils::cellReference(0, 0))
+                   .add(utils::CommonUtils::cellReference(dim_last_row, dim_last_col));
+        std::string ref = range_joiner.build();
         writer.writeAttribute("ref", ref.c_str());
     } else {
         writer.writeAttribute("ref", "A1");
@@ -174,7 +186,10 @@ void WorksheetXMLGenerator::generateSheetViews(XMLStreamWriter& writer) {
     
     // 缩放比例
     if (worksheet_->getZoom() != 100) {
-        writer.writeAttribute("zoomScale", fmt::format("{}", worksheet_->getZoom()).c_str());
+        // 使用StringBuilder优化数值输出
+        string_builder_.clear();
+        string_builder_.append(worksheet_->getZoom());
+        writer.writeAttribute("zoomScale", string_builder_.view());
     }
     
     // 网格线
@@ -197,10 +212,16 @@ void WorksheetXMLGenerator::generateSheetViews(XMLStreamWriter& writer) {
         auto freeze_info = worksheet_->getFreezeInfo();
         writer.startElement("pane");
         if (freeze_info.col > 0) {
-            writer.writeAttribute("xSplit", fmt::format("{}", freeze_info.col).c_str());
+            // 使用StringBuilder优化数值输出
+            string_builder_.clear();
+            string_builder_.append(freeze_info.col);
+            writer.writeAttribute("xSplit", string_builder_.view());
         }
         if (freeze_info.row > 0) {
-            writer.writeAttribute("ySplit", fmt::format("{}", freeze_info.row).c_str());
+            // 使用StringBuilder优化数值输出
+            string_builder_.clear();
+            string_builder_.append(freeze_info.row);
+            writer.writeAttribute("ySplit", string_builder_.view());
         }
         
         // Excel 常见行为：冻结首行时 topLeftCell = A2；冻结首列时 = B1；同时冻结 = B2
@@ -242,8 +263,14 @@ void WorksheetXMLGenerator::generateColumns(XMLStreamWriter& writer) {
         
         // 生成合并后的<col>标签
         writer.startElement("col");
-        writer.writeAttribute("min", fmt::format("{}", min_col + 1).c_str());
-        writer.writeAttribute("max", fmt::format("{}", max_col + 1).c_str());
+        // 使用StringBuilder优化数值输出
+        string_builder_.clear();
+        string_builder_.append(min_col + 1);
+        writer.writeAttribute("min", string_builder_.view());
+        
+        string_builder_.clear();
+        string_builder_.append(max_col + 1);
+        writer.writeAttribute("max", string_builder_.view());
         
         if (info.width > 0) {
             writer.writeAttribute("width", fmt::format("{}", info.width).c_str());
@@ -509,7 +536,7 @@ void WorksheetXMLGenerator::generateDrawing(XMLStreamWriter& writer) {
 
 // 流式模式生成方法
 
-void WorksheetXMLGenerator::generateStreaming(const std::function<void(const char*, size_t)>& callback) {
+void WorksheetXMLGenerator::generateStreaming(const std::function<void(const std::string&)>& callback) {
     // 使用XMLStreamWriter替代字符串拼接，提高性能
     XMLStreamWriter writer(callback);
     

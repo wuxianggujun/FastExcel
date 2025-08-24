@@ -2,6 +2,8 @@
 #pragma once
 
 #include "fastexcel/xml/XMLStreamWriter.hpp"
+#include "fastexcel/utils/StringViewOptimized.hpp"
+#include "fastexcel/utils/SafeBuffer.hpp"
 #include <functional>
 #include <memory>
 #include <string>
@@ -44,6 +46,10 @@ private:
     const core::SharedStringTable* sst_;
     const core::FormatRepository* format_repo_;
     GenerationMode mode_;
+    
+    // 内存优化组件
+    mutable utils::StringViewOptimized::StringBuilder string_builder_;
+    mutable utils::SafeBuffer<8192> safe_buffer_;
 
 public:
     /**
@@ -63,13 +69,13 @@ public:
      * @brief 生成完整的工作表XML
      * @param callback 输出回调函数
      */
-    void generate(const std::function<void(const char*, size_t)>& callback);
+    void generate(const std::function<void(const std::string&)>& callback);
     
     /**
      * @brief 生成工作表关系XML
      * @param callback 输出回调函数
      */
-    void generateRelationships(const std::function<void(const char*, size_t)>& callback);
+    void generateRelationships(const std::function<void(const std::string&)>& callback);
     
     // 配置方法
     
@@ -92,7 +98,7 @@ private:
      * @brief 批量模式生成工作表XML
      * @param callback 输出回调函数
      */
-    void generateBatch(const std::function<void(const char*, size_t)>& callback);
+    void generateBatch(const std::function<void(const std::string&)>& callback);
     
     /**
      * @brief 生成工作表视图
@@ -142,7 +148,7 @@ private:
      * @brief 流式模式生成工作表XML
      * @param callback 输出回调函数
      */
-    void generateStreaming(const std::function<void(const char*, size_t)>& callback);
+    void generateStreaming(const std::function<void(const std::string&)>& callback);
     
     /**
      * @brief 流式生成单元格数据

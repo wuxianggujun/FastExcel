@@ -100,7 +100,7 @@ static void writeSchemeColor(xml::XMLStreamWriter& w, const char* tag, const cor
 
 std::string Theme::toXML() const {
     std::string out;
-    xml::XMLStreamWriter writer([&](const char* data, size_t size) { out.append(data, size); });
+    xml::XMLStreamWriter writer([&](const std::string& data) { out.append(data); });
 
     writer.startDocument();
     writer.startElement("a:theme");

@@ -21,7 +21,7 @@ namespace fastexcel { namespace xml {
 
 static bool writeWithCallback(IFileWriter& writer,
                               const std::string& path,
-                              const std::function<void(const std::function<void(const char*, size_t)>&)>& gen) {
+                              const std::function<void(const std::function<void(const std::string&)>&)>& gen) {
     FASTEXCEL_LOG_DEBUG("writeWithCallback: Attempting to open streaming file: {}", path);
     if (!writer.openStreamingFile(path)) {
         FASTEXCEL_LOG_ERROR("Failed to open streaming file: {}", path);
@@ -30,10 +30,10 @@ static bool writeWithCallback(IFileWriter& writer,
     
     FASTEXCEL_LOG_DEBUG("writeWithCallback: Successfully opened streaming file: {}", path);
     try {
-        auto cb = [&writer](const char* data, size_t sz){
-            if (sz == 0 || data == nullptr) return; // 忽略空块
-            if (!writer.writeStreamingChunk(data, sz)) {
-                FASTEXCEL_LOG_ERROR("Failed to write streaming chunk ({} bytes)", sz);
+        auto cb = [&writer](const std::string& data){
+            if (data.empty()) return; // 忽略空块
+            if (!writer.writeStreamingChunk(data.data(), data.size())) {
+                FASTEXCEL_LOG_ERROR("Failed to write streaming chunk ({} bytes)", data.size());
                 throw std::runtime_error("writeStreamingChunk failed");
             }
         };
@@ -60,7 +60,7 @@ public:
     }
     bool generatePart(const std::string& part, const XMLContextView& ctx, IFileWriter& writer) override {
         if (part != "[Content_Types].xml") return false;
-        return writeWithCallback(writer, part, [&ctx](auto& cb){
+        return writeWithCallback(writer, part, [&ctx](const std::function<void(const std::string&)>& cb){
             XMLStreamWriter w(cb);
             w.startDocument();
             w.startElement("Types");
@@ -114,7 +114,7 @@ public:
                 }
             }
             w.endElement();
-            w.flushBuffer();
+            w.flush();
         });
     }
 };
@@ -127,7 +127,7 @@ public:
     }
     bool generatePart(const std::string& part, const XMLContextView& ctx, IFileWriter& writer) override {
         if (part != "_rels/.rels") return false;
-        return writeWithCallback(writer, part, [&ctx](auto& cb){
+        return writeWithCallback(writer, part, [&ctx](const std::function<void(const std::string&)>& cb){
             XMLStreamWriter w(cb); w.startDocument();
             w.startElement("Relationships"); w.writeAttribute("xmlns", "http://schemas.openxmlformats.org/package/2006/relationships");
             auto rel = [&](const char* id, const char* type, const char* target){ w.startElement("Relationship"); w.writeAttribute("Id", id); w.writeAttribute("Type", type); w.writeAttribute("Target", target); w.endElement(); };
@@ -138,7 +138,7 @@ public:
             if (ctx.workbook && ctx.workbook->hasCustomProperties()) {
                 rel("rId4", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/custom-properties", "docProps/custom.xml");
             }
-            w.endElement(); w.flushBuffer();
+            w.endElement(); w.flush();
         });
     }
 };
@@ -151,7 +151,7 @@ public:
     }
     bool generatePart(const std::string& part, const XMLContextView& ctx, IFileWriter& writer) override {
         if (part == "xl/_rels/workbook.xml.rels") {
-            return writeWithCallback(writer, part, [&ctx](auto& cb){
+            return writeWithCallback(writer, part, [&ctx](const std::function<void(const std::string&)>& cb){
                 XMLStreamWriter w(cb); w.startDocument();
                 w.startElement("Relationships"); w.writeAttribute("xmlns", "http://schemas.openxmlformats.org/package/2006/relationships");
                 int rId = 1;
@@ -169,11 +169,11 @@ public:
                 if (ctx.workbook && ctx.workbook->getOptions().use_shared_strings) {
                     w.startElement("Relationship"); w.writeAttribute("Id", fmt::format("rId{}", rId++).c_str()); w.writeAttribute("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings"); w.writeAttribute("Target", "sharedStrings.xml"); w.endElement();
                 }
-                w.endElement(); w.flushBuffer();
+                w.endElement(); w.flush();
             });
         }
         if (part == "xl/workbook.xml") {
-            return writeWithCallback(writer, part, [&ctx](auto& cb){
+            return writeWithCallback(writer, part, [&ctx](const std::function<void(const std::string&)>& cb){
                 XMLStreamWriter w(cb); w.startDocument();
                 w.startElement("workbook");
                 w.writeAttribute("xmlns", "http://schemas.openxmlformats.org/spreadsheetml/2006/main");
@@ -195,7 +195,7 @@ public:
                 w.endElement(); // 结束 sheets
                 w.startElement("calcPr"); w.writeAttribute("calcId", "124519"); w.writeAttribute("fullCalcOnLoad", "1"); w.endElement(); // calcPr
                 w.endElement(); // 结束 workbook
-                w.flushBuffer();
+                w.flush();
             });
         }
         return false;
@@ -211,7 +211,7 @@ public:
     bool generatePart(const std::string& part, const XMLContextView& ctx, IFileWriter& writer) override {
         if (part != "xl/styles.xml") return false;
         if (!ctx.format_repo) return true; // 无样式也可视为成功（生成空或默认）
-        return writeWithCallback(writer, part, [&ctx](auto& cb){ StyleSerializer::serialize(*ctx.format_repo, cb); });
+        return writeWithCallback(writer, part, [&ctx](const std::function<void(const std::string&)>& cb){ StyleSerializer::serialize(*ctx.format_repo, cb); });
     }
 };
 
@@ -224,12 +224,12 @@ public:
     }
     bool generatePart(const std::string& part, const XMLContextView& ctx, IFileWriter& writer) override {
         if (part != "xl/sharedStrings.xml") return false;
-        return writeWithCallback(writer, part, [&ctx](auto& cb){
+        return writeWithCallback(writer, part, [&ctx](const std::function<void(const std::string&)>& cb){
             if (ctx.sst) {
                 ctx.sst->generateXML(cb);
             } else {
                 XMLStreamWriter w(cb); w.startDocument();
-                w.startElement("sst"); w.writeAttribute("xmlns", "http://schemas.openxmlformats.org/spreadsheetml/2006/main"); w.writeAttribute("count", 0); w.writeAttribute("uniqueCount", 0); w.endElement(); w.flushBuffer();
+                w.startElement("sst"); w.writeAttribute("xmlns", "http://schemas.openxmlformats.org/spreadsheetml/2006/main"); w.writeAttribute("count", 0); w.writeAttribute("uniqueCount", 0); w.endElement(); w.flush();
             }
         });
     }
@@ -265,14 +265,14 @@ public:
     }
     bool generatePart(const std::string& part, const XMLContextView& ctx, IFileWriter& writer) override {
         if (part == "docProps/core.xml") {
-            return writeWithCallback(writer, part, [&](auto& cb){ DocPropsXMLGenerator::generateCoreXML(ctx.workbook, cb); });
+            return writeWithCallback(writer, part, [&](const std::function<void(const std::string&)>& cb){ DocPropsXMLGenerator::generateCoreXML(ctx.workbook, cb); });
         }
         if (part == "docProps/app.xml") {
-            return writeWithCallback(writer, part, [&](auto& cb){ DocPropsXMLGenerator::generateAppXML(ctx.workbook, cb); });
+            return writeWithCallback(writer, part, [&](const std::function<void(const std::string&)>& cb){ DocPropsXMLGenerator::generateAppXML(ctx.workbook, cb); });
         }
         if (part == "docProps/custom.xml") {
             FASTEXCEL_LOG_INFO("DocPropsGenerator: Generating custom.xml");
-            bool result = writeWithCallback(writer, part, [&](auto& cb){ DocPropsXMLGenerator::generateCustomXML(ctx.workbook, cb); });
+            bool result = writeWithCallback(writer, part, [&](const std::function<void(const std::string&)>& cb){ DocPropsXMLGenerator::generateCustomXML(ctx.workbook, cb); });
             FASTEXCEL_LOG_INFO("DocPropsGenerator: custom.xml generation result: {}", result);
             return result;
         }
@@ -321,7 +321,7 @@ public:
 
         // 使用现有 WorksheetXMLGenerator 流式输出
         WorksheetXMLGenerator gen(ws.get());
-        return writeWithCallback(writer, part, [&](auto& cb){ gen.generate(cb); });
+        return writeWithCallback(writer, part, [&](const std::function<void(const std::string&)>& cb){ gen.generate(cb); });
     }
 };
 
@@ -363,8 +363,8 @@ public:
         // 使用专门的WorksheetXMLGenerator来生成关系XML
         WorksheetXMLGenerator generator(ws.get());
         std::string rels_xml;
-        generator.generateRelationships([&rels_xml](const char* data, size_t size){ 
-            rels_xml.append(data, size); 
+        generator.generateRelationships([&rels_xml](const std::string& data){ 
+            rels_xml.append(data); 
         });
         
         if (rels_xml.empty()) return true; // 无关系则不写文件
@@ -423,7 +423,7 @@ public:
         DrawingXMLGenerator gen(&images, idx + 1);
         FASTEXCEL_LOG_DEBUG("Generating drawing XML for {} images using DrawingXMLGenerator", images.size());
         
-        return writeWithCallback(writer, part, [&gen](auto& cb){
+        return writeWithCallback(writer, part, [&gen](const std::function<void(const std::string&)>& cb){
             gen.generateDrawingXML(cb, true); // 强制生成，因为已经检查过图片存在
         });
     }
@@ -473,7 +473,7 @@ public:
         if (!ws || ws->getImages().empty()) return false;
         
         // 生成绘图关系XML
-        return writeWithCallback(writer, part, [&](auto& cb){
+        return writeWithCallback(writer, part, [&](const std::function<void(const std::string&)>& cb){
             XMLStreamWriter w(cb);
             w.startDocument();
             w.startElement("Relationships");
@@ -499,7 +499,7 @@ public:
             }
             
             w.endElement();
-            w.flushBuffer();
+            w.flush();
         });
     }
 };

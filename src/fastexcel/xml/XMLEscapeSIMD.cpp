@@ -70,14 +70,14 @@ void XMLEscapeSIMD::escapeAttributesScalar(const char* text, size_t length, Writ
         }
         
         if (i > last_write_pos) {
-            writer(text + last_write_pos, i - last_write_pos);
+            writer(std::string(text + last_write_pos, i - last_write_pos));
         }
-        writer(replacement, replacement_len);
+        writer(std::string(replacement, replacement_len));
         last_write_pos = i + 1;
     }
     
     if (last_write_pos < length) {
-        writer(text + last_write_pos, length - last_write_pos);
+        writer(std::string(text + last_write_pos, length - last_write_pos));
     }
 }
 
@@ -106,14 +106,14 @@ void XMLEscapeSIMD::escapeDataScalar(const char* text, size_t length, WriteCallb
         }
         
         if (i > last_write_pos) {
-            writer(text + last_write_pos, i - last_write_pos);
+            writer(std::string(text + last_write_pos, i - last_write_pos));
         }
-        writer(replacement, replacement_len);
+        writer(std::string(replacement, replacement_len));
         last_write_pos = i + 1;
     }
     
     if (last_write_pos < length) {
-        writer(text + last_write_pos, length - last_write_pos);
+        writer(std::string(text + last_write_pos, length - last_write_pos));
     }
 }
 
@@ -179,9 +179,9 @@ void XMLEscapeSIMD::escapeAttributesSIMD(const char* text, size_t length, WriteC
                 }
                 
                 if (i + j > last_write_pos) {
-                    writer(text + last_write_pos, (i + j) - last_write_pos);
+                    writer(std::string(text + last_write_pos, (i + j) - last_write_pos));
                 }
-                writer(replacement, replacement_len);
+                writer(std::string(replacement, replacement_len));
                 last_write_pos = i + j + 1;
             }
         }
@@ -205,14 +205,14 @@ void XMLEscapeSIMD::escapeAttributesSIMD(const char* text, size_t length, WriteC
         }
         
         if (i > last_write_pos) {
-            writer(text + last_write_pos, i - last_write_pos);
+            writer(std::string(text + last_write_pos, i - last_write_pos));
         }
-        writer(replacement, replacement_len);
+        writer(std::string(replacement, replacement_len));
         last_write_pos = i + 1;
     }
     
     if (last_write_pos < length) {
-        writer(text + last_write_pos, length - last_write_pos);
+        writer(std::string(text + last_write_pos, length - last_write_pos));
     }
 }
 
@@ -256,9 +256,9 @@ void XMLEscapeSIMD::escapeDataSIMD(const char* text, size_t length, WriteCallbac
                 }
                 
                 if (i + j > last_write_pos) {
-                    writer(text + last_write_pos, (i + j) - last_write_pos);
+                    writer(std::string(text + last_write_pos, (i + j) - last_write_pos));
                 }
-                writer(replacement, replacement_len);
+                writer(std::string(replacement, replacement_len));
                 last_write_pos = i + j + 1;
             }
         }
@@ -279,14 +279,14 @@ void XMLEscapeSIMD::escapeDataSIMD(const char* text, size_t length, WriteCallbac
         }
         
         if (i > last_write_pos) {
-            writer(text + last_write_pos, i - last_write_pos);
+            writer(std::string(text + last_write_pos, i - last_write_pos));
         }
-        writer(replacement, replacement_len);
+        writer(std::string(replacement, replacement_len));
         last_write_pos = i + 1;
     }
     
     if (last_write_pos < length) {
-        writer(text + last_write_pos, length - last_write_pos);
+        writer(std::string(text + last_write_pos, length - last_write_pos));
     }
 }
 

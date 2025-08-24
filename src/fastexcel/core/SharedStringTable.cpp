@@ -82,7 +82,7 @@ void SharedStringTable::clear() {
     next_id_ = 0;
 }
 
-void SharedStringTable::generateXML(const std::function<void(const char*, size_t)>& callback) const {
+void SharedStringTable::generateXML(const std::function<void(const std::string&)>& callback) const {
     xml::XMLStreamWriter writer(callback);
     writer.startDocument();
     writer.startElement("sst");

@@ -642,18 +642,18 @@ FreezePanes Worksheet::getFreezeInfo() const {
 
 // XML生成
 
-void Worksheet::generateXML(const std::function<void(const char*, size_t)>& callback) const {
+void Worksheet::generateXML(const std::function<void(const std::string&)>& callback) const {
     // 使用独立的WorksheetXMLGenerator生成XML
     auto generator = xml::WorksheetXMLGeneratorFactory::create(this);
     generator->generate(callback);
 }
 
-void Worksheet::generateXMLBatch(const std::function<void(const char*, size_t)>& callback) const {
+void Worksheet::generateXMLBatch(const std::function<void(const std::string&)>& callback) const {
     auto generator = xml::WorksheetXMLGeneratorFactory::createBatch(this);
     generator->generate(callback);
 }
 
-void Worksheet::generateXMLStreaming(const std::function<void(const char*, size_t)>& callback) const {
+void Worksheet::generateXMLStreaming(const std::function<void(const std::string&)>& callback) const {
     auto generator = xml::WorksheetXMLGeneratorFactory::createStreaming(this);
     generator->generate(callback);
 }

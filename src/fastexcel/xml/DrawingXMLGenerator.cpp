@@ -25,7 +25,7 @@ DrawingXMLGenerator::DrawingXMLGenerator(const std::vector<std::unique_ptr<core:
     : images_(images), drawing_id_(drawing_id) {
 }
 
-void DrawingXMLGenerator::generateDrawingXML(const std::function<void(const char*, size_t)>& callback, 
+void DrawingXMLGenerator::generateDrawingXML(const std::function<void(const std::string&)>& callback, 
                                              bool forceGenerate) const {
     if (!forceGenerate && !hasImages()) {
         FASTEXCEL_LOG_DEBUG("No images to generate drawing XML");
@@ -56,7 +56,7 @@ void DrawingXMLGenerator::generateDrawingXML(const std::function<void(const char
     writer.endElement(); // xdr:wsDr
     
     // 保证 XML 数据被完整写入
-    writer.flushBuffer();
+    writer.flush();
     
     FASTEXCEL_LOG_DEBUG("Generated drawing XML with {} images", image_index);
 }
@@ -68,15 +68,15 @@ void DrawingXMLGenerator::generateDrawingXMLToFile(const std::string& filename) 
         return;
     }
     
-    generateDrawingXML([&file](const char* data, size_t size) {
-        file.write(data, size);
+    generateDrawingXML([&file](const std::string& data) {
+        file.write(data.data(), data.size());
     });
     
     file.close();
     FASTEXCEL_LOG_DEBUG("Drawing XML written to file: {}", filename);
 }
 
-void DrawingXMLGenerator::generateDrawingRelsXML(const std::function<void(const char*, size_t)>& callback) const {
+void DrawingXMLGenerator::generateDrawingRelsXML(const std::function<void(const std::string&)>& callback) const {
     if (!hasImages()) {
         FASTEXCEL_LOG_DEBUG("No images to generate drawing relationships XML");
         return;
@@ -116,8 +116,8 @@ void DrawingXMLGenerator::generateDrawingRelsXMLToFile(const std::string& filena
         return;
     }
     
-    generateDrawingRelsXML([&file](const char* data, size_t size) {
-        file.write(data, size);
+    generateDrawingRelsXML([&file](const std::string& data) {
+        file.write(data.data(), data.size());
     });
     
     file.close();

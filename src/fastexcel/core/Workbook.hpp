@@ -24,6 +24,10 @@
 #include "StyleTransferContext.hpp"
 #include "StyleBuilder.hpp"
 #include "SharedStringTable.hpp"
+// 内存优化组件
+#include "fastexcel/memory/MemoryPoolOptimized.hpp"
+#include "fastexcel/utils/SafeConstruction.hpp"
+#include "fastexcel/utils/StringViewOptimized.hpp"
 #include <string>
 #include <vector>
 #include <map>
@@ -98,6 +102,16 @@ private:
     // 专门管理器（职责分离）
     std::unique_ptr<WorkbookDocumentManager> document_manager_;
     std::unique_ptr<WorkbookSecurityManager> security_manager_;
+    
+    // 内存优化组件
+    utils::LazyInitializer<memory::FixedSizePool<Cell, 2048>> cell_pool_;
+    utils::LazyInitializer<memory::FixedSizePool<FormatDescriptor, 512>> format_pool_;
+    mutable utils::StringPool string_pool_;
+    
+    // 性能统计
+    mutable size_t cell_allocations_ = 0;
+    mutable size_t format_allocations_ = 0;
+    mutable size_t string_optimizations_ = 0;
     std::unique_ptr<WorkbookDataManager> data_manager_;
     
     // 配置选项
@@ -1507,6 +1521,163 @@ public:
      * @return 优化的项目数
      */
     size_t optimize();
+    
+    /**
+     * @brief 内存池优化的Cell创建
+     */
+    template<typename... Args>
+    std::unique_ptr<Cell> createOptimizedCell(Args&&... args) {
+        if (!cell_pool_.isInitialized()) {
+            cell_pool_.initialize();
+        }
+        
+        Cell* cell = cell_pool_.get().allocate(std::forward<Args>(args)...);
+        ++cell_allocations_;
+        
+        return std::unique_ptr<Cell>(cell);
+    }
+    
+    /**
+     * @brief 内存池优化的FormatDescriptor创建
+     */
+    template<typename... Args>
+    std::unique_ptr<FormatDescriptor> createOptimizedFormat(Args&&... args) {
+        if (!format_pool_.isInitialized()) {
+            format_pool_.initialize();
+        }
+        
+        FormatDescriptor* format = format_pool_.get().allocate(std::forward<Args>(args)...);
+        ++format_allocations_;
+        
+        return std::unique_ptr<FormatDescriptor>(format);
+    }
+    
+    /**
+     * @brief 基础单元格值设置方法
+     */
+    void setCellValue(int row, int col, const std::string& value) {
+        // Get the first worksheet if available, or throw error
+        if (worksheet_manager_->count() == 0) {
+            addSheet("Sheet1");
+        }
+        auto sheet = worksheet_manager_->getByIndex(0);
+        if (sheet) {
+            sheet->setCellValue(row, col, value);
+        }
+    }
+    
+    void setCellValue(int row, int col, double value) {
+        // Get the first worksheet if available, or throw error
+        if (worksheet_manager_->count() == 0) {
+            addSheet("Sheet1");
+        }
+        auto sheet = worksheet_manager_->getByIndex(0);
+        if (sheet) {
+            sheet->setCellValue(row, col, value);
+        }
+    }
+    
+    void setCellValue(int row, int col, int value) {
+        setCellValue(row, col, static_cast<double>(value));
+    }
+    
+    void setCellValue(int row, int col, bool value) {
+        // Get the first worksheet if available, or throw error
+        if (worksheet_manager_->count() == 0) {
+            addSheet("Sheet1");
+        }
+        auto sheet = worksheet_manager_->getByIndex(0);
+        if (sheet) {
+            sheet->setCellValue(row, col, value);
+        }
+    }
+    
+    /**
+     * @brief 字符串优化的设置方法
+     */
+    void setCellValueOptimized(int row, int col, std::string_view value) {
+        // 使用字符串池避免重复分配
+        const std::string* pooled_string = string_pool_.intern(value);
+        ++string_optimizations_;
+        
+        // 使用优化的值设置
+        setCellValue(row, col, *pooled_string);
+    }
+    
+    /**
+     * @brief 使用StringJoiner优化的复合值设置
+     */
+    void setCellComplexValue(int row, int col, 
+                           const std::vector<std::string_view>& parts,
+                           std::string_view separator = " ") {
+        std::string result;
+        bool first = true;
+        for (const auto& part : parts) {
+            if (!first) {
+                result += separator;
+            }
+            result += part;
+            first = false;
+        }
+        setCellValueOptimized(row, col, std::string_view(result));
+    }
+    
+    /**
+     * @brief 使用StringBuilder优化的格式化值设置
+     */
+    template<typename... Args>
+    void setCellFormattedValue(int row, int col, const char* format, Args&&... args) {
+        std::string formatted = utils::StringViewOptimized::format(format, std::forward<Args>(args)...);
+        setCellValueOptimized(row, col, formatted);
+    }
+    
+    /**
+     * @brief 获取内存使用统计
+     */
+    struct MemoryStats {
+        size_t cell_allocations;
+        size_t format_allocations;
+        size_t string_optimizations;
+        size_t cell_pool_usage;
+        size_t format_pool_usage;
+        size_t string_pool_size;
+    };
+    
+    MemoryStats getMemoryStats() const {
+        MemoryStats stats{};
+        stats.cell_allocations = cell_allocations_;
+        stats.format_allocations = format_allocations_;
+        stats.string_optimizations = string_optimizations_;
+        
+        if (cell_pool_.isInitialized()) {
+            stats.cell_pool_usage = cell_pool_.get().getCurrentUsage();
+        }
+        
+        if (format_pool_.isInitialized()) {
+            stats.format_pool_usage = format_pool_.get().getCurrentUsage();
+        }
+        
+        stats.string_pool_size = string_pool_.size();
+        
+        return stats;
+    }
+    
+    /**
+     * @brief 内存收缩（释放未使用的内存）
+     */
+    void shrinkMemory() {
+        if (cell_pool_.isInitialized()) {
+            cell_pool_.get().shrink();
+        }
+        
+        if (format_pool_.isInitialized()) {
+            format_pool_.get().shrink();
+        }
+        
+        string_pool_.clear();
+        
+        FASTEXCEL_LOG_DEBUG("Memory shrinking completed for Workbook");
+    }
 
 private:
     // 文档属性通过 WorkbookDocumentManager 管理

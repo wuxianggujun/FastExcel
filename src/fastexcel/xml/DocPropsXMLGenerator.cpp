@@ -13,7 +13,7 @@ namespace xml {
 // 公共静态方法实现
 
 void DocPropsXMLGenerator::generateCoreXML(const core::Workbook* workbook,
-                                           const std::function<void(const char*, size_t)>& callback) {
+                                           const std::function<void(const std::string&)>& callback) {
     if (!workbook) {
         FASTEXCEL_LOG_WARN("DocPropsXMLGenerator::generateCoreXML - workbook is null");
         return;
@@ -102,7 +102,7 @@ void DocPropsXMLGenerator::generateCoreXML(const core::Workbook* workbook,
 }
 
 void DocPropsXMLGenerator::generateAppXML(const core::Workbook* workbook,
-                                         const std::function<void(const char*, size_t)>& callback) {
+                                         const std::function<void(const std::string&)>& callback) {
     if (!workbook) {
         FASTEXCEL_LOG_WARN("DocPropsXMLGenerator::generateAppXML - workbook is null");
         return;
@@ -166,7 +166,7 @@ void DocPropsXMLGenerator::generateAppXML(const core::Workbook* workbook,
 }
 
 void DocPropsXMLGenerator::generateCustomXML(const core::Workbook* workbook,
-                                            const std::function<void(const char*, size_t)>& callback) {
+                                            const std::function<void(const std::string&)>& callback) {
     if (!workbook) {
         FASTEXCEL_LOG_WARN("DocPropsXMLGenerator::generateCustomXML - workbook is null");
         return;

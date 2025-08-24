@@ -31,7 +31,7 @@ public:
      * @param callback 数据输出回调函数
      */
     static void serialize(const core::FormatRepository& repository,
-                         const std::function<void(const char*, size_t)>& callback);
+                         const std::function<void(const std::string&)>& callback);
     
     /**
      * @brief 序列化样式信息到文件

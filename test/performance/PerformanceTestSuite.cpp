@@ -954,8 +954,8 @@ void SharedFormulaPerformanceTest::testSharedFormulaXMLGeneration() {
         
         // 生成XML（模拟）
         std::string xml_output;
-        worksheet->generateXML([&](const char* data, size_t size) {
-            xml_output.append(data, size);
+        worksheet->generateXML([&](const std::string& data) {
+            xml_output.append(data);
         });
         
         volatile auto size = xml_output.size();

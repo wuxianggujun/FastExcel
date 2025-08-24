@@ -1476,7 +1476,7 @@ private:
      * @brief 生成工作表XML到回调函数（使用UnifiedXMLGenerator）
      * @param callback 数据写入回调函数
      */
-    void generateXML(const std::function<void(const char*, size_t)>& callback) const;
+    void generateXML(const std::function<void(const std::string&)>& callback) const;
     
     // 工具方法
     
@@ -2035,8 +2035,8 @@ private:
     
     // XML生成辅助方法 - 已移至UnifiedXMLGenerator
     // 保留这些方法声明用于向后兼容，但实际实现由 UnifiedXMLGenerator 负责
-    void generateXMLBatch(const std::function<void(const char*, size_t)>& callback) const;
-    void generateXMLStreaming(const std::function<void(const char*, size_t)>& callback) const;
+    void generateXMLBatch(const std::function<void(const std::string&)>& callback) const;
+    void generateXMLStreaming(const std::function<void(const std::string&)>& callback) const;
     
     // 内部状态管理
     void updateUsedRange(int row, int col);

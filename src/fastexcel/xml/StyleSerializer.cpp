@@ -11,7 +11,7 @@ void StyleSerializer::serialize(const core::FormatRepository& repository,
 }
 
 void StyleSerializer::serialize(const core::FormatRepository& repository,
-                               const std::function<void(const char*, size_t)>& callback) {
+                               const std::function<void(const std::string&)>& callback) {
     xml::XMLStreamWriter writer(callback);
     serialize(repository, writer);
 }

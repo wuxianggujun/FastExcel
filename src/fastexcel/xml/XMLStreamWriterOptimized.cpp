@@ -1,5 +1,5 @@
-#include "XMLStreamWriter.hpp"
-#include "fastexcel/utils/XMLUtils.hpp"
+#include "XMLStreamWriterOptimized.hpp"
+#include "fastexcel/xml/XMLEscapeSIMD.hpp"
 #include "fastexcel/core/Exception.hpp"
 #include <sstream>
 #include <iomanip>
@@ -8,40 +8,40 @@
 namespace fastexcel {
 namespace xml {
 
-XMLStreamWriter::XMLStreamWriter() {
+XMLStreamWriterOptimized::XMLStreamWriterOptimized() {
     try {
         initializeInternal();
         output_mode_ = OutputMode::MEMORY_BUFFER;
-        FASTEXCEL_LOG_DEBUG("XMLStreamWriter created in memory buffer mode");
+        FASTEXCEL_LOG_DEBUG("XMLStreamWriterOptimized created in memory buffer mode");
     } catch (...) {
         cleanupInternal();
         throw;
     }
 }
 
-XMLStreamWriter::XMLStreamWriter(const std::string& filename) {
+XMLStreamWriterOptimized::XMLStreamWriterOptimized(const std::string& filename) {
     try {
         initializeInternal();
         switchToFileMode(filename);
-        FASTEXCEL_LOG_DEBUG("XMLStreamWriter created with file: {}", filename);
+        FASTEXCEL_LOG_DEBUG("XMLStreamWriterOptimized created with file: {}", filename);
     } catch (...) {
         cleanupInternal();
         throw;
     }
 }
 
-XMLStreamWriter::XMLStreamWriter(WriteCallback callback) {
+XMLStreamWriterOptimized::XMLStreamWriterOptimized(WriteCallback callback) {
     try {
         initializeInternal();
         switchToCallbackMode(std::move(callback));
-        FASTEXCEL_LOG_DEBUG("XMLStreamWriter created with callback mode");
+        FASTEXCEL_LOG_DEBUG("XMLStreamWriterOptimized created with callback mode");
     } catch (...) {
         cleanupInternal();
         throw;
     }
 }
 
-XMLStreamWriter::~XMLStreamWriter() {
+XMLStreamWriterOptimized::~XMLStreamWriterOptimized() {
     try {
         if (!buffer_.empty()) {
             flush();
@@ -55,14 +55,14 @@ XMLStreamWriter::~XMLStreamWriter() {
         
         cleanupInternal();
         
-        FASTEXCEL_LOG_DEBUG("XMLStreamWriter destroyed. Bytes written: {}, Flushes: {}", 
+        FASTEXCEL_LOG_DEBUG("XMLStreamWriterOptimized destroyed. Bytes written: {}, Flushes: {}", 
                            bytes_written_, flush_count_);
     } catch (...) {
         // 析构函数中不抛出异常
     }
 }
 
-XMLStreamWriter::XMLStreamWriter(XMLStreamWriter&& other) noexcept
+XMLStreamWriterOptimized::XMLStreamWriterOptimized(XMLStreamWriterOptimized&& other) noexcept
     : buffer_(std::move(other.buffer_))
     , file_wrapper_(std::move(other.file_wrapper_))
     , output_mode_(other.output_mode_)
@@ -81,7 +81,7 @@ XMLStreamWriter::XMLStreamWriter(XMLStreamWriter&& other) noexcept
     other.flush_count_ = 0;
 }
 
-XMLStreamWriter& XMLStreamWriter::operator=(XMLStreamWriter&& other) noexcept {
+XMLStreamWriterOptimized& XMLStreamWriterOptimized::operator=(XMLStreamWriterOptimized&& other) noexcept {
     if (this != &other) {
         // 清理当前资源
         try {
@@ -114,7 +114,10 @@ XMLStreamWriter& XMLStreamWriter::operator=(XMLStreamWriter&& other) noexcept {
     return *this;
 }
 
-void XMLStreamWriter::initializeInternal() {    
+void XMLStreamWriterOptimized::initializeInternal() {
+    // 初始化SIMD转义器
+    XMLEscapeSIMD::initialize();
+    
     // 设置缓冲区刷新回调
     initializeBuffer();
     
@@ -127,7 +130,7 @@ void XMLStreamWriter::initializeInternal() {
     flush_count_ = 0;
 }
 
-void XMLStreamWriter::cleanupInternal() noexcept {
+void XMLStreamWriterOptimized::cleanupInternal() noexcept {
     try {
         pending_attributes_.clear();
         memory_buffer_.clear();
@@ -137,7 +140,7 @@ void XMLStreamWriter::cleanupInternal() noexcept {
     }
 }
 
-void XMLStreamWriter::initializeBuffer() {
+void XMLStreamWriterOptimized::initializeBuffer() {
     auto flush_callback = [this](const char* data, size_t length) {
         flushToOutput(data, length);
     };
@@ -146,7 +149,7 @@ void XMLStreamWriter::initializeBuffer() {
     buffer_.setAutoFlush(true);
 }
 
-void XMLStreamWriter::flushToOutput(const char* data, size_t length) {
+void XMLStreamWriterOptimized::flushToOutput(const char* data, size_t length) {
     if (length == 0) return;
     
     bytes_written_ += length;
@@ -161,7 +164,7 @@ void XMLStreamWriter::flushToOutput(const char* data, size_t length) {
                     throw core::FileException(
                         "Failed to write data to file",
                         "",
-                        core::ErrorCode::FileWriteError,
+                        core::ErrorCode::WriteError,
                         __FILE__, __LINE__
                     );
                 }
@@ -184,7 +187,7 @@ void XMLStreamWriter::flushToOutput(const char* data, size_t length) {
     }
 }
 
-void XMLStreamWriter::switchToFileMode(const std::string& filename) {
+void XMLStreamWriterOptimized::switchToFileMode(const std::string& filename) {
     // 先刷新当前缓冲区
     flush();
     
@@ -201,7 +204,7 @@ void XMLStreamWriter::switchToFileMode(const std::string& filename) {
     }
 }
 
-void XMLStreamWriter::switchToCallbackMode(WriteCallback callback) {
+void XMLStreamWriterOptimized::switchToCallbackMode(WriteCallback callback) {
     if (!callback) {
         throw core::ParameterException(
             "Callback cannot be null",
@@ -221,7 +224,7 @@ void XMLStreamWriter::switchToCallbackMode(WriteCallback callback) {
     FASTEXCEL_LOG_DEBUG("Switched to callback mode");
 }
 
-void XMLStreamWriter::switchToMemoryMode() {
+void XMLStreamWriterOptimized::switchToMemoryMode() {
     // 先刷新当前缓冲区
     flush();
     
@@ -233,14 +236,14 @@ void XMLStreamWriter::switchToMemoryMode() {
     FASTEXCEL_LOG_DEBUG("Switched to memory buffer mode");
 }
 
-void XMLStreamWriter::startDocument(const std::string& encoding) {
+void XMLStreamWriterOptimized::startDocument(const std::string& encoding) {
     std::string declaration = "<?xml version=\"1.0\" encoding=\"" + encoding + "\"?>\n";
     buffer_.append(declaration);
     
     FASTEXCEL_LOG_DEBUG("Started XML document with encoding: {}", encoding);
 }
 
-void XMLStreamWriter::endDocument() {
+void XMLStreamWriterOptimized::endDocument() {
     // 确保所有元素都已关闭
     while (!element_stack_.empty()) {
         FASTEXCEL_LOG_WARN("Auto-closing unclosed element: {}", element_stack_.top());
@@ -253,7 +256,7 @@ void XMLStreamWriter::endDocument() {
     FASTEXCEL_LOG_DEBUG("Ended XML document");
 }
 
-void XMLStreamWriter::startElement(const std::string& name) {
+void XMLStreamWriterOptimized::startElement(const std::string& name) {
     if (name.empty()) {
         throw core::ParameterException(
             "Element name cannot be empty",
@@ -273,7 +276,7 @@ void XMLStreamWriter::startElement(const std::string& name) {
     FASTEXCEL_LOG_TRACE("Started element: {}", name);
 }
 
-void XMLStreamWriter::endElement() {
+void XMLStreamWriterOptimized::endElement() {
     if (element_stack_.empty()) {
         throw core::OperationException(
             "No element to close",
@@ -301,7 +304,7 @@ void XMLStreamWriter::endElement() {
     FASTEXCEL_LOG_TRACE("Ended element: {}", element_name);
 }
 
-void XMLStreamWriter::writeEmptyElement(const std::string& name) {
+void XMLStreamWriterOptimized::writeEmptyElement(const std::string& name) {
     if (name.empty()) {
         throw core::ParameterException(
             "Element name cannot be empty",
@@ -320,7 +323,7 @@ void XMLStreamWriter::writeEmptyElement(const std::string& name) {
     FASTEXCEL_LOG_TRACE("Wrote empty element: {}", name);
 }
 
-void XMLStreamWriter::writeAttribute(const std::string& name, const std::string& value) {
+void XMLStreamWriterOptimized::writeAttribute(const std::string& name, const std::string& value) {
     if (!in_element_) {
         throw core::OperationException(
             "Cannot write attribute outside of element",
@@ -343,11 +346,11 @@ void XMLStreamWriter::writeAttribute(const std::string& name, const std::string&
     FASTEXCEL_LOG_TRACE("Added attribute: {}=\"{}\"", name, value);
 }
 
-void XMLStreamWriter::writeAttribute(const std::string& name, int value) {
+void XMLStreamWriterOptimized::writeAttribute(const std::string& name, int value) {
     writeAttribute(name, std::to_string(value));
 }
 
-void XMLStreamWriter::writeAttribute(const std::string& name, double value) {
+void XMLStreamWriterOptimized::writeAttribute(const std::string& name, double value) {
     std::ostringstream oss;
     oss << std::fixed << std::setprecision(6) << value;
     std::string str = oss.str();
@@ -361,15 +364,11 @@ void XMLStreamWriter::writeAttribute(const std::string& name, double value) {
     writeAttribute(name, str);
 }
 
-void XMLStreamWriter::writeAttribute(const std::string& name, bool value) {
+void XMLStreamWriterOptimized::writeAttribute(const std::string& name, bool value) {
     writeAttribute(name, value ? "true" : "false");
 }
 
-void XMLStreamWriter::writeAttribute(const std::string& name, std::string_view value) {
-    writeAttribute(name, std::string(value));
-}
-
-void XMLStreamWriter::writeText(const std::string& text) {
+void XMLStreamWriterOptimized::writeText(const std::string& text) {
     if (text.empty()) {
         return;
     }
@@ -380,14 +379,14 @@ void XMLStreamWriter::writeText(const std::string& text) {
     FASTEXCEL_LOG_TRACE("Wrote text: {}", text.substr(0, std::min(text.size(), size_t(50))));
 }
 
-void XMLStreamWriter::writeRaw(const std::string& data) {
+void XMLStreamWriterOptimized::writeRaw(const std::string& data) {
     ensureElementClosed();
     buffer_.append(data);
     
     FASTEXCEL_LOG_TRACE("Wrote raw data: {}", data.substr(0, std::min(data.size(), size_t(50))));
 }
 
-void XMLStreamWriter::writeCDATA(const std::string& data) {
+void XMLStreamWriterOptimized::writeCDATA(const std::string& data) {
     ensureElementClosed();
     buffer_.append("<![CDATA[");
     buffer_.append(data);
@@ -396,7 +395,7 @@ void XMLStreamWriter::writeCDATA(const std::string& data) {
     FASTEXCEL_LOG_TRACE("Wrote CDATA: {}", data.substr(0, std::min(data.size(), size_t(50))));
 }
 
-void XMLStreamWriter::writeComment(const std::string& comment) {
+void XMLStreamWriterOptimized::writeComment(const std::string& comment) {
     ensureElementClosed();
     buffer_.append("<!-- ");
     buffer_.append(comment);
@@ -405,17 +404,17 @@ void XMLStreamWriter::writeComment(const std::string& comment) {
     FASTEXCEL_LOG_TRACE("Wrote comment: {}", comment);
 }
 
-void XMLStreamWriter::startAttributeBatch() {
+void XMLStreamWriterOptimized::startAttributeBatch() {
     // 预留更多属性空间
     pending_attributes_.reserve(pending_attributes_.size() + 32);
 }
 
-void XMLStreamWriter::endAttributeBatch() {
+void XMLStreamWriterOptimized::endAttributeBatch() {
     // 属性批处理结束，可以进行优化处理
     writeAttributesToBuffer();
 }
 
-void XMLStreamWriter::flush() {
+void XMLStreamWriterOptimized::flush() {
     buffer_.flush();
     
     // 如果是文件模式，同时刷新文件缓冲区
@@ -424,7 +423,7 @@ void XMLStreamWriter::flush() {
     }
 }
 
-void XMLStreamWriter::clear() {
+void XMLStreamWriterOptimized::clear() {
     buffer_.clear();
     
     // 清理状态
@@ -444,7 +443,7 @@ void XMLStreamWriter::clear() {
     FASTEXCEL_LOG_DEBUG("XMLStreamWriter cleared");
 }
 
-std::string XMLStreamWriter::toString() const {
+std::string XMLStreamWriterOptimized::toString() const {
     if (output_mode_ != OutputMode::MEMORY_BUFFER) {
         FASTEXCEL_LOG_WARN("toString() called in non-memory mode");
         return "";
@@ -459,22 +458,22 @@ std::string XMLStreamWriter::toString() const {
     return result;
 }
 
-bool XMLStreamWriter::isEmpty() const {
+bool XMLStreamWriterOptimized::isEmpty() const {
     return buffer_.empty() && 
            (output_mode_ != OutputMode::MEMORY_BUFFER || memory_buffer_.empty()) &&
            bytes_written_ == 0;
 }
 
-void XMLStreamWriter::setAutoFlush(bool auto_flush) {
+void XMLStreamWriterOptimized::setAutoFlush(bool auto_flush) {
     buffer_.setAutoFlush(auto_flush);
     FASTEXCEL_LOG_DEBUG("Auto flush set to: {}", auto_flush);
 }
 
-void XMLStreamWriter::reserveAttributeCapacity(size_t capacity) {
+void XMLStreamWriterOptimized::reserveAttributeCapacity(size_t capacity) {
     pending_attributes_.reserve(capacity);
 }
 
-void XMLStreamWriter::ensureElementClosed() {
+void XMLStreamWriterOptimized::ensureElementClosed() {
     if (in_element_) {
         writeAttributesToBuffer();
         buffer_.append('>');
@@ -482,27 +481,79 @@ void XMLStreamWriter::ensureElementClosed() {
     }
 }
 
-void XMLStreamWriter::writeAttributesToBuffer() {
+void XMLStreamWriterOptimized::writeAttributesToBuffer() {
     for (const auto& attr : pending_attributes_) {
         buffer_.append(' ');
         buffer_.append(attr.key);
         buffer_.append("=\"");
         writeEscapedAttribute(attr.value);
-        buffer_.append('"');
+        buffer_.append('\"');
     }
     pending_attributes_.clear();
 }
 
-void XMLStreamWriter::writeEscapedAttribute(const std::string& value) {
-    // 直接使用XMLUtils工具类进行转义
-    std::string escaped = utils::XMLUtils::escapeXML(value);
-    buffer_.append(escaped);
+void XMLStreamWriterOptimized::writeEscapedAttribute(const std::string& value) {
+    // 使用SIMD优化的转义
+    if (XMLEscapeSIMD::isAvailable()) {
+        std::string escaped = XMLEscapeSIMD::escapeAttribute(value);
+        buffer_.append(escaped);
+    } else {
+        // 回退到标准转义
+        for (char c : value) {
+            switch (c) {
+            case '<': buffer_.append("&lt;"); break;
+            case '>': buffer_.append("&gt;"); break;
+            case '&': buffer_.append("&amp;"); break;
+            case '\"': buffer_.append("&quot;"); break;
+            case '\'': buffer_.append("&apos;"); break;
+            default: buffer_.append(c); break;
+            }
+        }
+    }
 }
 
-void XMLStreamWriter::writeEscapedText(const std::string& text) {
-    // 直接使用XMLUtils工具类进行转义
-    std::string escaped = utils::XMLUtils::escapeXML(text);
-    buffer_.append(escaped);
+void XMLStreamWriterOptimized::writeEscapedText(const std::string& text) {
+    // 使用SIMD优化的转义
+    if (XMLEscapeSIMD::isAvailable()) {
+        std::string escaped = XMLEscapeSIMD::escapeText(text);
+        buffer_.append(escaped);
+    } else {
+        // 回退到标准转义
+        for (char c : text) {
+            switch (c) {
+            case '<': buffer_.append("&lt;"); break;
+            case '>': buffer_.append("&gt;"); break;
+            case '&': buffer_.append("&amp;"); break;
+            default: buffer_.append(c); break;
+            }
+        }
+    }
+}
+
+// XMLWriterFactory 实现
+
+std::unique_ptr<XMLStreamWriterOptimized> XMLWriterFactory::createFileWriter(const std::string& filename) {
+    return std::make_unique<XMLStreamWriterOptimized>(filename);
+}
+
+std::unique_ptr<XMLStreamWriterOptimized> XMLWriterFactory::createCallbackWriter(XMLStreamWriterOptimized::WriteCallback callback) {
+    return std::make_unique<XMLStreamWriterOptimized>(std::move(callback));
+}
+
+std::unique_ptr<XMLStreamWriterOptimized> XMLWriterFactory::createMemoryWriter() {
+    return std::make_unique<XMLStreamWriterOptimized>();
+}
+
+std::pair<std::unique_ptr<XMLStreamWriterOptimized>, std::string> 
+XMLWriterFactory::createTempFileWriter(const std::string& prefix) {
+    // 创建临时文件
+    utils::TempFileWrapper temp_file(prefix, ".xml");
+    std::string temp_path = temp_file.getPath();
+    
+    // 创建写入器
+    auto writer = std::make_unique<XMLStreamWriterOptimized>(temp_path);
+    
+    return {std::move(writer), std::move(temp_path)};
 }
 
 } // namespace xml

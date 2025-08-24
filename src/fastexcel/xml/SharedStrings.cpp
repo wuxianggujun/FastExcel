@@ -32,7 +32,7 @@ std::string SharedStrings::getString(int index) const {
     return "";
 }
 
-void SharedStrings::generate(const std::function<void(const char*, size_t)>& callback) const {
+void SharedStrings::generate(const std::function<void(const std::string&)>& callback) const {
     XMLStreamWriter writer(callback);
     writer.startDocument();
     writer.startElement("sst");
