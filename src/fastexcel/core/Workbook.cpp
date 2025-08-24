@@ -1073,7 +1073,10 @@ bool Workbook::shouldGenerateDocPropsApp() const {
 
 bool Workbook::shouldGenerateDocPropsCustom() const {
     // 只有在真正有自定义属性时才需要生成 custom.xml
-    return !getAllProperties().empty();
+    // 通过 WorkbookDocumentManager 查询自定义属性集合，避免误判
+    if (!document_manager_) return false;
+    auto props = document_manager_->getAllCustomProperties();
+    return !props.empty();
 }
 
 bool Workbook::shouldGenerateSheet(size_t index) const {

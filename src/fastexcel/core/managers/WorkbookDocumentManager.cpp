@@ -304,7 +304,8 @@ std::unordered_map<std::string, std::string> WorkbookDocumentManager::getAllCust
     result.reserve(custom_properties_.size());
     
     for (const auto& [name, property] : custom_properties_) {
-        result[name] = property.asString();
+        std::string value = property.asString();
+        result[name] = value;
     }
     
     return result;

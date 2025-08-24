@@ -1026,6 +1026,15 @@ public:
     }
     
     /**
+     * @brief 添加自定义属性（字符串字面量）- 优先匹配字符串字面量
+     * @param name 属性名
+     * @param value 属性值
+     */
+    void setProperty(const std::string& name, const char* value) {
+        if (document_manager_) document_manager_->setCustomProperty(name, std::string(value));
+    }
+    
+    /**
      * @brief 添加自定义属性（数字）
      * @param name 属性名
      * @param value 属性值
@@ -1288,6 +1297,21 @@ public:
     const DocumentProperties& getDocumentProperties() const { 
         static DocumentProperties empty_properties;
         return document_manager_ ? document_manager_->getDocumentProperties() : empty_properties; 
+    }
+
+    /**
+     * @brief 是否存在自定义属性（docProps/custom.xml）
+     */
+    bool hasCustomProperties() const {
+        return document_manager_ && (document_manager_->getCustomPropertyCount() > 0);
+    }
+
+    /**
+     * @brief 获取所有自定义属性（名称->字符串值）
+     */
+    std::unordered_map<std::string, std::string> getAllCustomProperties() const {
+        if (!document_manager_) return {};
+        return document_manager_->getAllCustomProperties();
     }
     
     /**

@@ -1,7 +1,7 @@
-#include "../src/fastexcel/core/CSVProcessor.hpp"
-#include "../src/fastexcel/core/Workbook.hpp"
-#include "../src/fastexcel/core/Worksheet.hpp"
-#include "../src/fastexcel/core/Path.hpp"
+#include "fastexcel/core/CSVProcessor.hpp"
+#include "fastexcel/core/Workbook.hpp"
+#include "fastexcel/core/Worksheet.hpp"
+#include "fastexcel/core/Path.hpp"
 #include <iostream>
 #include <string>
 
@@ -12,7 +12,7 @@ int main() {
         std::cout << "=== FastExcel CSV功能测试 ===" << std::endl;
         
         // 1. 创建工作簿和工作表
-        auto workbook = Workbook::create(Path("test_workbook.xlsx"));
+        auto workbook = Workbook::create("test_workbook.xlsx");
         auto worksheet = workbook->addSheet("测试数据");
         
         // 2. 添加测试数据
@@ -79,7 +79,7 @@ int main() {
         
         // 7. 测试CSV加载
         std::cout << "\n测试CSV加载..." << std::endl;
-        auto new_workbook = Workbook::create(Path("test_loaded.xlsx"));
+        auto new_workbook = Workbook::create("test_loaded.xlsx");
         auto loaded_sheet = new_workbook->loadCSV(csv_filepath, "加载的数据", options);
         
         if (loaded_sheet) {

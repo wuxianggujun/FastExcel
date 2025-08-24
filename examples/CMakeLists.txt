@@ -13,6 +13,7 @@ set(EXAMPLE_SOURCES
         minimal_test.cpp
         step_test.cpp
         debug_xml_generation.cpp
+        advanced_features_isolation.cpp
 )
 
 # 为每个示例创建可执行文件

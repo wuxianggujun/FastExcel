@@ -9,15 +9,13 @@ class SharedFormulaBenchmark : public PerformanceBenchmark {
 protected:
     void SetUp() override {
         PerformanceBenchmark::SetUp();
-        workbook_ = fastexcel::core::Workbook::create(fastexcel::core::Path("benchmark_test.xlsx"));
-        workbook_->open();
-        worksheet_ = workbook_->addWorksheet("BenchmarkTest");
+        workbook_ = fastexcel::core::Workbook::create("benchmark_test.xlsx");
+        worksheet_ = workbook_->addSheet("BenchmarkTest");
     }
 
     void TearDown() override {
         if (workbook_) {
             workbook_->save();
-            workbook_->close();
         }
         PerformanceBenchmark::TearDown();
     }
@@ -32,8 +30,8 @@ TEST_F(SharedFormulaBenchmark, CreateSharedFormulaPerformance) {
     
     // 创建基础数据
     for (int i = 0; i < FORMULA_COUNT; ++i) {
-        worksheet_->writeNumber(i, 0, i + 1);
-        worksheet_->writeNumber(i, 1, (i + 1) * 2);
+        worksheet_->setValue(i, 0, static_cast<double>(i + 1));
+        worksheet_->setValue(i, 1, static_cast<double>((i + 1) * 2));
     }
     
     auto start = std::chrono::high_resolution_clock::now();
@@ -58,14 +56,14 @@ TEST_F(SharedFormulaBenchmark, FormulaOptimizationPerformance) {
     
     // 添加基础数据
     for (int i = 0; i < FORMULA_COUNT; ++i) {
-        worksheet_->writeNumber(i, 0, i + 1);
-        worksheet_->writeNumber(i, 1, (i + 1) * 2);
+        worksheet_->setValue(i, 0, static_cast<double>(i + 1));
+        worksheet_->setValue(i, 1, static_cast<double>((i + 1) * 2));
     }
     
     // 添加相似的普通公式
     for (int i = 0; i < FORMULA_COUNT; ++i) {
         std::string formula = "A" + std::to_string(i + 1) + "+B" + std::to_string(i + 1);
-        worksheet_->writeFormula(i, 2, formula);
+        worksheet_->getCell(i, 2).setFormula(formula);
     }
     
     auto start = std::chrono::high_resolution_clock::now();
@@ -90,8 +88,8 @@ TEST_F(SharedFormulaBenchmark, LargeSharedFormulaPerformance) {
     
     // 添加基础数据（前两列）
     for (int i = 0; i < ROWS; ++i) {
-        worksheet_->writeNumber(i, 0, i + 1);
-        worksheet_->writeNumber(i, 1, (i + 1) * 2);
+        worksheet_->setValue(i, 0, static_cast<double>(i + 1));
+        worksheet_->setValue(i, 1, static_cast<double>((i + 1) * 2));
     }
     
     auto start = std::chrono::high_resolution_clock::now();
@@ -116,23 +114,23 @@ TEST_F(SharedFormulaBenchmark, PatternDetectionPerformance) {
     
     // 首先添加基础数据到D列和E列，避免循环引用
     for (int i = 0; i < PATTERN_COUNT; ++i) {
-        worksheet_->writeNumber(i, 3, i + 1);        // D列：1, 2, 3, ...
-        worksheet_->writeNumber(i, 4, (i + 1) * 2);  // E列：2, 4, 6, ...
+        worksheet_->setValue(i, 3, static_cast<double>(i + 1));        // D列：1, 2, 3, ...
+        worksheet_->setValue(i, 4, static_cast<double>((i + 1) * 2));  // E列：2, 4, 6, ...
     }
     
     // 创建三种不同的公式模式（避免自引用）
     for (int i = 0; i < PATTERN_COUNT; ++i) {
         // 模式1: 加法公式 (D1+E1, D2+E2, ...) - 引用有数据的列
         std::string formula1 = "D" + std::to_string(i + 1) + "+E" + std::to_string(i + 1);
-        worksheet_->writeFormula(i, 0, formula1);
+        worksheet_->getCell(i, 0).setFormula(formula1);
         
         // 模式2: 乘法公式 (D1*E1, D2*E2, ...) - 引用有数据的列
         std::string formula2 = "D" + std::to_string(i + 1) + "*E" + std::to_string(i + 1);
-        worksheet_->writeFormula(i, 1, formula2);
+        worksheet_->getCell(i, 1).setFormula(formula2);
         
         // 模式3: SUM函数公式 (SUM(D1:E1), SUM(D2:E2), ...) - 引用有数据的范围
         std::string formula3 = "SUM(D" + std::to_string(i + 1) + ":E" + std::to_string(i + 1) + ")";
-        worksheet_->writeFormula(i, 2, formula3);
+        worksheet_->getCell(i, 2).setFormula(formula3);
     }
     
     auto start = std::chrono::high_resolution_clock::now();

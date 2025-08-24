@@ -47,7 +47,10 @@ public:
         result.append(xml::XMLEscapes::APOS, xml::XMLEscapes::APOS_LEN);
         break;
       default:
-        if (c < 0x20 && c != 0x09 && c != 0x0A && c != 0x0D) {
+        // 只过滤真正的控制字符，不要过滤UTF-8多字节字符
+        // 使用unsigned char比较避免负数问题
+        unsigned char uc = static_cast<unsigned char>(c);
+        if (uc < 0x20 && uc != 0x09 && uc != 0x0A && uc != 0x0D) {
           continue; // 跳过无效控制字符
         }
         result.push_back(c);

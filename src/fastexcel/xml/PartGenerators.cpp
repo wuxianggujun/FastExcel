@@ -22,11 +22,13 @@ namespace fastexcel { namespace xml {
 static bool writeWithCallback(IFileWriter& writer,
                               const std::string& path,
                               const std::function<void(const std::function<void(const char*, size_t)>&)>& gen) {
+    FASTEXCEL_LOG_DEBUG("writeWithCallback: Attempting to open streaming file: {}", path);
     if (!writer.openStreamingFile(path)) {
         FASTEXCEL_LOG_ERROR("Failed to open streaming file: {}", path);
         return false;
     }
     
+    FASTEXCEL_LOG_DEBUG("writeWithCallback: Successfully opened streaming file: {}", path);
     try {
         auto cb = [&writer](const char* data, size_t sz){
             if (sz == 0 || data == nullptr) return; // 忽略空块
@@ -36,10 +38,12 @@ static bool writeWithCallback(IFileWriter& writer,
             }
         };
         gen(cb);
+        FASTEXCEL_LOG_DEBUG("writeWithCallback: Content generation completed for: {}", path);
         if (!writer.closeStreamingFile()) {
             FASTEXCEL_LOG_ERROR("Failed to close streaming file: {}", path);
             return false;
         }
+        FASTEXCEL_LOG_DEBUG("writeWithCallback: Successfully closed streaming file: {}", path);
         return true;
     } catch (const std::exception& e) {
         FASTEXCEL_LOG_ERROR("Exception during streaming generation for {}: {}", path, e.what());
@@ -72,6 +76,10 @@ public:
             // 添加 docProps 的内容类型声明
             w.startElement("Override"); w.writeAttribute("PartName", "/docProps/core.xml"); w.writeAttribute("ContentType", "application/vnd.openxmlformats-package.core-properties+xml"); w.endElement();
             w.startElement("Override"); w.writeAttribute("PartName", "/docProps/app.xml"); w.writeAttribute("ContentType", "application/vnd.openxmlformats-officedocument.extended-properties+xml"); w.endElement();
+            // 如果有自定义属性，添加 custom.xml 的内容类型声明
+            if (ctx.workbook && ctx.workbook->hasCustomProperties()) {
+                w.startElement("Override"); w.writeAttribute("PartName", "/docProps/custom.xml"); w.writeAttribute("ContentType", "application/vnd.openxmlformats-officedocument.custom-properties+xml"); w.endElement();
+            }
             w.startElement("Override"); w.writeAttribute("PartName", "/xl/workbook.xml"); w.writeAttribute("ContentType", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"); w.endElement();
             w.startElement("Override"); w.writeAttribute("PartName", "/xl/styles.xml"); w.writeAttribute("ContentType", "application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"); w.endElement();
             if (ctx.workbook) {
@@ -97,6 +105,13 @@ public:
                     w.writeAttribute("ContentType", "application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml");
                     w.endElement();
                 }
+                // 自定义属性（存在时才声明）
+                if (ctx.workbook->hasCustomProperties()) {
+                    w.startElement("Override");
+                    w.writeAttribute("PartName", "/docProps/custom.xml");
+                    w.writeAttribute("ContentType", "application/vnd.openxmlformats-officedocument.custom-properties+xml");
+                    w.endElement();
+                }
             }
             w.endElement();
             w.flushBuffer();
@@ -111,15 +126,18 @@ public:
         return {"_rels/.rels"};
     }
     bool generatePart(const std::string& part, const XMLContextView& ctx, IFileWriter& writer) override {
-        (void)ctx;
         if (part != "_rels/.rels") return false;
-        return writeWithCallback(writer, part, [](auto& cb){
+        return writeWithCallback(writer, part, [&ctx](auto& cb){
             XMLStreamWriter w(cb); w.startDocument();
             w.startElement("Relationships"); w.writeAttribute("xmlns", "http://schemas.openxmlformats.org/package/2006/relationships");
             auto rel = [&](const char* id, const char* type, const char* target){ w.startElement("Relationship"); w.writeAttribute("Id", id); w.writeAttribute("Type", type); w.writeAttribute("Target", target); w.endElement(); };
             rel("rId1", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument", "xl/workbook.xml");
             rel("rId2", "http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties", "docProps/core.xml");
             rel("rId3", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties", "docProps/app.xml");
+            // 如果有自定义属性，添加 custom.xml 的关系
+            if (ctx.workbook && ctx.workbook->hasCustomProperties()) {
+                rel("rId4", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/custom-properties", "docProps/custom.xml");
+            }
             w.endElement(); w.flushBuffer();
         });
     }
@@ -253,7 +271,10 @@ public:
             return writeWithCallback(writer, part, [&](auto& cb){ DocPropsXMLGenerator::generateAppXML(ctx.workbook, cb); });
         }
         if (part == "docProps/custom.xml") {
-            return writeWithCallback(writer, part, [&](auto& cb){ DocPropsXMLGenerator::generateCustomXML(ctx.workbook, cb); });
+            FASTEXCEL_LOG_INFO("DocPropsGenerator: Generating custom.xml");
+            bool result = writeWithCallback(writer, part, [&](auto& cb){ DocPropsXMLGenerator::generateCustomXML(ctx.workbook, cb); });
+            FASTEXCEL_LOG_INFO("DocPropsGenerator: custom.xml generation result: {}", result);
+            return result;
         }
         return false;
     }
@@ -577,7 +598,7 @@ UnifiedXMLGenerator::~UnifiedXMLGenerator() = default;
 void UnifiedXMLGenerator::registerDefaultParts() {
     parts_.push_back(std::make_unique<ContentTypesGenerator>());
     parts_.push_back(std::make_unique<RootRelsGenerator>());
-    parts_.push_back(std::make_unique<DocPropsGenerator>());
+    parts_.push_back(std::make_unique<DocPropsGenerator>()); // 添加 DocProps 生成器
     parts_.push_back(std::make_unique<StylesGenerator>());
     parts_.push_back(std::make_unique<SharedStringsGenerator>());
     parts_.push_back(std::make_unique<ThemeGenerator>());
@@ -616,13 +637,19 @@ bool UnifiedXMLGenerator::generateParts(IFileWriter& writer,
     view.theme = context_.workbook ? context_.workbook->getTheme() : nullptr;
 
     for (const auto& target : parts_to_generate) {
+        FASTEXCEL_LOG_DEBUG("UnifiedXMLGenerator: Attempting to generate part: {}", target);
         bool handled = false;
         for (auto& p : parts_) {
             // 查询该生成器可生成的部件集合
             auto names = p->partNames(view);
             for (const auto& n : names) {
                 if (n == target) {
-                    if (!p->generatePart(target, view, writer)) return false;
+                    FASTEXCEL_LOG_DEBUG("UnifiedXMLGenerator: Found generator for part: {}", target);
+                    if (!p->generatePart(target, view, writer)) {
+                        FASTEXCEL_LOG_ERROR("UnifiedXMLGenerator: Failed to generate part: {}", target);
+                        return false;
+                    }
+                    FASTEXCEL_LOG_DEBUG("UnifiedXMLGenerator: Successfully generated part: {}", target);
                     handled = true;
                     break;
                 }
@@ -630,6 +657,7 @@ bool UnifiedXMLGenerator::generateParts(IFileWriter& writer,
             if (handled) break;
         }
         if (!handled) {
+            FASTEXCEL_LOG_ERROR("UnifiedXMLGenerator: No generator found for part: {}", target);
             return false;
         }
     }

@@ -1,7 +1,7 @@
-#include "../src/fastexcel/core/CSVProcessor.hpp"
-#include "../src/fastexcel/core/Path.hpp"
-#include "../src/fastexcel/core/Workbook.hpp"
-#include "../src/fastexcel/core/Worksheet.hpp"
+#include "fastexcel/core/CSVProcessor.hpp"
+#include "fastexcel/core/Path.hpp"
+#include "fastexcel/core/Workbook.hpp"
+#include "fastexcel/core/Worksheet.hpp"
 #include <fstream>
 #include <iostream>
 
@@ -25,7 +25,7 @@ int main() {
         std::cout << "✅ 创建测试CSV文件: test_edge_cases.csv" << std::endl;
         
         // 2. 测试CSV读取和类型推断
-        auto workbook = Workbook::create(Path("test_result.xlsx"));
+        auto workbook = Workbook::create("test_result.xlsx");
         auto worksheet = workbook->loadCSV("test_edge_cases.csv", "边界测试");
         
         if (!worksheet) {
@@ -44,15 +44,15 @@ int main() {
         std::cout << "\n=== 类型推断验证 ===" << std::endl;
         
         // 检查数字类型
-        std::cout << "张三年龄 (B2): " << worksheet->getCellDisplayValue(1, 1) << std::endl;
-        std::cout << "李四年龄 (B3): " << worksheet->getCellDisplayValue(2, 1) << std::endl;
-        std::cout << "张三薪资 (C2): " << worksheet->getCellDisplayValue(1, 2) << std::endl;
-        std::cout << "王五薪资 (C4): " << worksheet->getCellDisplayValue(3, 2) << std::endl;
+        std::cout << "张三年龄 (B2): " << worksheet->getCell(1, 1).getValue<std::string>() << std::endl;
+        std::cout << "李四年龄 (B3): " << worksheet->getCell(2, 1).getValue<std::string>() << std::endl;
+        std::cout << "张三薪资 (C2): " << worksheet->getCell(1, 2).getValue<std::string>() << std::endl;
+        std::cout << "王五薪资 (C4): " << worksheet->getCell(3, 2).getValue<std::string>() << std::endl;
         
         // 检查布尔类型
-        std::cout << "张三是否全职 (D2): " << worksheet->getCellDisplayValue(1, 3) << std::endl;
-        std::cout << "李四是否全职 (D3): " << worksheet->getCellDisplayValue(2, 3) << std::endl;
-        std::cout << "王五是否全职 (D4): " << worksheet->getCellDisplayValue(3, 3) << std::endl;
+        std::cout << "张三是否全职 (D2): " << worksheet->getCell(1, 3).getValue<std::string>() << std::endl;
+        std::cout << "李四是否全职 (D3): " << worksheet->getCell(2, 3).getValue<std::string>() << std::endl;
+        std::cout << "王五是否全职 (D4): " << worksheet->getCell(3, 3).getValue<std::string>() << std::endl;
         
         // 5. 测试导出功能
         CSVOptions export_options;

@@ -173,12 +173,15 @@ void DocPropsXMLGenerator::generateCustomXML(const core::Workbook* workbook,
     }
 
     // 检查是否有自定义属性
-    auto custom_props = workbook->getAllProperties();
+    auto custom_props = workbook->getAllCustomProperties();
+    FASTEXCEL_LOG_INFO("DocPropsXMLGenerator::generateCustomXML - found {} custom properties", custom_props.size());
+    
     if (custom_props.empty()) {
-        FASTEXCEL_LOG_DEBUG("No custom properties found, skipping custom.xml generation");
+        FASTEXCEL_LOG_INFO("No custom properties found, skipping custom.xml generation");
         return;
     }
 
+    FASTEXCEL_LOG_INFO("DocPropsXMLGenerator::generateCustomXML - starting XML generation");
     XMLStreamWriter writer(callback);
     writeXMLHeader(writer);
 
@@ -187,7 +190,10 @@ void DocPropsXMLGenerator::generateCustomXML(const core::Workbook* workbook,
     writer.writeAttribute("xmlns:vt", "http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes");
 
     int pid = 2; // 属性ID从2开始
-    for (const auto& [name, value] : custom_props) {
+    for (const auto& prop : custom_props) {
+        const std::string& name = prop.first;
+        const std::string& value = prop.second;
+        
         writer.startElement("property");
         writer.writeAttribute("fmtid", "{D5CDD505-2E9C-101B-9397-08002B2CF9AE}");
         writer.writeAttribute("pid", std::to_string(pid++));
@@ -203,6 +209,8 @@ void DocPropsXMLGenerator::generateCustomXML(const core::Workbook* workbook,
 
     writer.endElement(); // Properties
     writer.endDocument();
+    
+    FASTEXCEL_LOG_INFO("DocPropsXMLGenerator::generateCustomXML - XML generation completed successfully");
 }
 
 // 私有辅助方法实现

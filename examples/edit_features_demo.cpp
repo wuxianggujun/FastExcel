@@ -356,11 +356,11 @@ void demonstrateAdvancedFeatures() {
         // 在分析表中添加汇总信息
         analysis_sheet->setValue(0, 0, std::string("数据分析报告"));
         analysis_sheet->setValue(2, 0, std::string("总销售额"));
-        analysis_sheet->getCell(2, 1).setFormula("SUM(销售数据.E:E)");
+        analysis_sheet->getCell(2, 1).setFormula("SUM('销售数据'!E:E)");
         analysis_sheet->setValue(3, 0, std::string("平均单价"));
-        analysis_sheet->getCell(3, 1).setFormula("AVERAGE(销售数据.D:D)");
+        analysis_sheet->getCell(3, 1).setFormula("AVERAGE('销售数据'!D:D)");
         analysis_sheet->setValue(4, 0, std::string("总销量"));
-        analysis_sheet->getCell(4, 1).setFormula("SUM(销售数据.C:C)");
+        analysis_sheet->getCell(4, 1).setFormula("SUM('销售数据'!C:C)");
         
         // 合并单元格
         analysis_sheet->mergeCells(0, 0, 0, 3);

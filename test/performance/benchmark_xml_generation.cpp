@@ -10,15 +10,13 @@ class XMLGenerationBenchmark : public PerformanceBenchmark {
 protected:
     void SetUp() override {
         PerformanceBenchmark::SetUp();
-        workbook_ = fastexcel::core::Workbook::create(fastexcel::core::Path("xml_benchmark_test.xlsx"));
-        workbook_->open();
-        worksheet_ = workbook_->addWorksheet("XMLBenchmark");
+        workbook_ = fastexcel::core::Workbook::create("xml_benchmark_test.xlsx");
+        worksheet_ = workbook_->addSheet("XMLBenchmark");
     }
 
     void TearDown() override {
         if (workbook_) {
             workbook_->save();
-            workbook_->close();
         }
         PerformanceBenchmark::TearDown();
     }
@@ -36,9 +34,9 @@ TEST_F(XMLGenerationBenchmark, XMLGenerationPerformance) {
     for (int row = 0; row < ROWS; ++row) {
         for (int col = 0; col < COLS; ++col) {
             if (col % 2 == 0) {
-                worksheet_->writeNumber(row, col, row * col + 1.5);
+                worksheet_->setValue(row, col, static_cast<double>(row * col + 1.5));
             } else {
-                worksheet_->writeString(row, col, "Cell_" + std::to_string(row) + "_" + std::to_string(col));
+                worksheet_->setValue(row, col, "Cell_" + std::to_string(row) + "_" + std::to_string(col));
             }
         }
     }
@@ -73,11 +71,11 @@ TEST_F(XMLGenerationBenchmark, LargeDataXMLPerformance) {
     for (int row = 0; row < ROWS; ++row) {
         for (int col = 0; col < COLS; ++col) {
             if (col % 3 == 0) {
-                worksheet_->writeNumber(row, col, row + col);
+                worksheet_->setValue(row, col, static_cast<double>(row + col));
             } else if (col % 3 == 1) {
-                worksheet_->writeString(row, col, "Data" + std::to_string(row));
+                worksheet_->setValue(row, col, "Data" + std::to_string(row));
             } else {
-                worksheet_->writeFormula(row, col, "A" + std::to_string(row + 1) + "+B" + std::to_string(row + 1));
+                worksheet_->getCell(row, col).setFormula("A" + std::to_string(row + 1) + "+B" + std::to_string(row + 1));
             }
         }
     }
@@ -109,8 +107,8 @@ TEST_F(XMLGenerationBenchmark, SharedFormulaXMLPerformance) {
     
     // 添加基础数据
     for (int i = 0; i < ROWS; ++i) {
-        worksheet_->writeNumber(i, 0, i + 1);
-        worksheet_->writeNumber(i, 1, (i + 1) * 2);
+        worksheet_->setValue(i, 0, static_cast<double>(i + 1));
+        worksheet_->setValue(i, 1, static_cast<double>((i + 1) * 2));
     }
     
     // 创建共享公式

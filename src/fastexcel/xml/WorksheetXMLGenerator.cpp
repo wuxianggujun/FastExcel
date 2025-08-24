@@ -11,6 +11,7 @@
 #include <fmt/format.h>
 #include <cstring>
 #include <algorithm>
+#include <cctype>
 
 namespace fastexcel {
 namespace xml {
@@ -107,12 +108,20 @@ void WorksheetXMLGenerator::generateBatch(const std::function<void(const char*, 
     writer.writeAttribute("xmlns", "http://schemas.openxmlformats.org/spreadsheetml/2006/main");
     writer.writeAttribute("xmlns:r", "http://schemas.openxmlformats.org/officeDocument/2006/relationships");
     
-    // 尺寸信息
+    // 尺寸信息（考虑合并区域扩展列/行）
     auto [max_row, max_col] = worksheet_->getUsedRange();
+    // 扩展到合并区域的最远行列
+    int dim_last_row = max_row;
+    int dim_last_col = max_col;
+    const auto& merge_ranges_for_dim = worksheet_->getMergeRanges();
+    for (const auto& rng : merge_ranges_for_dim) {
+        dim_last_row = std::max(dim_last_row, rng.last_row);
+        dim_last_col = std::max(dim_last_col, rng.last_col);
+    }
     writer.startElement("dimension");
-    if (max_row >= 0 && max_col >= 0) {
+    if (dim_last_row >= 0 && dim_last_col >= 0) {
         std::string ref = utils::CommonUtils::cellReference(0, 0) + ":" +
-                         utils::CommonUtils::cellReference(max_row, max_col);
+                         utils::CommonUtils::cellReference(dim_last_row, dim_last_col);
         writer.writeAttribute("ref", ref.c_str());
     } else {
         writer.writeAttribute("ref", "A1");
@@ -139,12 +148,13 @@ void WorksheetXMLGenerator::generateBatch(const std::function<void(const char*, 
     
     // 生成合并单元格
     generateMergeCells(writer);
-    
+
+    // 注意元素顺序：根据 SpreadsheetML schema，sheetProtection 应位于 autoFilter 之前。
+    // 先输出工作表保护，再输出自动筛选，避免 Excel 修复提示。
+    generateSheetProtection(writer);
+
     // 生成自动筛选
     generateAutoFilter(writer);
-    
-    // 生成工作表保护
-    generateSheetProtection(writer);
     
     // 生成图片绘图引用
     generateDrawing(writer);
@@ -192,10 +202,13 @@ void WorksheetXMLGenerator::generateSheetViews(XMLStreamWriter& writer) {
         if (freeze_info.row > 0) {
             writer.writeAttribute("ySplit", fmt::format("{}", freeze_info.row).c_str());
         }
-        if (freeze_info.top_left_row >= 0 && freeze_info.top_left_col >= 0) {
-            std::string top_left = utils::CommonUtils::cellReference(freeze_info.top_left_row, freeze_info.top_left_col);
-            writer.writeAttribute("topLeftCell", top_left.c_str());
-        }
+        
+        // Excel 常见行为：冻结首行时 topLeftCell = A2；冻结首列时 = B1；同时冻结 = B2
+        int top_left_row = freeze_info.row > 0 ? freeze_info.row : 0;
+        int top_left_col = freeze_info.col > 0 ? freeze_info.col : 0;
+        std::string top_left = utils::CommonUtils::cellReference(top_left_row, top_left_col);
+        writer.writeAttribute("topLeftCell", top_left.c_str());
+        
         writer.writeAttribute("state", "frozen");
         writer.endElement(); // pane
     }
@@ -323,7 +336,7 @@ void WorksheetXMLGenerator::generateSheetData(XMLStreamWriter& writer) {
                                     std::string range_ref = utils::CommonUtils::cellReference(range_first_row, range_first_col) + ":" +
                                                           utils::CommonUtils::cellReference(range_last_row, range_last_col);
                                     writer.writeAttribute("ref", range_ref.c_str());
-                                    writer.writeText(cell.getFormula().c_str());
+                                    writer.writeText(cell.getFormula());
                                 }
                                 // 其他单元格：只输出 si 属性，无内容
                                 
@@ -340,7 +353,7 @@ void WorksheetXMLGenerator::generateSheetData(XMLStreamWriter& writer) {
                     } else {
                         // 普通公式 - 不应该设置 t="str" 属性
                         writer.startElement("f");
-                        writer.writeText(cell.getFormula().c_str());
+                        writer.writeText(cell.getFormula());
                         writer.endElement(); // f
                         
                         // ⚠️ 修复：不输出普通公式缓存值，让Excel重新计算
@@ -418,17 +431,51 @@ void WorksheetXMLGenerator::generateAutoFilter(XMLStreamWriter& writer) {
     writer.endElement(); // autoFilter
 }
 
+namespace {
+// Excel 工作表保护密码哈希（与 Excel/Libxlsxwriter 一致的16位算法）
+static unsigned short hashExcelPassword(const std::string& pwd) {
+    if (pwd.empty()) return 0;
+    unsigned short hash = 0;
+    // 从末尾到开头处理字符，右移并轮转最低位，再异或字符值
+    for (int i = static_cast<int>(pwd.size()) - 1; i >= 0; --i) {
+        unsigned short low_bit = (hash & 0x0001);
+        hash >>= 1;
+        if (low_bit) hash |= 0x8000;
+        hash ^= static_cast<unsigned char>(pwd[static_cast<size_t>(i)]);
+    }
+    hash ^= 0xCE4B;
+    return hash;
+}
+
+static bool isFourHex(const std::string& s) {
+    if (s.size() != 4) return false;
+    for (char c : s) {
+        if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F'))) return false;
+    }
+    return true;
+}
+}
+
 void WorksheetXMLGenerator::generateSheetProtection(XMLStreamWriter& writer) {
     if (!worksheet_->isProtected()) return;
-    
+
     writer.startElement("sheetProtection");
     writer.writeAttribute("sheet", "1");
-    
+
     const std::string& password = worksheet_->getProtectionPassword();
     if (!password.empty()) {
-        writer.writeAttribute("password", password.c_str());
+        // 如果传入的是4位十六进制，认为已是哈希；否则计算哈希。
+        if (isFourHex(password)) {
+            // 规范化为大写
+            std::string upper = password;
+            for (auto& ch : upper) ch = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
+            writer.writeAttribute("password", upper.c_str());
+        } else {
+            unsigned short hash = hashExcelPassword(password);
+            writer.writeAttribute("password", fmt::format("{:04X}", hash).c_str());
+        }
     }
-    
+
     writer.endElement(); // sheetProtection
 }
 
@@ -471,13 +518,20 @@ void WorksheetXMLGenerator::generateStreaming(const std::function<void(const cha
     writer.writeAttribute("xmlns", "http://schemas.openxmlformats.org/spreadsheetml/2006/main");
     writer.writeAttribute("xmlns:r", "http://schemas.openxmlformats.org/officeDocument/2006/relationships");
     
-    // 尺寸信息
-    auto [max_row, max_col] = worksheet_->getUsedRange();
+    // 尺寸信息（考虑合并区域扩展列/行）
+    auto [max_row2, max_col2] = worksheet_->getUsedRange();
+    int dim_last_row2 = max_row2;
+    int dim_last_col2 = max_col2;
+    const auto& merge_ranges_stream = worksheet_->getMergeRanges();
+    for (const auto& rng : merge_ranges_stream) {
+        dim_last_row2 = std::max(dim_last_row2, rng.last_row);
+        dim_last_col2 = std::max(dim_last_col2, rng.last_col);
+    }
     writer.startElement("dimension");
-    if (max_row >= 0 && max_col >= 0) {
-        std::string ref = utils::CommonUtils::cellReference(0, 0) + ":" +
-                         utils::CommonUtils::cellReference(max_row, max_col);
-        writer.writeAttribute("ref", ref.c_str());
+    if (dim_last_row2 >= 0 && dim_last_col2 >= 0) {
+        std::string ref2 = utils::CommonUtils::cellReference(0, 0) + ":" +
+                          utils::CommonUtils::cellReference(dim_last_row2, dim_last_col2);
+        writer.writeAttribute("ref", ref2.c_str());
     } else {
         writer.writeAttribute("ref", "A1");
     }
@@ -522,7 +576,7 @@ void WorksheetXMLGenerator::generateStreaming(const std::function<void(const cha
     
     // 单元格数据（流式处理）
     writer.startElement("sheetData");
-    if (max_row >= 0 && max_col >= 0) {
+    if (max_row2 >= 0 && max_col2 >= 0) {
         generateSheetDataStreaming(writer);  // 传递writer引用
     }
     writer.endElement(); // sheetData
@@ -543,7 +597,10 @@ void WorksheetXMLGenerator::generateStreaming(const std::function<void(const cha
         
         writer.endElement(); // mergeCells
     }
-    
+    // 注意元素顺序一致性：先 sheetProtection 再 autoFilter
+    generateSheetProtection(writer);
+    generateAutoFilter(writer);
+
     // 生成图片绘图引用（流式模式）
     generateDrawing(writer);
     
@@ -657,7 +714,7 @@ void WorksheetXMLGenerator::generateCellXMLStreaming(XMLStreamWriter& writer, in
                             std::string range_ref = utils::CommonUtils::cellReference(range_first_row, range_first_col) + ":" +
                                                   utils::CommonUtils::cellReference(range_last_row, range_last_col);
                             writer.writeAttribute("ref", range_ref.c_str());
-                            writer.writeText(cell.getFormula().c_str());
+                            writer.writeText(cell.getFormula());
                         }
                         // 其他单元格：只输出 si 属性，无内容
                         
@@ -673,7 +730,7 @@ void WorksheetXMLGenerator::generateCellXMLStreaming(XMLStreamWriter& writer, in
             } else {
                 // 普通公式 - 不应该设置 t="str" 属性 
                 writer.startElement("f");
-                writer.writeText(cell.getFormula().c_str());
+                writer.writeText(cell.getFormula());
                 writer.endElement(); // f
                 
                 // ⚠️ 修复：不输出公式缓存值，让Excel重新计算
