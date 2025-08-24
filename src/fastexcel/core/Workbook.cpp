@@ -198,10 +198,7 @@ Workbook::Workbook(const Path& path) : filename_(path.string()) {
         document_manager_->setAuthor("FastExcel");
         document_manager_->setCompany("FastExcel Library");
         
-        // 初始化内存优化组件的统计
-        cell_allocations_ = 0;
-        format_allocations_ = 0;
-        string_optimizations_ = 0;
+        // 已移除：Workbook 层面的内存统计（统一使用内存池统计）
         
         // 成功构造，取消清理
         resource_manager.release();
@@ -217,13 +214,7 @@ Workbook::Workbook(const Path& path) : filename_(path.string()) {
 
 Workbook::~Workbook() {
     try {
-        // 打印内存使用统计
-        if (cell_allocations_ > 0 || format_allocations_ > 0 || string_optimizations_ > 0) {
-            FASTEXCEL_LOG_DEBUG("Workbook destroyed. Memory stats - "
-                              "Cell allocations: {}, Format allocations: {}, "
-                              "String optimizations: {}",
-                              cell_allocations_, format_allocations_, string_optimizations_);
-        }
+        // 已移除：Workbook 层面的统计打印
         
         close();
         

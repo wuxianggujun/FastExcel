@@ -106,10 +106,7 @@ private:
     // 统一内存管理器
     std::unique_ptr<memory::WorkbookMemoryManager> memory_manager_;
     
-    // 性能统计
-    mutable size_t cell_allocations_ = 0;
-    mutable size_t format_allocations_ = 0;
-    mutable size_t string_optimizations_ = 0;
+    // 性能统计（已移除）：改用各内存池自身统计
     std::unique_ptr<WorkbookDataManager> data_manager_;
     
     // 配置选项
@@ -1529,7 +1526,6 @@ public:
             memory_manager_ = std::make_unique<memory::WorkbookMemoryManager>();
         }
         
-        ++cell_allocations_;
         return memory_manager_->createOptimizedCell(std::forward<Args>(args)...);
     }
     
@@ -1542,7 +1538,6 @@ public:
             memory_manager_ = std::make_unique<memory::WorkbookMemoryManager>();
         }
         
-        ++format_allocations_;
         return memory_manager_->createOptimizedFormat(std::forward<Args>(args)...);
     }
     
@@ -1554,7 +1549,6 @@ public:
             memory_manager_ = std::make_unique<memory::WorkbookMemoryManager>();
         }
         
-        ++format_allocations_;
         return memory_manager_->createDefaultFormat();
     }
     
@@ -1608,7 +1602,6 @@ public:
         
         // 使用字符串池避免重复分配
         const std::string* pooled_string = memory_manager_->internString(value);
-        ++string_optimizations_;
         
         // 使用优化的值设置
         setCellValue(row, col, *pooled_string);
@@ -1641,37 +1634,7 @@ public:
         setCellValueOptimized(row, col, formatted);
     }
     
-    /**
-     * @brief 获取内存使用统计
-     */
-    struct MemoryStats {
-        size_t cell_allocations;
-        size_t format_allocations;
-        size_t string_optimizations;
-        size_t cell_pool_usage;
-        size_t format_pool_usage;
-        size_t string_pool_size;
-        size_t total_memory_usage;
-        double string_deduplication_ratio;
-    };
-    
-    MemoryStats getMemoryStats() const {
-        MemoryStats stats{};
-        stats.cell_allocations = cell_allocations_;
-        stats.format_allocations = format_allocations_;
-        stats.string_optimizations = string_optimizations_;
-        
-        if (memory_manager_) {
-            auto memory_stats = memory_manager_->getMemoryStatistics();
-            stats.cell_pool_usage = memory_stats.cell_stats.current_usage;
-            stats.format_pool_usage = memory_stats.format_stats.current_usage;
-            stats.string_pool_size = memory_stats.string_stats.total_unique_strings;
-            stats.total_memory_usage = memory_stats.total_memory_usage;
-            stats.string_deduplication_ratio = memory_stats.string_stats.deduplication_ratio;
-        }
-        
-        return stats;
-    }
+    // 已移除：Workbook 级别内存使用统计接口（统一使用内存池统计）
     
     /**
      * @brief 内存收缩（释放未使用的内存）
@@ -1750,6 +1713,7 @@ public:
     
     // 内部：根据编辑/透传状态返回"是否在编辑模式下且启用透传"
     bool isPassThroughEditMode() const { return file_source_ == FileSource::EXISTING_FILE && preserve_unknown_parts_; }
+
 };
 
 }} // namespace fastexcel::core
