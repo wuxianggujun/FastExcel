@@ -1,8 +1,8 @@
 #include "XMLStreamWriter.hpp"
 #include "fastexcel/utils/XMLUtils.hpp"
 #include "fastexcel/core/Exception.hpp"
-#include <sstream>
 #include <iomanip>
+#include <fmt/format.h>
 #include <algorithm>
 
 namespace fastexcel {
@@ -344,26 +344,31 @@ void XMLStreamWriter::writeAttribute(const std::string& name, const std::string&
 }
 
 void XMLStreamWriter::writeAttribute(const std::string& name, int value) {
-    writeAttribute(name, std::to_string(value));
+    // 直接将整数写入属性缓存，避免临时std::string
+    if (!in_element_) {
+        throw core::OperationException("Cannot write attribute outside of element","writeAttribute", core::ErrorCode::InvalidArgument, __FILE__, __LINE__);
+    }
+    pending_attributes_.emplace_back(name, fmt::format("{}", value));
 }
 
 void XMLStreamWriter::writeAttribute(const std::string& name, double value) {
-    std::ostringstream oss;
-    oss << std::fixed << std::setprecision(6) << value;
-    std::string str = oss.str();
-    
-    // 移除末尾的零
-    str.erase(str.find_last_not_of('0') + 1, std::string::npos);
-    if (str.back() == '.') {
-        str.pop_back();
+    if (!in_element_) {
+        throw core::OperationException("Cannot write attribute outside of element","writeAttribute", core::ErrorCode::InvalidArgument, __FILE__, __LINE__);
     }
-    
-    writeAttribute(name, str);
+    // 使用fmt的快速路径格式化，避免ostringstream
+    std::string str = fmt::format("{}", value);
+    // 可选：移除尾随零和点（保持与既有行为一致）
+    auto pos = str.find_last_not_of('0');
+    if (pos != std::string::npos && pos + 1 < str.size()) str.erase(pos + 1);
+    if (!str.empty() && str.back() == '.') str.pop_back();
+    pending_attributes_.emplace_back(name, std::move(str));
 }
 
 void XMLStreamWriter::writeAttribute(const std::string& name, bool value) {
-    // 显式转发到 string_view 重载，避免 const char* 到 bool 的标准转换导致递归
-    writeAttribute(name, std::string_view(value ? "true" : "false"));
+    if (!in_element_) {
+        throw core::OperationException("Cannot write attribute outside of element","writeAttribute", core::ErrorCode::InvalidArgument, __FILE__, __LINE__);
+    }
+    pending_attributes_.emplace_back(name, value ? std::string("1") : std::string("0"));
 }
 
 void XMLStreamWriter::writeAttribute(const std::string& name, std::string_view value) {
@@ -379,6 +384,24 @@ void XMLStreamWriter::writeText(const std::string& text) {
     writeEscapedText(text);
     
     FASTEXCEL_LOG_TRACE("Wrote text: {}", text.substr(0, std::min(text.size(), size_t(50))));
+}
+
+void XMLStreamWriter::writeText(int value) {
+    ensureElementClosed();
+    auto s = fmt::format("{}", value);
+    buffer_.append(s.c_str(), s.size());
+}
+
+void XMLStreamWriter::writeText(size_t value) {
+    ensureElementClosed();
+    auto s = fmt::format("{}", value);
+    buffer_.append(s.c_str(), s.size());
+}
+
+void XMLStreamWriter::writeText(double value) {
+    ensureElementClosed();
+    auto s = fmt::format("{}", value);
+    buffer_.append(s.c_str(), s.size());
 }
 
 void XMLStreamWriter::writeRaw(const std::string& data) {

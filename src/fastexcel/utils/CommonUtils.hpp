@@ -47,6 +47,42 @@ public:
     static std::string cellReference(int row, int col) {
         return columnToLetter(col) + std::to_string(row + 1);
     }
+
+    /**
+     * @brief 零分配快速生成单元格引用（如A1, B2），写入调用方提供的缓冲区
+     * @param row 行号（0开始）
+     * @param col 列号（0开始）
+     * @param buf 目标缓冲区指针（建议至少16字节）
+     * @param buf_size 缓冲区大小
+     * @param out_len 输出长度（返回时写入的字节数）
+     * @return std::string_view 指向buf中结果的视图
+     */
+    static std::string_view cellReferenceFast(int row, int col, char* buf, size_t buf_size, size_t& out_len) {
+        // 最坏情况 XFD1048576 长度 <= 11
+        if (buf_size < 16) {
+            throw std::invalid_argument("buffer too small for cellReferenceFast");
+        }
+        // 1) 列名生成到临时栈，再拷到buf（列名最长3字符: XFD）
+        char colbuf[8];
+        int ci = 0;
+        int c = col;
+        while (c >= 0) {
+            int rem = c % 26;
+            colbuf[ci++] = static_cast<char>('A' + rem);
+            c = c / 26 - 1;
+        }
+        // 反转到buf
+        size_t pos = 0;
+        for (int i = ci - 1; i >= 0; --i) buf[pos++] = colbuf[i];
+        // 2) 行号(row+1) itoa 追加
+        unsigned int r = static_cast<unsigned int>(row + 1);
+        char numbuf[12];
+        int ni = 0;
+        do { numbuf[ni++] = static_cast<char>('0' + (r % 10)); r /= 10; } while (r > 0);
+        for (int i = ni - 1; i >= 0; --i) buf[pos++] = numbuf[i];
+        out_len = pos;
+        return std::string_view(buf, pos);
+    }
     
     /**
      * @brief 生成范围引用（如A1:B2）

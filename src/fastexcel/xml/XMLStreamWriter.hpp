@@ -162,6 +162,9 @@ public:
      * @brief 文本内容操作
      */
     void writeText(const std::string& text);
+    void writeText(int value);
+    void writeText(size_t value);
+    void writeText(double value);
     void writeRaw(const std::string& data);
     void writeCDATA(const std::string& data);
     void writeComment(const std::string& comment);

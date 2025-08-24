@@ -318,7 +318,7 @@ void WorksheetXMLGenerator::generateSheetData(XMLStreamWriter& writer) {
         if (!row_has_data) continue;
         
         writer.startElement("row");
-        writer.writeAttribute("r", fmt::format("{}", row + 1).c_str());
+        writer.writeAttribute("r", row + 1);
         
         for (int col = 0; col <= max_col; ++col) {
             if (!worksheet_->hasCellAt(row, col)) continue;
@@ -327,13 +327,15 @@ void WorksheetXMLGenerator::generateSheetData(XMLStreamWriter& writer) {
             if (cell.isEmpty() && !cell.hasFormat()) continue;
             
             writer.startElement("c");
-            writer.writeAttribute("r", utils::CommonUtils::cellReference(row, col).c_str());
+            {
+                char cref[16]; size_t clen=0;
+                auto v = utils::CommonUtils::cellReferenceFast(row, col, cref, sizeof(cref), clen);
+                writer.writeAttribute("r", std::string(v));
+            }
             
             // 应用单元格格式
             int format_index = getCellFormatIndex(cell);
-            if (format_index >= 0) {
-                writer.writeAttribute("s", fmt::format("{}", format_index).c_str());
-            }
+            if (format_index >= 0) { writer.writeAttribute("s", format_index); }
             
             // 输出单元格值
             if (!cell.isEmpty()) {
@@ -734,7 +736,7 @@ void WorksheetXMLGenerator::generateCellXMLStreaming(XMLStreamWriter& writer, in
                         
                         writer.startElement("f");
                         writer.writeAttribute("t", "shared");
-                        writer.writeAttribute("si", fmt::format("{}", shared_index).c_str());
+                        writer.writeAttribute("si", shared_index);
                         
                         if (is_master_cell) {
                             // 主单元格：输出完整公式和范围
@@ -771,11 +773,11 @@ void WorksheetXMLGenerator::generateCellXMLStreaming(XMLStreamWriter& writer, in
             if (workbook_ && workbook_->getOptions().use_shared_strings && sst_) {
                 writer.writeAttribute("t", "s");
                 writer.startElement("v");
-                int sst_index = sst_->getStringId(cell.getStringValue());
-                if (sst_index < 0) {
-                    sst_index = const_cast<core::SharedStringTable*>(sst_)->addString(cell.getStringValue());
-                }
-                writer.writeText(fmt::format("{}", sst_index).c_str());
+                        int sst_index = sst_->getStringId(cell.getStringValue());
+                        if (sst_index < 0) {
+                            sst_index = const_cast<core::SharedStringTable*>(sst_)->addString(cell.getStringValue());
+                        }
+                        writer.writeText(sst_index);
                 writer.endElement(); // v
             } else {
                 writer.writeAttribute("t", "inlineStr");
