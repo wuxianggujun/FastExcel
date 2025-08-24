@@ -129,12 +129,14 @@ void WorksheetXMLGenerator::generateBatch(const std::function<void(const std::st
     }
     writer.startElement("dimension");
     if (dim_last_row >= 0 && dim_last_col >= 0) {
-        // 使用StringJoiner优化单元格范围生成
-        utils::StringViewOptimized::StringJoiner range_joiner(":");
-        range_joiner.add(utils::CommonUtils::cellReference(0, 0))
-                   .add(utils::CommonUtils::cellReference(dim_last_row, dim_last_col));
-        std::string ref = range_joiner.build();
-        writer.writeAttribute("ref", ref.c_str());
+        char a[16], b[16]; size_t la=0, lb=0;
+        auto ra = utils::CommonUtils::cellReferenceFast(0, 0, a, sizeof(a), la);
+        auto rb = utils::CommonUtils::cellReferenceFast(dim_last_row, dim_last_col, b, sizeof(b), lb);
+        char buf[40]; size_t pos=0;
+        std::memcpy(buf+pos, ra.data(), ra.size()); pos += ra.size();
+        buf[pos++] = ':';
+        std::memcpy(buf+pos, rb.data(), rb.size()); pos += rb.size();
+        writer.writeAttribute("ref", std::string(buf, pos));
     } else {
         writer.writeAttribute("ref", "A1");
     }
@@ -145,11 +147,9 @@ void WorksheetXMLGenerator::generateBatch(const std::function<void(const std::st
     
     // 工作表格式信息：补充 baseColWidth 与 defaultColWidth 以贴近Excel行为
     writer.startElement("sheetFormatPr");
-    // 基础列宽字符数（通常Excel为10，对应Calibri 11的最大数字字符宽度计数）
     writer.writeAttribute("baseColWidth", "10");
     writer.writeAttribute("defaultRowHeight", "15");
-    // 使用工作表的默认列宽（Worksheet为friend，可直接访问）
-    writer.writeAttribute("defaultColWidth", fmt::format("{}", worksheet_->default_col_width_).c_str());
+    writer.writeAttribute("defaultColWidth", worksheet_->default_col_width_);
     writer.endElement(); // sheetFormatPr
     
     // 生成列信息
@@ -263,23 +263,12 @@ void WorksheetXMLGenerator::generateColumns(XMLStreamWriter& writer) {
         
         // 生成合并后的<col>标签
         writer.startElement("col");
-        // 使用StringBuilder优化数值输出
-        string_builder_.clear();
-        string_builder_.append(min_col + 1);
-        writer.writeAttribute("min", string_builder_.view());
+        writer.writeAttribute("min", min_col + 1);
+        writer.writeAttribute("max", max_col + 1);
         
-        string_builder_.clear();
-        string_builder_.append(max_col + 1);
-        writer.writeAttribute("max", string_builder_.view());
+        if (info.width > 0) { writer.writeAttribute("width", info.width); writer.writeAttribute("customWidth", "1"); }
         
-        if (info.width > 0) {
-            writer.writeAttribute("width", fmt::format("{}", info.width).c_str());
-            writer.writeAttribute("customWidth", "1");
-        }
-        
-        if (info.format_id >= 0) {
-            writer.writeAttribute("style", fmt::format("{}", info.format_id).c_str());
-        }
+        if (info.format_id >= 0) { writer.writeAttribute("style", info.format_id); }
         
         if (info.hidden) {
             writer.writeAttribute("hidden", "1");
@@ -531,8 +520,12 @@ void WorksheetXMLGenerator::generateDrawing(XMLStreamWriter& writer) {
     }
     
     // drawing 的 rId 应为超链接数量 + 1
-    std::string drawing_rel = fmt::format("rId{}", hyperlink_count + 1);
-    writer.writeAttribute("r:id", drawing_rel.c_str());
+    {
+        char rid[24]; size_t pos=0; rid[pos++]='r'; rid[pos++]='I'; rid[pos++]='d';
+        unsigned v = hyperlink_count + 1; char num[16]; int ni=0; do { num[ni++]=char('0'+(v%10)); v/=10;} while(v>0);
+        for(int i=ni-1;i>=0;--i) rid[pos++]=num[i];
+        writer.writeAttribute("r:id", std::string(rid,pos));
+    }
     writer.endElement(); // drawing
 }
 
@@ -580,7 +573,7 @@ void WorksheetXMLGenerator::generateStreaming(const std::function<void(const std
     writer.startElement("sheetFormatPr");
     writer.writeAttribute("baseColWidth", "10");
     writer.writeAttribute("defaultRowHeight", "15");
-    writer.writeAttribute("defaultColWidth", fmt::format("{}", worksheet_->default_col_width_).c_str());
+    writer.writeAttribute("defaultColWidth", worksheet_->default_col_width_);
     writer.endElement(); // sheetFormatPr
     
     // 列信息（使用XMLStreamWriter优化）
@@ -663,7 +656,7 @@ void WorksheetXMLGenerator::generateSheetDataStreaming(XMLStreamWriter& writer) 
             
             // 生成行开始标签
             writer.startElement("row");
-            writer.writeAttribute("r", fmt::format("{}", row_num + 1).c_str());
+            writer.writeAttribute("r", row_num + 1);
             
             // 生成单元格数据
             for (int col = 0; col <= max_col; ++col) {
@@ -707,12 +700,15 @@ int WorksheetXMLGenerator::getCellFormatIndex(const core::Cell& cell) {
 
 void WorksheetXMLGenerator::generateCellXMLStreaming(XMLStreamWriter& writer, int row, int col, const core::Cell& cell) {
     writer.startElement("c");
-    writer.writeAttribute("r", utils::CommonUtils::cellReference(row, col).c_str());
+    {
+        char cref[16]; size_t clen=0; auto v = utils::CommonUtils::cellReferenceFast(row, col, cref, sizeof(cref), clen);
+        writer.writeAttribute("r", std::string(v));
+    }
     
     // 应用单元格格式
     int format_index = getCellFormatIndex(cell);
     if (format_index >= 0) {
-        writer.writeAttribute("s", fmt::format("{}", format_index).c_str());
+        writer.writeAttribute("s", format_index);
     }
     
     // 输出单元格值
@@ -742,7 +738,7 @@ void WorksheetXMLGenerator::generateCellXMLStreaming(XMLStreamWriter& writer, in
                             // 主单元格：输出完整公式和范围
                             std::string range_ref = utils::CommonUtils::cellReference(range_first_row, range_first_col) + ":" +
                                                   utils::CommonUtils::cellReference(range_last_row, range_last_col);
-                            writer.writeAttribute("ref", range_ref.c_str());
+                        writer.writeAttribute("ref", range_ref.c_str());
                             writer.writeText(cell.getFormula());
                         }
                         // 其他单元格：只输出 si 属性，无内容
@@ -752,7 +748,7 @@ void WorksheetXMLGenerator::generateCellXMLStreaming(XMLStreamWriter& writer, in
                         // 输出结果值 (对于共享公式，总是输出结果，即使是0)
                         double result = cell.getFormulaResult();
                         writer.startElement("v");
-                        writer.writeText(fmt::format("{}", result).c_str());
+                        writer.writeText(result);
                         writer.endElement(); // v
                     }
                 }
