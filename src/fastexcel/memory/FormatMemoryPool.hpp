@@ -56,6 +56,52 @@ public:
         ++total_allocations_;
         return format;
     }
+
+    // 便捷：默认构造分配（使用默认格式参数构建）
+    core::FormatDescriptor* allocate() {
+        if (!pool_.isInitialized()) {
+            pool_.initialize();
+        }
+        const auto& d = core::FormatDescriptor::getDefault();
+        core::FormatDescriptor* fmt = pool_.get().allocate(
+            d.getFontName(),
+            d.getFontSize(),
+            d.isBold(),
+            d.isItalic(),
+            d.getUnderline(),
+            d.isStrikeout(),
+            d.getFontScript(),
+            d.getFontColor(),
+            d.getFontFamily(),
+            d.getFontCharset(),
+            d.getHorizontalAlign(),
+            d.getVerticalAlign(),
+            d.isTextWrap(),
+            d.getRotation(),
+            d.getIndent(),
+            d.isShrink(),
+            d.getLeftBorder(),
+            d.getRightBorder(),
+            d.getTopBorder(),
+            d.getBottomBorder(),
+            d.getDiagBorder(),
+            d.getDiagType(),
+            d.getLeftBorderColor(),
+            d.getRightBorderColor(),
+            d.getTopBorderColor(),
+            d.getBottomBorderColor(),
+            d.getDiagBorderColor(),
+            d.getPattern(),
+            d.getBackgroundColor(),
+            d.getForegroundColor(),
+            d.getNumberFormat(),
+            d.getNumberFormatIndex(),
+            d.isLocked(),
+            d.isHidden()
+        );
+        ++total_allocations_;
+        return fmt;
+    }
     
     /**
      * @brief 创建智能指针管理的FormatDescriptor对象
@@ -146,6 +192,17 @@ public:
         }
         
         return stats;
+    }
+
+    // 统计便捷查询
+    size_t getCurrentUsage() const noexcept {
+        return pool_.isInitialized() ? pool_.get().getCurrentUsage() : 0;
+    }
+    size_t getPeakUsage() const noexcept {
+        return pool_.isInitialized() ? pool_.get().getPeakUsage() : 0;
+    }
+    size_t getTotalAllocated() const noexcept {
+        return pool_.isInitialized() ? pool_.get().getTotalAllocated() : 0;
     }
     
     /**

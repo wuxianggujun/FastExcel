@@ -56,6 +56,9 @@ public:
         ++total_allocations_;
         return cell;
     }
+
+    // 便捷：默认构造分配
+    core::Cell* allocate() { return allocate<>(); }
     
     /**
      * @brief 创建智能指针管理的Cell对象
@@ -102,6 +105,17 @@ public:
         }
         
         return stats;
+    }
+
+    // 统计便捷查询
+    size_t getCurrentUsage() const noexcept {
+        return pool_.isInitialized() ? pool_.get().getCurrentUsage() : 0;
+    }
+    size_t getPeakUsage() const noexcept {
+        return pool_.isInitialized() ? pool_.get().getPeakUsage() : 0;
+    }
+    size_t getTotalAllocated() const noexcept {
+        return pool_.isInitialized() ? pool_.get().getTotalAllocated() : 0;
     }
     
     /**

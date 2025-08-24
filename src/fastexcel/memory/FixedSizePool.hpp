@@ -6,6 +6,7 @@
 #pragma once
 
 #include "AlignedAllocator.hpp"
+#include "IMemoryPool.hpp"
 #include "fastexcel/utils/Logger.hpp"
 #include "fastexcel/core/Exception.hpp"
 #include <memory>
@@ -23,7 +24,7 @@ namespace memory {
  * 专为频繁分配/释放相同大小对象设计，提供高性能的内存管理
  */
 template<typename T, size_t PoolSize = 1024>
-class FixedSizePool {
+class FixedSizePool : public IMemoryPool {
     static_assert(sizeof(T) >= sizeof(void*), "Object size too small for pool");
     static_assert(std::is_trivially_destructible_v<T> || std::has_virtual_destructor_v<T>,
                  "Type must be trivially destructible or have virtual destructor");
@@ -142,6 +143,7 @@ public:
         
         return obj;
     }
+
     
     /**
      * @brief 释放对象
@@ -229,6 +231,52 @@ public:
         cleanup();
     }
 
+    // IMemoryPool 原始接口实现
+    void* allocate(std::size_t size, std::size_t alignment = alignof(std::max_align_t)) override {
+        // 仅支持不超过 T 大小的分配，且对齐不超过 T 的对齐
+        if (size > sizeof(T) || alignment > alignof(T)) {
+            // 回退到通用分配，交由 deallocate 判断是否来自池
+            return AlignedAllocator::allocate(alignment, size);
+        }
+
+        std::lock_guard<std::mutex> lock(mutex_);
+        Block* block = getFreeBlock();
+        if (!block) {
+            allocateNewPage();
+            block = getFreeBlock();
+            if (!block) return nullptr;
+        }
+        ++current_usage_;
+        ++total_allocated_;
+        if (current_usage_ > peak_usage_) peak_usage_ = current_usage_.load();
+        return reinterpret_cast<void*>(block);
+    }
+
+    void deallocate(void* ptr, std::size_t /*size*/, std::size_t /*alignment*/ = alignof(std::max_align_t)) override {
+        if (!ptr) return;
+        std::lock_guard<std::mutex> lock(mutex_);
+
+        // 判断指针是否来自本池的页面
+        if (isFromThisPool(ptr)) {
+            Block* block = reinterpret_cast<Block*>(ptr);
+            block->next = free_list_;
+            free_list_ = block;
+            --current_usage_;
+        } else {
+            // 外部分配，直接释放
+            AlignedAllocator::deallocate(ptr);
+        }
+    }
+
+    IMemoryPool::Statistics getStatistics() const override {
+        IMemoryPool::Statistics s{};
+        s.current_usage = current_usage_.load() * sizeof(T);
+        s.peak_usage = peak_usage_ * sizeof(T);
+        s.total_allocations = total_allocated_ * sizeof(T);
+        s.total_deallocations = (total_allocated_ - current_usage_.load()) * sizeof(T);
+        return s;
+    }
+
 private:
     mutable std::mutex mutex_;
     std::vector<std::unique_ptr<Page>> pages_;
@@ -281,6 +329,19 @@ private:
         } catch (...) {
             // 忽略清理时的异常
         }
+    }
+
+    bool isFromThisPool(void* ptr) const noexcept {
+        for (const auto& page : pages_) {
+            const Block* base = page->blocks.get();
+            if (!base) continue;
+            const Block* end = base + PoolSize;
+            if (reinterpret_cast<const Block*>(ptr) >= base &&
+                reinterpret_cast<const Block*>(ptr) < end) {
+                return true;
+            }
+        }
+        return false;
     }
 };
 

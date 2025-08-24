@@ -8,6 +8,7 @@
 #include "CellMemoryPool.hpp"
 #include "FormatMemoryPool.hpp"
 #include "StringMemoryPool.hpp"
+#include "MultiSizePool.hpp"
 #include <memory>
 
 namespace fastexcel {
@@ -24,6 +25,8 @@ private:
     std::unique_ptr<CellMemoryPool> cell_pool_;
     std::unique_ptr<FormatMemoryPool> format_pool_;
     std::unique_ptr<StringMemoryPool> string_pool_;
+    // 统一原始分配：多大小内存池
+    std::unique_ptr<MultiSizePool> raw_pool_;
     
 public:
     /**
@@ -32,7 +35,8 @@ public:
     WorkbookMemoryManager() 
         : cell_pool_(std::make_unique<CellMemoryPool>())
         , format_pool_(std::make_unique<FormatMemoryPool>())
-        , string_pool_(std::make_unique<StringMemoryPool>()) {
+        , string_pool_(std::make_unique<StringMemoryPool>())
+        , raw_pool_(std::make_unique<MultiSizePool>()) {
     }
     
     ~WorkbookMemoryManager() = default;
@@ -63,6 +67,21 @@ public:
      */
     StringMemoryPool& getStringPool() { return *string_pool_; }
     const StringMemoryPool& getStringPool() const { return *string_pool_; }
+
+    /**
+     * @brief 原始字节分配（高性能多大小池）。
+     */
+    void* allocateRaw(std::size_t size, std::size_t alignment = alignof(std::max_align_t)) {
+        return raw_pool_ ? raw_pool_->allocate(size, alignment) : nullptr;
+    }
+
+    /**
+     * @brief 原始字节释放（对应 allocateRaw）。
+     */
+    void deallocateRaw(void* ptr, std::size_t size, std::size_t alignment = alignof(std::max_align_t)) {
+        if (!raw_pool_ || !ptr) return;
+        raw_pool_->deallocate(ptr, size, alignment);
+    }
     
     /**
      * @brief 创建优化的Cell对象
@@ -170,6 +189,7 @@ public:
         cell_pool_->shrink();
         format_pool_->shrink();
         string_pool_->shrink();
+        if (raw_pool_) raw_pool_->shrink();
     }
     
     /**
@@ -179,6 +199,7 @@ public:
         cell_pool_->clear();
         format_pool_->clear();
         string_pool_->clear();
+        if (raw_pool_) raw_pool_->clear();
     }
     
     /**
