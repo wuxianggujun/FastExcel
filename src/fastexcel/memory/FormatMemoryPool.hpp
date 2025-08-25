@@ -239,6 +239,114 @@ public:
             pool_.get().clear();
         }
     }
+
+    /**
+     * @brief 获取详细的性能统计信息
+     */
+    using DetailedStatistics = FixedSizePool<core::FormatDescriptor, POOL_SIZE>::DetailedStatistics;
+    
+    DetailedStatistics getDetailedStatistics() const {
+        if (pool_.isInitialized()) {
+            return pool_.get().getDetailedStatistics();
+        }
+        return DetailedStatistics{};
+    }
+    
+    /**
+     * @brief 打印性能报告
+     */
+    void printPerformanceReport() const {
+        if (pool_.isInitialized()) {
+            pool_.get().printPerformanceReport();
+        } else {
+            FASTEXCEL_LOG_INFO("FormatMemoryPool not yet initialized");
+        }
+    }
+    
+    /**
+     * @brief 预热内存池
+     */
+    void warmUp(size_t object_count = POOL_SIZE / 4) {
+        if (!pool_.isInitialized()) {
+            pool_.initialize();
+        }
+        
+        FASTEXCEL_LOG_INFO("Warming up FormatMemoryPool with {} objects", object_count);
+        
+        // 预分配足够的页面
+        size_t pages_needed = (object_count + POOL_SIZE - 1) / POOL_SIZE;
+        pool_.get().preAllocate(pages_needed);
+        
+        // 对于FormatDescriptor，创建一些基于默认格式的对象来预热缓存
+        std::vector<core::FormatDescriptor*> temp_objects;
+        temp_objects.reserve(object_count);
+        
+        try {
+            const auto& defaultFormat = core::FormatDescriptor::getDefault();
+            
+            for (size_t i = 0; i < object_count; ++i) {
+                // 使用默认格式参数创建对象
+                temp_objects.push_back(pool_.get().allocate(
+                    defaultFormat.getFontName(),
+                    defaultFormat.getFontSize(),
+                    defaultFormat.isBold(),
+                    defaultFormat.isItalic(),
+                    defaultFormat.getUnderline(),
+                    defaultFormat.isStrikeout(),
+                    defaultFormat.getFontScript(),
+                    defaultFormat.getFontColor(),
+                    defaultFormat.getFontFamily(),
+                    defaultFormat.getFontCharset(),
+                    defaultFormat.getHorizontalAlign(),
+                    defaultFormat.getVerticalAlign(),
+                    defaultFormat.isTextWrap(),
+                    defaultFormat.getRotation(),
+                    defaultFormat.getIndent(),
+                    defaultFormat.isShrink(),
+                    defaultFormat.getLeftBorder(),
+                    defaultFormat.getRightBorder(),
+                    defaultFormat.getTopBorder(),
+                    defaultFormat.getBottomBorder(),
+                    defaultFormat.getDiagBorder(),
+                    defaultFormat.getDiagType(),
+                    defaultFormat.getLeftBorderColor(),
+                    defaultFormat.getRightBorderColor(),
+                    defaultFormat.getTopBorderColor(),
+                    defaultFormat.getBottomBorderColor(),
+                    defaultFormat.getDiagBorderColor(),
+                    defaultFormat.getPattern(),
+                    defaultFormat.getBackgroundColor(),
+                    defaultFormat.getForegroundColor(),
+                    defaultFormat.getNumberFormat(),
+                    defaultFormat.getNumberFormatIndex(),
+                    defaultFormat.isLocked(),
+                    defaultFormat.isHidden()
+                ));
+            }
+            
+            // 释放所有对象，填充各级缓存
+            for (auto* obj : temp_objects) {
+                pool_.get().deallocate(obj);
+            }
+            
+            FASTEXCEL_LOG_INFO("FormatMemoryPool warm-up completed");
+        } catch (const std::exception& e) {
+            FASTEXCEL_LOG_ERROR("FormatMemoryPool warm-up failed: {}", e.what());
+            // 清理已分配的对象
+            for (auto* obj : temp_objects) {
+                if (obj) pool_.get().deallocate(obj);
+            }
+        }
+    }
+    
+    /**
+     * @brief 强制执行动态调整
+     */
+    void performDynamicAdjustment() {
+        if (pool_.isInitialized()) {
+            pool_.get().performDynamicAdjustment();
+        }
+    }
 };
 
 }} // namespace fastexcel::memory

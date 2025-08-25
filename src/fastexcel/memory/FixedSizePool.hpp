@@ -190,9 +190,12 @@ public:
     T* allocate(Args&&... args) {
         // 1. 尝试从线程本地缓存获取
         Block* block = thread_cache_.getBlock();
-        
-        // 2. 如果本地缓存为空，从全局栈获取
-        if (!block) {
+        if (block) {
+            cache_hits_.fetch_add(1); // 缓存命中
+        } else {
+            cache_misses_.fetch_add(1); // 缓存未命中
+            
+            // 2. 如果本地缓存为空，从全局栈获取
             block = global_free_stack_.pop();
         }
         
@@ -200,6 +203,7 @@ public:
         if (!block) {
             allocateNewPage();
             block = global_free_stack_.pop();
+            page_allocations_.fetch_add(1); // 记录页面分配
             
             if (!block) {
                 throw core::MemoryException(
@@ -220,13 +224,18 @@ public:
         
         // 5. 更新统计信息（原子操作）
         size_t current = current_usage_.fetch_add(1) + 1;
-        total_allocated_.fetch_add(1);
+        size_t total_allocs = total_allocated_.fetch_add(1) + 1;
         
         // 更新峰值使用量（无锁CAS）
         size_t expected_peak = peak_usage_.load();
         while (current > expected_peak && 
                !peak_usage_.compare_exchange_weak(expected_peak, current)) {
             // 重试直到成功
+        }
+        
+        // 6. 动态调整检查（定期执行）
+        if (total_allocs % SHRINK_CHECK_INTERVAL == 0) {
+            performDynamicAdjustment();
         }
         
         return obj;
@@ -324,6 +333,163 @@ public:
         cleanup();
     }
 
+    /**
+     * @brief 执行动态调整策略
+     */
+    void performDynamicAdjustment() {
+        size_t current = current_usage_.load();
+        size_t total_capacity = pages_.size() * PoolSize;
+        
+        if (total_capacity == 0) return;
+        
+        double usage_ratio = static_cast<double>(current) / total_capacity;
+        
+        // 低使用率时收缩
+        if (usage_ratio < LOW_USAGE_THRESHOLD && pages_.size() > 1) {
+            FASTEXCEL_LOG_DEBUG("Pool usage low ({:.2f}%), attempting shrink", usage_ratio * 100);
+            shrink();
+        }
+        // 高使用率时预分配
+        else if (usage_ratio > HIGH_USAGE_THRESHOLD) {
+            FASTEXCEL_LOG_DEBUG("Pool usage high ({:.2f}%), pre-allocating page", usage_ratio * 100);
+            preAllocate(1);
+        }
+        
+        last_shrink_check_.store(total_allocated_.load());
+    }
+
+    /**
+     * @brief 获取详细的性能统计信息
+     */
+    struct DetailedStatistics {
+        size_t current_usage = 0;
+        size_t peak_usage = 0;
+        size_t total_allocated = 0;
+        size_t total_deallocated = 0;
+        size_t active_objects = 0;
+        size_t cache_hits = 0;
+        size_t cache_misses = 0;
+        size_t cache_hit_rate_percent = 0;
+        size_t page_allocations = 0;
+        size_t contention_count = 0;
+        size_t pages_count = 0;
+        size_t total_capacity = 0;
+        size_t usage_percent = 0;
+        size_t memory_overhead_bytes = 0;
+    };
+
+    DetailedStatistics getDetailedStatistics() const {
+        DetailedStatistics stats;
+        
+        stats.current_usage = current_usage_.load();
+        stats.peak_usage = peak_usage_.load();
+        stats.total_allocated = total_allocated_.load();
+        stats.total_deallocated = stats.total_allocated - stats.current_usage;
+        stats.active_objects = stats.current_usage;
+        
+        stats.cache_hits = cache_hits_.load();
+        stats.cache_misses = cache_misses_.load();
+        size_t total_accesses = stats.cache_hits + stats.cache_misses;
+        stats.cache_hit_rate_percent = total_accesses > 0 ? 
+            (stats.cache_hits * 100) / total_accesses : 0;
+        
+        stats.page_allocations = page_allocations_.load();
+        stats.contention_count = contention_count_.load();
+        
+        {
+            std::lock_guard<std::mutex> lock(pages_mutex_);
+            stats.pages_count = pages_.size();
+        }
+        
+        stats.total_capacity = stats.pages_count * PoolSize;
+        stats.usage_percent = stats.total_capacity > 0 ? 
+            (stats.current_usage * 100) / stats.total_capacity : 0;
+        
+        // 计算内存开销（元数据、管理结构等）
+        stats.memory_overhead_bytes = sizeof(FixedSizePool) + 
+            stats.pages_count * sizeof(Page) + 
+            stats.pages_count * sizeof(std::unique_ptr<Page>);
+        
+        return stats;
+    }
+
+    /**
+     * @brief 打印详细的性能报告
+     */
+    void printPerformanceReport() const {
+        auto stats = getDetailedStatistics();
+        
+        FASTEXCEL_LOG_INFO("=== FixedSizePool Performance Report ===");
+        FASTEXCEL_LOG_INFO("Object type: {}", typeid(T).name());
+        FASTEXCEL_LOG_INFO("Object size: {} bytes", sizeof(T));
+        FASTEXCEL_LOG_INFO("Pool size per page: {}", PoolSize);
+        
+        FASTEXCEL_LOG_INFO("Memory Usage:");
+        FASTEXCEL_LOG_INFO("  Current usage: {} objects ({} bytes)", 
+                          stats.current_usage, stats.current_usage * sizeof(T));
+        FASTEXCEL_LOG_INFO("  Peak usage: {} objects ({} bytes)", 
+                          stats.peak_usage, stats.peak_usage * sizeof(T));
+        FASTEXCEL_LOG_INFO("  Total capacity: {} objects ({} bytes)", 
+                          stats.total_capacity, stats.total_capacity * sizeof(T));
+        FASTEXCEL_LOG_INFO("  Usage ratio: {}%", stats.usage_percent);
+        FASTEXCEL_LOG_INFO("  Memory overhead: {} bytes", stats.memory_overhead_bytes);
+        
+        FASTEXCEL_LOG_INFO("Allocation Statistics:");
+        FASTEXCEL_LOG_INFO("  Total allocated: {} objects", stats.total_allocated);
+        FASTEXCEL_LOG_INFO("  Total deallocated: {} objects", stats.total_deallocated);
+        FASTEXCEL_LOG_INFO("  Active objects: {} objects", stats.active_objects);
+        FASTEXCEL_LOG_INFO("  Pages allocated: {} pages", stats.page_allocations);
+        
+        FASTEXCEL_LOG_INFO("Cache Performance:");
+        FASTEXCEL_LOG_INFO("  Cache hits: {}", stats.cache_hits);
+        FASTEXCEL_LOG_INFO("  Cache misses: {}", stats.cache_misses);
+        FASTEXCEL_LOG_INFO("  Cache hit rate: {}%", stats.cache_hit_rate_percent);
+        
+        FASTEXCEL_LOG_INFO("Threading:");
+        FASTEXCEL_LOG_INFO("  Lock contention count: {}", stats.contention_count);
+        FASTEXCEL_LOG_INFO("==========================================");
+    }
+
+    /**
+     * @brief 内存预热 - 预分配并初始化指定数量的对象
+     */
+    void warmUp(size_t object_count = PoolSize / 2) {
+        FASTEXCEL_LOG_INFO("Warming up memory pool with {} objects", object_count);
+        
+        // 预分配足够的页面
+        size_t pages_needed = (object_count + PoolSize - 1) / PoolSize;
+        preAllocate(pages_needed);
+        
+        // 对于不能默认构造的类型，仅预分配页面即可
+        // 不进行对象的实际构造和析构操作
+        if constexpr (std::is_default_constructible_v<T>) {
+            // 预分配对象然后立即释放，以填充缓存
+            std::vector<T*> temp_objects;
+            temp_objects.reserve(object_count);
+            
+            try {
+                for (size_t i = 0; i < object_count; ++i) {
+                    temp_objects.push_back(allocate());
+                }
+                
+                // 释放所有对象，填充各级缓存
+                for (auto* obj : temp_objects) {
+                    deallocate(obj);
+                }
+                
+                FASTEXCEL_LOG_INFO("Memory pool warm-up completed with object construction");
+            } catch (const std::exception& e) {
+                FASTEXCEL_LOG_ERROR("Memory pool warm-up failed: {}", e.what());
+                // 清理已分配的对象
+                for (auto* obj : temp_objects) {
+                    if (obj) deallocate(obj);
+                }
+            }
+        } else {
+            FASTEXCEL_LOG_INFO("Memory pool warm-up completed (page pre-allocation only)");
+        }
+    }
+
     // IMemoryPool 原始接口实现
     void* allocate(std::size_t size, std::size_t alignment = alignof(std::max_align_t)) override {
         // 仅支持不超过 T 大小的分配，且对齐不超过 T 的对齐
@@ -395,6 +561,18 @@ private:
     std::atomic<size_t> current_usage_{0};
     std::atomic<size_t> peak_usage_{0};
     std::atomic<size_t> total_allocated_{0};
+    
+    // 高级性能监控
+    std::atomic<size_t> cache_hits_{0};        // 线程本地缓存命中数
+    std::atomic<size_t> cache_misses_{0};      // 缓存未命中数
+    std::atomic<size_t> page_allocations_{0};  // 页面分配次数
+    std::atomic<size_t> contention_count_{0};  // 锁竞争次数
+    
+    // 动态调整参数
+    std::atomic<size_t> last_shrink_check_{0}; // 上次收缩检查时间
+    static constexpr size_t SHRINK_CHECK_INTERVAL = 10000; // 检查间隔（分配次数）
+    static constexpr double LOW_USAGE_THRESHOLD = 0.1;     // 低使用率阈值
+    static constexpr double HIGH_USAGE_THRESHOLD = 0.8;    // 高使用率阈值
     
     // 分配新页面的方法
     void allocateNewPage() {
