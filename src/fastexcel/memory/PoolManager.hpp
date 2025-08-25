@@ -38,25 +38,45 @@ public:
      */
     template<typename T>
     FixedSizePool<T>& getPool() {
-        std::lock_guard<std::mutex> lock(mutex_);
-        
-        auto it = pools_.find(typeid(T).hash_code());
-        if (it == pools_.end()) {
-            auto pool = std::make_unique<FixedSizePool<T>>();
-            auto& pool_ref = *pool;
+        // 首先尝试查找现有池
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            size_t type_hash = typeid(T).hash_code();
+            auto it = pools_.find(type_hash);
             
-            // 使用类型删除器来正确删除池
-            pools_[typeid(T).hash_code()] = std::unique_ptr<void, void(*)(void*)>(
-                pool.release(),
+            if (it != pools_.end()) {
+                return *static_cast<FixedSizePool<T>*>(it->second.get());
+            }
+        }
+        
+        // 如果池不存在，创建新池（在锁外创建以避免死锁）
+        auto new_pool = std::make_unique<FixedSizePool<T>>();
+        FixedSizePool<T>* pool_ptr = new_pool.get();
+        
+        // 再次获取锁并插入新池
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            size_t type_hash = typeid(T).hash_code();
+            auto it = pools_.find(type_hash);
+            
+            // 双重检查：可能其他线程已经创建了池
+            if (it != pools_.end()) {
+                return *static_cast<FixedSizePool<T>*>(it->second.get());
+            }
+            
+            // 使用删除器函数正确删除池
+            std::unique_ptr<void, void(*)(void*)> void_ptr(
+                new_pool.release(),
                 [](void* ptr) {
                     delete static_cast<FixedSizePool<T>*>(ptr);
                 }
             );
             
-            return pool_ref;
+            // 使用emplace避免默认构造
+            pools_.emplace(type_hash, std::move(void_ptr));
         }
         
-        return *static_cast<FixedSizePool<T>*>(it->second.get());
+        return *pool_ptr;
     }
     
     /**

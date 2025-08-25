@@ -367,7 +367,8 @@ bool WorkbookDataManager::isCSVFile(const std::string& filepath) {
     if (filepath.size() < 4) return false;
     
     std::string extension = filepath.substr(filepath.size() - 4);
-    std::transform(extension.begin(), extension.end(), extension.begin(), ::tolower);
+    std::transform(extension.begin(), extension.end(), extension.begin(), 
+                   [](char c) { return static_cast<char>(std::tolower(static_cast<unsigned char>(c))); });
     
     return extension == ".csv";
 }

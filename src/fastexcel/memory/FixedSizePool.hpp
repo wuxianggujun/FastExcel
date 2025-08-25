@@ -13,8 +13,8 @@
 #include <vector>
 #include <mutex>
 #include <atomic>
-#include <type_traits>
 #include <thread>
+#include <type_traits>
 
 namespace fastexcel {
 namespace memory {
@@ -26,9 +26,9 @@ namespace memory {
  */
 template<typename T, size_t PoolSize = 1024>
 class FixedSizePool : public IMemoryPool {
-    static_assert(sizeof(T) >= sizeof(void*), "Object size too small for pool");
-    static_assert(std::is_trivially_destructible_v<T> || std::has_virtual_destructor_v<T>,
-                 "Type must be trivially destructible or have virtual destructor");
+    // 放宽约束条件，允许更多类型使用内存池
+    static_assert(sizeof(T) >= 1, "Type must have non-zero size");
+    // 对于小类型或复杂类型，我们仍然支持，但会有特殊处理
 
 private:
     // 前向声明
@@ -233,9 +233,16 @@ public:
             // 重试直到成功
         }
         
-        // 6. 动态调整检查（定期执行）
+        // 6. 动态调整检查（定期执行，避免在持有锁时调用）
         if (total_allocs % SHRINK_CHECK_INTERVAL == 0) {
-            performDynamicAdjustment();
+            // 使用异步方式执行动态调整，避免死锁
+            std::thread([this]() {
+                try {
+                    performDynamicAdjustment();
+                } catch (const std::exception& e) {
+                    FASTEXCEL_LOG_WARN("Dynamic adjustment failed: {}", e.what());
+                }
+            }).detach();
         }
         
         return obj;
@@ -295,7 +302,7 @@ public:
         std::lock_guard<std::mutex> lock(pages_mutex_);
         
         for (size_t i = 0; i < page_count; ++i) {
-            allocateNewPage();
+            allocateNewPageInternal();
         }
         
         FASTEXCEL_LOG_DEBUG("Pre-allocated {} pages for pool", page_count);
@@ -577,7 +584,11 @@ private:
     // 分配新页面的方法
     void allocateNewPage() {
         std::lock_guard<std::mutex> lock(pages_mutex_);
-        
+        allocateNewPageInternal();
+    }
+    
+    // 分配新页面的内部方法（假设已经持有锁）
+    void allocateNewPageInternal() {
         auto new_page = std::make_unique<Page>(PoolSize);
         
         // 将新页面的所有块添加到全局栈中

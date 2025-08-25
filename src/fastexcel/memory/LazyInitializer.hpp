@@ -7,6 +7,7 @@
 
 #include <memory>
 #include <stdexcept>
+#include "fastexcel/utils/Logger.hpp"
 
 namespace fastexcel {
 namespace memory {
