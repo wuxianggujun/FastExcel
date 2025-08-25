@@ -271,9 +271,6 @@ private:
     void validateCellPosition(int row, int col) const;
     void validateRange(int first_row, int first_col, int last_row, int last_col) const;
     std::string generateNextImageId();
-    
-    // 内部状态管理
-    void syncLayoutManagerState(); // 用于向后兼容，如果需要
 
 public:
     explicit Worksheet(const std::string& name, std::shared_ptr<Workbook> workbook, int sheet_id = 1);
@@ -347,16 +344,7 @@ public:
         double format_deduplication_ratio = 0.0;
     };
     PerformanceStats getPerformanceStats() const;
-    
-    // 基本单元格操作
-    
-    /**
-     * @brief 获取单元格引用
-     * @param row 行号（0开始）
-     * @param col 列号（0开始）
-     * @return 单元格引用
-     */
-private:
+
 public:
     
     /**
@@ -373,21 +361,6 @@ public:
      */
     Cell& getCell(const core::Address& address);
     const Cell& getCell(const core::Address& address) const;
-    
-    // 模板化的单元格值获取和设置
-    /**
-     * @brief 模板化获取单元格值
-     * @tparam T 返回值类型
-     * @param row 行号（0开始）
-     * @param col 列号（0开始）
-     * @return 指定类型的值
-     * 
-     * @example
-     * auto str_value = worksheet.getValue<std::string>(0, 0);  // 获取A1的字符串值
-     * auto num_value = worksheet.getValue<double>(1, 1);       // 获取B2的数字值
-     * auto bool_value = worksheet.getValue<bool>(2, 2);        // 获取C3的布尔值
-     */
-public:
     
     /**
      * @brief 模板化获取单元格值
@@ -453,7 +426,6 @@ public:
     void setValue(int row, int col, const T& value) {
         cell_processor_->setValue(row, col, value);
     }
-public:
     
     /**
      * @brief 模板化设置单元格值（统一地址接口）
@@ -482,22 +454,6 @@ public:
     void setCellValue(int row, int col, const T& value) {
         setValue<T>(row, col, value);
     }
-public:
-    
-    // 智能单元格格式设置 API
-    
-    /**
-     * @brief 设置单元格格式（智能优化版）
-     * @param row 行号（0开始）
-     * @param col 列号（0开始）
-     * @param format 格式描述符
-     * 
-     * @details 设置指定单元格的显示格式，内部自动FormatRepository优化。
-     *          格式可能被多个单元格共享以节省内存。
-     * @example worksheet.setCellFormat(0, 0, format);
-     */
-private:
-public:
     
     /**
      * @brief 设置单元格格式（统一地址接口）
@@ -576,12 +532,6 @@ private:
     }
 public:
     
-    /**
-     * @brief 安全获取列宽
-     * @param col 列号（0开始）
-     * @return 列宽的可选值，失败时返回std::nullopt
-     */
-private:
     std::optional<double> tryGetColumnWidth(int col) const noexcept {
         try {
             if (col < 0) return std::nullopt;
@@ -590,14 +540,12 @@ private:
             return std::nullopt;
         }
     }
-public:
     
     /**
      * @brief 安全获取行高
      * @param row 行号（0开始）
      * @return 行高的可选值，失败时返回std::nullopt
      */
-private:
     std::optional<double> tryGetRowHeight(int row) const noexcept {
         try {
             if (row < 0) return std::nullopt;
@@ -763,8 +711,6 @@ public:
      */
     void freezePanes(int row, int col, int top_left_row, int top_left_col);
     void splitPanes(const core::Address& split_cell);
-    
-    // 批量数据操作
     
     // 模板化范围操作
     /**
@@ -1122,16 +1068,6 @@ public:
         mergeCells(range.getStartRow(), range.getStartCol(), range.getEndRow(), range.getEndCol());
     }
     
-    /**
-     * @brief 合并单元格并写入内容
-     * @param first_row 起始行
-     * @param first_col 起始列
-     * @param last_row 结束行
-     * @param last_col 结束列
-     * @param value 内容
-     */
-    
-    // 自动筛选
     
     /**
      * @brief 设置自动筛选
@@ -1160,15 +1096,7 @@ public:
      * @brief 移除自动筛选
      */
     void removeAutoFilter();
-    
-    // 冻结窗格
-    
-    // 冻结窗格和分割窗格已在上面声明
-    
-    // 打印设置
-    
-    // 工作表保护
-    
+
     /**
      * @brief 保护工作表
      * @param password 密码（可选）
@@ -1217,14 +1145,8 @@ public:
      * @param selected 是否选中
      */
     void setTabSelected(bool selected = true);
-    
-    /**
-     * @brief 设置活动单元格
-     * @param row 行号
-     * @param col 列号
-     */
+
 private:
-    void setActiveCell(int row, int col);
     
     /**
      * @brief 设置活动单元格（支持多种地址格式）
@@ -1276,13 +1198,6 @@ private:
         setSelection(range.getStartRow(), range.getStartCol(), range.getEndRow(), range.getEndCol());
     }
     
-    // 获取信息
-    
-    // 其他原本在private的方法已移动到public区域
-    
-    // getUsedRange, hasCellAt, getCellCount 已在 public 区域声明
-    
-    // 便捷的工作表状态检查方法
     /**
      * @brief 检查工作表是否为空（无任何单元格数据）
      * @return 是否为空
@@ -1300,7 +1215,6 @@ private:
      */
     bool hasData() const { return !cells_.empty(); }
     
-    // getRowCount 和 getColumnCount 已在 public 区域声明
     
     /**
      * @brief 获取指定行的单元格数量
@@ -1617,27 +1531,6 @@ private:
      */
     void moveRange(int src_first_row, int src_first_col, int src_last_row, int src_last_col,
                    int dst_row, int dst_col);
-    
-    /**
-     * @brief 查找并替换
-     * @param find_text 查找的文本
-     * @param replace_text 替换的文本
-     * @param match_case 是否区分大小写
-     * @param match_entire_cell 是否匹配整个单元格
-     * @return 替换的数量
-     */
-    
-    /**
-     * @brief 查找单元格
-     * @param search_text 搜索文本
-     * @param match_case 是否区分大小写
-     * @param match_entire_cell 是否匹配整个单元格
-     * @return 匹配的单元格位置列表 (row, col)
-     */
-    
-    // sortRange 已移动到 public 区域
-    
-    // 共享公式管理
     
     /**
      * @brief 创建共享公式 - 支持地址范围类
@@ -2032,11 +1925,6 @@ private:
     void switchToNewRow(int row_num);
     void writeOptimizedCell(int row, int col, Cell&& cell);
     void updateUsedRangeOptimized(int row, int col);
-    
-    // XML生成辅助方法 - 已移至UnifiedXMLGenerator
-    // 保留这些方法声明用于向后兼容，但实际实现由 UnifiedXMLGenerator 负责
-    void generateXMLBatch(const std::function<void(const std::string&)>& callback) const;
-    void generateXMLStreaming(const std::function<void(const std::string&)>& callback) const;
     
     // 内部状态管理
     void updateUsedRange(int row, int col);

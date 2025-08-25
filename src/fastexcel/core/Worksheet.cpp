@@ -648,15 +648,6 @@ void Worksheet::generateXML(const std::function<void(const std::string&)>& callb
     generator->generate(callback);
 }
 
-void Worksheet::generateXMLBatch(const std::function<void(const std::string&)>& callback) const {
-    auto generator = xml::WorksheetXMLGeneratorFactory::createBatch(this);
-    generator->generate(callback);
-}
-
-void Worksheet::generateXMLStreaming(const std::function<void(const std::string&)>& callback) const {
-    auto generator = xml::WorksheetXMLGeneratorFactory::createStreaming(this);
-    generator->generate(callback);
-}
 
 // 工具方法
 

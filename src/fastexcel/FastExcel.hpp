@@ -115,11 +115,6 @@ FASTEXCEL_API void cleanup();
 // === 公共接口 ===
 
 /**
- * @brief 创建新的Excel工作簿
- */
-FASTEXCEL_API std::unique_ptr<core::Workbook> createWorkbook();
-
-/**
  * @brief 打开现有的Excel文件
  */
 FASTEXCEL_API std::unique_ptr<core::Workbook> openWorkbook(const std::string& filename);

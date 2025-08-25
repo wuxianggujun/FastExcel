@@ -39,19 +39,6 @@ FASTEXCEL_API void cleanup() {
     }
 }
 
-// API 2.0 工厂函数实现
-
-FASTEXCEL_API std::unique_ptr<core::Workbook> createWorkbook() {
-    try {
-        // 使用默认的临时文件名
-        auto workbook = std::make_unique<core::Workbook>(core::Path("temp.xlsx"));
-        FASTEXCEL_LOG_DEBUG("Created new workbook");
-        return workbook;
-    } catch (const std::exception& e) {
-        FASTEXCEL_LOG_ERROR("Failed to create workbook: {}", e.what());
-        return nullptr;
-    }
-}
 
 FASTEXCEL_API std::unique_ptr<core::Workbook> openWorkbook(const std::string& filename) {
     try {
@@ -71,12 +58,7 @@ FASTEXCEL_API std::unique_ptr<core::Workbook> openWorkbook(const std::string& fi
 }
 
 FASTEXCEL_API core::StyleBuilder createStyle() {
-    try {
         return core::StyleBuilder();
-    } catch (const std::exception& e) {
-        FASTEXCEL_LOG_ERROR("Failed to create style builder: {}", e.what());
-        throw StyleException("Failed to create style builder: " + std::string(e.what()));
-    }
 }
 
 } // namespace fastexcel
