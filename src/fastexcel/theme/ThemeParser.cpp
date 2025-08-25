@@ -11,7 +11,11 @@ static inline uint32_t parseRGB(const std::string& srgb) {
     if (hex.size() < 6) return 0;
     try {
         return static_cast<uint32_t>(std::stoul(hex, nullptr, 16));
-    } catch (...) {
+    } catch (const std::invalid_argument& e) {
+        FASTEXCEL_LOG_DEBUG("Invalid RGB hex format '{}': {}", srgb, e.what());
+        return 0;
+    } catch (const std::out_of_range& e) {
+        FASTEXCEL_LOG_DEBUG("RGB hex value out of range '{}': {}", srgb, e.what());
         return 0;
     }
 }

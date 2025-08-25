@@ -815,7 +815,11 @@ bool WorksheetParser::extractSharedFormulaInfo(const std::string& f_tag, int& si
     
     try {
         si = std::stoi(f_tag.substr(si_pos, si_end - si_pos));
-    } catch (...) {
+    } catch (const std::invalid_argument& e) {
+        FASTEXCEL_LOG_WARN("Invalid shared formula index format in f tag: {}", e.what());
+        return false;
+    } catch (const std::out_of_range& e) {
+        FASTEXCEL_LOG_WARN("Shared formula index out of range in f tag: {}", e.what());
         return false;
     }
     

@@ -154,7 +154,11 @@ public:
         try {
             parseAddress(address);
             return true;
-        } catch (...) {
+        } catch (const std::invalid_argument&) {
+            // 地址格式无效
+            return false;
+        } catch (const std::exception&) {
+            // 其他解析错误
             return false;
         }
     }
@@ -168,7 +172,11 @@ public:
         try {
             parseRange(range);
             return true;
-        } catch (...) {
+        } catch (const std::invalid_argument&) {
+            // 范围格式无效
+            return false;
+        } catch (const std::exception&) {
+            // 其他解析错误
             return false;
         }
     }

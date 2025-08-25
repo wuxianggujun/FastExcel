@@ -190,12 +190,9 @@ void QuickFormat::formatAsDataList(Worksheet& worksheet, const std::string& rang
                     }
                 }
             }
-        } catch (const std::exception&) {
-            // 解析失败，回退到简单格式
-            formatter.applyStyle(StyleBuilder()
-                .border(BorderStyle::Thin)
-                .vcenterAlign()
-            );
+        } catch (const std::exception& e) {
+            // 解析失败，抛出异常
+            throw std::invalid_argument("Failed to parse range '" + range + "': " + e.what());
         }
     }
     

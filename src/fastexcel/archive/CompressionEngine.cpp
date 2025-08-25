@@ -69,7 +69,7 @@ std::string CompressionEngine::backendToString(Backend backend) {
 
 Result<CompressionEngine::Backend> CompressionEngine::stringToBackend(const std::string& name) {
     std::string lower_name = name;
-    std::transform(lower_name.begin(), lower_name.end(), lower_name.begin(), ::tolower);
+    std::transform(lower_name.begin(), lower_name.end(), lower_name.begin(), [](char c){ return static_cast<char>(std::tolower(static_cast<unsigned char>(c))); });
     
     if (lower_name == "zlib") {
         return makeExpected(Backend::ZLIB);

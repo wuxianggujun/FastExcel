@@ -363,8 +363,10 @@ void Logger::shutdown() {
                 file_stream_.flush();
                 file_stream_.close();
             }
-        } catch (...) {
-            // 忽略关闭时的异常
+        } catch (const std::ios_base::failure& e) {
+            // 忽略文件关闭时的I/O异常
+        } catch (const std::exception& e) {
+            // 忽略其他异常
         }
         initialized_.store(false);
     }

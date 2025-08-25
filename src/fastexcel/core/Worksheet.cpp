@@ -91,6 +91,12 @@ std::pair<double, int> Worksheet::setColumnWidthAdvanced(int col, double target_
                                                         const std::vector<std::string>& cell_contents) {
     validateCellPosition(0, col);
     
+    // 标记未使用的参数以避免编译警告
+    (void)font_name;
+    (void)font_size;
+    (void)strategy;
+    (void)cell_contents;
+    
     if (parent_workbook_ && parent_workbook_->getDirtyManager()) {
         std::string sheet_path = "xl/worksheets/sheet" + std::to_string(sheet_id_) + ".xml";
         parent_workbook_->getDirtyManager()->markDirty(sheet_path, DirtyManager::DirtyLevel::METADATA);

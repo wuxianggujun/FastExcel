@@ -72,7 +72,10 @@ WorkbookDataManager::previewCSV(const std::string& filepath, size_t max_rows, co
             preview.emplace_back(core::parseLine(line, options.delimiter, options.quote_char, options.escape_char));
             ++count;
         }
-    } catch (...) {
+    } catch (const std::ios_base::failure& e) {
+        FASTEXCEL_LOG_WARN("I/O error while reading CSV preview: {}", e.what());
+    } catch (const std::exception& e) {
+        FASTEXCEL_LOG_WARN("Exception while reading CSV preview: {}", e.what());
     }
     return preview;
 }
@@ -198,7 +201,12 @@ WorkbookDataManager::ImportResult WorkbookDataManager::importCSVString(const std
                         try {
                             double num_value = std::stod(cell_value);
                             worksheet->setValue(static_cast<int>(processed_rows), static_cast<int>(col), num_value);
-                        } catch (...) {
+                        } catch (const std::invalid_argument&) {
+                            // 数字格式无效，作为字符串处理
+                            worksheet->setValue(static_cast<int>(processed_rows), static_cast<int>(col), cell_value);
+                        } catch (const std::out_of_range&) {
+                            // 数字超出范围，作为字符串处理
+                            FASTEXCEL_LOG_DEBUG("Numeric value out of range, treating as string: {}", cell_value);
                             worksheet->setValue(static_cast<int>(processed_rows), static_cast<int>(col), cell_value);
                         }
                     } else {

@@ -71,8 +71,14 @@ public:
         if (should_log(Level::TRACE)) {
             try {
                 trace(fmt::vformat(fmt_str, fmt::make_format_args(args...)));
-            } catch (...) {
+            } catch (const fmt::format_error& e) {
+                // 格式化错误，使用原始字符串并记录错误
                 trace(fmt_str);
+                trace("Format error in trace log: " + std::string(e.what()));
+            } catch (const std::exception& e) {
+                // 其他异常，使用原始字符串
+                trace(fmt_str);
+                trace("Exception in trace log: " + std::string(e.what()));
             }
         }
     }
@@ -82,8 +88,14 @@ public:
         if (should_log(Level::DEBUG)) {
             try {
                 debug(fmt::vformat(fmt_str, fmt::make_format_args(args...)));
-            } catch (...) {
+            } catch (const fmt::format_error& e) {
+                // 格式化错误，使用原始字符串
                 debug(fmt_str);
+                debug("Format error in debug log: " + std::string(e.what()));
+            } catch (const std::exception& e) {
+                // 其他异常，使用原始字符串
+                debug(fmt_str);
+                debug("Exception in debug log: " + std::string(e.what()));
             }
         }
     }
@@ -93,8 +105,14 @@ public:
         if (should_log(Level::INFO)) {
             try {
                 info(fmt::vformat(fmt_str, fmt::make_format_args(args...)));
-            } catch (...) {
+            } catch (const fmt::format_error& e) {
+                // 格式化错误，使用原始字符串
                 info(fmt_str);
+                info("Format error in info log: " + std::string(e.what()));
+            } catch (const std::exception& e) {
+                // 其他异常，使用原始字符串
+                info(fmt_str);
+                info("Exception in info log: " + std::string(e.what()));
             }
         }
     }
@@ -104,8 +122,14 @@ public:
         if (should_log(Level::WARN)) {
             try {
                 warn(fmt::vformat(fmt_str, fmt::make_format_args(args...)));
-            } catch (...) {
+            } catch (const fmt::format_error& e) {
+                // 格式化错误，使用原始字符串
                 warn(fmt_str);
+                warn("Format error in warn log: " + std::string(e.what()));
+            } catch (const std::exception& e) {
+                // 其他异常，使用原始字符串
+                warn(fmt_str);
+                warn("Exception in warn log: " + std::string(e.what()));
             }
         }
     }
@@ -115,8 +139,14 @@ public:
         if (should_log(Level::ERROR)) {
             try {
                 error(fmt::vformat(fmt_str, fmt::make_format_args(args...)));
-            } catch (...) {
+            } catch (const fmt::format_error& e) {
+                // 格式化错误，使用原始字符串
                 error(fmt_str);
+                error("Format error in error log: " + std::string(e.what()));
+            } catch (const std::exception& e) {
+                // 其他异常，使用原始字符串
+                error(fmt_str);
+                error("Exception in error log: " + std::string(e.what()));
             }
         }
     }
@@ -126,8 +156,14 @@ public:
         if (should_log(Level::CRITICAL)) {
             try {
                 critical(fmt::vformat(fmt_str, fmt::make_format_args(args...)));
-            } catch (...) {
+            } catch (const fmt::format_error& e) {
+                // 格式化错误，使用原始字符串
                 critical(fmt_str);
+                critical("Format error in critical log: " + std::string(e.what()));
+            } catch (const std::exception& e) {
+                // 其他异常，使用原始字符串
+                critical(fmt_str);
+                critical("Exception in critical log: " + std::string(e.what()));
             }
         }
     }

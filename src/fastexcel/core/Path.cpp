@@ -101,7 +101,11 @@ uintmax_t Path::fileSize() const {
 #else
     try {
         return std::filesystem::file_size(utf8_path_);
-    } catch (...) {
+    } catch (const std::filesystem::filesystem_error& e) {
+        FASTEXCEL_LOG_DEBUG("Filesystem error getting file size '{}': {}", utf8_path_.string(), e.what());
+        return 0;
+    } catch (const std::exception& e) {
+        FASTEXCEL_LOG_DEBUG("Exception getting file size '{}': {}", utf8_path_.string(), e.what());
         return 0;
     }
 #endif
@@ -116,7 +120,11 @@ bool Path::remove() const {
 #else
     try {
         return std::filesystem::remove(utf8_path_);
-    } catch (...) {
+    } catch (const std::filesystem::filesystem_error& e) {
+        FASTEXCEL_LOG_DEBUG("Filesystem error removing file '{}': {}", utf8_path_.string(), e.what());
+        return false;
+    } catch (const std::exception& e) {
+        FASTEXCEL_LOG_DEBUG("Exception removing file '{}': {}", utf8_path_.string(), e.what());
         return false;
     }
 #endif
@@ -136,7 +144,13 @@ bool Path::copyTo(const Path& target, bool overwrite) const {
             std::filesystem::copy_options::none;
         std::filesystem::copy_file(utf8_path_, target.utf8_path_, copy_options);
         return true;
-    } catch (...) {
+    } catch (const std::filesystem::filesystem_error& e) {
+        FASTEXCEL_LOG_DEBUG("Filesystem error copying file '{}' to '{}': {}", 
+                           utf8_path_.string(), target.utf8_path_.string(), e.what());
+        return false;
+    } catch (const std::exception& e) {
+        FASTEXCEL_LOG_DEBUG("Exception copying file '{}' to '{}': {}", 
+                           utf8_path_.string(), target.utf8_path_.string(), e.what());
         return false;
     }
 #endif
@@ -153,7 +167,13 @@ bool Path::moveTo(const Path& target) const {
     try {
         std::filesystem::rename(utf8_path_, target.utf8_path_);
         return true;
-    } catch (...) {
+    } catch (const std::filesystem::filesystem_error& e) {
+        FASTEXCEL_LOG_DEBUG("Filesystem error moving file '{}' to '{}': {}", 
+                           utf8_path_.string(), target.utf8_path_.string(), e.what());
+        return false;
+    } catch (const std::exception& e) {
+        FASTEXCEL_LOG_DEBUG("Exception moving file '{}' to '{}': {}", 
+                           utf8_path_.string(), target.utf8_path_.string(), e.what());
         return false;
     }
 #endif

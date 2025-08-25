@@ -298,7 +298,7 @@ private:
         auto new_page = std::make_unique<Page>(PoolSize);
         
         // 将新页面的空闲块添加到总的空闲链表中
-        if (PoolSize > 0) {
+        if constexpr (PoolSize > 0) {
             new_page->blocks[PoolSize - 1].next = free_list_;
             free_list_ = &new_page->blocks[0];
         }
@@ -326,8 +326,12 @@ private:
             std::lock_guard<std::mutex> lock(mutex_);
             pages_.clear();
             free_list_ = nullptr;
-        } catch (...) {
-            // 忽略清理时的异常
+        } catch (const std::system_error& e) {
+            // 记录互斥锁相关错误
+            FASTEXCEL_LOG_ERROR("System error during FixedSizePool cleanup: {}", e.what());
+        } catch (const std::exception& e) {
+            // 记录其他异常但不抛出（析构函数中调用）
+            FASTEXCEL_LOG_ERROR("Exception during FixedSizePool cleanup: {}", e.what());
         }
     }
 

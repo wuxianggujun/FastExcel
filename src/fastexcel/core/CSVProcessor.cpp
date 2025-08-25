@@ -1,4 +1,5 @@
 #include "fastexcel/core/CSVProcessor.hpp"
+#include "fastexcel/utils/Logger.hpp"
 #include <fstream>
 #include <sstream>
 #include <fmt/format.h>
@@ -181,12 +182,16 @@ CSVParseInfo parseContent(const std::string& content, const CSVOptions& options)
                     // 尝试解析为数字（简单实现）
                     try {
                         if (field.find('.') != std::string::npos) {
-                            std::stod(field); // 测试是否为有效数字
+                            (void)std::stod(field); // 测试是否为有效数字，忽略返回值
                         } else {
-                            std::stoi(field); // 测试是否为有效整数
+                            (void)std::stoi(field); // 测试是否为有效整数，忽略返回值
                         }
-                    } catch (...) {
-                        // 不是数字，保持原样
+                    } catch (const std::invalid_argument&) {
+                        // 不是数字格式，保持原样
+                        FASTEXCEL_LOG_TRACE("Field '{}' is not a valid number format", field);
+                    } catch (const std::out_of_range&) {
+                        // 数字超出范围，保持原样
+                        FASTEXCEL_LOG_TRACE("Field '{}' is out of numeric range", field);
                     }
                 }
             }

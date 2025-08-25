@@ -261,7 +261,7 @@ std::string ImageUtils::formatToString(ImageFormat format) {
 
 ImageFormat ImageUtils::stringToFormat(const std::string& format_str) {
     std::string upper_str = format_str;
-    std::transform(upper_str.begin(), upper_str.end(), upper_str.begin(), ::toupper);
+    std::transform(upper_str.begin(), upper_str.end(), upper_str.begin(), [](char c){ return static_cast<char>(std::toupper(static_cast<unsigned char>(c))); });
     
     if (upper_str == "PNG") return ImageFormat::PNG;
     if (upper_str == "JPEG" || upper_str == "JPG") return ImageFormat::JPEG;

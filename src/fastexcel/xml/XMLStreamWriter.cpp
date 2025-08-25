@@ -13,9 +13,12 @@ XMLStreamWriter::XMLStreamWriter() {
         initializeInternal();
         output_mode_ = OutputMode::MEMORY_BUFFER;
         FASTEXCEL_LOG_DEBUG("XMLStreamWriter created in memory buffer mode");
-    } catch (...) {
+    } catch (const std::bad_alloc& e) {
         cleanupInternal();
-        throw;
+        throw std::runtime_error("Failed to initialize XMLStreamWriter: out of memory");
+    } catch (const std::exception& e) {
+        cleanupInternal();
+        throw std::runtime_error("Failed to initialize XMLStreamWriter: " + std::string(e.what()));
     }
 }
 
@@ -24,9 +27,15 @@ XMLStreamWriter::XMLStreamWriter(const std::string& filename) {
         initializeInternal();
         switchToFileMode(filename);
         FASTEXCEL_LOG_DEBUG("XMLStreamWriter created with file: {}", filename);
-    } catch (...) {
+    } catch (const std::ios_base::failure& e) {
         cleanupInternal();
-        throw;
+        throw std::runtime_error("Failed to open file '" + filename + "': " + e.what());
+    } catch (const std::bad_alloc& e) {
+        cleanupInternal();
+        throw std::runtime_error("Failed to initialize XMLStreamWriter: out of memory");
+    } catch (const std::exception& e) {
+        cleanupInternal();
+        throw std::runtime_error("Failed to initialize XMLStreamWriter with file '" + filename + "': " + e.what());
     }
 }
 
@@ -35,9 +44,12 @@ XMLStreamWriter::XMLStreamWriter(WriteCallback callback) {
         initializeInternal();
         switchToCallbackMode(std::move(callback));
         FASTEXCEL_LOG_DEBUG("XMLStreamWriter created with callback mode");
-    } catch (...) {
+    } catch (const std::bad_alloc& e) {
         cleanupInternal();
-        throw;
+        throw std::runtime_error("Failed to initialize XMLStreamWriter: out of memory");
+    } catch (const std::exception& e) {
+        cleanupInternal();
+        throw std::runtime_error("Failed to initialize XMLStreamWriter with callback: " + std::string(e.what()));
     }
 }
 
@@ -57,8 +69,13 @@ XMLStreamWriter::~XMLStreamWriter() {
         
         FASTEXCEL_LOG_DEBUG("XMLStreamWriter destroyed. Bytes written: {}, Flushes: {}", 
                            bytes_written_, flush_count_);
-    } catch (...) {
-        // 析构函数中不抛出异常
+    } catch (const std::exception& e) {
+        // 析构函数中不抛出异常，但记录错误
+        try {
+            FASTEXCEL_LOG_ERROR("Exception in XMLStreamWriter destructor: {}", e.what());
+        } catch (...) {
+            // 如果连日志都失败了，则静默忽略
+        }
     }
 }
 
@@ -89,8 +106,13 @@ XMLStreamWriter& XMLStreamWriter::operator=(XMLStreamWriter&& other) noexcept {
                 flush();
             }
             cleanupInternal();
-        } catch (...) {
-            // 忽略清理时的异常
+        } catch (const std::exception& e) {
+            // 记录清理时的异常但不抛出（移动赋值操作符中）
+            try {
+                FASTEXCEL_LOG_ERROR("Exception during XMLStreamWriter move assignment cleanup: {}", e.what());
+            } catch (...) {
+                // 如果连日志都失败了，则静默忽略
+            }
         }
         
         // 移动资源
@@ -132,8 +154,13 @@ void XMLStreamWriter::cleanupInternal() noexcept {
         pending_attributes_.clear();
         memory_buffer_.clear();
         file_wrapper_.reset();
-    } catch (...) {
-        // 清理时忽略异常
+    } catch (const std::exception& e) {
+        // noexcept函数中不能抛出异常，但记录错误
+        try {
+            FASTEXCEL_LOG_ERROR("Exception during XMLStreamWriter cleanup: {}", e.what());
+        } catch (...) {
+            // 如果连日志都失败了，则静默忽略
+        }
     }
 }
 

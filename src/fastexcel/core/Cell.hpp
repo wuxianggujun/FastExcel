@@ -174,7 +174,14 @@ public:
     std::optional<T> tryGetValue() const noexcept {
         try {
             return getValue<T>();
-        } catch (...) {
+        } catch (const std::bad_cast& e) {
+            FASTEXCEL_LOG_DEBUG("Type conversion failed in tryGetValue: {}", e.what());
+            return std::nullopt;
+        } catch (const std::runtime_error& e) {
+            FASTEXCEL_LOG_DEBUG("Runtime error in tryGetValue: {}", e.what());
+            return std::nullopt;
+        } catch (const std::exception& e) {
+            FASTEXCEL_LOG_DEBUG("Exception in tryGetValue: {}", e.what());
             return std::nullopt;
         }
     }

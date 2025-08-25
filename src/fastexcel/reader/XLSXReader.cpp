@@ -687,7 +687,14 @@ std::string XLSXReader::getCellValue(const std::string& cell_xml, core::CellType
                     int index = std::stoi(value);
                     auto it = shared_strings_.find(index);
                     return (it != shared_strings_.end()) ? it->second : "";
-                } catch (...) {
+                } catch (const std::invalid_argument& e) {
+                    FASTEXCEL_LOG_DEBUG("Invalid shared string index '{}': {}", value, e.what());
+                    return "";
+                } catch (const std::out_of_range& e) {
+                    FASTEXCEL_LOG_DEBUG("Shared string index '{}' out of range: {}", value, e.what());
+                    return "";
+                } catch (const std::exception& e) {
+                    FASTEXCEL_LOG_DEBUG("Exception parsing shared string index '{}': {}", value, e.what());
                     return "";
                 }
             } else if (cell_type == "b") {

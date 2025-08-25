@@ -363,7 +363,11 @@ public:
         try {
             auto sheet = findSheet(name);
             return sheet ? std::make_optional(sheet) : std::nullopt;
-        } catch (...) {
+        } catch (const std::out_of_range& e) {
+            FASTEXCEL_LOG_DEBUG("Sheet not found '{}': {}", name, e.what());
+            return std::nullopt;
+        } catch (const std::exception& e) {
+            FASTEXCEL_LOG_DEBUG("Exception in tryGetSheet '{}': {}", name, e.what());
             return std::nullopt;
         }
     }
@@ -377,7 +381,11 @@ public:
         try {
             auto sheet = getSheet(index);
             return sheet ? std::make_optional(sheet) : std::nullopt;
-        } catch (...) {
+        } catch (const std::out_of_range& e) {
+            FASTEXCEL_LOG_DEBUG("Sheet index out of range {}: {}", index, e.what());
+            return std::nullopt;
+        } catch (const std::exception& e) {
+            FASTEXCEL_LOG_DEBUG("Exception in tryGetSheet index {}: {}", index, e.what());
             return std::nullopt;
         }
     }

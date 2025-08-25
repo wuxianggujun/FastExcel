@@ -271,11 +271,28 @@ std::string WorksheetCSVHandler::getCellDisplayValue(int row, int col) const {
                         result_str.erase(result_str.find_last_not_of('.') + 1, std::string::npos);
                         return result_str;
                     }
-                } catch (...) {
+                } catch (const std::runtime_error& e) {
+                    FASTEXCEL_LOG_DEBUG("Formula execution error: {}", e.what());
                     try {
                         std::string formula = cell.getFormula();
                         return formula.empty() ? "=" : fmt::format("={}", formula);
-                    } catch (...) {
+                    } catch (const fmt::format_error& e) {
+                        FASTEXCEL_LOG_DEBUG("Formula format error: {}", e.what());
+                        return "#FORMULA_ERROR";
+                    } catch (const std::exception& e) {
+                        FASTEXCEL_LOG_DEBUG("Exception getting formula: {}", e.what());
+                        return "#FORMULA_ERROR";
+                    }
+                } catch (const std::exception& e) {
+                    FASTEXCEL_LOG_DEBUG("Exception getting formula result: {}", e.what());
+                    try {
+                        std::string formula = cell.getFormula();
+                        return formula.empty() ? "=" : fmt::format("={}", formula);
+                    } catch (const fmt::format_error& e) {
+                        FASTEXCEL_LOG_DEBUG("Formula format error: {}", e.what());
+                        return "#FORMULA_ERROR";
+                    } catch (const std::exception& e) {
+                        FASTEXCEL_LOG_DEBUG("Exception getting formula: {}", e.what());
                         return "#FORMULA_ERROR";
                     }
                 }

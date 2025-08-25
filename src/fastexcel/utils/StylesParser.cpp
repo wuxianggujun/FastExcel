@@ -94,7 +94,14 @@ std::pair<std::string, double> StylesParser::parseFontById(const std::string& xm
                 if (!size_str.empty()) {
                     try {
                         font_size = std::stod(size_str);
-                    } catch (...) {
+                    } catch (const std::invalid_argument& e) {
+                        FASTEXCEL_LOG_DEBUG("Invalid font size string '{}': {}", size_str, e.what());
+                        font_size = 11.0;
+                    } catch (const std::out_of_range& e) {
+                        FASTEXCEL_LOG_DEBUG("Font size '{}' out of range: {}", size_str, e.what());
+                        font_size = 11.0;
+                    } catch (const std::exception& e) {
+                        FASTEXCEL_LOG_DEBUG("Exception parsing font size '{}': {}", size_str, e.what());
                         font_size = 11.0;
                     }
                 }

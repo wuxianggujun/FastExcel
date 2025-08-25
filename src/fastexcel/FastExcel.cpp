@@ -16,7 +16,8 @@ namespace fastexcel {
 
 FASTEXCEL_API bool initialize(const std::string& log_file_path, bool enable_console) {
     try {
-        // 初始化日志系统 - 使用静态初始化
+        // 初始化日志系统
+        Logger::getInstance().initialize(log_file_path, Logger::Level::INFO, enable_console);
         FASTEXCEL_LOG_INFO("FastExcel library initialized successfully");
         FASTEXCEL_LOG_INFO("Version: {}", getVersion());
         
@@ -34,8 +35,13 @@ FASTEXCEL_API void cleanup() {
     try {
         FASTEXCEL_LOG_INFO("FastExcel library cleanup completed");
         // 日志系统会在程序结束时自动清理
-    } catch (...) {
-        // 清理时忽略异常
+    } catch (const std::exception& e) {
+        // 清理时记录异常但不抛出，避免析构函数中抛出异常
+        try {
+            FASTEXCEL_LOG_ERROR("Exception during cleanup: {}", e.what());
+        } catch (...) {
+            // 如果连日志都失败了，则静默忽略
+        }
     }
 }
 

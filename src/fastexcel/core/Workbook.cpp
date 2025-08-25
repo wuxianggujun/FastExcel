@@ -211,10 +211,17 @@ Workbook::Workbook(const Path& path) : filename_(path.string()) {
         
         FASTEXCEL_LOG_DEBUG("Workbook constructed with memory optimizations: {}", filename_);
         
-    } catch (...) {
+    } catch (const std::bad_alloc& e) {
         // resource_manager会自动清理已分配的资源
-        FASTEXCEL_LOG_ERROR("Failed to construct Workbook: {}", path.string());
-        throw;
+        FASTEXCEL_LOG_ERROR("Out of memory while constructing Workbook: {}", path.string());
+        throw std::runtime_error("Failed to construct Workbook: out of memory");
+    } catch (const std::ios_base::failure& e) {
+        FASTEXCEL_LOG_ERROR("I/O error while constructing Workbook '{}': {}", path.string(), e.what());
+        throw std::runtime_error("Failed to construct Workbook: I/O error - " + std::string(e.what()));
+    } catch (const std::exception& e) {
+        // resource_manager会自动清理已分配的资源
+        FASTEXCEL_LOG_ERROR("Exception while constructing Workbook '{}': {}", path.string(), e.what());
+        throw std::runtime_error("Failed to construct Workbook: " + std::string(e.what()));
     }
 }
 
@@ -229,9 +236,13 @@ Workbook::~Workbook() {
             memory_manager_->clear();
         }
         
-    } catch (...) {
-        // 析构函数中不抛出异常
-        FASTEXCEL_LOG_ERROR("Error during Workbook destruction");
+    } catch (const std::exception& e) {
+        // 析构函数中不抛出异常，但记录详细错误信息
+        try {
+            FASTEXCEL_LOG_ERROR("Exception during Workbook destruction: {}", e.what());
+        } catch (...) {
+            // 如果连日志都失败了，则静默忽略
+        }
     }
 }
 

@@ -57,8 +57,13 @@ public:
         try {
             instance_ = std::make_unique<T>(std::forward<Args>(args)...);
             return *instance_;
-        } catch (...) {
+        } catch (const std::bad_alloc& e) {
             instance_.reset();
+            FASTEXCEL_LOG_ERROR("Out of memory in LazyInitializer: {}", e.what());
+            throw;
+        } catch (const std::exception& e) {
+            instance_.reset();
+            FASTEXCEL_LOG_ERROR("Exception in LazyInitializer construction: {}", e.what());
             throw;
         }
     }

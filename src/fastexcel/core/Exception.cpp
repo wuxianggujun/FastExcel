@@ -5,6 +5,7 @@
 
 #include "Exception.hpp"
 #include "fastexcel/utils/CommonUtils.hpp"
+#include "fastexcel/utils/Logger.hpp"
 #include <sstream>
 #include <fmt/format.h>
 #include <iostream>
@@ -197,8 +198,13 @@ bool ErrorManager::handleError(const FastExcelException& exception) {
             bool result = error_handler_->handleError(exception);
             stats_.handled_errors++;
             return result;
-        } catch (...) {
+        } catch (const std::bad_alloc& e) {
             stats_.unhandled_errors++;
+            FASTEXCEL_LOG_CRITICAL("Out of memory in error handler: {}", e.what());
+            throw;
+        } catch (const std::exception& e) {
+            stats_.unhandled_errors++;
+            FASTEXCEL_LOG_ERROR("Exception in error handler: {}", e.what());
             throw;
         }
     } else {

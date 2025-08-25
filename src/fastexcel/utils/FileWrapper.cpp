@@ -38,8 +38,12 @@ TempFileWrapper& TempFileWrapper::operator=(TempFileWrapper&& other) noexcept {
         if (should_delete_ && !temp_path_.empty()) {
             try {
                 std::filesystem::remove(temp_path_);
-            } catch (...) {
-                // 忽略清理错误
+            } catch (const std::filesystem::filesystem_error& e) {
+                // 记录文件系统错误但不抛出（移动赋值操作符中）
+                FASTEXCEL_LOG_WARN("Failed to remove temp file '{}' during move assignment: {}", temp_path_.string(), e.what());
+            } catch (const std::exception& e) {
+                // 记录其他错误
+                FASTEXCEL_LOG_WARN("Exception while removing temp file '{}': {}", temp_path_.string(), e.what());
             }
         }
         
