@@ -213,60 +213,6 @@ private:
     bool auto_flush_ = true;
 };
 
-/**
- * @brief 动态大小的安全缓冲区
- * 
- * 支持自动扩展，但有最大大小限制
- */
-class DynamicSafeBuffer {
-public:
-    using FlushCallback = std::function<void(const char* data, size_t length)>;
-    
-    /**
-     * @brief 构造函数
-     * @param initial_capacity 初始容量
-     * @param max_capacity 最大容量限制
-     * @param flush_callback 刷新回调
-     */
-    explicit DynamicSafeBuffer(
-        size_t initial_capacity = 4096,
-        size_t max_capacity = 1024 * 1024, // 1MB
-        FlushCallback flush_callback = nullptr
-    );
-    
-    /**
-     * @brief 追加数据
-     */
-    bool append(const char* data, size_t length);
-    bool append(const std::string& str) { return append(str.c_str(), str.size()); }
-    bool append(char c) { return append(&c, 1); }
-    
-    /**
-     * @brief 刷新和清理
-     */
-    void flush();
-    void clear() noexcept;
-    
-    /**
-     * @brief 状态查询
-     */
-    size_t size() const noexcept { return pos_; }
-    size_t capacity() const noexcept { return buffer_.size(); }
-    bool empty() const noexcept { return pos_ == 0; }
-    
-    /**
-     * @brief 数据访问
-     */
-    const char* data() const noexcept { return buffer_.data(); }
-
-private:
-    std::vector<char> buffer_;
-    size_t pos_ = 0;
-    size_t max_capacity_;
-    FlushCallback flush_callback_;
-    
-    bool ensureCapacity(size_t required_size);
-};
 
 } // namespace utils
 } // namespace fastexcel
