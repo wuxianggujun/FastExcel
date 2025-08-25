@@ -682,9 +682,8 @@ void Worksheet::clearRange(int first_row, int first_col, int last_row, int last_
     
     for (int row = first_row; row <= last_row; ++row) {
         for (int col = first_col; col <= last_col; ++col) {
-            auto it = cells_.find(std::make_pair(row, col));
-            if (it != cells_.end()) {
-                cells_.erase(it);
+            if (cells_.hasCell(row, col)) {
+                cells_.removeCell(row, col);
             }
         }
     }
@@ -717,18 +716,29 @@ void Worksheet::updateUsedRange(int row, int col) {
 }
 
 void Worksheet::shiftCellsForRowInsertion(int row, int count) {
-    std::map<std::pair<int, int>, Cell> new_cells;
+    // 获取所有单元格并重新定位
+    auto all_cells = cells_.getAllCells();
     
-    for (auto& [pos, cell] : cells_) {
+    // 收集需要移动的单元格
+    std::vector<std::tuple<std::pair<int, int>, std::pair<int, int>, Cell>> moves;
+    
+    for (const auto& [pos, cell_ptr] : all_cells) {
         if (pos.first >= row) {
             // 向下移动
-            new_cells[{pos.first + count, pos.second}] = std::move(cell);
-        } else {
-            new_cells[pos] = std::move(cell);
+            std::pair<int, int> new_pos = {pos.first + count, pos.second};
+            moves.emplace_back(pos, new_pos, *cell_ptr);
         }
     }
     
-    cells_ = std::move(new_cells);
+    // 先移除旧位置的单元格
+    for (const auto& [old_pos, new_pos, cell] : moves) {
+        cells_.removeCell(old_pos.first, old_pos.second);
+    }
+    
+    // 再在新位置设置单元格
+    for (const auto& [old_pos, new_pos, cell] : moves) {
+        cells_.getCell(new_pos.first, new_pos.second) = cell;
+    }
     
     // 更新合并单元格
     for (auto& range : merge_ranges_) {
@@ -742,18 +752,29 @@ void Worksheet::shiftCellsForRowInsertion(int row, int count) {
 }
 
 void Worksheet::shiftCellsForColumnInsertion(int col, int count) {
-    std::map<std::pair<int, int>, Cell> new_cells;
+    // 获取所有单元格并重新定位
+    auto all_cells = cells_.getAllCells();
     
-    for (auto& [pos, cell] : cells_) {
+    // 收集需要移动的单元格
+    std::vector<std::tuple<std::pair<int, int>, std::pair<int, int>, Cell>> moves;
+    
+    for (const auto& [pos, cell_ptr] : all_cells) {
         if (pos.second >= col) {
             // 向右移动
-            new_cells[{pos.first, pos.second + count}] = std::move(cell);
-        } else {
-            new_cells[pos] = std::move(cell);
+            std::pair<int, int> new_pos = {pos.first, pos.second + count};
+            moves.emplace_back(pos, new_pos, *cell_ptr);
         }
     }
     
-    cells_ = std::move(new_cells);
+    // 先移除旧位置的单元格
+    for (const auto& [old_pos, new_pos, cell] : moves) {
+        cells_.removeCell(old_pos.first, old_pos.second);
+    }
+    
+    // 再在新位置设置单元格
+    for (const auto& [old_pos, new_pos, cell] : moves) {
+        cells_.getCell(new_pos.first, new_pos.second) = cell;
+    }
     
     // 更新合并单元格
     for (auto& range : merge_ranges_) {
@@ -767,19 +788,39 @@ void Worksheet::shiftCellsForColumnInsertion(int col, int count) {
 }
 
 void Worksheet::shiftCellsForRowDeletion(int row, int count) {
-    std::map<std::pair<int, int>, Cell> new_cells;
+    // 获取所有单元格并重新定位
+    auto all_cells = cells_.getAllCells();
     
-    for (auto& [pos, cell] : cells_) {
+    // 收集需要移动的单元格和需要删除的单元格
+    std::vector<std::tuple<std::pair<int, int>, std::pair<int, int>, Cell>> moves;
+    std::vector<std::pair<int, int>> deletions;
+    
+    for (const auto& [pos, cell_ptr] : all_cells) {
         if (pos.first >= row + count) {
             // 向上移动
-            new_cells[{pos.first - count, pos.second}] = std::move(cell);
-        } else if (pos.first < row) {
-            new_cells[pos] = std::move(cell);
+            std::pair<int, int> new_pos = {pos.first - count, pos.second};
+            moves.emplace_back(pos, new_pos, *cell_ptr);
+        } else if (pos.first >= row) {
+            // 删除范围内的单元格
+            deletions.push_back(pos);
         }
-        // 删除范围内的单元格被忽略
+        // pos.first < row 的单元格保持不变
     }
     
-    cells_ = std::move(new_cells);
+    // 先删除需要删除的单元格
+    for (const auto& pos : deletions) {
+        cells_.removeCell(pos.first, pos.second);
+    }
+    
+    // 再移除需要移动的单元格的旧位置
+    for (const auto& [old_pos, new_pos, cell] : moves) {
+        cells_.removeCell(old_pos.first, old_pos.second);
+    }
+    
+    // 最后在新位置设置单元格
+    for (const auto& [old_pos, new_pos, cell] : moves) {
+        cells_.getCell(new_pos.first, new_pos.second) = cell;
+    }
     
     // 更新合并单元格
     auto it = merge_ranges_.begin();
@@ -800,19 +841,39 @@ void Worksheet::shiftCellsForRowDeletion(int row, int count) {
 }
 
 void Worksheet::shiftCellsForColumnDeletion(int col, int count) {
-    std::map<std::pair<int, int>, Cell> new_cells;
+    // 获取所有单元格并重新定位
+    auto all_cells = cells_.getAllCells();
     
-    for (auto& [pos, cell] : cells_) {
+    // 收集需要移动的单元格和需要删除的单元格
+    std::vector<std::tuple<std::pair<int, int>, std::pair<int, int>, Cell>> moves;
+    std::vector<std::pair<int, int>> deletions;
+    
+    for (const auto& [pos, cell_ptr] : all_cells) {
         if (pos.second >= col + count) {
             // 向左移动
-            new_cells[{pos.first, pos.second - count}] = std::move(cell);
-        } else if (pos.second < col) {
-            new_cells[pos] = std::move(cell);
+            std::pair<int, int> new_pos = {pos.first, pos.second - count};
+            moves.emplace_back(pos, new_pos, *cell_ptr);
+        } else if (pos.second >= col) {
+            // 删除范围内的单元格
+            deletions.push_back(pos);
         }
-        // 删除范围内的单元格被忽略
+        // pos.second < col 的单元格保持不变
     }
     
-    cells_ = std::move(new_cells);
+    // 先删除需要删除的单元格
+    for (const auto& pos : deletions) {
+        cells_.removeCell(pos.first, pos.second);
+    }
+    
+    // 再移除需要移动的单元格的旧位置
+    for (const auto& [old_pos, new_pos, cell] : moves) {
+        cells_.removeCell(old_pos.first, old_pos.second);
+    }
+    
+    // 最后在新位置设置单元格
+    for (const auto& [old_pos, new_pos, cell] : moves) {
+        cells_.getCell(new_pos.first, new_pos.second) = cell;
+    }
     
     // 更新合并单元格
     auto it = merge_ranges_.begin();
@@ -860,7 +921,7 @@ void Worksheet::flushCurrentRow() {
     // 将当前行数据移动到主存储中
     int row_num = current_row_->row_num;
     for (auto& [col, cell] : current_row_->cells) {
-        cells_[std::make_pair(row_num, col)] = std::move(cell);
+        cells_.getCell(row_num, col) = std::move(cell);
     }
     
     // 更新行信息
@@ -883,9 +944,10 @@ size_t Worksheet::getMemoryUsage() const {
     size_t usage = sizeof(Worksheet);
     
     // 单元格内存
-    for (const auto& [pos, cell] : cells_) {
-        usage += sizeof(std::pair<std::pair<int, int>, Cell>);
-        usage += cell.getMemoryUsage();
+    auto all_cells = cells_.getAllCells();
+    for (const auto& [pos, cell_ptr] : all_cells) {
+        usage += sizeof(std::pair<std::pair<int, int>, Cell*>);
+        usage += cell_ptr->getMemoryUsage();
     }
     
     // 当前行内存（优化模式）
@@ -1166,7 +1228,8 @@ int Worksheet::getRowCount() const {
     }
     
     int max_row = -1;
-    for (const auto& [pos, cell] : cells_) {
+    auto all_cells = cells_.getAllCells();
+    for (const auto& [pos, cell_ptr] : all_cells) {
         max_row = std::max(max_row, pos.first);
     }
     
@@ -1179,7 +1242,8 @@ int Worksheet::getColumnCount() const {
     }
     
     int max_col = -1;
-    for (const auto& [pos, cell] : cells_) {
+    auto all_cells = cells_.getAllCells();
+    for (const auto& [pos, cell_ptr] : all_cells) {
         max_col = std::max(max_col, pos.second);
     }
     

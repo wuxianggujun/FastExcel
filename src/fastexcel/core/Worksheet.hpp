@@ -1,6 +1,6 @@
 #pragma once
 
-#include "fastexcel/core/Cell.hpp"
+#include "fastexcel/core/BlockSparseMatrix.hpp"
 #include "fastexcel/core/SharedStringTable.hpp"
 #include "fastexcel/core/FormatRepository.hpp"
 #include "fastexcel/core/WorksheetTypes.hpp"
@@ -194,7 +194,7 @@ public:
 
 private:
     std::string name_;
-    std::map<std::pair<int, int>, Cell> cells_; // (row, col) -> Cell
+    BlockSparseMatrix cells_; // 优化的分块稀疏矩阵存储
     std::shared_ptr<Workbook> parent_workbook_;
     int sheet_id_;
     

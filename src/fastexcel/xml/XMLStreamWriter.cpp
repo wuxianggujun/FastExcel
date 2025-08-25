@@ -523,13 +523,33 @@ void XMLStreamWriter::ensureElementClosed() {
 }
 
 void XMLStreamWriter::writeAttributesToBuffer() {
+    if (pending_attributes_.empty()) return;
+    
+    // 预估所需空间 - 避免多次内存重分配
+    size_t estimated_size = 0;
     for (const auto& attr : pending_attributes_) {
-        buffer_.append(' ');
-        buffer_.append(attr.key);
-        buffer_.append("=\"");
-        writeEscapedAttribute(attr.value);
-        buffer_.append('"');
+        // 空格(1) + key + ="(2) + value + "(1) + 转义字符的额外空间
+        estimated_size += 4 + attr.key.size() + estimateEscapedSize(attr.value);
     }
+    
+    // 使用临时缓冲区批量构建属性字符串
+    std::string attribute_buffer;
+    attribute_buffer.reserve(estimated_size);
+    
+    // 批量构建属性字符串
+    for (const auto& attr : pending_attributes_) {
+        attribute_buffer += ' ';
+        attribute_buffer += attr.key;
+        attribute_buffer += "=\"";
+        
+        // 内联XML转义 - 避免临时字符串创建
+        appendEscapedInline(attribute_buffer, attr.value);
+        
+        attribute_buffer += '\"';
+    }
+    
+    // 一次性写入到主缓冲区
+    buffer_.append(attribute_buffer);
     pending_attributes_.clear();
 }
 
@@ -537,6 +557,52 @@ void XMLStreamWriter::writeEscapedAttribute(const std::string& value) {
     // 直接使用XMLUtils工具类进行转义
     std::string escaped = utils::XMLUtils::escapeXML(value);
     buffer_.append(escaped);
+}
+
+// 性能优化的辅助方法实现
+size_t XMLStreamWriter::estimateEscapedSize(const std::string& text) const {
+    size_t extra = 0;
+    for (char c : text) {
+        switch (c) {
+            case '<':
+            case '>':
+                extra += 3; // &lt; &gt; = 4字符，原来1字符，增加3
+                break;
+            case '&':
+                extra += 4; // &amp; = 5字符，原来1字符，增加4
+                break;
+            case '"':
+            case '\'':
+                extra += 5; // &quot; &apos; = 6字符，原来1字符，增加5
+                break;
+        }
+    }
+    return text.size() + extra;
+}
+
+void XMLStreamWriter::appendEscapedInline(std::string& target, const std::string& source) const {
+    for (char c : source) {
+        switch (c) {
+            case '<':
+                target += "&lt;";
+                break;
+            case '>':
+                target += "&gt;";
+                break;
+            case '&':
+                target += "&amp;";
+                break;
+            case '"':
+                target += "&quot;";
+                break;
+            case '\'':
+                target += "&apos;";
+                break;
+            default:
+                target += c;
+                break;
+        }
+    }
 }
 
 void XMLStreamWriter::writeEscapedText(const std::string& text) {

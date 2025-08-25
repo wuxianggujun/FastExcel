@@ -206,6 +206,10 @@ private:
     // 异常安全的初始化方法
     void initializeInternal();
     void cleanupInternal() noexcept;
+    
+    // 性能优化的辅助方法
+    size_t estimateEscapedSize(const std::string& text) const;
+    void appendEscapedInline(std::string& target, const std::string& source) const;
 };
 
 }} // namespace fastexcel::xml

@@ -10,7 +10,7 @@
 namespace fastexcel {
 namespace core {
 
-CellDataProcessor::CellDataProcessor(std::map<std::pair<int, int>, Cell>& cells, 
+CellDataProcessor::CellDataProcessor(BlockSparseMatrix& cells, 
                                    CellRangeManager& range_manager,
                                    std::shared_ptr<Workbook> parent_workbook,
                                    int sheet_id)
@@ -20,17 +20,16 @@ CellDataProcessor::CellDataProcessor(std::map<std::pair<int, int>, Cell>& cells,
 Cell& CellDataProcessor::getCell(int row, int col) {
     validateCellPosition(row, col);
     updateUsedRange(row, col);
-    return cells_[std::make_pair(row, col)];
+    return cells_.getCell(row, col);
 }
 
 const Cell& CellDataProcessor::getCell(int row, int col) const {
     validateCellPosition(row, col);
-    auto it = cells_.find(std::make_pair(row, col));
-    if (it == cells_.end()) {
+    if (!cells_.hasCell(row, col)) {
         static Cell empty_cell;
         return empty_cell;
     }
-    return it->second;
+    return cells_.getCell(row, col);
 }
 
 void CellDataProcessor::setFormula(int row, int col, const std::string& formula, double result) {
@@ -62,16 +61,14 @@ void CellDataProcessor::setHyperlink(int row, int col, const std::string& url, c
 }
 
 void CellDataProcessor::clearCell(int row, int col) {
-    auto it = cells_.find(std::make_pair(row, col));
-    if (it != cells_.end()) {
+    if (cells_.hasCell(row, col)) {
         markDirty();
-        cells_.erase(it);
+        cells_.removeCell(row, col);
     }
 }
 
 bool CellDataProcessor::hasCellAt(int row, int col) const {
-    auto it = cells_.find(std::make_pair(row, col));
-    return it != cells_.end() && (!it->second.isEmpty() || it->second.hasFormat());
+    return cells_.hasCell(row, col) && (!cells_.getCell(row, col).isEmpty() || cells_.getCell(row, col).hasFormat());
 }
 
 void CellDataProcessor::copyCell(int src_row, int src_col, int dst_row, int dst_col, bool copy_format) {
@@ -159,12 +156,13 @@ std::vector<std::pair<int, int>> CellDataProcessor::findCells(const std::string&
                                                              bool match_entire_cell) const {
     std::vector<std::pair<int, int>> results;
     
-    for (const auto& [pos, cell] : cells_) {
-        if (!cell.isString()) {
+    auto all_cells = cells_.getAllCells();
+    for (const auto& [pos, cell_ptr] : all_cells) {
+        if (!cell_ptr->isString()) {
             continue;
         }
         
-        std::string cell_text = cell.getValue<std::string>();
+        std::string cell_text = cell_ptr->getValue<std::string>();
         std::string target_text = cell_text;
         std::string find_text = search_text;
         
@@ -194,12 +192,13 @@ int CellDataProcessor::findAndReplace(const std::string& find_text, const std::s
                                      bool match_case, bool match_entire_cell) {
     int replace_count = 0;
     
-    for (auto& [pos, cell] : cells_) {
-        if (!cell.isString()) {
+    auto all_cells = cells_.getAllCells();
+    for (const auto& [pos, cell_ptr] : all_cells) {
+        if (!cell_ptr->isString()) {
             continue;
         }
         
-        std::string cell_text = cell.getValue<std::string>();
+        std::string cell_text = cell_ptr->getValue<std::string>();
         bool replaced = false;
         
         if (match_entire_cell) {
@@ -214,7 +213,8 @@ int CellDataProcessor::findAndReplace(const std::string& find_text, const std::s
             }
             
             if (target_text == search_text) {
-                cell.setValue(replace_text);
+                // 需要通过坐标获取可修改的引用
+                cells_.getCell(pos.first, pos.second).setValue(replace_text);
                 replaced = true;
             }
         } else {
@@ -227,7 +227,8 @@ int CellDataProcessor::findAndReplace(const std::string& find_text, const std::s
             }
             
             if (replaced) {
-                cell.setValue(cell_text);
+                // 需要通过坐标获取可修改的引用
+                cells_.getCell(pos.first, pos.second).setValue(cell_text);
             }
         }
         
@@ -259,10 +260,9 @@ void CellDataProcessor::sortRange(int first_row, int first_col, int last_row, in
     for (int row = data_start_row; row <= last_row; ++row) {
         std::map<int, Cell> row_cells;
         for (int col = first_col; col <= last_col; ++col) {
-            auto it = cells_.find(std::make_pair(row, col));
-            if (it != cells_.end()) {
-                row_cells[col] = std::move(it->second);
-                cells_.erase(it);
+            if (cells_.hasCell(row, col)) {
+                row_cells[col] = cells_.getCell(row, col);
+                cells_.removeCell(row, col);
             }
         }
         rows_data.emplace_back(row, std::move(row_cells));
@@ -309,26 +309,21 @@ void CellDataProcessor::sortRange(int first_row, int first_col, int last_row, in
         const auto& row_cells = rows_data[i].second;
         
         for (const auto& [col, cell] : row_cells) {
-            cells_[std::make_pair(target_row, col)] = std::move(const_cast<Cell&>(cell));
+            cells_.getCell(target_row, col) = std::move(const_cast<Cell&>(cell));
             updateUsedRange(target_row, col);
         }
     }
 }
 
 int CellDataProcessor::getCellCount() const {
-    int count = 0;
-    for (const auto& [pos, cell] : cells_) {
-        if (!cell.isEmpty()) {
-            count++;
-        }
-    }
-    return count;
+    return static_cast<int>(cells_.size());
 }
 
 int CellDataProcessor::getCellCountInRow(int row) const {
     int count = 0;
-    for (const auto& [pos, cell] : cells_) {
-        if (pos.first == row && !cell.isEmpty()) {
+    auto all_cells = cells_.getAllCells();
+    for (const auto& [pos, cell_ptr] : all_cells) {
+        if (pos.first == row && !cell_ptr->isEmpty()) {
             count++;
         }
     }
@@ -337,8 +332,9 @@ int CellDataProcessor::getCellCountInRow(int row) const {
 
 int CellDataProcessor::getCellCountInColumn(int col) const {
     int count = 0;
-    for (const auto& [pos, cell] : cells_) {
-        if (pos.second == col && !cell.isEmpty()) {
+    auto all_cells = cells_.getAllCells();
+    for (const auto& [pos, cell_ptr] : all_cells) {
+        if (pos.second == col && !cell_ptr->isEmpty()) {
             count++;
         }
     }
@@ -356,12 +352,11 @@ std::tuple<int, int, int, int> CellDataProcessor::getUsedRangeFull() const {
 }
 
 void CellDataProcessor::clearRow(int row) {
-    auto it = cells_.begin();
-    while (it != cells_.end()) {
-        if (it->first.first == row) {
-            it = cells_.erase(it);
-        } else {
-            ++it;
+    // 获取所有单元格，然后移除指定行的单元格
+    auto all_cells = cells_.getAllCells();
+    for (const auto& [pos, cell_ptr] : all_cells) {
+        if (pos.first == row) {
+            cells_.removeCell(pos.first, pos.second);
         }
     }
     markDirty();
@@ -369,12 +364,11 @@ void CellDataProcessor::clearRow(int row) {
 }
 
 void CellDataProcessor::clearColumn(int col) {
-    auto it = cells_.begin();
-    while (it != cells_.end()) {
-        if (it->first.second == col) {
-            it = cells_.erase(it);
-        } else {
-            ++it;
+    // 获取所有单元格，然后移除指定列的单元格
+    auto all_cells = cells_.getAllCells();
+    for (const auto& [pos, cell_ptr] : all_cells) {
+        if (pos.second == col) {
+            cells_.removeCell(pos.first, pos.second);
         }
     }
     markDirty();

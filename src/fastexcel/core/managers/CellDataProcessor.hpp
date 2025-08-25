@@ -1,5 +1,6 @@
 #pragma once
 
+#include "fastexcel/core/BlockSparseMatrix.hpp"
 #include "fastexcel/core/Cell.hpp"
 #include "fastexcel/core/CellRangeManager.hpp"
 #include <map>
@@ -15,7 +16,7 @@ class DirtyManager;
 
 class CellDataProcessor {
 public:
-    explicit CellDataProcessor(std::map<std::pair<int, int>, Cell>& cells, 
+    explicit CellDataProcessor(BlockSparseMatrix& cells, 
                               CellRangeManager& range_manager,
                               std::shared_ptr<Workbook> parent_workbook = nullptr,
                               int sheet_id = -1);
@@ -72,7 +73,7 @@ public:
     void clearAll();
 
 private:
-    std::map<std::pair<int, int>, Cell>& cells_;
+    BlockSparseMatrix& cells_;
     CellRangeManager& range_manager_;
     std::shared_ptr<Workbook> parent_workbook_;
     int sheet_id_;
