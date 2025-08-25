@@ -90,8 +90,6 @@ private:
     core::ErrorCode parseWorksheetXML(const std::string& path, core::Worksheet* worksheet);
     core::ErrorCode parseStylesXML();
     core::ErrorCode parseSharedStringsXML();
-    core::ErrorCode parseContentTypesXML();
-    core::ErrorCode parseRelationshipsXML();
     core::ErrorCode parseDocPropsXML();
     core::ErrorCode parseThemeXML();
     

@@ -202,18 +202,34 @@ int FormatUtils::selectiveClearFormat(Worksheet& worksheet, const std::string& r
 // 格式检查
 
 bool FormatUtils::hasFormat(const Worksheet& worksheet, int row, int col) {
-    (void)worksheet; (void)row; (void)col; // 消除未使用参数警告
-    // 需要访问工作表的内部API来检查单元格是否有格式
-    // 简化实现：总是返回true，实际实现需要检查Cell对象
-    return true; // 占位实现
+    if (!isValidCellPosition(row, col)) {
+        return false;
+    }
+    
+    try {
+        const auto& cell = worksheet.getCell(row, col);
+        return cell.hasFormat();
+    } catch (const std::exception&) {
+        return false;
+    }
 }
 
 std::optional<FormatDescriptor> FormatUtils::getFormat(const Worksheet& worksheet, 
                                                       int row, int col) {
-    (void)worksheet; (void)row; (void)col; // 消除未使用参数警告
-    // 需要访问工作表的内部API来获取单元格格式
-    // 这需要Worksheet类提供相应的getter方法
-    return std::nullopt; // 占位实现
+    if (!isValidCellPosition(row, col)) {
+        return std::nullopt;
+    }
+    
+    try {
+        const auto& cell = worksheet.getCell(row, col);
+        auto format_ptr = cell.getFormatDescriptor();
+        if (format_ptr) {
+            return *format_ptr;
+        }
+        return std::nullopt;
+    } catch (const std::exception&) {
+        return std::nullopt;
+    }
 }
 
 bool FormatUtils::hasUniformFormat(const Worksheet& worksheet, const std::string& range) {

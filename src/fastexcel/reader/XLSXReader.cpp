@@ -604,18 +604,6 @@ core::ErrorCode XLSXReader::parseSharedStringsXML() {
     }
 }
 
-core::ErrorCode XLSXReader::parseContentTypesXML() {
-    // TODO: 实现内容类型XML解析
-    FASTEXCEL_LOG_WARN("parseContentTypesXML 尚未实现");
-    return core::ErrorCode::NotImplemented;
-}
-
-core::ErrorCode XLSXReader::parseRelationshipsXML() {
-    // TODO: 实现关系XML解析
-    FASTEXCEL_LOG_WARN("parseRelationshipsXML 尚未实现");
-    return core::ErrorCode::NotImplemented;
-}
-
 core::ErrorCode XLSXReader::parseDocPropsXML() {
     // 尝试解析核心文档属性
     auto error = zip_archive_->fileExists("docProps/core.xml");
