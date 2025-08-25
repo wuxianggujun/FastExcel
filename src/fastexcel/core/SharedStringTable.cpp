@@ -2,18 +2,42 @@
 #include "fastexcel/xml/XMLStreamWriter.hpp"
 #include "fastexcel/core/Exception.hpp"
 #include <fmt/format.h>
+#include <algorithm>
 
 namespace fastexcel {
 namespace core {
 
 SharedStringTable::SharedStringTable() : next_id_(0) {
-    // 预留一些空间以减少重新分配
-    string_to_id_.reserve(1000);
-    id_to_string_.reserve(1000);
+    // 预留大容量以减少重新分配，并设置负载因子
+    string_to_id_.reserve(INITIAL_CAPACITY);
+    string_to_id_.max_load_factor(MAX_LOAD_FACTOR);
+    id_to_string_.reserve(INITIAL_CAPACITY);
+}
+
+void SharedStringTable::reserve(size_t expected_count) {
+    // 预分配容量，避免频繁rehash
+    string_to_id_.reserve(expected_count);
+    id_to_string_.reserve(expected_count);
+}
+
+std::vector<int32_t> SharedStringTable::addStringsBatch(const std::vector<std::string>& strings) {
+    std::vector<int32_t> result_ids;
+    result_ids.reserve(strings.size());
+    
+    // 预分配足够的容量以避免rehash
+    if (string_to_id_.size() + strings.size() > string_to_id_.bucket_count() * MAX_LOAD_FACTOR) {
+        reserve(string_to_id_.size() + strings.size());
+    }
+    
+    for (const auto& str : strings) {
+        result_ids.push_back(addString(str));
+    }
+    
+    return result_ids;
 }
 
 int32_t SharedStringTable::addString(const std::string& str) {
-    // 检查字符串是否已存在
+    // 使用优化的哈希查找
     auto it = string_to_id_.find(str);
     if (it != string_to_id_.end()) {
         return it->second;  // 返回已存在的ID
@@ -21,8 +45,8 @@ int32_t SharedStringTable::addString(const std::string& str) {
     
     // 添加新字符串
     int32_t id = next_id_++;
-    string_to_id_[str] = id;
-    id_to_string_.push_back(str);
+    string_to_id_.emplace(str, id);  // 使用emplace避免额外拷贝
+    id_to_string_.emplace_back(str);
     
     return id;
 }
@@ -59,13 +83,13 @@ int32_t SharedStringTable::addStringWithId(const std::string& str, int32_t origi
     if (!id_to_string_[original_id].empty()) {
         // 如果原始ID位置已被占用，使用新的ID
         int32_t new_id = next_id_++;
-        string_to_id_[str] = new_id;
-        id_to_string_.push_back(str);
+        string_to_id_.emplace(str, new_id);
+        id_to_string_.emplace_back(str);
         return new_id;
     }
     
     // 使用原始ID
-    string_to_id_[str] = original_id;
+    string_to_id_.emplace(str, original_id);
     id_to_string_[original_id] = str;
     
     // 更新next_id_以确保不会重复使用已占用的ID
@@ -80,6 +104,10 @@ void SharedStringTable::clear() {
     string_to_id_.clear();
     id_to_string_.clear();
     next_id_ = 0;
+    
+    // 重新预分配初始容量
+    string_to_id_.reserve(INITIAL_CAPACITY);
+    id_to_string_.reserve(INITIAL_CAPACITY);
 }
 
 void SharedStringTable::generateXML(const std::function<void(const std::string&)>& callback) const {
@@ -90,31 +118,14 @@ void SharedStringTable::generateXML(const std::function<void(const std::string&)
     writer.writeAttribute("count", std::to_string(id_to_string_.size()).c_str());
     writer.writeAttribute("uniqueCount", std::to_string(string_to_id_.size()).c_str());
     
-    // 即使没有字符串，也要生成完整的XML结构
+    // 使用更高效的循环遍历
     for (const auto& str : id_to_string_) {
         writer.startElement("si");
         writer.startElement("t");
         
-        // 处理特殊字符转义
-        std::string escaped_str = str;
-        // 简单的XML转义处理
-        size_t pos = 0;
-        while ((pos = escaped_str.find('&', pos)) != std::string::npos) {
-            escaped_str.replace(pos, 1, "&amp;");
-            pos += 5;
-        }
-        pos = 0;
-        while ((pos = escaped_str.find('<', pos)) != std::string::npos) {
-            escaped_str.replace(pos, 1, "&lt;");
-            pos += 4;
-        }
-        pos = 0;
-        while ((pos = escaped_str.find('>', pos)) != std::string::npos) {
-            escaped_str.replace(pos, 1, "&gt;");
-            pos += 4;
-        }
+        // 使用XMLStreamWriter内置的转义功能，避免手动转义
+        writer.writeText(str);
         
-        writer.writeText(escaped_str.c_str());
         writer.endElement(); // t
         
         // 添加phoneticPr标签以提高Excel兼容性
@@ -130,12 +141,13 @@ void SharedStringTable::generateXML(const std::function<void(const std::string&)
     writer.endDocument();
 }
 
-
 size_t SharedStringTable::getMemoryUsage() const {
     size_t usage = sizeof(SharedStringTable);
     
-    // 计算unordered_map的内存使用
-    usage += string_to_id_.bucket_count() * sizeof(std::pair<std::string, int32_t>);
+    // 计算unordered_map的内存使用（更精确）
+    usage += string_to_id_.bucket_count() * sizeof(void*);  // 桶指针数组
+    usage += string_to_id_.size() * (sizeof(std::pair<std::string, int32_t>) + sizeof(void*)); // 节点开销
+    
     for (const auto& [str, id] : string_to_id_) {
         usage += str.capacity();
     }
@@ -177,6 +189,27 @@ SharedStringTable::CompressionStats SharedStringTable::getCompressionStats() con
         stats.compression_ratio = 1.0 - (static_cast<double>(stats.compressed_size) / stats.original_size);
     } else {
         stats.compression_ratio = 0.0;
+    }
+    
+    return stats;
+}
+
+SharedStringTable::HashStats SharedStringTable::getHashStats() const {
+    HashStats stats;
+    
+    stats.bucket_count = string_to_id_.bucket_count();
+    stats.load_factor = string_to_id_.load_factor();
+    
+    // 计算最大桶大小和冲突数量
+    stats.max_bucket_size = 0;
+    stats.collision_count = 0;
+    
+    for (size_t i = 0; i < stats.bucket_count; ++i) {
+        size_t bucket_size = string_to_id_.bucket_size(i);
+        stats.max_bucket_size = std::max(stats.max_bucket_size, bucket_size);
+        if (bucket_size > 1) {
+            stats.collision_count += bucket_size - 1;
+        }
     }
     
     return stats;

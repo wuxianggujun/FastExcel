@@ -147,7 +147,7 @@ public:
      */
     void clear() noexcept {
         pos_ = 0;
-        buffer_.fill('\0');
+        // 移除不必要的清零操作，性能优化
     }
     
     /**
