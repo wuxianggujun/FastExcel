@@ -1,6 +1,7 @@
 #include "QuickFormat.hpp"
 #include "RangeFormatter.hpp"
 #include "StyleBuilder.hpp"
+#include "../utils/AddressParser.hpp"
 #include <sstream>
 #include <stdexcept>
 
@@ -152,12 +153,50 @@ void QuickFormat::formatAsDataList(Worksheet& worksheet, const std::string& rang
     formatter.allBorders(BorderStyle::Thin);
     
     if (has_headers) {
-        // 如果有标题，需要单独处理标题行
-        // 这里简化实现，实际应该解析range获取第一行
-        formatter.applyStyle(StyleBuilder()
-            .border(BorderStyle::Thin)
-            .vcenterAlign()
-        );
+        // 解析range获取第一行，完整实现
+        try {
+            auto [sheet, start_row, start_col, end_row, end_col] = utils::AddressParser::parseRange(range);
+            
+            // 为标题行应用特殊格式
+            if (start_row >= 0 && start_col >= 0 && end_col >= start_col) {
+                // 构造标题行范围字符串
+                std::string header_range = utils::AddressParser::indexToRange(start_row, start_col, start_row, end_col);
+                auto header_formatter = worksheet.rangeFormatter(header_range);
+                header_formatter.applyStyle(StyleBuilder()
+                    .border(BorderStyle::Thick)  // 标题行使用较粗边框
+                    .bold(true)                   // 加粗
+                    .vcenterAlign()               // 垂直居中
+                    .centerAlign()                // 水平居中
+                    .backgroundColor(core::Color(0xE6E6E6))  // 浅灰色背景
+                );
+                header_formatter.apply();
+                
+                // 为数据行应用交替背景（如果有多行数据）
+                if (end_row > start_row) {
+                    for (int row = start_row + 1; row <= end_row; ++row) {
+                        std::string data_range = utils::AddressParser::indexToRange(row, start_col, row, end_col);
+                        auto data_formatter = worksheet.rangeFormatter(data_range);
+                        if ((row - start_row - 1) % 2 == 1) { // 奇数行应用背景色
+                            data_formatter.applyStyle(StyleBuilder()
+                                .border(BorderStyle::Thin)
+                                .backgroundColor(core::Color(0xF5F5F5))  // 更浅的背景色
+                            );
+                        } else {
+                            data_formatter.applyStyle(StyleBuilder()
+                                .border(BorderStyle::Thin)
+                            );
+                        }
+                        data_formatter.apply();
+                    }
+                }
+            }
+        } catch (const std::exception&) {
+            // 解析失败，回退到简单格式
+            formatter.applyStyle(StyleBuilder()
+                .border(BorderStyle::Thin)
+                .vcenterAlign()
+            );
+        }
     }
     
     formatter.apply();

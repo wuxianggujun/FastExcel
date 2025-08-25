@@ -152,13 +152,12 @@ int FormatUtils::clearAllFormats(Worksheet& worksheet) {
 int FormatUtils::selectiveClearFormat(Worksheet& worksheet, const std::string& range,
                                      bool clear_font, bool clear_fill, bool clear_border,
                                      bool clear_alignment, bool clear_number) {
-    // 这个功能需要更复杂的实现，涉及到部分格式清除
-    // 简化实现：如果所有选项都为true，则完全清除
+    // 如果所有选项都为true，则完全清除
     if (clear_font && clear_fill && clear_border && clear_alignment && clear_number) {
         return clearFormat(worksheet, range);
     }
     
-    // 否则需要逐个单元格处理，构建只清除指定部分的新格式
+    // 逐个单元格处理，构建只清除指定部分的新格式
     try {
         auto bounds = parseRange(range);
         int processed_count = 0;
@@ -171,7 +170,7 @@ int FormatUtils::selectiveClearFormat(Worksheet& worksheet, const std::string& r
                 // 构建新格式（保留不需要清除的部分）
                 StyleBuilder builder;
                 
-                // 从现有格式复制需要保留的属性
+                // 字体属性：如果不清除则保留
                 if (!clear_font) {
                     builder.fontName(current_format->getFontName())
                            .fontSize(current_format->getFontSize())
@@ -180,13 +179,34 @@ int FormatUtils::selectiveClearFormat(Worksheet& worksheet, const std::string& r
                            .fontColor(current_format->getFontColor());
                 }
                 
+                // 填充属性：如果不清除则保留
                 if (!clear_fill) {
                     if (current_format->getPattern() != PatternType::None) {
-                        builder.backgroundColor(current_format->getBackgroundColor());
+                        builder.fill(current_format->getPattern(), 
+                                    current_format->getBackgroundColor(), 
+                                    current_format->getForegroundColor());
                     }
                 }
                 
-                // 类似地处理其他属性...
+                // 边框属性：如果不清除则保留
+                if (!clear_border) {
+                    builder.leftBorder(current_format->getLeftBorder(), current_format->getLeftBorderColor())
+                           .rightBorder(current_format->getRightBorder(), current_format->getRightBorderColor())
+                           .topBorder(current_format->getTopBorder(), current_format->getTopBorderColor())
+                           .bottomBorder(current_format->getBottomBorder(), current_format->getBottomBorderColor());
+                }
+                
+                // 对齐属性：如果不清除则保留
+                if (!clear_alignment) {
+                    builder.horizontalAlign(current_format->getHorizontalAlign())
+                           .verticalAlign(current_format->getVerticalAlign())
+                           .textWrap(current_format->isTextWrap());
+                }
+                
+                // 数字格式：如果不清除则保留
+                if (!clear_number) {
+                    builder.numberFormat(current_format->getNumberFormat());
+                }
                 
                 worksheet.setCellFormat(row, col, builder.build());
                 processed_count++;
@@ -404,20 +424,94 @@ bool FormatUtils::isValidCellPosition(int row, int col) {
 // 格式导入导出（简化实现）
 
 std::string FormatUtils::exportFormat(const FormatDescriptor& format) {
-    // 简化的JSON导出
+    // 完整的JSON导出包含所有格式属性
     std::ostringstream oss;
     oss << "{"
+        // 字体属性
         << "\"fontName\":\"" << format.getFontName() << "\","
         << "\"fontSize\":" << format.getFontSize() << ","
         << "\"bold\":" << (format.isBold() ? "true" : "false") << ","
-        << "\"italic\":" << (format.isItalic() ? "true" : "false")
+        << "\"italic\":" << (format.isItalic() ? "true" : "false") << ","
+        << "\"strikeout\":" << (format.isStrikeout() ? "true" : "false") << ","
+        << "\"fontColor\":\"" << format.getFontColor().toHex() << "\","
+        
+        // 对齐属性
+        << "\"horizontalAlign\":" << static_cast<int>(format.getHorizontalAlign()) << ","
+        << "\"verticalAlign\":" << static_cast<int>(format.getVerticalAlign()) << ","
+        << "\"textWrap\":" << (format.isTextWrap() ? "true" : "false") << ","
+        << "\"rotation\":" << format.getRotation() << ","
+        << "\"indent\":" << format.getIndent() << ","
+        << "\"shrink\":" << (format.isShrink() ? "true" : "false") << ","
+        
+        // 边框属性
+        << "\"leftBorder\":" << static_cast<int>(format.getLeftBorder()) << ","
+        << "\"rightBorder\":" << static_cast<int>(format.getRightBorder()) << ","
+        << "\"topBorder\":" << static_cast<int>(format.getTopBorder()) << ","
+        << "\"bottomBorder\":" << static_cast<int>(format.getBottomBorder()) << ","
+        << "\"leftBorderColor\":\"" << format.getLeftBorderColor().toHex() << "\","
+        << "\"rightBorderColor\":\"" << format.getRightBorderColor().toHex() << "\","
+        << "\"topBorderColor\":\"" << format.getTopBorderColor().toHex() << "\","
+        << "\"bottomBorderColor\":\"" << format.getBottomBorderColor().toHex() << "\","
+        
+        // 填充属性
+        << "\"pattern\":" << static_cast<int>(format.getPattern()) << ","
+        << "\"backgroundColor\":\"" << format.getBackgroundColor().toHex() << "\","
+        << "\"foregroundColor\":\"" << format.getForegroundColor().toHex() << "\","
+        
+        // 数字格式
+        << "\"numberFormat\":\"" << format.getNumberFormat() << "\","
+        << "\"numberFormatIndex\":" << format.getNumberFormatIndex() << ","
+        
+        // 保护属性
+        << "\"locked\":" << (format.isLocked() ? "true" : "false") << ","
+        << "\"hidden\":" << (format.isHidden() ? "true" : "false")
         << "}";
     return oss.str();
 }
 
 std::optional<FormatDescriptor> FormatUtils::importFormat(const std::string& format_string) {
-    // 简化实现：返回空，实际需要JSON解析
-    return std::nullopt;
+    if (format_string.empty()) {
+        return std::nullopt;
+    }
+    
+    try {
+        // 简化的JSON解析，只处理基本属性
+        StyleBuilder builder;
+        
+        // 解析 fontName
+        std::regex font_name_regex(R"("fontName"\s*:\s*"([^"]*)");
+        std::smatch match;
+        if (std::regex_search(format_string, match, font_name_regex)) {
+            builder.fontName(match[1].str());
+        }
+        
+        // 解析 fontSize
+        std::regex font_size_regex(R"("fontSize"\s*:\s*(\d+))");
+        if (std::regex_search(format_string, match, font_size_regex)) {
+            int size = std::stoi(match[1].str());
+            builder.fontSize(size);
+        }
+        
+        // 解析 bold
+        std::regex bold_regex(R"("bold"\s*:\s*(true|false))");
+        if (std::regex_search(format_string, match, bold_regex)) {
+            bool is_bold = match[1].str() == "true";
+            builder.bold(is_bold);
+        }
+        
+        // 解析 italic
+        std::regex italic_regex(R"("italic"\s*:\s*(true|false))");
+        if (std::regex_search(format_string, match, italic_regex)) {
+            bool is_italic = match[1].str() == "true";
+            builder.italic(is_italic);
+        }
+        
+        return builder.build();
+        
+    } catch (const std::exception&) {
+        // JSON解析失败
+        return std::nullopt;
+    }
 }
 
 }} // namespace fastexcel::core

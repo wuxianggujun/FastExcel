@@ -845,8 +845,55 @@ std::shared_ptr<Worksheet> Workbook::copyWorksheet(const std::string& source_nam
     // 创建新工作表
     auto new_worksheet = std::make_shared<Worksheet>(new_name, std::shared_ptr<Workbook>(this, [](Workbook*){}), next_sheet_id_++);
     
-    // 这里应该实现深拷贝逻辑
-    // 简化版本，实际需要复制所有单元格、格式、设置等
+    // 实现深拷贝逻辑：复制所有单元格、格式、设置等
+    try {
+        auto [max_row, max_col] = source_worksheet->getUsedRange();
+        
+        // 复制所有单元格和格式
+        for (int row = 0; row <= max_row; ++row) {
+            for (int col = 0; col <= max_col; ++col) {
+                if (source_worksheet->hasCellAt(row, col)) {
+                    // 使用copyCell方法复制单元格及其格式
+                    source_worksheet->copyCell(row, col, row, col, true, false);
+                    // 将复制的内容设置到新工作表
+                    const auto& source_cell = source_worksheet->getCell(row, col);
+                    auto& new_cell = new_worksheet->getCell(row, col);
+                    
+                    // 复制单元格值
+                    new_cell = source_cell;
+                    
+                    // 复制格式
+                    auto format = source_cell.getFormatDescriptor();
+                    if (format) {
+                        new_worksheet->setCellFormat(row, col, format);
+                    }
+                }
+            }
+        }
+        
+        // 复制工作表设置
+        new_worksheet->setTabSelected(source_worksheet->isTabSelected());
+        
+        // 复制列宽和行高
+        for (int col = 0; col <= max_col; ++col) {
+            auto width_opt = source_worksheet->tryGetColumnWidth(col);
+            if (width_opt && *width_opt > 0) {
+                new_worksheet->setColumnWidth(col, *width_opt);
+            }
+        }
+        
+        for (int row = 0; row <= max_row; ++row) {
+            auto height_opt = source_worksheet->tryGetRowHeight(row);
+            if (height_opt && *height_opt > 0) {
+                new_worksheet->setRowHeight(row, *height_opt);
+            }
+        }
+        
+        FASTEXCEL_LOG_DEBUG("Deep copied worksheet content: {} cells from {} to {}", 
+                           (max_row + 1) * (max_col + 1), source_name, new_name);
+    } catch (const std::exception& e) {
+        FASTEXCEL_LOG_ERROR("Failed to copy worksheet content: {}", e.what());
+    }
     
     worksheets_.push_back(new_worksheet);
     
@@ -1476,8 +1523,53 @@ bool Workbook::mergeWorkbook(const std::unique_ptr<Workbook>& other_workbook, co
                 // 创建新工作表并复制内容
                 auto new_worksheet = addSheet(new_name);
                 if (new_worksheet) {
-                    // 这里需要实现深拷贝逻辑
-                    // 简化版本：复制基本属性
+                    // 实现深拷贝逻辑：复制所有单元格、格式、设置等
+                    try {
+                        auto [max_row, max_col] = other_worksheet->getUsedRange();
+                        
+                        // 复制所有单元格和格式
+                        for (int row = 0; row <= max_row; ++row) {
+                            for (int col = 0; col <= max_col; ++col) {
+                                if (other_worksheet->hasCellAt(row, col)) {
+                                    const auto& source_cell = other_worksheet->getCell(row, col);
+                                    auto& new_cell = new_worksheet->getCell(row, col);
+                                    
+                                    // 复制单元格值
+                                    new_cell = source_cell;
+                                    
+                                    // 复制格式
+                                    auto format = source_cell.getFormatDescriptor();
+                                    if (format) {
+                                        new_worksheet->setCellFormat(row, col, format);
+                                    }
+                                }
+                            }
+                        }
+                        
+                        // 复制工作表设置
+                        new_worksheet->setTabSelected(other_worksheet->isTabSelected());
+                        
+                        // 复制列宽和行高
+                        for (int col = 0; col <= max_col; ++col) {
+                            auto width_opt = other_worksheet->tryGetColumnWidth(col);
+                            if (width_opt && *width_opt > 0) {
+                                new_worksheet->setColumnWidth(col, *width_opt);
+                            }
+                        }
+                        
+                        for (int row = 0; row <= max_row; ++row) {
+                            auto height_opt = other_worksheet->tryGetRowHeight(row);
+                            if (height_opt && *height_opt > 0) {
+                                new_worksheet->setRowHeight(row, *height_opt);
+                            }
+                        }
+                        
+                        FASTEXCEL_LOG_DEBUG("Deep copied {} cells from {} to {}", 
+                                           (max_row + 1) * (max_col + 1), other_worksheet->getName(), new_name);
+                    } catch (const std::exception& e) {
+                        FASTEXCEL_LOG_ERROR("Failed to copy worksheet content during merge: {}", e.what());
+                    }
+                    
                     merged_count++;
                     FASTEXCEL_LOG_DEBUG("Merged worksheet: {} -> {}", other_worksheet->getName(), new_name);
                 }

@@ -146,13 +146,6 @@ public:
      */
     bool writeFiles(const std::vector<std::pair<std::string, std::string>>& files);
     
-    /**
-     * @brief 获取文件写入器
-     * @param use_streaming 是否使用流式写入
-     * @return 文件写入器
-     */
-    std::unique_ptr<IFileWriter> createFileWriter(bool use_streaming = false);
-    
     // 压缩设置
     
     /**

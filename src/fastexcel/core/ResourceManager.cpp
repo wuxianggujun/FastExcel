@@ -390,13 +390,6 @@ bool ResourceManager::writeFiles(const std::vector<std::pair<std::string, std::s
     return all_success;
 }
 
-std::unique_ptr<IFileWriter> ResourceManager::createFileWriter(bool use_streaming) {
-    // 这里需要实现文件写入器的创建逻辑
-    // 由于IFileWriter的具体实现不在当前文件中，我们返回nullptr作为占位符
-    FASTEXCEL_LOG_DEBUG("Creating file writer (streaming: {})", use_streaming);
-    return nullptr; // 需要具体的IFileWriter实现
-}
-
 bool ResourceManager::setCompressionLevel(int level) {
     if (level < 0 || level > 9) {
         FASTEXCEL_LOG_ERROR("Invalid compression level: {}", level);
