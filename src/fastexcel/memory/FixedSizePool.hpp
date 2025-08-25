@@ -14,6 +14,7 @@
 #include <mutex>
 #include <atomic>
 #include <type_traits>
+#include <thread>
 
 namespace fastexcel {
 namespace memory {
@@ -30,26 +31,100 @@ class FixedSizePool : public IMemoryPool {
                  "Type must be trivially destructible or have virtual destructor");
 
 private:
-    // 内存块结构
+    // 前向声明
+    struct Block;
+    
+    // 内存块结构（必须先定义）
     struct Block {
         alignas(T) char data[sizeof(T)];
-        Block* next = nullptr;
+        std::atomic<Block*> next{nullptr};
+        
+        // 转换为原始指针用于链表操作
+        Block* getNext() const { return next.load(); }
+        void setNext(Block* n) { next.store(n); }
+    };
+    
+    // 无锁的原子栈结构
+    struct AtomicStack {
+        std::atomic<Block*> head{nullptr};
+        
+        void push(Block* block) {
+            Block* old_head = head.load();
+            do {
+                block->setNext(old_head);
+            } while (!head.compare_exchange_weak(old_head, block));
+        }
+        
+        Block* pop() {
+            Block* old_head = head.load();
+            while (old_head && !head.compare_exchange_weak(old_head, old_head->getNext())) {
+                // 重试直到成功或栈为空
+            }
+            return old_head;
+        }
+        
+        bool empty() const {
+            return head.load() == nullptr;
+        }
+    };
+    
+    // 线程本地缓存
+    struct ThreadLocalCache {
+        static constexpr size_t CACHE_SIZE = 64; // 每个线程缓存的块数量
+        Block* local_free_list = nullptr;
+        size_t cache_count = 0;
+        
+        Block* getBlock() {
+            if (local_free_list) {
+                Block* block = local_free_list;
+                local_free_list = local_free_list->getNext();
+                --cache_count;
+                return block;
+            }
+            return nullptr;
+        }
+        
+        bool returnBlock(Block* block) {
+            if (cache_count < CACHE_SIZE) {
+                block->setNext(local_free_list);
+                local_free_list = block;
+                ++cache_count;
+                return true;
+            }
+            return false; // 缓存已满
+        }
+        
+        void flushToGlobal(AtomicStack& global_stack) {
+            while (local_free_list && cache_count > CACHE_SIZE / 2) {
+                Block* block = local_free_list;
+                local_free_list = local_free_list->getNext();
+                global_stack.push(block);
+                --cache_count;
+            }
+        }
     };
     
     // 内存页结构  
     struct Page {
         std::unique_ptr<Block[]> blocks;
         Page* next = nullptr;
-        size_t used_count = 0;
+        std::atomic<size_t> used_count{0};
         
         explicit Page(size_t block_count) {
             blocks = std::make_unique<Block[]>(block_count);
             
-            // 初始化空闲链表
+            // 初始化空闲链表（非原子版本用于初始化）
             for (size_t i = 0; i < block_count - 1; ++i) {
-                blocks[i].next = &blocks[i + 1];
+                blocks[i].setNext(&blocks[i + 1]);
             }
-            blocks[block_count - 1].next = nullptr;
+            blocks[block_count - 1].setNext(nullptr);
+        }
+        
+        // 将页面的所有块添加到全局栈
+        void addToGlobalStack(AtomicStack& global_stack) {
+            for (size_t i = 0; i < PoolSize; ++i) {
+                global_stack.push(&blocks[i]);
+            }
         }
     };
 
@@ -70,7 +145,7 @@ public:
         cleanup();
         FASTEXCEL_LOG_DEBUG("Destroyed FixedSizePool for type {}. "
                            "Total allocated: {}, Peak usage: {}", 
-                           typeid(T).name(), total_allocated_, peak_usage_);
+                           typeid(T).name(), total_allocated_.load(), peak_usage_.load());
     }
     
     // 禁用拷贝，允许移动
@@ -85,16 +160,21 @@ public:
         if (this != &other) {
             cleanup();
             
-            std::lock_guard<std::mutex> lock1(mutex_);
-            std::lock_guard<std::mutex> lock2(other.mutex_);
+            std::lock_guard<std::mutex> lock1(pages_mutex_);
+            std::lock_guard<std::mutex> lock2(other.pages_mutex_);
             
+            // 移动页面和统计数据
             pages_ = std::move(other.pages_);
-            free_list_ = other.free_list_;
             current_usage_ = other.current_usage_.load();
-            peak_usage_ = other.peak_usage_;
-            total_allocated_ = other.total_allocated_;
+            peak_usage_ = other.peak_usage_.load();
+            total_allocated_ = other.total_allocated_.load();
             
-            other.free_list_ = nullptr;
+            // 移动全局栈内容（简单方式：重建）
+            while (Block* block = other.global_free_stack_.pop()) {
+                global_free_stack_.push(block);
+            }
+            
+            // 重置源对象
             other.current_usage_ = 0;
             other.peak_usage_ = 0;
             other.total_allocated_ = 0;
@@ -103,17 +183,23 @@ public:
     }
     
     /**
-     * @brief 分配对象
+     * @brief 分配对象（无锁优化版本）
      * @return 新分配的对象指针
      */
     template<typename... Args>
     T* allocate(Args&&... args) {
-        std::lock_guard<std::mutex> lock(mutex_);
+        // 1. 尝试从线程本地缓存获取
+        Block* block = thread_cache_.getBlock();
         
-        Block* block = getFreeBlock();
+        // 2. 如果本地缓存为空，从全局栈获取
+        if (!block) {
+            block = global_free_stack_.pop();
+        }
+        
+        // 3. 如果全局栈也为空，分配新页面
         if (!block) {
             allocateNewPage();
-            block = getFreeBlock();
+            block = global_free_stack_.pop();
             
             if (!block) {
                 throw core::MemoryException(
@@ -124,7 +210,7 @@ public:
             }
         }
         
-        // 构造对象
+        // 4. 构造对象
         T* obj = reinterpret_cast<T*>(block);
         if constexpr (sizeof...(args) > 0) {
             new (obj) T(std::forward<Args>(args)...);
@@ -132,42 +218,44 @@ public:
             new (obj) T();
         }
         
-        // 更新统计信息
-        ++current_usage_;
-        ++total_allocated_;
-        if (current_usage_ > peak_usage_) {
-            peak_usage_ = current_usage_.load();
-        }
+        // 5. 更新统计信息（原子操作）
+        size_t current = current_usage_.fetch_add(1) + 1;
+        total_allocated_.fetch_add(1);
         
-        FASTEXCEL_LOG_TRACE("Allocated object from pool, current usage: {}", current_usage_.load());
+        // 更新峰值使用量（无锁CAS）
+        size_t expected_peak = peak_usage_.load();
+        while (current > expected_peak && 
+               !peak_usage_.compare_exchange_weak(expected_peak, current)) {
+            // 重试直到成功
+        }
         
         return obj;
     }
 
     
     /**
-     * @brief 释放对象
+     * @brief 释放对象（无锁优化版本）
      * @param obj 要释放的对象指针
      */
     void deallocate(T* obj) {
         if (!obj) return;
         
-        std::lock_guard<std::mutex> lock(mutex_);
-        
-        // 调用析构函数
+        // 1. 调用析构函数
         if constexpr (!std::is_trivially_destructible_v<T>) {
             obj->~T();
         }
         
-        // 添加到空闲链表
         Block* block = reinterpret_cast<Block*>(obj);
-        block->next = free_list_;
-        free_list_ = block;
         
-        // 更新统计信息
-        --current_usage_;
+        // 2. 尝试放入线程本地缓存
+        if (!thread_cache_.returnBlock(block)) {
+            // 3. 本地缓存已满，刷新部分到全局栈，然后放入全局栈
+            thread_cache_.flushToGlobal(global_free_stack_);
+            global_free_stack_.push(block);
+        }
         
-        FASTEXCEL_LOG_TRACE("Deallocated object to pool, current usage: {}", current_usage_.load());
+        // 4. 更新统计信息
+        current_usage_.fetch_sub(1);
     }
     
     /**
@@ -195,7 +283,7 @@ public:
      * @brief 预分配内存页
      */
     void preAllocate(size_t page_count = 1) {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::lock_guard<std::mutex> lock(pages_mutex_);
         
         for (size_t i = 0; i < page_count; ++i) {
             allocateNewPage();
@@ -208,17 +296,22 @@ public:
      * @brief 收缩内存（释放未使用的页面）
      */
     void shrink() {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::lock_guard<std::mutex> lock(pages_mutex_);
         
         // 简单实现：只有当使用率很低时才收缩
         if (current_usage_ == 0 && pages_.size() > 1) {
+            // 清空全局栈（因为要释放页面）
+            while (Block* block = global_free_stack_.pop()) {
+                // 清空栈中的所有块
+            }
+            
             // 保留一个页面，释放其他页面
             auto first_page = std::move(pages_.front());
             pages_.clear();
             pages_.push_back(std::move(first_page));
             
-            // 重建空闲链表
-            rebuildFreeList();
+            // 重建全局空闲栈 - 将保留页面的所有块重新添加到栈中
+            first_page->addToGlobalStack(global_free_stack_);
             
             FASTEXCEL_LOG_DEBUG("Pool shrunk to 1 page");
         }
@@ -239,29 +332,39 @@ public:
             return AlignedAllocator::allocate(alignment, size);
         }
 
-        std::lock_guard<std::mutex> lock(mutex_);
-        Block* block = getFreeBlock();
+        // 使用新的无锁分配逻辑
+        Block* block = global_free_stack_.pop();
+        
+        // 如果全局栈为空，分配新页面
         if (!block) {
             allocateNewPage();
-            block = getFreeBlock();
+            block = global_free_stack_.pop();
             if (!block) return nullptr;
         }
-        ++current_usage_;
-        ++total_allocated_;
-        if (current_usage_ > peak_usage_) peak_usage_ = current_usage_.load();
+        
+        // 更新统计信息（原子操作）
+        current_usage_.fetch_add(1);
+        total_allocated_.fetch_add(1);
+        
+        // 更新峰值使用量（无锁CAS）
+        size_t current = current_usage_.load();
+        size_t expected_peak = peak_usage_.load();
+        while (current > expected_peak && 
+               !peak_usage_.compare_exchange_weak(expected_peak, current)) {
+            // 重试直到成功
+        }
+        
         return reinterpret_cast<void*>(block);
     }
 
     void deallocate(void* ptr, std::size_t /*size*/, std::size_t /*alignment*/ = alignof(std::max_align_t)) override {
         if (!ptr) return;
-        std::lock_guard<std::mutex> lock(mutex_);
 
         // 判断指针是否来自本池的页面
         if (isFromThisPool(ptr)) {
             Block* block = reinterpret_cast<Block*>(ptr);
-            block->next = free_list_;
-            free_list_ = block;
-            --current_usage_;
+            global_free_stack_.push(block);
+            current_usage_.fetch_sub(1);
         } else {
             // 外部分配，直接释放
             AlignedAllocator::deallocate(ptr);
@@ -278,57 +381,52 @@ public:
     }
 
 private:
-    mutable std::mutex mutex_;
+    // 全局无锁空闲块栈
+    AtomicStack global_free_stack_;
+    
+    // 页面管理（仍需要锁保护）
+    mutable std::mutex pages_mutex_;
     std::vector<std::unique_ptr<Page>> pages_;
-    Block* free_list_ = nullptr;
+    
+    // 线程本地缓存
+    thread_local static ThreadLocalCache thread_cache_;
+    
+    // 统计信息（原子操作）
     std::atomic<size_t> current_usage_{0};
-    size_t peak_usage_ = 0;
-    size_t total_allocated_ = 0;
+    std::atomic<size_t> peak_usage_{0};
+    std::atomic<size_t> total_allocated_{0};
     
-    Block* getFreeBlock() {
-        if (free_list_) {
-            Block* block = free_list_;
-            free_list_ = free_list_->next;
-            return block;
-        }
-        return nullptr;
-    }
-    
+    // 分配新页面的方法
     void allocateNewPage() {
+        std::lock_guard<std::mutex> lock(pages_mutex_);
+        
         auto new_page = std::make_unique<Page>(PoolSize);
         
-        // 将新页面的空闲块添加到总的空闲链表中
-        if constexpr (PoolSize > 0) {
-            new_page->blocks[PoolSize - 1].next = free_list_;
-            free_list_ = &new_page->blocks[0];
-        }
+        // 将新页面的所有块添加到全局栈中
+        new_page->addToGlobalStack(global_free_stack_);
         
         pages_.push_back(std::move(new_page));
         
         FASTEXCEL_LOG_DEBUG("Allocated new page for pool, total pages: {}", pages_.size());
     }
     
-    void rebuildFreeList() {
-        free_list_ = nullptr;
-        
-        for (auto& page : pages_) {
-            // 重建页面内的空闲链表
-            for (size_t i = 0; i < PoolSize - 1; ++i) {
-                page->blocks[i].next = &page->blocks[i + 1];
-            }
-            page->blocks[PoolSize - 1].next = free_list_;
-            free_list_ = &page->blocks[0];
-        }
-    }
-    
+    // 清理所有资源的内部方法
     void cleanup() noexcept {
         try {
-            std::lock_guard<std::mutex> lock(mutex_);
+            // 清空线程本地缓存
+            while (Block* block = thread_cache_.getBlock()) {
+                // 这些块会自动随页面释放而释放
+            }
+            
+            // 清空全局栈
+            while (Block* block = global_free_stack_.pop()) {
+                // 这些块会自动随页面释放而释放  
+            }
+            
+            // 释放所有页面
+            std::lock_guard<std::mutex> lock(pages_mutex_);
             pages_.clear();
-            free_list_ = nullptr;
-        } catch (const std::system_error& e) {
-            // 记录互斥锁相关错误
-            FASTEXCEL_LOG_ERROR("System error during FixedSizePool cleanup: {}", e.what());
+            
         } catch (const std::exception& e) {
             // 记录其他异常但不抛出（析构函数中调用）
             FASTEXCEL_LOG_ERROR("Exception during FixedSizePool cleanup: {}", e.what());
@@ -336,6 +434,7 @@ private:
     }
 
     bool isFromThisPool(void* ptr) const noexcept {
+        std::lock_guard<std::mutex> lock(pages_mutex_);
         for (const auto& page : pages_) {
             const Block* base = page->blocks.get();
             if (!base) continue;
@@ -348,5 +447,10 @@ private:
         return false;
     }
 };
+
+// 线程本地缓存的定义
+template<typename T, size_t PoolSize>
+thread_local typename FixedSizePool<T, PoolSize>::ThreadLocalCache 
+    FixedSizePool<T, PoolSize>::thread_cache_;
 
 }} // namespace fastexcel::memory
