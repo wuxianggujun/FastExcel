@@ -55,11 +55,6 @@ public:
     // 压缩设置
     bool setCompressionLevel(int level);
     
-    // Excel文件结构管理 - 公开给Workbook使用
-    bool addContentTypes();
-    bool addWorkbookRels();
-    bool addRootRels();
-
     // 从现有包中复制未修改的条目（编辑模式保真写回）
     // skip_prefixes: 以这些前缀开头的路径将被跳过，不复制（因为将由新的生成逻辑覆盖）
     bool copyFromExistingPackage(const core::Path& source_package,
@@ -148,10 +143,6 @@ public:
      * @return 内部路径
      */
     static std::string getDrawingRelsPath(int drawing_id);
-    
-private:
-    bool createExcelStructure();
-    bool addDocProps();
 };
 
 }} // namespace fastexcel::archive

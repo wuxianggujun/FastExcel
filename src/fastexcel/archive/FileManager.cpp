@@ -32,8 +32,6 @@ bool FileManager::open(bool create) {
         FASTEXCEL_LOG_ERROR("Failed to open archive: {}", filename_);
         return false;
     }
-    
-    // 不在这里创建Excel结构，而是在Workbook::save()时创建
     return true;
 }
 
@@ -139,94 +137,6 @@ std::vector<std::string> FileManager::listFiles() const {
     }
     
     return archive_->listFiles();
-}
-
-bool FileManager::createExcelStructure() {
-    // 创建Excel文件所需的基本结构
-    if (!addContentTypes()) {
-        FASTEXCEL_LOG_ERROR("Failed to add content types");
-        return false;
-    }
-    
-    if (!addRootRels()) {
-        FASTEXCEL_LOG_ERROR("Failed to add root relationships");
-        return false;
-    }
-    
-    if (!addDocProps()) {
-        FASTEXCEL_LOG_ERROR("Failed to add document properties");
-        return false;
-    }
-    
-    if (!addWorkbookRels()) {
-        FASTEXCEL_LOG_ERROR("Failed to add workbook relationships");
-        return false;
-    }
-    
-    FASTEXCEL_LOG_INFO("Excel file structure created successfully");
-    return true;
-}
-
-bool FileManager::addContentTypes() {
-    // 不使用addExcelDefaults()，而是让Workbook类动态生成正确的Content_Types.xml
-    // 这个方法现在只是一个占位符，实际内容由Workbook类的generateContentTypesXML生成
-    return true;
-}
-
-bool FileManager::addRootRels() {
-    // 不在这里生成，让Workbook类动态生成正确的_rels/.rels
-    // 这个方法现在只是一个占位符，实际内容由Workbook类的generateRelsXML生成
-    return true;
-}
-
-bool FileManager::addWorkbookRels() {
-    // 不在这里生成，让Workbook类动态生成正确的xl/_rels/workbook.xml.rels
-    // 这个方法现在只是一个占位符，实际内容由Workbook类的generateWorkbookRelsXML生成
-    return true;
-}
-
-bool FileManager::addDocProps() {
-    // 创建核心属性
-    std::ostringstream core_props;
-    core_props << "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\r\n";
-    core_props << "<cp:coreProperties xmlns:cp=\"http://schemas.openxmlformats.org/package/2006/metadata/core-properties\" ";
-    core_props << "xmlns:dc=\"http://purl.org/dc/elements/1.1/\" ";
-    core_props << "xmlns:dcterms=\"http://purl.org/dc/terms/\" ";
-    core_props << "xmlns:dcmitype=\"http://purl.org/dc/dcmitype/\" ";
-    core_props << "xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\">\r\n";
-    core_props << "  <dc:creator>FastExcel</dc:creator>\r\n";
-    core_props << "  <cp:lastModifiedBy>FastExcel</cp:lastModifiedBy>\r\n";
-    core_props << "  <dcterms:created xsi:type=\"dcterms:W3CDTF\">";
-    
-    // 添加当前UTC时间（统一封装自 TimeUtils）
-    auto tm_utc = ::fastexcel::utils::TimeUtils::getCurrentUTCTime();
-    core_props << ::fastexcel::utils::TimeUtils::formatTimeISO8601(tm_utc);
-    
-    core_props << "</dcterms:created>\r\n";
-    core_props << "  <dcterms:modified xsi:type=\"dcterms:W3CDTF\">";
-    core_props << ::fastexcel::utils::TimeUtils::formatTimeISO8601(tm_utc);
-    core_props << "</dcterms:modified>\r\n";
-    core_props << "</cp:coreProperties>\r\n";
-    
-    if (!writeFile("docProps/core.xml", core_props.str())) {
-        return false;
-    }
-    
-    // 创建扩展属性
-    std::ostringstream app_props;
-    app_props << "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\r\n";
-    app_props << "<Properties xmlns=\"http://schemas.openxmlformats.org/officeDocument/2006/extended-properties\" ";
-    app_props << "xmlns:vt=\"http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes\">\r\n";
-    app_props << "  <Application>Microsoft Excel</Application>\r\n";
-    app_props << "  <DocSecurity>0</DocSecurity>\r\n";
-    app_props << "  <ScaleCrop>false</ScaleCrop>\r\n";
-    app_props << "  <LinksUpToDate>false</LinksUpToDate>\r\n";
-    app_props << "  <SharedDoc>false</SharedDoc>\r\n";
-    app_props << "  <HyperlinksChanged>false</HyperlinksChanged>\r\n";
-    app_props << "  <AppVersion>1.0</AppVersion>\r\n";
-    app_props << "</Properties>\r\n";
-    
-    return writeFile("docProps/app.xml", app_props.str());
 }
 
 bool FileManager::setCompressionLevel(int level) {
