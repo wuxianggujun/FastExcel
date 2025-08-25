@@ -120,46 +120,17 @@ private:
     size_t active_worksheet_index_ = 0;                    // 迁移到WorksheetManager
 
 public:
-    /**
-     * @brief 设置工作簿选项（含是否使用共享字符串SST）。
-     */
     void setOptions(const WorkbookOptions& opts) {
         options_ = opts;
     }
 
-    // 注意：getOptions() 与 const 重载在类后部已定义，此处不再重复定义
-    /**
-     * @brief 创建新的Excel文件
-     * @param filepath 文件路径字符串
-     * @return 工作簿智能指针，失败返回nullptr
-     */
     static std::unique_ptr<Workbook> create(const std::string& filepath);
-    
-    /**
-     * @brief 只读方式打开Excel文件
-     * @param filepath 文件路径字符串  
-     * @return 工作簿智能指针，失败返回nullptr
-     */
     static std::unique_ptr<Workbook> openReadOnly(const std::string& filepath);
-    
-    /**
-     * @brief 编辑方式打开Excel文件
-     * @param filepath 文件路径字符串
-     * @return 工作簿智能指针，失败返回nullptr
-     */
     static std::unique_ptr<Workbook> openEditable(const std::string& filepath);
     
 
     
-    /**
-     * @brief 构造函数
-     * @param path 文件路径
-     */
     explicit Workbook(const Path& path);
-    
-    /**
-     * @brief 析构函数
-     */
     ~Workbook();
     
     // 禁用拷贝构造和赋值
@@ -171,18 +142,7 @@ public:
     Workbook& operator=(Workbook&&) = default;
     
     // 文件操作
-    
-    /**
-     * @brief 保存工作簿
-     * @return 是否成功
-     */
     bool save();
-    
-    /**
-     * @brief 另存为
-     * @param filename 新文件名
-     * @return 是否成功
-     */
     bool saveAs(const std::string& filename);
     
     // CSV功能
@@ -264,16 +224,7 @@ public:
         return WorkbookDataManager::isCSVFile(filepath);
     }
     
-    /**
-     * @brief 检查工作簿是否已打开
-     * @return 是否已打开（处于可用状态）
-     */
     bool isOpen() const;
-    
-    /**
-     * @brief 关闭工作簿
-     * @return 是否成功
-     */
     bool close();
     
     // 编辑模式/保真写回配置
@@ -281,119 +232,34 @@ public:
     bool getPreserveUnknownParts() const { return preserve_unknown_parts_; }
 
     // 工作表管理
-    
-    /**
-     * @brief 添加工作表
-     * @param name 工作表名称（空则自动生成）
-     * @return 工作表指针
-     */
     std::shared_ptr<Worksheet> addSheet(const std::string& name = "");
-    
-    /**
-     * @brief 插入工作表
-     * @param index 插入位置
-     * @param name 工作表名称
-     * @return 工作表指针
-     */
     std::shared_ptr<Worksheet> insertSheet(size_t index, const std::string& name = "");
-    
-    /**
-     * @brief 删除工作表
-     * @param name 工作表名称
-     * @return 是否成功
-     */
     bool removeSheet(const std::string& name);
-    
-    /**
-     * @brief 删除工作表
-     * @param index 工作表索引
-     * @return 是否成功
-     */
     bool removeSheet(size_t index);
     
-    /**
-     * @brief 获取工作表（按名称）
-     * @param name 工作表名称
-     * @return 工作表指针
-     */
     std::shared_ptr<Worksheet> getSheet(const std::string& name);
-    
-    /**
-     * @brief 获取工作表（按索引）
-     * @param index 工作表索引
-     * @return 工作表指针
-     */
     std::shared_ptr<Worksheet> getSheet(size_t index);
-    
-    /**
-     * @brief 获取工作表（按名称，只读）
-     * @param name 工作表名称
-     * @return 工作表指针
-     */
     std::shared_ptr<const Worksheet> getSheet(const std::string& name) const;
-    
-    /**
-     * @brief 获取工作表（按索引，只读）
-     * @param index 工作表索引
-     * @return 工作表指针
-     */
     std::shared_ptr<const Worksheet> getSheet(size_t index) const;
     
     // 便捷的工作表访问操作符
-    /**
-     * @brief 通过索引访问工作表（操作符重载）
-     * @param index 工作表索引
-     * @return 工作表指针
-     * 
-     * @example
-     * auto worksheet = workbook[0];  // 获取第一个工作表
-     * workbook[0]->setValue("A1", std::string("Hello"));  // 直接操作
-     */
     std::shared_ptr<Worksheet> operator[](size_t index) {
         return getSheet(index);
     }
     
-    /**
-     * @brief 通过索引访问工作表（只读操作符重载）
-     * @param index 工作表索引
-     * @return 工作表指针
-     */
     std::shared_ptr<const Worksheet> operator[](size_t index) const {
         return getSheet(index);
     }
     
-    /**
-     * @brief 通过名称访问工作表（操作符重载）
-     * @param name 工作表名称
-     * @return 工作表指针
-     * 
-     * @example
-     * auto worksheet = workbook["Sheet1"];  // 获取名为"Sheet1"的工作表
-     * workbook["Sheet1"]->setValue("A1", std::string("Hello"));  // 直接操作
-     */
     std::shared_ptr<Worksheet> operator[](const std::string& name) {
         return getSheet(name);
     }
     
-    /**
-     * @brief 通过名称访问工作表（只读操作符重载）
-     * @param name 工作表名称
-     * @return 工作表指针
-     */
     std::shared_ptr<const Worksheet> operator[](const std::string& name) const {
         return getSheet(name);
     }
     
-    /**
-     * @brief 获取工作表数量
-     * @return 工作表数量
-     */
     size_t getSheetCount() const { return worksheets_.size(); }
-    
-    /**
-     * @brief 检查工作簿是否为空（无工作表）
-     * @return 是否为空
-     */
     bool isEmpty() const { return worksheets_.empty(); }
     
     /**
@@ -406,146 +272,25 @@ public:
      * }
      */
     std::shared_ptr<Worksheet> getFirstSheet();
-    
-    /**
-     * @brief 获取第一个工作表（只读版本）
-     * @return 第一个工作表指针，如果无工作表返回nullptr
-     */
     std::shared_ptr<const Worksheet> getFirstSheet() const;
-    
-    /**
-     * @brief 获取最后一个工作表
-     * @return 最后一个工作表指针，如果无工作表返回nullptr
-     */
     std::shared_ptr<Worksheet> getLastSheet();
-    
-    /**
-     * @brief 获取最后一个工作表（只读版本）
-     * @return 最后一个工作表指针，如果无工作表返回nullptr
-     */
     std::shared_ptr<const Worksheet> getLastSheet() const;
-    
-    /**
-     * @brief 获取所有工作表名称
-     * @return 工作表名称列表
-     */
     std::vector<std::string> getSheetNames() const;
     
     // 便捷的工作表查找方法
-    /**
-     * @brief 检查是否存在指定名称的工作表
-     * @param name 工作表名称
-     * @return 是否存在
-     * 
-     * @example
-     * if (workbook.hasSheet("Data")) {
-     *     auto sheet = workbook.getSheet("Data");
-     * }
-     */
     bool hasSheet(const std::string& name) const;
-    
-    /**
-     * @brief 查找工作表（可能不存在）
-     * @param name 工作表名称
-     * @return 工作表指针，如果不存在返回nullptr
-     * 
-     * @example
-     * if (auto sheet = workbook.findSheet("Data")) {
-     *     // 工作表存在，可以安全使用
-     *     sheet->setValue("A1", std::string("Hello"));
-     * }
-     */
     std::shared_ptr<Worksheet> findSheet(const std::string& name);
-    
-    /**
-     * @brief 查找工作表（只读版本）
-     * @param name 工作表名称
-     * @return 工作表指针，如果不存在返回nullptr
-     */
     std::shared_ptr<const Worksheet> findSheet(const std::string& name) const;
-    
-    /**
-     * @brief 获取所有工作表
-     * @return 工作表指针列表
-     * 
-     * @example
-     * for (auto& sheet : workbook.getAllSheets()) {
-     *     std::cout << "工作表: " << sheet->getName() << std::endl;
-     * }
-     */
     std::vector<std::shared_ptr<Worksheet>> getAllSheets();
-    
-    /**
-     * @brief 获取所有工作表（只读版本）
-     * @return 工作表指针列表
-     */
     std::vector<std::shared_ptr<const Worksheet>> getAllSheets() const;
-    
-    /**
-     * @brief 清空所有工作表
-     * @return 清理的工作表数量
-     * 
-     * @example
-     * int count = workbook.clearAllSheets();
-     * std::cout << "已清理 " << count << " 个工作表" << std::endl;
-     */
     int clearAllSheets();
-    
-    /**
-     * @brief 重命名工作表
-     * @param old_name 旧名称
-     * @param new_name 新名称
-     * @return 是否成功
-     */
     bool renameSheet(const std::string& old_name, const std::string& new_name);
-    
-    /**
-     * @brief 移动工作表
-     * @param from_index 源位置
-     * @param to_index 目标位置
-     * @return 是否成功
-     */
     bool moveSheet(size_t from_index, size_t to_index);
-    
-    /**
-     * @brief 复制工作表
-     * @param source_name 源工作表名称
-     * @param new_name 新工作表名称
-     * @return 新工作表指针
-     */
     std::shared_ptr<Worksheet> copyWorksheet(const std::string& source_name, const std::string& new_name);
-    
-    /**
-     * @brief 复制工作表从另一个工作簿
-     * @param source_worksheet 源工作表
-     * @param new_name 新工作表名称（空则使用源名称）
-     * @return 新创建的工作表指针
-     */
-    std::shared_ptr<Worksheet> copyWorksheetFrom(const std::shared_ptr<const Worksheet>& source_worksheet, 
+    std::shared_ptr<Worksheet> copyWorksheetFrom(const std::shared_ptr<const Worksheet>& source_worksheet,
                                 const std::string& new_name = "");
-    
-    /**
-     * @brief 设置活动工作表
-     * @param index 工作表索引
-     */
     void setActiveWorksheet(size_t index);
-    
-    /**
-     * @brief 获取活动工作表
-     * @return 活动工作表指针，如果没有工作表则返回nullptr
-     * 
-     * @example
-     * auto activeSheet = workbook.getActiveWorksheet();
-     * if (activeSheet) {
-     *     activeSheet->setValue("A1", std::string("Hello"));
-     * }
-     */
     std::shared_ptr<Worksheet> getActiveWorksheet();
-    
-    /**
-     * @brief 获取活动工作表（只读）
-     * @return 活动工作表指针，如果没有工作表则返回nullptr
-     */
     std::shared_ptr<const Worksheet> getActiveWorksheet() const;
     
     // 便捷的单元格访问方法（跨工作表）
@@ -899,136 +644,68 @@ public:
         if (document_manager_) document_manager_->setTitle(title); 
     }
     
-    /**
-     * @brief 获取文档标题
-     * @return 标题
-     */
-    std::string getTitle() const { 
-        return document_manager_ ? document_manager_->getTitle() : std::string(); 
+    std::string getTitle() const {
+        return document_manager_ ? document_manager_->getTitle() : std::string();
     }
     
-    /**
-     * @brief 设置文档主题
-     * @param subject 主题
-     */
-    void setSubject(const std::string& subject) { 
-        if (document_manager_) document_manager_->setSubject(subject); 
+    void setSubject(const std::string& subject) {
+        if (document_manager_) document_manager_->setSubject(subject);
     }
     
-    /**
-     * @brief 获取文档主题
-     * @return 主题
-     */
-    std::string getSubject() const { 
-        return document_manager_ ? document_manager_->getSubject() : std::string(); 
+    std::string getSubject() const {
+        return document_manager_ ? document_manager_->getSubject() : std::string();
     }
     
-    /**
-     * @brief 设置文档作者
-     * @param author 作者
-     */
-    void setAuthor(const std::string& author) { 
-        if (document_manager_) document_manager_->setAuthor(author); 
+    void setAuthor(const std::string& author) {
+        if (document_manager_) document_manager_->setAuthor(author);
     }
     
-    /**
-     * @brief 获取文档作者
-     * @return 作者
-     */
-    std::string getAuthor() const { 
-        return document_manager_ ? document_manager_->getAuthor() : std::string(); 
+    std::string getAuthor() const {
+        return document_manager_ ? document_manager_->getAuthor() : std::string();
     }
     
-    /**
-     * @brief 设置文档管理者
-     * @param manager 管理者
-     */
-    void setManager(const std::string& manager) { 
-        if (document_manager_) document_manager_->setManager(manager); 
+    void setManager(const std::string& manager) {
+        if (document_manager_) document_manager_->setManager(manager);
     }
     
-    /**
-     * @brief 设置公司
-     * @param company 公司
-     */
-    void setCompany(const std::string& company) { 
-        if (document_manager_) document_manager_->setCompany(company); 
+    void setCompany(const std::string& company) {
+        if (document_manager_) document_manager_->setCompany(company);
     }
     
-    /**
-     * @brief 设置类别
-     * @param category 类别
-     */
-    void setCategory(const std::string& category) { 
-        if (document_manager_) document_manager_->setCategory(category); 
+    void setCategory(const std::string& category) {
+        if (document_manager_) document_manager_->setCategory(category);
     }
     
-    /**
-     * @brief 设置关键词
-     * @param keywords 关键词
-     */
-    void setKeywords(const std::string& keywords) { 
-        if (document_manager_) document_manager_->setKeywords(keywords); 
+    void setKeywords(const std::string& keywords) {
+        if (document_manager_) document_manager_->setKeywords(keywords);
     }
     
-    /**
-     * @brief 设置注释
-     * @param comments 注释
-     */
-    void setComments(const std::string& comments) { 
-        if (document_manager_) document_manager_->setComments(comments); 
+    void setComments(const std::string& comments) {
+        if (document_manager_) document_manager_->setComments(comments);
     }
     
-    /**
-     * @brief 设置状态
-     * @param status 状态
-     */
-    void setStatus(const std::string& status) { 
-        if (document_manager_) document_manager_->setStatus(status); 
+    void setStatus(const std::string& status) {
+        if (document_manager_) document_manager_->setStatus(status);
     }
     
-    /**
-     * @brief 设置超链接基础
-     * @param hyperlink_base 超链接基础
-     */
-    void setHyperlinkBase(const std::string& hyperlink_base) { 
-        if (document_manager_) document_manager_->setHyperlinkBase(hyperlink_base); 
+    void setHyperlinkBase(const std::string& hyperlink_base) {
+        if (document_manager_) document_manager_->setHyperlinkBase(hyperlink_base);
     }
     
-    /**
-     * @brief 设置创建时间
-     * @param created_time 创建时间
-     */
-    void setCreatedTime(const std::tm& created_time) { 
-        if (document_manager_) document_manager_->setCreatedTime(created_time); 
+    void setCreatedTime(const std::tm& created_time) {
+        if (document_manager_) document_manager_->setCreatedTime(created_time);
     }
     
-    /**
-     * @brief 设置修改时间
-     * @param modified_time 修改时间
-     */
-    void setModifiedTime(const std::tm& modified_time) { 
-        if (document_manager_) document_manager_->setModifiedTime(modified_time); 
+    void setModifiedTime(const std::tm& modified_time) {
+        if (document_manager_) document_manager_->setModifiedTime(modified_time);
     }
     
-    /**
-     * @brief 批量设置文档属性（新API）
-     * @param title 标题
-     * @param subject 主题
-     * @param author 作者
-     * @param company 公司
-     * @param comments 注释
-     */
     void setDocumentProperties(const std::string& title = "",
                               const std::string& subject = "",
                               const std::string& author = "",
                               const std::string& company = "",
                               const std::string& comments = "");
     
-    /**
-     * @brief 设置应用程序名称（新API）
-     * @param application 应用程序名称
-     */
     void setApplication(const std::string& application);
     
     // 自定义属性
@@ -1060,100 +737,45 @@ public:
         if (document_manager_) document_manager_->setCustomProperty(name, value);
     }
     
-    /**
-     * @brief 添加自定义属性（布尔）
-     * @param name 属性名
-     * @param value 属性值
-     */
     void setProperty(const std::string& name, bool value) {
         if (document_manager_) document_manager_->setCustomProperty(name, value);
     }
     
-    /**
-     * @brief 获取自定义属性
-     * @param name 属性名
-     * @return 属性值（如果不存在返回空字符串）
-     */
     std::string getProperty(const std::string& name) const {
         return document_manager_ ? document_manager_->getCustomProperty(name) : std::string();
     }
     
-    /**
-     * @brief 删除自定义属性
-     * @param name 属性名
-     * @return 是否成功
-     */
     bool removeProperty(const std::string& name) {
         return document_manager_ ? document_manager_->removeCustomProperty(name) : false;
     }
     
-    /**
-     * @brief 获取所有自定义属性
-     * @return 自定义属性映射 (名称 -> 值)
-     */
     std::unordered_map<std::string, std::string> getAllProperties() const {
         return document_manager_ ? document_manager_->getAllCustomProperties() : std::unordered_map<std::string, std::string>();
     }
     
     // 定义名称
-    
-    /**
-     * @brief 定义名称
-     * @param name 名称
-     * @param formula 公式
-     * @param scope 作用域（工作表名或空表示全局）
-     */
     void defineName(const std::string& name, const std::string& formula, const std::string& scope = "") {
         if (document_manager_) document_manager_->defineName(name, formula, scope);
     }
     
-    /**
-     * @brief 获取定义名称的公式
-     * @param name 名称
-     * @param scope 作用域
-     * @return 公式（如果不存在返回空字符串）
-     */
     std::string getDefinedName(const std::string& name, const std::string& scope = "") const {
         return document_manager_ ? document_manager_->getDefinedName(name, scope) : std::string();
     }
     
-    /**
-     * @brief 删除定义名称
-     * @param name 名称
-     * @param scope 作用域
-     * @return 是否成功
-     */
     bool removeDefinedName(const std::string& name, const std::string& scope = "") {
         return document_manager_ ? document_manager_->removeDefinedName(name, scope) : false;
     }
     
     // VBA项目
-    
-    /**
-     * @brief 添加VBA项目
-     * @param vba_project_path VBA项目文件路径
-     * @return 是否成功
-     */
     bool addVbaProject(const std::string& vba_project_path) {
         return security_manager_ ? security_manager_->addVbaProject(vba_project_path) : false;
     }
     
-    /**
-     * @brief 检查是否有VBA项目
-     * @return 是否有VBA项目
-     */
-    bool hasVbaProject() const { 
-        return security_manager_ ? security_manager_->hasVbaProject() : false; 
+    bool hasVbaProject() const {
+        return security_manager_ ? security_manager_->hasVbaProject() : false;
     }
     
     // 工作簿保护
-    
-    /**
-     * @brief 保护工作簿
-     * @param password 密码（可选）
-     * @param lock_structure 锁定结构
-     * @param lock_windows 锁定窗口
-     */
     void protect(const std::string& password = "", bool lock_structure = true, bool lock_windows = false) {
         if (security_manager_) {
             WorkbookSecurityManager::ProtectionOptions options;
@@ -1164,19 +786,12 @@ public:
         }
     }
     
-    /**
-     * @brief 取消保护
-     */
     void unprotect() {
         if (security_manager_) security_manager_->unprotect();
     }
     
-    /**
-     * @brief 检查是否受保护
-     * @return 是否受保护
-     */
-    bool isProtected() const { 
-        return security_manager_ ? security_manager_->isProtected() : false; 
+    bool isProtected() const {
+        return security_manager_ ? security_manager_->isProtected() : false;
     }
     
     // 工作簿选项
@@ -1206,58 +821,18 @@ public:
      */
     void setCalcOptions(bool calc_on_load, bool full_calc_on_load = false);
     
-    /**
-     * @brief 启用/禁用共享字符串
-     * @param enable 是否启用共享字符串
-     */
     void setUseSharedStrings(bool enable) { options_.use_shared_strings = enable; }
-    
-    /**
-     * @brief 设置工作簿模式
-     * @param mode 工作簿模式（AUTO/BATCH/STREAMING）
-     */
     void setMode(WorkbookMode mode) {
         options_.mode = mode;
     }
-    
-    /**
-     * @brief 获取当前工作簿模式
-     * @return 当前模式
-     */
     WorkbookMode getMode() const { return options_.mode; }
-    
-    /**
-     * @brief 设置自动模式阈值
-     * @param cell_threshold 单元格数量阈值
-     * @param memory_threshold 内存使用阈值（字节）
-     */
     void setAutoModeThresholds(size_t cell_threshold, size_t memory_threshold) {
         options_.auto_mode_cell_threshold = cell_threshold;
         options_.auto_mode_memory_threshold = memory_threshold;
     }
-    
-    /**
-     * @brief 设置行缓冲大小
-     * @param size 缓冲大小
-     */
     void setRowBufferSize(size_t size) { options_.row_buffer_size = size; }
-    
-    /**
-     * @brief 设置ZIP压缩级别
-     * @param level 压缩级别（0-9）
-     */
     void setCompressionLevel(int level) { options_.compression_level = level; }
-    
-    /**
-     * @brief 设置XML缓冲区大小
-     * @param size 缓冲区大小（字节）
-     */
     void setXMLBufferSize(size_t size) { options_.xml_buffer_size = size; }
-    
-    /**
-     * @brief 启用高性能模式（自动配置最佳性能参数）
-     * @param enable 是否启用
-     */
     void setHighPerformanceMode(bool enable);
     
     // 获取状态
@@ -1289,113 +864,36 @@ public:
     bool shouldGenerateSheet(size_t index) const;
     bool shouldGenerateSheetRels(size_t index) const;
     
-    /**
-     * @brief 检查是否只读模式
-     * @return 是否只读
-     */
     bool isReadOnly() const { return state_ == WorkbookState::READING; }
-    
-    /**
-     * @brief 检查是否编辑模式
-     * @return 是否可编辑
-     */
     bool isEditable() const { return state_ == WorkbookState::EDITING || state_ == WorkbookState::CREATING; }
-    
-    /**
-     * @brief 获取文件名
-     * @return 文件名
-     */
     const std::string& getFilename() const { return filename_; }
-    
-    /**
-     * @brief 获取文档属性
-     * @return 文档属性
-     */
-    const DocumentProperties& getDocumentProperties() const { 
+    const DocumentProperties& getDocumentProperties() const {
         static DocumentProperties empty_properties;
-        return document_manager_ ? document_manager_->getDocumentProperties() : empty_properties; 
+        return document_manager_ ? document_manager_->getDocumentProperties() : empty_properties;
     }
 
-    /**
-     * @brief 是否存在自定义属性（docProps/custom.xml）
-     */
     bool hasCustomProperties() const {
         return document_manager_ && (document_manager_->getCustomPropertyCount() > 0);
     }
 
-    /**
-     * @brief 获取所有自定义属性（名称->字符串值）
-     */
     std::unordered_map<std::string, std::string> getAllCustomProperties() const {
         if (!document_manager_) return {};
         return document_manager_->getAllCustomProperties();
     }
     
-    /**
-     * @brief 获取工作簿选项
-     * @return 工作簿选项引用
-     */
     WorkbookOptions& getOptions() { return options_; }
-    
-    /**
-     * @brief 获取工作簿选项（只读）
-     * @return 工作簿选项引用
-     */
     const WorkbookOptions& getOptions() const { return options_; }
     
     // 共享字符串管理
-    
-    /**
-     * @brief 添加共享字符串
-     * @param str 字符串
-     * @return 字符串索引
-     */
     int addSharedString(const std::string& str);
-
-    /**
-     * @brief 添加共享字符串并保持原始索引（用于文件复制）
-     * @param str 字符串
-     * @param original_index 原始文件中的索引
-     * @return 实际使用的索引
-     */
     int addSharedStringWithIndex(const std::string& str, int original_index);
-    
-    /**
-     * @brief 获取共享字符串索引
-     * @param str 字符串
-     * @return 索引（如果不存在返回-1）
-     */
     int getSharedStringIndex(const std::string& str) const;
-    
-    /**
-     * @brief 获取共享字符串表
-     * @return 共享字符串表指针（可能为nullptr）
-     */
     const SharedStringTable* getSharedStrings() const;
-    
-    /**
-     * @brief 获取共享字符串表
-     * @return 共享字符串表指针
-     */
     SharedStringTable* getSharedStringTable() { return shared_string_table_.get(); }
     const SharedStringTable* getSharedStringTable() const { return shared_string_table_.get(); }
     
-    /**
-     * @brief 检查是否处于编辑模式
-     * @return 是否处于编辑模式
-     */
     bool isEditMode() const { return state_ == WorkbookState::EDITING; }
-    
-    /**
-     * @brief 获取原始包路径（用于编辑模式）
-     * @return 原始文件路径
-     */
     const std::string& getOriginalPackagePath() const { return original_package_path_; }
-    
-    /**
-     * @brief 获取估计大小（用于决定是否使用流式写入）
-     * @return 估计的文件大小（字节）
-     */
     size_t getEstimatedSize() const;
 
     

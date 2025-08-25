@@ -193,46 +193,17 @@ public:
     bool isDate() const { return flags_.type == CellType::Date; }
     
     // 便捷访问方法（统一命名风格）
-    /**
-     * @brief 将单元格值转为字符串
-     * @return 字符串表示的值
-     */
     std::string asString() const { return getValue<std::string>(); }
-    
-    /**
-     * @brief 将单元格值转为数字
-     * @return 数字值，如果无法转换则抛出异常
-     */
     double asNumber() const { return getValue<double>(); }
-    
-    /**
-     * @brief 将单元格值转为布尔值
-     * @return 布尔值，如果无法转换则抛出异常
-     */
     bool asBool() const { return getValue<bool>(); }
-    
-    /**
-     * @brief 将单元格值转为整数
-     * @return 整数值，如果无法转换则抛出异常
-     */
     int asInt() const { return getValue<int>(); }
     
     // 安全的类型转换方法
-    /**
-     * @brief 检查是否可以转换为指定类型
-     * @tparam T 目标类型
-     * @return 是否可以安全转换
-     */
     template<typename T>
     bool canConvertTo() const noexcept {
         return tryGetValue<T>().has_value();
     }
     
-    /**
-     * @brief 安全类型转换
-     * @tparam T 目标类型
-     * @return 转换结果的optional，失败时返回nullopt
-     */
     template<typename T>
     std::optional<T> safeCast() const noexcept {
         return tryGetValue<T>();
