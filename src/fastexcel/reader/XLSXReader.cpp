@@ -512,19 +512,22 @@ core::ErrorCode XLSXReader::parseWorksheetXML(const std::string& path, core::Wor
         return core::ErrorCode::InvalidArgument;
     }
     
+    if (!zip_archive_ || !zip_archive_->getReader()) {
+        FASTEXCEL_LOG_ERROR("ZIP存档或读取器不可用");
+        return core::ErrorCode::InternalError;
+    }
+    
     try {
         WorksheetParser parser;
-        // 使用流式解析以避免一次性加载巨大的XML
-        if (zip_archive_ && zip_archive_->getReader()) {
-            auto* zr = zip_archive_->getReader();
-            if (parser.parseStream(zr, path, worksheet, shared_strings_, styles_, style_id_mapping_)) {
-                FASTEXCEL_LOG_DEBUG("成功以流式解析工作表: {}", worksheet->getName());
-                return core::ErrorCode::Ok;
-            }
+        auto* zr = zip_archive_->getReader();
+        
+        if (!parser.parseStream(zr, path, worksheet, shared_strings_, styles_, style_id_mapping_)) {
+            FASTEXCEL_LOG_ERROR("流式解析工作表失败: {}", path);
+            return core::ErrorCode::XmlParseError;
         }
         
-        FASTEXCEL_LOG_ERROR("流式解析工作表失败: {}", path);
-        return core::ErrorCode::XmlParseError;
+        FASTEXCEL_LOG_DEBUG("成功以流式解析工作表: {}", worksheet->getName());
+        return core::ErrorCode::Ok;
         
     } catch (const std::exception& e) {
         FASTEXCEL_LOG_ERROR("解析工作表时发生异常: {}", e.what());
@@ -661,74 +664,6 @@ core::ErrorCode XLSXReader::parseDocPropsXML() {
     }
     
     return core::ErrorCode::Ok;
-}
-
-std::string XLSXReader::getCellValue(const std::string& cell_xml, core::CellType& type) {
-    // 提取单元格类型
-    std::string cell_type = extractAttribute(cell_xml, "t");
-    
-    // 查找值标签
-    size_t v_start = cell_xml.find("<v>");
-    if (v_start != std::string::npos) {
-        v_start += 3; // 跳过 <v>
-        size_t v_end = cell_xml.find("</v>", v_start);
-        if (v_end != std::string::npos) {
-            std::string value = cell_xml.substr(v_start, v_end - v_start);
-            
-            if (cell_type == "s") {
-                type = core::CellType::String;
-                // 共享字符串索引
-                try {
-                    int index = std::stoi(value);
-                    auto it = shared_strings_.find(index);
-                    return (it != shared_strings_.end()) ? it->second : "";
-                } catch (const std::invalid_argument& e) {
-                    FASTEXCEL_LOG_DEBUG("Invalid shared string index '{}': {}", value, e.what());
-                    return "";
-                } catch (const std::out_of_range& e) {
-                    FASTEXCEL_LOG_DEBUG("Shared string index '{}' out of range: {}", value, e.what());
-                    return "";
-                } catch (const std::exception& e) {
-                    FASTEXCEL_LOG_DEBUG("Exception parsing shared string index '{}': {}", value, e.what());
-                    return "";
-                }
-            } else if (cell_type == "b") {
-                type = core::CellType::Boolean;
-                return value;
-            } else if (cell_type == "str") {
-                type = core::CellType::String;
-                return value;
-            } else {
-                type = core::CellType::Number;
-                return value;
-            }
-        }
-    }
-    
-    // 查找内联字符串
-    size_t is_start = cell_xml.find("<is>");
-    if (is_start != std::string::npos) {
-        size_t t_start = cell_xml.find("<t>", is_start);
-        if (t_start != std::string::npos) {
-            t_start += 3;
-            size_t t_end = cell_xml.find("</t>", t_start);
-            if (t_end != std::string::npos) {
-                type = core::CellType::String;
-                return cell_xml.substr(t_start, t_end - t_start);
-            }
-        }
-    }
-    
-    type = core::CellType::Empty;
-    return "";
-}
-
-std::shared_ptr<core::FormatDescriptor> XLSXReader::getStyleByIndex(int index) {
-    auto it = styles_.find(index);
-    if (it != styles_.end()) {
-        return it->second;
-    }
-    return nullptr;
 }
 
 // 新增的辅助方法
