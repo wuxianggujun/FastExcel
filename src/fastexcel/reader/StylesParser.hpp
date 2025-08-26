@@ -5,7 +5,7 @@
 
 #pragma once
 
-
+#include "BaseSAXParser.hpp"
 #include "fastexcel/core/FormatDescriptor.hpp"
 #include "fastexcel/core/Color.hpp"
 #include <string>
@@ -17,12 +17,26 @@ namespace fastexcel {
 namespace reader {
 
 /**
- * @brief 样式解析器
+ * @brief 高性能样式解析器 - 基于SAX流式解析
  * 
  * 负责解析Excel文件中的styles.xml文件，
- * 提取字体、填充、边框、对齐等样式信息
+ * 使用BaseSAXParser提供的高性能SAX解析能力，
+ * 完全消除字符串查找操作，大幅提升样式解析性能。
+ * 
+ * 性能优化：
+ * - 零字符串查找：基于SAX事件驱动
+ * - 流式解析：不需要多次find/substr操作
+ * - 状态机驱动：智能处理嵌套XML结构
+ * - 内存效率：最小化临时对象创建
+ * 
+ * 支持完整的Excel样式：
+ * - 数字格式 (numFmts)
+ * - 字体样式 (fonts) 
+ * - 填充样式 (fills)
+ * - 边框样式 (borders)
+ * - 单元格格式 (cellXfs)
  */
-class StylesParser {
+class StylesParser : public BaseSAXParser {
 public:
     StylesParser() = default;
     ~StylesParser() = default;
@@ -32,7 +46,10 @@ public:
      * @param xml_content XML内容
      * @return 是否解析成功
      */
-    bool parse(const std::string& xml_content);
+    bool parse(const std::string& xml_content) {
+        clear();
+        return parseXML(xml_content);
+    }
     
     /**
      * @brief 根据XF索引获取格式描述符
@@ -48,6 +65,80 @@ public:
     size_t getFormatCount() const { return cell_xfs_.size(); }
 
 private:
+    // 前向声明
+    struct FontInfo;
+    struct FillInfo;
+    struct BorderInfo;
+    struct BorderSide;
+    struct CellXf;
+
+    // 解析状态机 - 管理复杂的嵌套XML结构
+    struct ParseState {
+        enum class Context {
+            None,
+            NumFmts,        // <numFmts>
+            Fonts,          // <fonts>
+            Fills,          // <fills> 
+            Borders,        // <borders>
+            CellXfs,        // <cellXfs>
+            
+            // 字体子上下文
+            Font,           // <font>
+            FontName,       // <name>
+            FontSize,       // <sz>
+            FontColor,      // <color>
+            
+            // 填充子上下文  
+            Fill,           // <fill>
+            PatternFill,    // <patternFill>
+            FgColor,        // <fgColor>
+            BgColor,        // <bgColor>
+            
+            // 边框子上下文
+            Border,         // <border>
+            BorderLeft,     // <left>
+            BorderRight,    // <right>
+            BorderTop,      // <top>
+            BorderBottom,   // <bottom>
+            BorderDiagonal, // <diagonal>
+            BorderColor     // 边框颜色
+        };
+        
+        std::vector<Context> context_stack;
+        
+        // 当前正在构建的对象
+        FontInfo* current_font = nullptr;
+        FillInfo* current_fill = nullptr; 
+        BorderInfo* current_border = nullptr;
+        CellXf* current_xf = nullptr;
+        
+        // 当前边框边指针
+        BorderSide* current_border_side = nullptr;
+        
+        void reset() {
+            context_stack.clear();
+            current_font = nullptr;
+            current_fill = nullptr;
+            current_border = nullptr;
+            current_xf = nullptr;
+            current_border_side = nullptr;
+        }
+        
+        Context getCurrentContext() const {
+            return context_stack.empty() ? Context::None : context_stack.back();
+        }
+        
+        void pushContext(Context ctx) {
+            context_stack.push_back(ctx);
+        }
+        
+        void popContext() {
+            if (!context_stack.empty()) {
+                context_stack.pop_back();
+            }
+        }
+    } parse_state_;
+    
     // 字体信息结构
     struct FontInfo {
         std::string name = "Calibri";
@@ -101,21 +192,20 @@ private:
     std::vector<CellXf> cell_xfs_;
     std::unordered_map<int, std::string> number_formats_;
     
-    // 解析方法
-    void parseNumberFormats(const std::string& xml_content);
-    void parseFonts(const std::string& xml_content);
-    void parseFills(const std::string& xml_content);
-    void parseBorders(const std::string& xml_content);
-    void parseCellXfs(const std::string& xml_content);
+    // 重写基类虚函数
+    void onStartElement(const std::string& name, const std::vector<xml::XMLAttribute>& attributes, int depth) override;
+    void onEndElement(const std::string& name, int depth) override;
+    void onText(const std::string& text, int depth) override;
     
-    // 辅助解析方法
-    BorderSide parseBorderSide(const std::string& border_xml, const std::string& side);
-    core::Color parseColor(const std::string& color_xml);
-    
-    // XML属性提取方法
-    int extractIntAttribute(const std::string& xml, const std::string& attr_name);
-    double extractDoubleAttribute(const std::string& xml, const std::string& attr_name);
-    std::string extractStringAttribute(const std::string& xml, const std::string& attr_name);
+    // 清理数据
+    void clear() {
+        fonts_.clear();
+        fills_.clear();
+        borders_.clear();
+        cell_xfs_.clear();
+        number_formats_.clear();
+        parse_state_.reset();
+    }
     
     // 枚举转换方法
     core::HorizontalAlign getAlignment(const std::string& alignment) const;

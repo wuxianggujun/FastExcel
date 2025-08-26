@@ -1,6 +1,6 @@
 #pragma once
 
-#include "fastexcel/xml/XMLStreamReader.hpp"
+#include "BaseSAXParser.hpp"
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -9,12 +9,19 @@ namespace fastexcel {
 namespace reader {
 
 /**
- * @brief 内容类型解析器
+ * @brief 高性能内容类型解析器 - 基于SAX流式解析
  * 
  * 专门解析Excel文件中的[Content_Types].xml文件，
- * 提取文件扩展名和部件的内容类型映射，遵循单一职责原则
+ * 使用BaseSAXParser提供的高性能SAX解析能力，
+ * 消除DOM解析开销和字符串查找操作。
+ * 
+ * 性能优化：
+ * - 零字符串查找：基于SAX事件驱动
+ * - 流式解析：不加载完整DOM到内存  
+ * - 直接索引构建：解析时同步构建hash索引
+ * - 内存效率：最小化临时对象创建
  */
-class ContentTypesParser {
+class ContentTypesParser : public BaseSAXParser {
 public:
     /**
      * @brief 默认类型结构体
@@ -40,7 +47,10 @@ public:
      * @param xml_content XML内容
      * @return 是否解析成功
      */
-    bool parse(const std::string& xml_content);
+    bool parse(const std::string& xml_content) {
+        clear();
+        return parseXML(xml_content);
+    }
     
     /**
      * @brief 获取默认类型列表
@@ -96,14 +106,13 @@ private:
     std::vector<DefaultType> defaults_;
     std::vector<OverrideType> overrides_;
     
-    // 为快速查找建立的索引
+    // 高性能查找索引（解析时同步构建）
     std::unordered_map<std::string, std::string> default_index_;
     std::unordered_map<std::string, std::string> override_index_;
     
-    /**
-     * @brief 重建索引
-     */
-    void rebuildIndex();
+    // 重写基类虚函数
+    void onStartElement(const std::string& name, const std::vector<xml::XMLAttribute>& attributes, int depth) override;
+    void onEndElement(const std::string& name, int depth) override;
 };
 
 }} // namespace fastexcel::reader

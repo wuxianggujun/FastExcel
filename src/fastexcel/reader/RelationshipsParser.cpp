@@ -1,4 +1,3 @@
-#include "fastexcel/utils/Logger.hpp"
 #include "RelationshipsParser.hpp"
 #include "fastexcel/utils/Logger.hpp"
 #include <algorithm>
@@ -6,89 +5,57 @@
 namespace fastexcel {
 namespace reader {
 
-bool RelationshipsParser::parse(const std::string& xml_content) {
-    if (xml_content.empty()) {
-        FASTEXCEL_LOG_DEBUG("Empty relationships XML content");
-        return true;
-    }
-
-    try {
-        // 清理之前的数据
-        clear();
+void RelationshipsParser::onStartElement(const std::string& name, const std::vector<xml::XMLAttribute>& attributes, int depth) {
+    if (name == "Relationship") {
+        // 解析Relationship元素
+        auto id = findAttribute(attributes, "Id");
+        auto type = findAttribute(attributes, "Type");
+        auto target = findAttribute(attributes, "Target");
+        auto target_mode = findAttribute(attributes, "TargetMode");
         
-        // 使用XMLStreamReader的DOM解析，遵循ThemeParser的模式
-        xml::XMLStreamReader reader;
-        auto dom = reader.parseToDOM(xml_content);
-        if (!dom) {
-            FASTEXCEL_LOG_ERROR("Failed to parse relationships XML to DOM");
-            return false;
-        }
-        
-        // 查找Relationships根元素
-        xml::XMLStreamReader::SimpleElement* relationshipsEl = nullptr;
-        if (dom->name.find("Relationships") != std::string::npos) {
-            relationshipsEl = dom.get();
-        } else {
-            // 在子元素中查找
-            for (const auto& child_up : dom->children) {
-                const auto* child = child_up.get();
-                if (!child) continue;
-                if (child->name.find("Relationships") != std::string::npos) {
-                    relationshipsEl = const_cast<xml::XMLStreamReader::SimpleElement*>(child);
-                    break;
-                }
-            }
-        }
-        
-        if (!relationshipsEl) {
-            FASTEXCEL_LOG_ERROR("No Relationships element found in XML");
-            return false;
-        }
-        
-        // 解析每个Relationship元素
-        for (const auto& child_up : relationshipsEl->children) {
-            const auto* child = child_up.get();
-            if (!child) continue;
+        // 验证必需属性
+        if (id && type && target && !id->empty() && !type->empty() && !target->empty()) {
+            Relationship rel;
+            rel.id = *id;
+            rel.type = *type;
+            rel.target = *target;
+            rel.target_mode = target_mode ? *target_mode : "Internal";  // 默认值
             
-            if (child->name.find("Relationship") != std::string::npos) {
-                Relationship rel;
-                
-                // 提取属性
-                rel.id = child->getAttribute("Id");
-                rel.type = child->getAttribute("Type");
-                rel.target = child->getAttribute("Target");
-                rel.target_mode = child->getAttribute("TargetMode", "Internal");
-                
-                // 验证必需属性
-                if (!rel.id.empty() && !rel.type.empty() && !rel.target.empty()) {
-                    relationships_.push_back(rel);
-                    FASTEXCEL_LOG_DEBUG("Parsed relationship: {} -> {} ({})", rel.id, rel.target, rel.type);
-                } else {
-                    FASTEXCEL_LOG_WARN("Skipping incomplete relationship: id='{}', type='{}', target='{}'", 
-                             rel.id, rel.type, rel.target);
-                }
-            }
+            // 添加到集合并建立ID索引
+            size_t index = relationships_.size();
+            relationships_.push_back(std::move(rel));
+            id_index_[*id] = index;
+            
+            FASTEXCEL_LOG_DEBUG("Parsed relationship: {} -> {} ({})", *id, *target, *type);
+        } else {
+            FASTEXCEL_LOG_WARN("Skipping incomplete relationship: id='{}', type='{}', target='{}'", 
+                     id ? *id : "", type ? *type : "", target ? *target : "");
         }
-        
-        FASTEXCEL_LOG_DEBUG("Successfully parsed {} relationships", relationships_.size());
-        return true;
-        
-    } catch (const std::exception& e) {
-        FASTEXCEL_LOG_ERROR("Exception parsing relationships XML: {}", e.what());
-        return false;
     }
+    // 忽略其他元素如 <Relationships> 根元素
+}
+
+void RelationshipsParser::onEndElement(const std::string& name, int depth) {
+    // RelationshipsParser不需要处理元素结束事件
+    // 所有属性都在开始元素中处理完毕
 }
 
 const RelationshipsParser::Relationship* RelationshipsParser::findById(const std::string& id) const {
-    auto it = std::find_if(relationships_.begin(), relationships_.end(),
-                          [&id](const Relationship& rel) {
-                              return rel.id == id;
-                          });
-    return (it != relationships_.end()) ? &(*it) : nullptr;
+    // 使用O(1)索引查找，替代线性查找
+    auto it = id_index_.find(id);
+    if (it != id_index_.end()) {
+        size_t index = it->second;
+        if (index < relationships_.size()) {
+            return &relationships_[index];
+        }
+    }
+    return nullptr;
 }
 
 std::vector<const RelationshipsParser::Relationship*> RelationshipsParser::findByType(const std::string& type) const {
     std::vector<const Relationship*> result;
+    result.reserve(4); // 预分配空间，大多数情况下关系数量不多
+    
     for (const auto& rel : relationships_) {
         if (rel.type == type) {
             result.push_back(&rel);
@@ -97,4 +64,5 @@ std::vector<const RelationshipsParser::Relationship*> RelationshipsParser::findB
     return result;
 }
 
-}} // namespace fastexcel::reader
+} // namespace reader
+} // namespace fastexcel

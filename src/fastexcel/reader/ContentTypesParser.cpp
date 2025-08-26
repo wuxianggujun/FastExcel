@@ -1,94 +1,56 @@
-#include "fastexcel/utils/Logger.hpp"
 #include "ContentTypesParser.hpp"
 #include "fastexcel/utils/Logger.hpp"
-#include <algorithm>
 
 namespace fastexcel {
 namespace reader {
 
-bool ContentTypesParser::parse(const std::string& xml_content) {
-    if (xml_content.empty()) {
-        FASTEXCEL_LOG_DEBUG("Empty content types XML content");
-        return true;
-    }
-
-    try {
-        // 清理之前的数据
-        clear();
+void ContentTypesParser::onStartElement(const std::string& name, const std::vector<xml::XMLAttribute>& attributes, int depth) {
+    if (name == "Default") {
+        // 解析Default元素
+        auto extension = findAttribute(attributes, "Extension");
+        auto content_type = findAttribute(attributes, "ContentType");
         
-        // 使用XMLStreamReader的DOM解析，遵循项目模式
-        xml::XMLStreamReader reader;
-        auto dom = reader.parseToDOM(xml_content);
-        if (!dom) {
-            FASTEXCEL_LOG_ERROR("Failed to parse content types XML to DOM");
-            return false;
-        }
-        
-        // 查找Types根元素
-        xml::XMLStreamReader::SimpleElement* typesEl = nullptr;
-        if (dom->name.find("Types") != std::string::npos) {
-            typesEl = dom.get();
-        } else {
-            // 在子元素中查找
-            for (const auto& child_up : dom->children) {
-                const auto* child = child_up.get();
-                if (!child) continue;
-                if (child->name.find("Types") != std::string::npos) {
-                    typesEl = const_cast<xml::XMLStreamReader::SimpleElement*>(child);
-                    break;
-                }
-            }
-        }
-        
-        if (!typesEl) {
-            FASTEXCEL_LOG_ERROR("No Types element found in content types XML");
-            return false;
-        }
-        
-        // 解析Default和Override元素
-        for (const auto& child_up : typesEl->children) {
-            const auto* child = child_up.get();
-            if (!child) continue;
+        if (extension && content_type && !extension->empty() && !content_type->empty()) {
+            DefaultType defaultType;
+            defaultType.extension = *extension;
+            defaultType.content_type = *content_type;
             
-            if (child->name.find("Default") != std::string::npos) {
-                // 解析Default元素
-                DefaultType defaultType;
-                defaultType.extension = child->getAttribute("Extension");
-                defaultType.content_type = child->getAttribute("ContentType");
-                
-                if (!defaultType.extension.empty() && !defaultType.content_type.empty()) {
-                    defaults_.push_back(defaultType);
-                    FASTEXCEL_LOG_DEBUG("Parsed default type: .{} -> {}", defaultType.extension, defaultType.content_type);
-                } else {
-                    FASTEXCEL_LOG_WARN("Skipping incomplete default type: extension='{}', contentType='{}'", 
-                             defaultType.extension, defaultType.content_type);
-                }
-            } else if (child->name.find("Override") != std::string::npos) {
-                // 解析Override元素
-                OverrideType overrideType;
-                overrideType.part_name = child->getAttribute("PartName");
-                overrideType.content_type = child->getAttribute("ContentType");
-                
-                if (!overrideType.part_name.empty() && !overrideType.content_type.empty()) {
-                    overrides_.push_back(overrideType);
-                    FASTEXCEL_LOG_DEBUG("Parsed override type: {} -> {}", overrideType.part_name, overrideType.content_type);
-                } else {
-                    FASTEXCEL_LOG_WARN("Skipping incomplete override type: partName='{}', contentType='{}'", 
-                             overrideType.part_name, overrideType.content_type);
-                }
-            }
+            defaults_.push_back(defaultType);
+            // 同步构建索引，避免后续重建
+            default_index_[defaultType.extension] = defaultType.content_type;
+            
+            FASTEXCEL_LOG_DEBUG("Parsed default type: .{} -> {}", defaultType.extension, defaultType.content_type);
+        } else {
+            FASTEXCEL_LOG_WARN("Skipping incomplete default type: extension='{}', contentType='{}'", 
+                     extension ? *extension : "", content_type ? *content_type : "");
         }
-        
-        // 重建索引以提高查找性能
-        rebuildIndex();
-        
-        FASTEXCEL_LOG_DEBUG("Successfully parsed {} defaults and {} overrides", defaults_.size(), overrides_.size());
-        return true;
-        
-    } catch (const std::exception& e) {
-        FASTEXCEL_LOG_ERROR("Exception parsing content types XML: {}", e.what());
-        return false;
     }
+    else if (name == "Override") {
+        // 解析Override元素
+        auto part_name = findAttribute(attributes, "PartName");
+        auto content_type = findAttribute(attributes, "ContentType");
+        
+        if (part_name && content_type && !part_name->empty() && !content_type->empty()) {
+            OverrideType overrideType;
+            overrideType.part_name = *part_name;
+            overrideType.content_type = *content_type;
+            
+            overrides_.push_back(overrideType);
+            // 同步构建索引，避免后续重建
+            override_index_[overrideType.part_name] = overrideType.content_type;
+            
+            FASTEXCEL_LOG_DEBUG("Parsed override type: {} -> {}", overrideType.part_name, overrideType.content_type);
+        } else {
+            FASTEXCEL_LOG_WARN("Skipping incomplete override type: partName='{}', contentType='{}'", 
+                     part_name ? *part_name : "", content_type ? *content_type : "");
+        }
+    }
+    // 忽略其他元素如 <Types> 根元素
+}
+
+void ContentTypesParser::onEndElement(const std::string& name, int depth) {
+    // ContentTypes解析不需要处理元素结束事件
+    // 所有属性都在开始元素中处理完毕
 }
 
 std::string ContentTypesParser::findDefaultType(const std::string& extension) const {
@@ -129,18 +91,5 @@ void ContentTypesParser::clear() {
     override_index_.clear();
 }
 
-void ContentTypesParser::rebuildIndex() {
-    // 重建默认类型索引
-    default_index_.clear();
-    for (const auto& defaultType : defaults_) {
-        default_index_[defaultType.extension] = defaultType.content_type;
-    }
-    
-    // 重建覆盖类型索引
-    override_index_.clear();
-    for (const auto& overrideType : overrides_) {
-        override_index_[overrideType.part_name] = overrideType.content_type;
-    }
-}
-
-}} // namespace fastexcel::reader
+} // namespace reader
+} // namespace fastexcel

@@ -114,7 +114,7 @@ public:
                 handleText(text, depth);
             });
             
-            reader.setErrorCallback([this](xml::XMLParseError error, const std::string& message, int line, int column) {
+            reader.setErrorCallback([this](xml::XMLParseError /*error*/, const std::string& message, int line, int column) {
                 state_.has_error = true;
                 state_.error_message = "XML Parse Error at line " + std::to_string(line) + 
                                      ", column " + std::to_string(column) + ": " + message;
@@ -176,7 +176,7 @@ protected:
     // 子类重写的虚函数
     virtual void onStartElement(const std::string& name, const std::vector<xml::XMLAttribute>& attributes, int depth) = 0;
     virtual void onEndElement(const std::string& name, int depth) = 0;
-    virtual void onText(const std::string& text, int depth) {}
+    virtual void onText(const std::string& /*text*/, int /*depth*/) {}
     
     // ==================== 通用工具方法 ====================
     
