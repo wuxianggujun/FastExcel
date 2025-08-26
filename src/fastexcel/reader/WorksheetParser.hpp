@@ -5,13 +5,10 @@
 
 #pragma once
 
+#include "BaseSAXParser.hpp"
 #include "fastexcel/core/Worksheet.hpp"
 #include "fastexcel/core/Cell.hpp"
 #include "fastexcel/core/FormatDescriptor.hpp"
-#include "fastexcel/xml/XMLStreamReader.hpp"
-#include "fastexcel/utils/CommonUtils.hpp"
-#include "fastexcel/utils/XMLUtils.hpp"
-#include "fastexcel/core/RangeFormatter.hpp"
 #include <string>
 #include <unordered_map>
 #include <memory>
@@ -30,7 +27,7 @@ namespace reader {
  * - 减少临时对象创建，大幅降低内存开销
  * - 支持600万+单元格的高效解析
  */
-class WorksheetParser {
+class WorksheetParser : public BaseSAXParser {
 public:
     WorksheetParser() = default;
     ~WorksheetParser() = default;
@@ -109,10 +106,10 @@ private:
         }
     } state_;
     
-    // SAX事件处理器
-    void handleStartElement(const std::string& name, const std::vector<xml::XMLAttribute>& attributes, int depth);
-    void handleEndElement(const std::string& name, int depth);
-    void handleText(const std::string& text, int depth);
+    // 重写基类的虚函数
+    void onStartElement(const std::string& name, const std::vector<xml::XMLAttribute>& attributes, int depth) override;
+    void onEndElement(const std::string& name, int depth) override;
+    void onText(const std::string& text, int depth) override;
     
     // 私有SAX事件处理辅助方法
     void handleColumnElement(const std::vector<xml::XMLAttribute>& attributes);
@@ -120,18 +117,14 @@ private:
     void handleRowStartElement(const std::vector<xml::XMLAttribute>& attributes);
     void handleCellStartElement(const std::vector<xml::XMLAttribute>& attributes);
     
-    // 属性解析优化版本 - 直接从vector<XMLAttribute>提取
-    std::optional<std::string> findAttribute(const std::vector<xml::XMLAttribute>& attributes, const std::string& name);
-    std::optional<int> findIntAttribute(const std::vector<xml::XMLAttribute>& attributes, const std::string& name);
-    std::optional<double> findDoubleAttribute(const std::vector<xml::XMLAttribute>& attributes, const std::string& name);
+    // 基类已提供属性解析方法，这里不需要重复定义
     
     // 单元格处理
     void processCellData();
     void processColumnDefinition();
     void processMergeCell(const std::vector<xml::XMLAttribute>& attributes);
     
-    // 工具方法 - 保留必要的转换功能
-    bool parseRangeRef(const std::string& ref, int& first_row, int& first_col, int& last_row, int& last_col);
+    // 基类已提供所有工具方法
     
     // 字符串转换优化
     bool isDateFormat(int style_index) const;

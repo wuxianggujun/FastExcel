@@ -7,19 +7,9 @@
 #include "fastexcel/utils/Logger.hpp"
 #include "fastexcel/core/Workbook.hpp"
 #include "fastexcel/core/SharedFormula.hpp"
-#include "fastexcel/utils/CommonUtils.hpp"
-#include "fastexcel/utils/XMLUtils.hpp"
-#include "fastexcel/core/RangeFormatter.hpp"
-#include "fastexcel/xml/XMLStreamReader.hpp"
-
-#include <algorithm>
 #include "fastexcel/utils/TimeUtils.hpp"
 #include <cctype>
 #include <ctime>
-#include <iostream>
-#include <sstream>
-#include <string>
-#include <optional>
 
 namespace fastexcel {
 namespace reader {
@@ -40,93 +30,11 @@ bool WorksheetParser::parse(const std::string& xml_content,
     state_.styles = &styles;
     state_.style_id_mapping = &style_id_mapping;
     
-    try {
-        // 使用SAX流式解析
-        xml::XMLStreamReader reader;
-        
-        // 设置回调函数 - 正确的函数签名包含depth参数
-        reader.setStartElementCallback([this](const std::string& name, const std::vector<xml::XMLAttribute>& attributes, int depth) {
-            this->handleStartElement(name, attributes, depth);
-        });
-        
-        reader.setEndElementCallback([this](const std::string& name, int depth) {
-            this->handleEndElement(name, depth);
-        });
-        
-        reader.setTextCallback([this](const std::string& text, int depth) {
-            this->handleText(text, depth);
-        });
-        
-        // 执行解析并检查结果
-        xml::XMLParseError result = reader.parseFromString(xml_content);
-        return result == xml::XMLParseError::Ok;
-        
-    } catch (const std::exception& e) {
-        FASTEXCEL_LOG_ERROR("解析工作表时发生错误: {}", e.what());
-        return false;
-    }
+    // 使用基类的parseXML方法进行SAX解析
+    return parseXML(xml_content);
 }
 
-// SAX helper methods - 将这些移到前面以便后面的方法调用
-std::optional<std::string> WorksheetParser::findAttribute(const std::vector<xml::XMLAttribute>& attributes, const std::string& name) {
-    for (const auto& attr : attributes) {
-        if (attr.name == name) {
-            return attr.value;
-        }
-    }
-    return std::nullopt;
-}
-
-std::optional<int> WorksheetParser::findIntAttribute(const std::vector<xml::XMLAttribute>& attributes, const std::string& name) {
-    auto value_opt = findAttribute(attributes, name);
-    if (!value_opt) {
-        return std::nullopt;
-    }
-    try {
-        return std::stoi(value_opt.value());
-    } catch (const std::exception& /*e*/) {
-        return std::nullopt;
-    }
-}
-
-std::optional<double> WorksheetParser::findDoubleAttribute(const std::vector<xml::XMLAttribute>& attributes, const std::string& name) {
-    auto value_opt = findAttribute(attributes, name);
-    if (!value_opt) {
-        return std::nullopt;
-    }
-    try {
-        return std::stod(value_opt.value());
-    } catch (const std::exception& /*e*/) {
-        return std::nullopt;
-    }
-}
-
-// Utility methods (using existing project utilities)
-
-bool WorksheetParser::parseRangeRef(const std::string& ref, int& first_row, int& first_col, int& last_row, int& last_col) {
-    size_t colon = ref.find(':');
-    if (colon == std::string::npos) {
-        // 单一单元格区间
-        try {
-            auto [r, c] = utils::CommonUtils::parseReference(ref);
-            first_row = last_row = r;
-            first_col = last_col = c;
-            return true;
-        } catch (const std::exception& /*e*/) {
-            return false;
-        }
-    }
-    std::string start_ref = ref.substr(0, colon);
-    std::string end_ref = ref.substr(colon + 1);
-    try {
-        auto [r1, c1] = utils::CommonUtils::parseReference(start_ref);
-        auto [r2, c2] = utils::CommonUtils::parseReference(end_ref);
-        first_row = r1; first_col = c1; last_row = r2; last_col = c2;
-        return true;
-    } catch (const std::exception& /*e*/) {
-        return false;
-    }
-}
+// Utility methods (基类已提供所有通用方法)
 
 bool WorksheetParser::isDateFormat(int style_index) const {
     if (style_index < 0) {
@@ -169,7 +77,7 @@ std::string WorksheetParser::convertExcelDateToString(double excel_date) {
 }
 
 // SAX事件处理器实现
-void WorksheetParser::handleStartElement(const std::string& name, const std::vector<xml::XMLAttribute>& attributes, int depth) {
+void WorksheetParser::onStartElement(const std::string& name, const std::vector<xml::XMLAttribute>& attributes, int depth) {
     // 推入元素栈
     if (name == "worksheet") {
         state_.element_stack.push(ParseState::Element::Worksheet);
@@ -218,7 +126,7 @@ void WorksheetParser::handleStartElement(const std::string& name, const std::vec
     }
 }
 
-void WorksheetParser::handleEndElement(const std::string& name, int depth) {
+void WorksheetParser::onEndElement(const std::string& name, int depth) {
     if (!state_.element_stack.empty()) {
         ParseState::Element current = state_.element_stack.top();
         state_.element_stack.pop();
@@ -237,7 +145,7 @@ void WorksheetParser::handleEndElement(const std::string& name, int depth) {
     }
 }
 
-void WorksheetParser::handleText(const std::string& text, int depth) {
+void WorksheetParser::onText(const std::string& text, int depth) {
     if (!state_.element_stack.empty()) {
         ParseState::Element current = state_.element_stack.top();
         if (current == ParseState::Element::CellValue) {
@@ -311,7 +219,7 @@ void WorksheetParser::handleMergeCellElement(const std::vector<xml::XMLAttribute
     if (ref_opt) {
         std::string ref = ref_opt.value();
         int r1, c1, r2, c2;
-        if (parseRangeRef(ref, r1, c1, r2, c2)) {
+        if (parseRangeReference(ref, r1, c1, r2, c2)) {
             state_.worksheet->mergeCells(r1, c1, r2, c2);
         }
     }
@@ -359,7 +267,7 @@ void WorksheetParser::handleCellStartElement(const std::vector<xml::XMLAttribute
     if (ref_opt) {
         state_.current_cell_ref = ref_opt.value();
         try {
-            auto [row, col] = utils::CommonUtils::parseReference(state_.current_cell_ref);
+            auto [row, col] = parseCellReference(state_.current_cell_ref);
             state_.current_col = col;
         } catch (const std::exception& /*e*/) {
             // 解析失败，使用列属性
@@ -409,7 +317,7 @@ void WorksheetParser::processCellData() {
         }
     } else if (state_.current_cell_type == "inlineStr") {
         // 内联字符串
-        std::string decoded_value = utils::XMLUtils::unescapeXML(state_.current_value);
+        std::string decoded_value = decodeXMLEntities(state_.current_value);
         state_.worksheet->setValue(row, col, decoded_value);
     } else if (state_.current_cell_type == "b") {
         // 布尔值
@@ -417,15 +325,15 @@ void WorksheetParser::processCellData() {
         state_.worksheet->setValue(row, col, bool_value);
     } else if (state_.current_cell_type == "str") {
         // 公式字符串结果
-        std::string decoded_value = utils::XMLUtils::unescapeXML(state_.current_value);
+        std::string decoded_value = decodeXMLEntities(state_.current_value);
         state_.worksheet->setValue(row, col, decoded_value);
     } else if (state_.current_cell_type == "e") {
         // 错误值
-        std::string decoded_value = utils::XMLUtils::unescapeXML(state_.current_value);
+        std::string decoded_value = decodeXMLEntities(state_.current_value);
         state_.worksheet->setValue(row, col, "#ERROR: " + decoded_value);
     } else if (state_.current_cell_type == "d") {
         // 日期值（ISO 8601格式）
-        std::string decoded_value = utils::XMLUtils::unescapeXML(state_.current_value);
+        std::string decoded_value = decodeXMLEntities(state_.current_value);
         state_.worksheet->setValue(row, col, decoded_value);
     } else {
         // 数字或默认类型 - Excel中没有t属性的单元格默认是数字！
@@ -471,7 +379,7 @@ void WorksheetParser::processCellData() {
     
     // 处理公式
     if (!state_.current_formula.empty()) {
-        state_.worksheet->setFormula(row, col, utils::XMLUtils::unescapeXML(state_.current_formula));
+        state_.worksheet->setFormula(row, col, decodeXMLEntities(state_.current_formula));
     }
 }
 
@@ -484,7 +392,7 @@ void WorksheetParser::processMergeCell(const std::vector<xml::XMLAttribute>& att
     if (ref_opt) {
         std::string ref = ref_opt.value();
         int r1, c1, r2, c2;
-        if (parseRangeRef(ref, r1, c1, r2, c2)) {
+        if (parseRangeReference(ref, r1, c1, r2, c2)) {
             state_.worksheet->mergeCells(r1, c1, r2, c2);
         }
     }
