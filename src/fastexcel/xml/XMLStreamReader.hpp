@@ -2,6 +2,7 @@
 #pragma once
 
 #include <string>
+#include <string_view>
 #include <vector>
 #include <stack>
 #include <memory>
@@ -12,6 +13,7 @@
 #include "fastexcel/core/Constants.hpp"
 #include "fastexcel/core/Expected.hpp"
 #include "fastexcel/core/ErrorCode.hpp"
+#include "fastexcel/core/span.hpp"
 
 // 项目日志头文件
 #include "fastexcel/utils/Logger.hpp"
@@ -58,34 +60,38 @@ constexpr bool isError(XMLParseError error) noexcept {
     return error != XMLParseError::Ok;
 }
 
-// XML属性结构
+// XML属性结构（零拷贝优化）
 struct XMLAttribute {
-    std::string name;
-    std::string value;
+    std::string_view name;
+    std::string_view value;
     
+    XMLAttribute(std::string_view n, std::string_view v) 
+        : name(n), value(v) {}
+    
+    // 向后兼容的构造函数
     XMLAttribute(const std::string& n, const std::string& v) 
         : name(n), value(v) {}
 };
 
-// XML元素信息
-struct XMLElement {
-    std::string name;
-    std::vector<XMLAttribute> attributes;
-    std::string text_content;
-    int depth;
+// 轻量级XML元素信息（栈优化版本）
+struct XMLElementSlim {
+    std::string_view name;
+    uint32_t attr_start_offset;  // 属性在全局数组中的起始位置
+    uint16_t attr_count;         // 属性数量
+    uint16_t depth;
     
-    XMLElement(const std::string& n, int d) 
-        : name(n), depth(d) {}
+    XMLElementSlim(std::string_view n, int d, uint32_t attr_start = 0, uint16_t attr_cnt = 0) 
+        : name(n), depth(static_cast<uint16_t>(d)), attr_start_offset(attr_start), attr_count(attr_cnt) {}
 };
 
 class XMLStreamReader {
 public:
-    // 事件回调函数类型定义
-    using StartElementCallback = std::function<void(const std::string& name, const std::vector<XMLAttribute>& attributes, int depth)>;
-    using EndElementCallback = std::function<void(const std::string& name, int depth)>;
-    using TextCallback = std::function<void(const std::string& text, int depth)>;
-    using CommentCallback = std::function<void(const std::string& comment, int depth)>;
-    using ProcessingInstructionCallback = std::function<void(const std::string& target, const std::string& data, int depth)>;
+    // 事件回调函数类型定义（零拷贝优化，保持原有接口）
+    using StartElementCallback = std::function<void(std::string_view name, span<const XMLAttribute> attributes, int depth)>;
+    using EndElementCallback = std::function<void(std::string_view name, int depth)>;
+    using TextCallback = std::function<void(std::string_view text, int depth)>;
+    using CommentCallback = std::function<void(std::string_view comment, int depth)>;
+    using ProcessingInstructionCallback = std::function<void(std::string_view target, std::string_view data, int depth)>;
     using ErrorCallback = std::function<void(XMLParseError error, const std::string& message, int line, int column)>;
 
 private:
@@ -98,12 +104,20 @@ private:
     XMLParseError last_error_ = XMLParseError::Ok;
     std::string last_error_message_;
     
-    // 元素栈，用于跟踪嵌套结构
-    std::stack<XMLElement> element_stack_;
+    // 元素栈优化：使用轻量级元素和固定容量
+    std::vector<XMLElementSlim> element_stack_slim_;
+    static constexpr size_t MAX_DEPTH = 256;  // 最大嵌套深度
     
-    // 当前文本内容累积
+    // 属性缓存池（避免重复分配）
+    std::vector<XMLAttribute> attribute_pool_;
+    
+    // 当前文本内容累积（优化版本）
     std::string current_text_;
     bool collecting_text_ = false;
+    
+    // 文本缓冲区预留（减少realloc）
+    static constexpr size_t TEXT_RESERVE_SIZE = 256;
+    bool text_reserved_ = false;
     
     // 缓冲区设置
     static constexpr size_t BUFFER_SIZE = fastexcel::core::Constants::kIOBufferSize;
@@ -138,9 +152,11 @@ private:
     bool initializeParser();
     void cleanupParser();
     void resetState();
-    std::vector<XMLAttribute> parseAttributes(const XML_Char** attrs);
+    span<const XMLAttribute> parseAttributes(const XML_Char** attrs);
     std::string trimString(const std::string& str) const;
+    std::string_view trimStringView(std::string_view str) const;
     void handleError(XMLParseError error, const std::string& message);
+    void ensureTextReserve();
     
 public:
     XMLStreamReader();
@@ -202,13 +218,38 @@ public:
         // 查找子元素
         SimpleElement* findChild(const std::string& element_name) const;
         std::vector<SimpleElement*> findChildren(const std::string& element_name) const;
+        SimpleElement* findChildByPath(const std::string& path) const;  // 支持路径查找如"child/grandchild"
         
-        // 获取属性值
+        // 属性操作
         std::string getAttribute(const std::string& attr_name, const std::string& defaultValue = "") const;
         bool hasAttribute(const std::string& attr_name) const;
+        void setAttribute(const std::string& attr_name, const std::string& value);
+        void removeAttribute(const std::string& attr_name);
         
-        // 获取文本内容
+        // 文本内容
         std::string getTextContent() const;
+        void setTextContent(const std::string& content);
+        std::string getInnerText() const;  // 递归获取所有子节点文本
+        
+        // 子元素操作
+        SimpleElement* appendChild(const std::string& element_name);
+        SimpleElement* prependChild(const std::string& element_name);
+        bool removeChild(SimpleElement* child);
+        void clear();  // 清除所有子元素
+        
+        // 遍历辅助方法
+        void forEach(std::function<void(SimpleElement*)> callback);
+        void forEachRecursive(std::function<void(SimpleElement*, int)> callback, int depth = 0);
+        
+        // 查询方法
+        size_t getChildCount() const { return children.size(); }
+        bool hasChildren() const { return !children.empty(); }
+        bool isEmpty() const { return text.empty() && children.empty(); }
+        int getDepth() const;  // 获取元素在树中的深度
+        
+        // 输出方法
+        std::string toString(int indent = 0) const;  // 美化输出XML字符串
+        void print(int indent = 0) const;  // 打印元素结构
     };
     
     // 简单DOM解析（将整个文档解析为树结构）

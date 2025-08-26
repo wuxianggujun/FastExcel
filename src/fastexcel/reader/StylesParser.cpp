@@ -5,7 +5,7 @@
 namespace fastexcel {
 namespace reader {
 
-void StylesParser::onStartElement(const std::string& name, const std::vector<xml::XMLAttribute>& attributes, int /*depth*/) {
+void StylesParser::onStartElement(std::string_view name, span<const xml::XMLAttribute> attributes, int /*depth*/) {
     if (!state_.collecting_region) {
         // 顶级区域检测
         if (name == "numFmts") {
@@ -28,16 +28,16 @@ void StylesParser::onStartElement(const std::string& name, const std::vector<xml
     
     // 收集区域内的XML
     if (state_.collecting_region) {
-        state_.region_xml_buffer += '<' + name;
+        state_.region_xml_buffer += std::string("<") + std::string(name);
         for (const auto& attr : attributes) {
-            state_.region_xml_buffer += " " + attr.name + "=\"" + attr.value + "\"";
+            state_.region_xml_buffer += " " + std::string(attr.name) + "=\"" + std::string(attr.value) + "\"";
         }
         state_.region_xml_buffer += '>';
         state_.region_depth++;
     }
 }
 
-void StylesParser::onEndElement(const std::string& name, int /*depth*/) {
+void StylesParser::onEndElement(std::string_view name, int /*depth*/) {
     if (state_.collecting_region) {
         state_.region_depth--;
         
@@ -66,15 +66,15 @@ void StylesParser::onEndElement(const std::string& name, int /*depth*/) {
             state_.endRegion();
         } else {
             // 区域内部元素结束
-            state_.region_xml_buffer += "</" + name + ">";
+            state_.region_xml_buffer += "</" + std::string(name) + ">";
         }
     }
 }
 
-void StylesParser::onText(const std::string& text, int /*depth*/) {
+void StylesParser::onText(std::string_view text, int /*depth*/) {
     if (state_.collecting_region && !text.empty()) {
         // XML实体转义处理
-        std::string escaped_text = text;
+        std::string escaped_text(text);
         // 基本XML实体转义
         size_t pos = 0;
         while ((pos = escaped_text.find('&', pos)) != std::string::npos) {

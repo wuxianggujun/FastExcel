@@ -1,10 +1,13 @@
 #pragma once
 
 #include "BaseSAXParser.hpp"
+#include "fastexcel/core/span.hpp"
 #include <string>
 #include <vector>
 #include <unordered_map>
 #include <memory>
+
+using fastexcel::core::span;  // Import span into this namespace
 
 namespace fastexcel {
 namespace reader {
@@ -90,8 +93,8 @@ private:
     std::unordered_map<std::string, size_t> id_index_;
     
     // 重写基类虚函数
-    void onStartElement(const std::string& name, const std::vector<xml::XMLAttribute>& attributes, int depth) override;
-    void onEndElement(const std::string& name, int depth) override;
+    void onStartElement(std::string_view name, span<const xml::XMLAttribute> attributes, int depth) override;
+    void onEndElement(std::string_view name, int depth) override;
 };
 
 }} // namespace fastexcel::reader

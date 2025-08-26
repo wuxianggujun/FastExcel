@@ -8,7 +8,7 @@
 namespace fastexcel {
 namespace reader {
 
-void SharedStringsParser::onStartElement(const std::string& name, const std::vector<xml::XMLAttribute>& attributes, int depth) {
+void SharedStringsParser::onStartElement(std::string_view name, span<const xml::XMLAttribute> attributes, int depth) {
     if (name == "si") {
         // 开始新的共享字符串项
         parse_state_.startNewString();
@@ -25,7 +25,7 @@ void SharedStringsParser::onStartElement(const std::string& name, const std::vec
     // 其他元素（如 <rPh>, <phoneticPr> 等）我们忽略
 }
 
-void SharedStringsParser::onEndElement(const std::string& name, int depth) {
+void SharedStringsParser::onEndElement(std::string_view name, int depth) {
     if (name == "si") {
         // 结束共享字符串项，保存收集到的文本
         if (!parse_state_.current_text.empty()) {

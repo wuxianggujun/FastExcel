@@ -9,6 +9,7 @@
 #include "fastexcel/core/Cell.hpp"
 #include "fastexcel/core/FormatDescriptor.hpp"
 #include "fastexcel/utils/Logger.hpp"
+#include "fastexcel/core/span.hpp"
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -16,6 +17,8 @@
 #include <vector>
 #include <optional>
 #include <cstring>
+
+using fastexcel::core::span;  // Import span into this namespace
 
 namespace fastexcel {
 namespace reader {
@@ -90,9 +93,9 @@ private:
     } state_;
     
     // SAX事件处理（只处理行级事件）
-    void onStartElement(const std::string& name, const std::vector<xml::XMLAttribute>& attributes, int depth) override;
-    void onEndElement(const std::string& name, int depth) override;
-    void onText(const std::string& text, int depth) override;
+    void onStartElement(std::string_view name, span<const xml::XMLAttribute> attributes, int depth) override;
+    void onEndElement(std::string_view name, int depth) override;
+    void onText(std::string_view text, int depth) override;
     
     // 核心优化：零分配指针扫描器
     void parseRowWithPointerScan(std::string_view row_xml, std::vector<FastCellData>& cells);
@@ -105,9 +108,9 @@ private:
     void setCellValue(int row, uint32_t col, const FastCellData& cell_data);
     
     // 完整的工作表元素处理方法
-    void handleColumnElement(const std::vector<xml::XMLAttribute>& attributes);
-    void handleMergeCellElement(const std::vector<xml::XMLAttribute>& attributes);
-    void handleRowStartElement(const std::vector<xml::XMLAttribute>& attributes);
+    void handleColumnElement(span<const xml::XMLAttribute> attributes);
+    void handleMergeCellElement(span<const xml::XMLAttribute> attributes);
+    void handleRowStartElement(span<const xml::XMLAttribute> attributes);
     
     // 工具方法
     bool isDateFormat(int style_index) const;

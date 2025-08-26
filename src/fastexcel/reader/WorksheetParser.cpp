@@ -43,7 +43,7 @@ bool WorksheetParser::parse(const std::string& xml_content,
 }
 
 // === 完整的混合架构实现：处理所有工作表元素 ===
-void WorksheetParser::onStartElement(const std::string& name, const std::vector<xml::XMLAttribute>& attributes, int depth) {
+void WorksheetParser::onStartElement(std::string_view name, span<const xml::XMLAttribute> attributes, int depth) {
     // 列定义处理 - 影响整个工作表的列格式和宽度
     if (name == "cols") {
         // 进入列定义区域
@@ -75,15 +75,15 @@ void WorksheetParser::onStartElement(const std::string& name, const std::vector<
         // 开始收集这一行的原始XML内容以进行指针扫描
         state_.row_xml_buffer = "<row";
         for (const auto& attr : attributes) {
-            state_.row_xml_buffer += " " + attr.name + "=\"" + attr.value + "\"";
+            state_.row_xml_buffer += " " + std::string(attr.name) + "=\"" + std::string(attr.value) + "\"";
         }
         state_.row_xml_buffer += ">";
     }
     else if (state_.in_row) {
         // 在行内的任何元素都需要收集到row_xml_buffer中
-        state_.row_xml_buffer += "<" + name;
+        state_.row_xml_buffer += "<" + std::string(name);
         for (const auto& attr : attributes) {
-            state_.row_xml_buffer += " " + attr.name + "=\"" + attr.value + "\"";
+            state_.row_xml_buffer += " " + std::string(attr.name) + "=\"" + std::string(attr.value) + "\"";
         }
         state_.row_xml_buffer += ">";
     }
@@ -91,7 +91,7 @@ void WorksheetParser::onStartElement(const std::string& name, const std::vector<
     // 其他非关键元素忽略 - 关键优化：减少SAX回调处理
 }
 
-void WorksheetParser::onEndElement(const std::string& name, int depth) {
+void WorksheetParser::onEndElement(std::string_view name, int depth) {
     if (name == "row" && state_.in_row) {
         // 行结束：完成XML收集，进行指针扫描解析
         state_.row_xml_buffer += "</row>";
@@ -108,18 +108,18 @@ void WorksheetParser::onEndElement(const std::string& name, int depth) {
     }
     else if (state_.in_row) {
         // 在行内的结束标签也要收集
-        state_.row_xml_buffer += "</" + name + ">";
+        state_.row_xml_buffer += "</" + std::string(name) + ">";
     }
     else if (name == "sheetData") {
         state_.in_sheet_data = false;
     }
 }
 
-void WorksheetParser::onText(const std::string& text, int depth) {
+void WorksheetParser::onText(std::string_view text, int depth) {
     if (state_.in_row && !text.empty()) {
         // 在行内：直接收集文本内容用于指针扫描
         // SAX解析器已经处理了XML实体解码，不需要再次转义
-        state_.row_xml_buffer += text;
+        state_.row_xml_buffer += std::string(text);
     }
 }
 
@@ -377,7 +377,7 @@ std::string WorksheetParser::convertExcelDateToString(double excel_date) {
 
 // === 完整的工作表元素处理方法实现 ===
 
-void WorksheetParser::handleColumnElement(const std::vector<xml::XMLAttribute>& attributes) {
+void WorksheetParser::handleColumnElement(span<const xml::XMLAttribute> attributes) {
     // 提取列属性 - 完整的列处理逻辑
     auto min_col_opt = findIntAttribute(attributes, "min");
     auto max_col_opt = findIntAttribute(attributes, "max");
@@ -430,7 +430,7 @@ void WorksheetParser::handleColumnElement(const std::vector<xml::XMLAttribute>& 
     }
 }
 
-void WorksheetParser::handleMergeCellElement(const std::vector<xml::XMLAttribute>& attributes) {
+void WorksheetParser::handleMergeCellElement(span<const xml::XMLAttribute> attributes) {
     auto ref_opt = findAttribute(attributes, "ref");
     if (ref_opt) {
         std::string ref = ref_opt.value();
@@ -442,7 +442,7 @@ void WorksheetParser::handleMergeCellElement(const std::vector<xml::XMLAttribute
     }
 }
 
-void WorksheetParser::handleRowStartElement(const std::vector<xml::XMLAttribute>& attributes) {
+void WorksheetParser::handleRowStartElement(span<const xml::XMLAttribute> attributes) {
     // 解析行级属性：r（行号）、ht（行高）、customHeight、hidden
     auto r_opt = findIntAttribute(attributes, "r");
     if (r_opt) {

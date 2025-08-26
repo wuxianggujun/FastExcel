@@ -5,7 +5,7 @@
 namespace fastexcel {
 namespace reader {
 
-void RelationshipsParser::onStartElement(const std::string& name, const std::vector<xml::XMLAttribute>& attributes, int depth) {
+void RelationshipsParser::onStartElement(std::string_view name, span<const xml::XMLAttribute> attributes, int depth) {
     if (name == "Relationship") {
         // 解析Relationship元素
         auto id = findAttribute(attributes, "Id");
@@ -36,7 +36,7 @@ void RelationshipsParser::onStartElement(const std::string& name, const std::vec
     // 忽略其他元素如 <Relationships> 根元素
 }
 
-void RelationshipsParser::onEndElement(const std::string& name, int depth) {
+void RelationshipsParser::onEndElement(std::string_view name, int depth) {
     // RelationshipsParser不需要处理元素结束事件
     // 所有属性都在开始元素中处理完毕
 }

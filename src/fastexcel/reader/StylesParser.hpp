@@ -8,10 +8,13 @@
 #include "BaseSAXParser.hpp"
 #include "fastexcel/core/FormatDescriptor.hpp"
 #include "fastexcel/core/Color.hpp"
+#include "fastexcel/core/span.hpp"
 #include <string>
 #include <vector>
 #include <unordered_map>
 #include <memory>
+
+using fastexcel::core::span;  // Import span into this namespace
 
 namespace fastexcel {
 namespace reader {
@@ -179,9 +182,9 @@ private:
     std::unordered_map<int, std::string> number_formats_;
     
     // 混合架构实现
-    void onStartElement(const std::string& name, const std::vector<xml::XMLAttribute>& attributes, int depth) override;
-    void onEndElement(const std::string& name, int depth) override;
-    void onText(const std::string& text, int depth) override;
+    void onStartElement(std::string_view name, span<const xml::XMLAttribute> attributes, int depth) override;
+    void onEndElement(std::string_view name, int depth) override;
+    void onText(std::string_view text, int depth) override;
     
     // 区域处理方法 - 使用指针扫描
     void processNumFmtsRegion(std::string_view region_xml);

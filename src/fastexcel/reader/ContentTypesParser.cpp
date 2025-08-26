@@ -4,7 +4,7 @@
 namespace fastexcel {
 namespace reader {
 
-void ContentTypesParser::onStartElement(const std::string& name, const std::vector<xml::XMLAttribute>& attributes, int depth) {
+void ContentTypesParser::onStartElement(std::string_view name, span<const xml::XMLAttribute> attributes, int depth) {
     if (name == "Default") {
         // 解析Default元素
         auto extension = findAttribute(attributes, "Extension");
@@ -48,7 +48,7 @@ void ContentTypesParser::onStartElement(const std::string& name, const std::vect
     // 忽略其他元素如 <Types> 根元素
 }
 
-void ContentTypesParser::onEndElement(const std::string& name, int depth) {
+void ContentTypesParser::onEndElement(std::string_view name, int depth) {
     // ContentTypes解析不需要处理元素结束事件
     // 所有属性都在开始元素中处理完毕
 }

@@ -4,12 +4,16 @@
 #include "fastexcel/utils/CommonUtils.hpp"
 #include "fastexcel/utils/XMLUtils.hpp"
 #include "fastexcel/utils/Logger.hpp"
+#include "fastexcel/core/span.hpp"
 #include <string>
+#include <string_view>
 #include <vector>
 #include <stack>
 #include <optional>
 #include <functional>
 #include <unordered_map>
+
+using fastexcel::core::span;  // Import span into this namespace
 
 namespace fastexcel {
 namespace reader {
@@ -102,15 +106,15 @@ public:
             xml::XMLStreamReader reader;
             
             // 设置SAX回调
-            reader.setStartElementCallback([this](const std::string& name, const std::vector<xml::XMLAttribute>& attributes, int depth) {
+            reader.setStartElementCallback([this](std::string_view name, span<const xml::XMLAttribute> attributes, int depth) {
                 handleStartElement(name, attributes, depth);
             });
             
-            reader.setEndElementCallback([this](const std::string& name, int depth) {
+            reader.setEndElementCallback([this](std::string_view name, int depth) {
                 handleEndElement(name, depth);
             });
             
-            reader.setTextCallback([this](const std::string& text, int depth) {
+            reader.setTextCallback([this](std::string_view text, int depth) {
                 handleText(text, depth);
             });
             
@@ -150,14 +154,14 @@ protected:
     /**
      * @brief 子类需要实现的SAX事件处理器
      */
-    virtual void handleStartElement(const std::string& name, const std::vector<xml::XMLAttribute>& attributes, int depth) {
-        state_.element_stack.push(name);
+    virtual void handleStartElement(std::string_view name, span<const xml::XMLAttribute> attributes, int depth) {
+        state_.element_stack.push(std::string(name));
         state_.current_depth = depth;
         state_.current_text.clear();
         onStartElement(name, attributes, depth);
     }
     
-    virtual void handleEndElement(const std::string& name, int depth) {
+    virtual void handleEndElement(std::string_view name, int depth) {
         if (!state_.element_stack.empty()) {
             state_.element_stack.pop();
         }
@@ -166,7 +170,7 @@ protected:
         state_.current_text.clear();
     }
     
-    virtual void handleText(const std::string& text, int depth) {
+    virtual void handleText(std::string_view text, int depth) {
         if (state_.collecting_text) {
             state_.current_text += text;
         }
@@ -174,19 +178,19 @@ protected:
     }
     
     // 子类重写的虚函数
-    virtual void onStartElement(const std::string& name, const std::vector<xml::XMLAttribute>& attributes, int depth) = 0;
-    virtual void onEndElement(const std::string& name, int depth) = 0;
-    virtual void onText(const std::string& /*text*/, int /*depth*/) {}
+    virtual void onStartElement(std::string_view name, span<const xml::XMLAttribute> attributes, int depth) = 0;
+    virtual void onEndElement(std::string_view name, int depth) = 0;
+    virtual void onText(std::string_view /*text*/, int /*depth*/) {}
     
     // ==================== 通用工具方法 ====================
     
     /**
      * @brief 快速属性查找 - 零分配优化版本
      */
-    std::optional<std::string> findAttribute(const std::vector<xml::XMLAttribute>& attributes, const std::string& name) const {
+    std::optional<std::string> findAttribute(span<const xml::XMLAttribute> attributes, std::string_view name) const {
         for (const auto& attr : attributes) {
             if (attr.name == name) {
-                return attr.value;
+                return std::string(attr.value);
             }
         }
         return std::nullopt;
@@ -195,7 +199,7 @@ protected:
     /**
      * @brief 整数属性提取
      */
-    std::optional<int> findIntAttribute(const std::vector<xml::XMLAttribute>& attributes, const std::string& name) const {
+    std::optional<int> findIntAttribute(span<const xml::XMLAttribute> attributes, std::string_view name) const {
         auto val = findAttribute(attributes, name);
         if (val) {
             try {
@@ -210,7 +214,7 @@ protected:
     /**
      * @brief 浮点数属性提取
      */
-    std::optional<double> findDoubleAttribute(const std::vector<xml::XMLAttribute>& attributes, const std::string& name) const {
+    std::optional<double> findDoubleAttribute(span<const xml::XMLAttribute> attributes, std::string_view name) const {
         auto val = findAttribute(attributes, name);
         if (val) {
             try {
@@ -225,7 +229,7 @@ protected:
     /**
      * @brief 布尔属性提取
      */
-    std::optional<bool> findBoolAttribute(const std::vector<xml::XMLAttribute>& attributes, const std::string& name) const {
+    std::optional<bool> findBoolAttribute(span<const xml::XMLAttribute> attributes, std::string_view name) const {
         auto val = findAttribute(attributes, name);
         if (val) {
             const std::string& value = *val;
@@ -237,7 +241,7 @@ protected:
     /**
      * @brief 获取属性值，带默认值
      */
-    std::string getAttributeOr(const std::vector<xml::XMLAttribute>& attributes, const std::string& name, const std::string& default_value) const {
+    std::string getAttributeOr(span<const xml::XMLAttribute> attributes, std::string_view name, const std::string& default_value) const {
         auto val = findAttribute(attributes, name);
         return val ? *val : default_value;
     }
@@ -245,7 +249,7 @@ protected:
     /**
      * @brief 整数属性获取，带默认值
      */
-    int getIntAttributeOr(const std::vector<xml::XMLAttribute>& attributes, const std::string& name, int default_value) const {
+    int getIntAttributeOr(span<const xml::XMLAttribute> attributes, std::string_view name, int default_value) const {
         auto val = findIntAttribute(attributes, name);
         return val ? *val : default_value;
     }
@@ -253,7 +257,7 @@ protected:
     /**
      * @brief 浮点数属性获取，带默认值
      */
-    double getDoubleAttributeOr(const std::vector<xml::XMLAttribute>& attributes, const std::string& name, double default_value) const {
+    double getDoubleAttributeOr(span<const xml::XMLAttribute> attributes, std::string_view name, double default_value) const {
         auto val = findDoubleAttribute(attributes, name);
         return val ? *val : default_value;
     }
@@ -261,7 +265,7 @@ protected:
     /**
      * @brief 布尔属性获取，带默认值
      */
-    bool getBoolAttributeOr(const std::vector<xml::XMLAttribute>& attributes, const std::string& name, bool default_value) const {
+    bool getBoolAttributeOr(span<const xml::XMLAttribute> attributes, std::string_view name, bool default_value) const {
         auto val = findBoolAttribute(attributes, name);
         return val ? *val : default_value;
     }

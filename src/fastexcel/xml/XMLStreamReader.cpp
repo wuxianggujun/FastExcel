@@ -2,13 +2,20 @@
 #include <algorithm>
 #include <cstring>
 #include <fstream>
-#include <sstream>
+#include <iostream>
+#include <fmt/format.h>
 #include "fastexcel/core/Path.hpp"
 
 namespace fastexcel {
 namespace xml {
 
 XMLStreamReader::XMLStreamReader() {
+    // 为元素栈预留空间
+    element_stack_slim_.reserve(MAX_DEPTH);
+    
+    // 为属性池预留空间
+    attribute_pool_.reserve(128); // 初始预留128个属性
+    
     resetState();
 }
 
@@ -57,17 +64,20 @@ void XMLStreamReader::resetState() {
     last_error_ = XMLParseError::Ok;
     last_error_message_.clear();
     
-    // 清空栈
-    while (!element_stack_.empty()) {
-        element_stack_.pop();
-    }
+    // 清空轻量级栈
+    element_stack_slim_.clear();
+    
+    // 清空属性池
+    attribute_pool_.clear();
     
     current_text_.clear();
     collecting_text_ = false;
+    text_reserved_ = false;
     bytes_parsed_ = 0;
     elements_parsed_ = 0;
 }
 
+// 回调函数设置
 void XMLStreamReader::setStartElementCallback(StartElementCallback callback) {
     start_element_callback_ = std::move(callback);
 }
@@ -136,17 +146,29 @@ XMLParseError XMLStreamReader::parseFromFile(FILE* file) {
     resetState();
     is_parsing_ = true;
     
+    // 使用ParseBuffer API减少拷贝
     size_t bytes_read;
     while ((bytes_read = fread(buffer_, 1, BUFFER_SIZE, file)) > 0) {
         bytes_parsed_ += bytes_read;
         
+        // 使用ParseBuffer而不是Parse，减少一次内存拷贝
+        void* expat_buffer = XML_GetBuffer(parser_, static_cast<int>(bytes_read));
+        if (!expat_buffer) {
+            handleError(XMLParseError::MemoryError, "Failed to get Expat buffer");
+            is_parsing_ = false;
+            return XMLParseError::MemoryError;
+        }
+        
+        // 直接拷贝到Expat内部缓冲区
+        std::memcpy(expat_buffer, buffer_, bytes_read);
+        
         int is_final = feof(file) ? 1 : 0;
-        if (XML_Parse(parser_, buffer_, static_cast<int>(bytes_read), is_final) == XML_STATUS_ERROR) {
-            std::ostringstream oss;
-            oss << "Parse error at line " << XML_GetCurrentLineNumber(parser_)
-                << ", column " << XML_GetCurrentColumnNumber(parser_)
-                << ": " << XML_ErrorString(XML_GetErrorCode(parser_));
-            handleError(XMLParseError::ParseFailed, oss.str());
+        if (XML_ParseBuffer(parser_, static_cast<int>(bytes_read), is_final) == XML_STATUS_ERROR) {
+            std::string error_msg = fmt::format("Parse error at line {}, column {}: {}", 
+                XML_GetCurrentLineNumber(parser_),
+                XML_GetCurrentColumnNumber(parser_),
+                XML_ErrorString(XML_GetErrorCode(parser_)));
+            handleError(XMLParseError::ParseFailed, error_msg);
             is_parsing_ = false;
             return XMLParseError::ParseFailed;
         }
@@ -177,12 +199,22 @@ XMLParseError XMLStreamReader::parseFromBuffer(const char* buffer, size_t size) 
     is_parsing_ = true;
     bytes_parsed_ = size;
     
-    if (XML_Parse(parser_, buffer, static_cast<int>(size), 1) == XML_STATUS_ERROR) {
-        std::ostringstream oss;
-        oss << "Parse error at line " << XML_GetCurrentLineNumber(parser_)
-            << ", column " << XML_GetCurrentColumnNumber(parser_)
-            << ": " << XML_ErrorString(XML_GetErrorCode(parser_));
-        handleError(XMLParseError::ParseFailed, oss.str());
+    // 使用ParseBuffer API
+    void* expat_buffer = XML_GetBuffer(parser_, static_cast<int>(size));
+    if (!expat_buffer) {
+        handleError(XMLParseError::MemoryError, "Failed to get Expat buffer");
+        is_parsing_ = false;
+        return XMLParseError::MemoryError;
+    }
+    
+    std::memcpy(expat_buffer, buffer, size);
+    
+    if (XML_ParseBuffer(parser_, static_cast<int>(size), 1) == XML_STATUS_ERROR) {
+        std::string error_msg = fmt::format("Parse error at line {}, column {}: {}", 
+            XML_GetCurrentLineNumber(parser_),
+            XML_GetCurrentColumnNumber(parser_),
+            XML_ErrorString(XML_GetErrorCode(parser_)));
+        handleError(XMLParseError::ParseFailed, error_msg);
         is_parsing_ = false;
         return XMLParseError::ParseFailed;
     }
@@ -201,12 +233,12 @@ XMLParseError XMLStreamReader::parseChunk(const char* chunk, size_t size, bool i
     if (!chunk || size == 0) {
         if (is_final) {
             // 结束解析
-            if (XML_Parse(parser_, "", 0, 1) == XML_STATUS_ERROR) {
-                std::ostringstream oss;
-                oss << "Parse error at line " << XML_GetCurrentLineNumber(parser_)
-                    << ", column " << XML_GetCurrentColumnNumber(parser_)
-                    << ": " << XML_ErrorString(XML_GetErrorCode(parser_));
-                handleError(XMLParseError::ParseFailed, oss.str());
+            if (XML_ParseBuffer(parser_, 0, 1) == XML_STATUS_ERROR) {
+                std::string error_msg = fmt::format("Parse error at line {}, column {}: {}", 
+                    XML_GetCurrentLineNumber(parser_),
+                    XML_GetCurrentColumnNumber(parser_),
+                    XML_ErrorString(XML_GetErrorCode(parser_)));
+                handleError(XMLParseError::ParseFailed, error_msg);
                 return XMLParseError::ParseFailed;
             }
             is_parsing_ = false;
@@ -216,12 +248,21 @@ XMLParseError XMLStreamReader::parseChunk(const char* chunk, size_t size, bool i
     
     bytes_parsed_ += size;
     
-    if (XML_Parse(parser_, chunk, static_cast<int>(size), is_final ? 1 : 0) == XML_STATUS_ERROR) {
-        std::ostringstream oss;
-        oss << "Parse error at line " << XML_GetCurrentLineNumber(parser_)
-            << ", column " << XML_GetCurrentColumnNumber(parser_)
-            << ": " << XML_ErrorString(XML_GetErrorCode(parser_));
-        handleError(XMLParseError::ParseFailed, oss.str());
+    // 使用ParseBuffer API
+    void* expat_buffer = XML_GetBuffer(parser_, static_cast<int>(size));
+    if (!expat_buffer) {
+        handleError(XMLParseError::MemoryError, "Failed to get Expat buffer");
+        return XMLParseError::MemoryError;
+    }
+    
+    std::memcpy(expat_buffer, chunk, size);
+    
+    if (XML_ParseBuffer(parser_, static_cast<int>(size), is_final ? 1 : 0) == XML_STATUS_ERROR) {
+        std::string error_msg = fmt::format("Parse error at line {}, column {}: {}", 
+            XML_GetCurrentLineNumber(parser_),
+            XML_GetCurrentColumnNumber(parser_),
+            XML_ErrorString(XML_GetErrorCode(parser_)));
+        handleError(XMLParseError::ParseFailed, error_msg);
         return XMLParseError::ParseFailed;
     }
     
@@ -267,15 +308,23 @@ std::string XMLStreamReader::getParserVersion() const {
 void XMLCALL XMLStreamReader::startElementHandler(void* userData, const XML_Char* name, const XML_Char** attrs) {
     XMLStreamReader* reader = static_cast<XMLStreamReader*>(userData);
     
-    std::string element_name(name);
-    std::vector<XMLAttribute> attributes = reader->parseAttributes(attrs);
-    
-    // 创建新元素并推入栈
-    XMLElement element(element_name, reader->current_depth_);
-    element.attributes = attributes;
-    reader->element_stack_.push(element);
+    // 使用string_view，直接引用Expat的缓冲区（零拷贝）
+    std::string_view element_name{name, std::strlen(name)};
     
     reader->elements_parsed_++;
+    
+    // 使用零拷贝优化的属性解析
+    auto attributes = reader->parseAttributes(attrs);
+    
+    // 创建轻量级元素并推入栈
+    if (reader->element_stack_slim_.size() < MAX_DEPTH) {
+        reader->element_stack_slim_.emplace_back(
+            element_name, 
+            reader->current_depth_,
+            static_cast<uint32_t>(reader->attribute_pool_.size() - attributes.size()),
+            static_cast<uint16_t>(attributes.size())
+        );
+    }
     
     // 调用用户回调
     if (reader->start_element_callback_) {
@@ -289,6 +338,11 @@ void XMLCALL XMLStreamReader::startElementHandler(void* userData, const XML_Char
     reader->current_depth_++;
     reader->current_text_.clear();
     reader->collecting_text_ = reader->collect_text_;
+    
+    // 确保文本缓冲区预留
+    if (reader->collecting_text_) {
+        reader->ensureTextReserve();
+    }
 }
 
 void XMLCALL XMLStreamReader::endElementHandler(void* userData, const XML_Char* name) {
@@ -296,12 +350,14 @@ void XMLCALL XMLStreamReader::endElementHandler(void* userData, const XML_Char* 
     
     reader->current_depth_--;
     
-    std::string element_name(name);
+    // 使用string_view，直接引用Expat的缓冲区（零拷贝）
+    std::string_view element_name{name, std::strlen(name)};
     
     // 处理累积的文本内容
     if (reader->collecting_text_ && !reader->current_text_.empty()) {
-        std::string text_content = reader->trim_whitespace_ ? 
-            reader->trimString(reader->current_text_) : reader->current_text_;
+        // 使用string_view trim（零拷贝）
+        std::string_view text_content = reader->trim_whitespace_ ? 
+            reader->trimStringView(reader->current_text_) : std::string_view{reader->current_text_};
         
         if (!text_content.empty() && reader->text_callback_) {
             try {
@@ -309,11 +365,6 @@ void XMLCALL XMLStreamReader::endElementHandler(void* userData, const XML_Char* 
             } catch (const std::exception& e) {
                 reader->handleError(XMLParseError::CallbackError, "Text callback error: " + std::string(e.what()));
             }
-        }
-        
-        // 更新栈顶元素的文本内容
-        if (!reader->element_stack_.empty()) {
-            reader->element_stack_.top().text_content = text_content;
         }
     }
     
@@ -326,9 +377,9 @@ void XMLCALL XMLStreamReader::endElementHandler(void* userData, const XML_Char* 
         }
     }
     
-    // 弹出元素栈
-    if (!reader->element_stack_.empty()) {
-        reader->element_stack_.pop();
+    // 弹出轻量级元素栈
+    if (!reader->element_stack_slim_.empty()) {
+        reader->element_stack_slim_.pop_back();
     }
     
     reader->current_text_.clear();
@@ -348,7 +399,8 @@ void XMLCALL XMLStreamReader::commentHandler(void* userData, const XML_Char* dat
     
     if (reader->comment_callback_) {
         try {
-            reader->comment_callback_(std::string(data), reader->current_depth_);
+            std::string_view comment{data, std::strlen(data)};
+            reader->comment_callback_(comment, reader->current_depth_);
         } catch (const std::exception& e) {
             reader->handleError(XMLParseError::CallbackError, "Comment callback error: " + std::string(e.what()));
         }
@@ -360,26 +412,55 @@ void XMLCALL XMLStreamReader::processingInstructionHandler(void* userData, const
     
     if (reader->pi_callback_) {
         try {
-            reader->pi_callback_(std::string(target), data ? std::string(data) : std::string(), reader->current_depth_);
+            std::string_view target_view{target, std::strlen(target)};
+            std::string_view data_view = data ? std::string_view{data, std::strlen(data)} : std::string_view{};
+            reader->pi_callback_(target_view, data_view, reader->current_depth_);
         } catch (const std::exception& e) {
             reader->handleError(XMLParseError::CallbackError, "Processing instruction callback error: " + std::string(e.what()));
         }
     }
 }
 
-// 辅助方法实现
-std::vector<XMLAttribute> XMLStreamReader::parseAttributes(const XML_Char** attrs) {
-    std::vector<XMLAttribute> attributes;
+// 属性解析方法（零拷贝优化）
+span<const XMLAttribute> XMLStreamReader::parseAttributes(const XML_Char** attrs) {
+    size_t attr_start = attribute_pool_.size();
     
     if (attrs) {
         for (int i = 0; attrs[i]; i += 2) {
             if (attrs[i + 1]) {
-                attributes.emplace_back(std::string(attrs[i]), std::string(attrs[i + 1]));
+                // 使用string_view，直接引用Expat内部缓冲区
+                attribute_pool_.emplace_back(
+                    std::string_view{attrs[i], std::strlen(attrs[i])},
+                    std::string_view{attrs[i + 1], std::strlen(attrs[i + 1])}
+                );
             }
         }
     }
     
-    return attributes;
+    size_t attr_count = attribute_pool_.size() - attr_start;
+    return span<const XMLAttribute>{
+        attribute_pool_.data() + attr_start, 
+        attr_count
+    };
+}
+
+// 字符串视图trim方法（零拷贝）
+std::string_view XMLStreamReader::trimStringView(std::string_view str) const {
+    size_t start = str.find_first_not_of(" \t\n\r");
+    if (start == std::string_view::npos) {
+        return std::string_view{};
+    }
+    
+    size_t end = str.find_last_not_of(" \t\n\r");
+    return str.substr(start, end - start + 1);
+}
+
+// 确保文本缓冲区预留
+void XMLStreamReader::ensureTextReserve() {
+    if (!text_reserved_) {
+        current_text_.reserve(TEXT_RESERVE_SIZE);
+        text_reserved_ = true;
+    }
 }
 
 std::string XMLStreamReader::trimString(const std::string& str) const {
@@ -427,6 +508,24 @@ std::vector<XMLStreamReader::SimpleElement*> XMLStreamReader::SimpleElement::fin
     return result;
 }
 
+XMLStreamReader::SimpleElement* XMLStreamReader::SimpleElement::findChildByPath(const std::string& path) const {
+    if (path.empty()) return nullptr;
+    
+    size_t pos = path.find('/');
+    if (pos == std::string::npos) {
+        return findChild(path);
+    }
+    
+    std::string first_part = path.substr(0, pos);
+    std::string remaining = path.substr(pos + 1);
+    
+    SimpleElement* child = findChild(first_part);
+    if (child) {
+        return child->findChildByPath(remaining);
+    }
+    return nullptr;
+}
+
 std::string XMLStreamReader::SimpleElement::getAttribute(const std::string& attr_name, const std::string& defaultValue) const {
     auto it = attributes.find(attr_name);
     return it != attributes.end() ? it->second : defaultValue;
@@ -436,8 +535,116 @@ bool XMLStreamReader::SimpleElement::hasAttribute(const std::string& attr_name) 
     return attributes.find(attr_name) != attributes.end();
 }
 
+void XMLStreamReader::SimpleElement::setAttribute(const std::string& attr_name, const std::string& value) {
+    attributes[attr_name] = value;
+}
+
+void XMLStreamReader::SimpleElement::removeAttribute(const std::string& attr_name) {
+    attributes.erase(attr_name);
+}
+
 std::string XMLStreamReader::SimpleElement::getTextContent() const {
     return text;
+}
+
+void XMLStreamReader::SimpleElement::setTextContent(const std::string& content) {
+    text = content;
+}
+
+std::string XMLStreamReader::SimpleElement::getInnerText() const {
+    std::string result = text;
+    for (const auto& child : children) {
+        result += child->getInnerText();
+    }
+    return result;
+}
+
+XMLStreamReader::SimpleElement* XMLStreamReader::SimpleElement::appendChild(const std::string& element_name) {
+    auto child = std::make_unique<SimpleElement>(element_name);
+    SimpleElement* child_ptr = child.get();
+    child_ptr->parent = this;
+    children.push_back(std::move(child));
+    return child_ptr;
+}
+
+XMLStreamReader::SimpleElement* XMLStreamReader::SimpleElement::prependChild(const std::string& element_name) {
+    auto child = std::make_unique<SimpleElement>(element_name);
+    SimpleElement* child_ptr = child.get();
+    child_ptr->parent = this;
+    children.insert(children.begin(), std::move(child));
+    return child_ptr;
+}
+
+bool XMLStreamReader::SimpleElement::removeChild(SimpleElement* child) {
+    auto it = std::find_if(children.begin(), children.end(),
+                          [child](const std::unique_ptr<SimpleElement>& ptr) {
+                              return ptr.get() == child;
+                          });
+    if (it != children.end()) {
+        children.erase(it);
+        return true;
+    }
+    return false;
+}
+
+void XMLStreamReader::SimpleElement::clear() {
+    children.clear();
+}
+
+void XMLStreamReader::SimpleElement::forEach(std::function<void(SimpleElement*)> callback) {
+    for (const auto& child : children) {
+        callback(child.get());
+    }
+}
+
+void XMLStreamReader::SimpleElement::forEachRecursive(std::function<void(SimpleElement*, int)> callback, int depth) {
+    callback(this, depth);
+    for (const auto& child : children) {
+        child->forEachRecursive(callback, depth + 1);
+    }
+}
+
+int XMLStreamReader::SimpleElement::getDepth() const {
+    int depth = 0;
+    const SimpleElement* current = parent;
+    while (current) {
+        depth++;
+        current = current->parent;
+    }
+    return depth;
+}
+
+std::string XMLStreamReader::SimpleElement::toString(int indent) const {
+    std::string result;
+    std::string indentation(indent * 2, ' ');
+    
+    result += indentation + "<" + name;
+    for (const auto& attr : attributes) {
+        result += " " + attr.first + "=\"" + attr.second + "\"";
+    }
+    
+    if (text.empty() && children.empty()) {
+        result += "/>\n";
+    } else {
+        result += ">";
+        if (!text.empty()) {
+            result += text;
+        }
+        if (!children.empty()) {
+            result += "\n";
+            for (const auto& child : children) {
+                result += child->toString(indent + 1);
+            }
+            result += indentation;
+        }
+        result += "</" + name + ">\n";
+    }
+    
+    return result;
+}
+
+void XMLStreamReader::SimpleElement::print(int indent) const {
+    std::cout << toString(indent);
 }
 
 // DOM解析实现
@@ -445,13 +652,13 @@ std::unique_ptr<XMLStreamReader::SimpleElement> XMLStreamReader::parseToDOM(cons
     std::unique_ptr<SimpleElement> root;
     std::stack<SimpleElement*> element_stack;
     
-    // 设置回调函数
-    setStartElementCallback([&](const std::string& element_name, const std::vector<XMLAttribute>& attributes, int /*depth*/) {
-        auto element = std::make_unique<SimpleElement>(element_name);
+    // 设置回调函数（使用优化后的零拷贝回调）
+    setStartElementCallback([&](std::string_view element_name, span<const XMLAttribute> attributes, int /*depth*/) {
+        auto element = std::make_unique<SimpleElement>(std::string(element_name));
         
-        // 转换属性
+        // 转换属性（这里需要拷贝因为DOM要保存数据）
         for (const auto& attr : attributes) {
-            element->attributes[attr.name] = attr.value;
+            element->attributes[std::string(attr.name)] = std::string(attr.value);
         }
         
         SimpleElement* element_ptr = element.get();
@@ -468,18 +675,18 @@ std::unique_ptr<XMLStreamReader::SimpleElement> XMLStreamReader::parseToDOM(cons
         element_stack.push(element_ptr);
     });
     
-    setEndElementCallback([&](const std::string& /*element_name*/, int /*depth*/) {
+    setEndElementCallback([&](std::string_view /*element_name*/, int /*depth*/) {
         if (!element_stack.empty()) {
             element_stack.pop();
         }
     });
     
-    setTextCallback([&](const std::string& text, int /*depth*/) {
+    setTextCallback([&](std::string_view text, int /*depth*/) {
         if (!element_stack.empty()) {
             if (element_stack.top()->text.empty()) {
-                element_stack.top()->text = text;
+                element_stack.top()->text = std::string(text);
             } else {
-                element_stack.top()->text += text;
+                element_stack.top()->text += std::string(text);
             }
         }
     });
