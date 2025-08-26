@@ -17,6 +17,7 @@ set(EXAMPLE_SOURCES
         integrated_optimization_demo.cpp
         memory_pool_advanced_demo.cpp
         minimal_destructor_test.cpp
+        large_file_reading_demo.cpp
 )
 
 # 为每个示例创建可执行文件

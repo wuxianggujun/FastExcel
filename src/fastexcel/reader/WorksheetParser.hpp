@@ -8,18 +8,27 @@
 #include "fastexcel/core/Worksheet.hpp"
 #include "fastexcel/core/Cell.hpp"
 #include "fastexcel/core/FormatDescriptor.hpp"
+#include "fastexcel/xml/XMLStreamReader.hpp"
+#include "fastexcel/utils/CommonUtils.hpp"
+#include "fastexcel/utils/XMLUtils.hpp"
+#include "fastexcel/core/RangeFormatter.hpp"
 #include <string>
 #include <unordered_map>
 #include <memory>
+#include <stack>
+#include <optional>
 
 namespace fastexcel {
 namespace reader {
 
 /**
- * @brief 工作表解析器
+ * @brief 高性能SAX流式工作表解析器
  *
- * 负责解析Excel文件中的worksheet*.xml文件，
- * 提取单元格数据并填充到Worksheet对象中
+ * 重写为基于libexpat的SAX流式解析，彻底解决字符串查找性能瓶颈：
+ * - 使用XMLStreamReader进行真正的流式解析
+ * - 消除所有find/substr字符串操作
+ * - 减少临时对象创建，大幅降低内存开销
+ * - 支持600万+单元格的高效解析
  */
 class WorksheetParser {
 public:
@@ -27,7 +36,7 @@ public:
     ~WorksheetParser() = default;
     
     /**
-     * @brief 解析工作表XML内容
+     * @brief 解析工作表XML内容 - SAX流式版本
      * @param xml_content XML内容
      * @param worksheet 目标工作表对象
      * @param shared_strings 共享字符串映射
@@ -42,59 +51,91 @@ public:
                const std::unordered_map<int, int>& style_id_mapping = {});
 
 private:
-    // 辅助方法
-    bool parseSheetData(const std::string& xml_content,
-                       core::Worksheet* worksheet,
-                       const std::unordered_map<int, std::string>& shared_strings,
-                       const std::unordered_map<int, std::shared_ptr<core::FormatDescriptor>>& styles,
-                       const std::unordered_map<int, int>& style_id_mapping);
+    // SAX事件处理状态
+    struct ParseState {
+        core::Worksheet* worksheet = nullptr;
+        const std::unordered_map<int, std::string>* shared_strings = nullptr;
+        const std::unordered_map<int, std::shared_ptr<core::FormatDescriptor>>* styles = nullptr;
+        const std::unordered_map<int, int>* style_id_mapping = nullptr;
+        
+        // 当前解析状态
+        enum class Element {
+            None,
+            Worksheet,
+            SheetData, 
+            Row,
+            Cell,
+            CellValue,
+            CellFormula,
+            Cols,
+            Col,
+            MergeCells,
+            MergeCell
+        };
+        
+        std::stack<Element> element_stack;
+        
+        // 当前行/单元格状态
+        int current_row = -1;
+        int current_col = -1;
+        std::string current_cell_ref;
+        std::string current_cell_type;
+        int current_style_id = -1;
+        
+        // 当前单元格数据收集
+        std::string current_value;
+        std::string current_formula;
+        
+        // 列定义状态
+        int col_min = -1;
+        int col_max = -1;
+        double col_width = -1.0;
+        bool col_hidden = false;
+        int col_style = -1;
+        
+        // 性能优化：预分配容器
+        std::vector<core::Cell> row_cells_buffer; // 重用的行单元格缓冲区
+        
+        void reset() {
+            while (!element_stack.empty()) element_stack.pop();
+            current_row = -1;
+            current_col = -1;
+            current_cell_ref.clear();
+            current_cell_type.clear();
+            current_style_id = -1;
+            current_value.clear();
+            current_formula.clear();
+            row_cells_buffer.clear();
+        }
+    } state_;
     
-    bool parseColumns(const std::string& xml_content,
-                     core::Worksheet* worksheet,
-                     const std::unordered_map<int, std::shared_ptr<core::FormatDescriptor>>& styles,
-                     const std::unordered_map<int, int>& style_id_mapping);
-
-    // 解析合并单元格 (<mergeCells><mergeCell ref="A1:C3"/></mergeCells>)
-    bool parseMergeCells(const std::string& xml_content,
-                         core::Worksheet* worksheet);
+    // SAX事件处理器
+    void handleStartElement(const std::string& name, const std::vector<xml::XMLAttribute>& attributes, int depth);
+    void handleEndElement(const std::string& name, int depth);
+    void handleText(const std::string& text, int depth);
     
-    bool parseRow(const std::string& row_xml,
-                  core::Worksheet* worksheet,
-                  const std::unordered_map<int, std::string>& shared_strings,
-                  const std::unordered_map<int, std::shared_ptr<core::FormatDescriptor>>& styles,
-                  const std::unordered_map<int, int>& style_id_mapping);
+    // 私有SAX事件处理辅助方法
+    void handleColumnElement(const std::vector<xml::XMLAttribute>& attributes);
+    void handleMergeCellElement(const std::vector<xml::XMLAttribute>& attributes);
+    void handleRowStartElement(const std::vector<xml::XMLAttribute>& attributes);
+    void handleCellStartElement(const std::vector<xml::XMLAttribute>& attributes);
     
-    bool parseCell(const std::string& cell_xml,
-                   core::Worksheet* worksheet,
-                   const std::unordered_map<int, std::string>& shared_strings,
-                   const std::unordered_map<int, std::shared_ptr<core::FormatDescriptor>>& styles,
-                   const std::unordered_map<int, int>& style_id_mapping);
+    // 属性解析优化版本 - 直接从vector<XMLAttribute>提取
+    std::optional<std::string> findAttribute(const std::vector<xml::XMLAttribute>& attributes, const std::string& name);
+    std::optional<int> findIntAttribute(const std::vector<xml::XMLAttribute>& attributes, const std::string& name);
+    std::optional<double> findDoubleAttribute(const std::vector<xml::XMLAttribute>& attributes, const std::string& name);
     
-    // 工具方法
-    std::pair<int, int> parseCellReference(const std::string& ref);
-    std::string extractCellValue(const std::string& cell_xml);
-    std::string extractCellType(const std::string& cell_xml);
-    int extractStyleIndex(const std::string& cell_xml);
-    std::string decodeXMLEntities(const std::string& text);
-    int columnLetterToNumber(const std::string& column);
+    // 单元格处理
+    void processCellData();
+    void processColumnDefinition();
+    void processMergeCell(const std::vector<xml::XMLAttribute>& attributes);
     
-    // XML属性提取工具方法
-    int extractIntAttribute(const std::string& xml, const std::string& attr_name);
-    double extractDoubleAttribute(const std::string& xml, const std::string& attr_name);
-    std::string extractStringAttribute(const std::string& xml, const std::string& attr_name);
-    
-    // 新增的工具方法
-    std::string extractFormula(const std::string& cell_xml);
-    
-    // 解析共享公式
-    void parseSharedFormulas(const std::string& xml_content, core::Worksheet* worksheet);
-    bool extractSharedFormulaInfo(const std::string& f_tag, int& si, std::string& ref, std::string& formula);
-    
-    bool isDateFormat(int style_index, const std::unordered_map<int, std::shared_ptr<core::FormatDescriptor>>& styles);
-    std::string convertExcelDateToString(double excel_date);
-
-    // 解析区间引用（例如 A1:C3）
+    // 工具方法 - 保留必要的转换功能
     bool parseRangeRef(const std::string& ref, int& first_row, int& first_col, int& last_row, int& last_col);
+    
+    // 字符串转换优化
+    bool isDateFormat(int style_index) const;
+    std::string convertExcelDateToString(double excel_date);
 };
 
 } // namespace reader
