@@ -16,6 +16,7 @@ set(EXAMPLE_SOURCES
         advanced_features_isolation.cpp
         integrated_optimization_demo.cpp
         memory_pool_advanced_demo.cpp
+        minimal_destructor_test.cpp
 )
 
 # 为每个示例创建可执行文件

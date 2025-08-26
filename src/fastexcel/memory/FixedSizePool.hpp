@@ -15,9 +15,38 @@
 #include <atomic>
 #include <thread>
 #include <type_traits>
+#include <unordered_set>
+#include <unordered_map>
 
 namespace fastexcel {
 namespace memory {
+
+/**
+ * @brief 内存池配置结构
+ */
+struct PoolConfig {
+    size_t initial_pages = 1;           // 初始页面数
+    size_t max_pages = 1000;            // 最大页面数
+    double shrink_threshold = 0.1;      // 收缩阈值
+    size_t thread_cache_size = 32;      // 线程本地缓存大小
+    bool enable_statistics = true;      // 启用统计信息
+    bool enable_debug_tracking = false; // 启用调试跟踪（强制开启，即使非调试模式）
+    size_t batch_stats_size = 64;       // 批量统计更新大小
+    size_t shrink_check_interval = 10000; // 收缩检查间隔
+    double high_usage_threshold = 0.8;  // 高使用率阈值
+    
+    // 验证配置有效性
+    bool isValid() const {
+        return initial_pages > 0 && 
+               max_pages >= initial_pages &&
+               shrink_threshold > 0.0 && shrink_threshold < 1.0 &&
+               thread_cache_size > 0 &&
+               batch_stats_size > 0 &&
+               shrink_check_interval > 0 &&
+               high_usage_threshold > shrink_threshold &&
+               high_usage_threshold < 1.0;
+    }
+};
 
 /**
  * @brief 固定大小对象的内存池
@@ -132,16 +161,30 @@ public:
     /**
      * @brief 构造函数
      */
-    FixedSizePool() {
-        allocateNewPage();
-        FASTEXCEL_LOG_DEBUG("Created FixedSizePool for type {} with pool size {}", 
-                           typeid(T).name(), PoolSize);
+    FixedSizePool(const PoolConfig& config = {}) : config_(config) {
+        if (!config_.isValid()) {
+            throw std::invalid_argument("Invalid pool configuration");
+        }
+        
+        // 预分配初始页面
+        preAllocate(config_.initial_pages);
+        
+        FASTEXCEL_LOG_DEBUG("Created FixedSizePool for type {} with pool size {}, config: "
+                           "initial_pages={}, max_pages={}, cache_size={}", 
+                           typeid(T).name(), PoolSize, 
+                           config_.initial_pages, config_.max_pages, config_.thread_cache_size);
     }
     
     /**
      * @brief 析构函数
      */
     ~FixedSizePool() {
+        // 设置析构状态标志，阻止新的异步操作
+        is_destroying_.store(true, std::memory_order_release);
+        
+        // 稍等一下，让正在进行的异步操作完成
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        
         cleanup();
         FASTEXCEL_LOG_DEBUG("Destroyed FixedSizePool for type {}. "
                            "Total allocated: {}, Peak usage: {}", 
@@ -188,12 +231,22 @@ public:
      */
     template<typename... Args>
     T* allocate(Args&&... args) {
-        // 1. 尝试从线程本地缓存获取
-        Block* block = thread_cache_.getBlock();
+        // 如果正在析构，拒绝新的分配
+        if (is_destroying_.load(std::memory_order_acquire)) {
+            throw std::runtime_error("Pool is being destroyed");
+        }
+        
+        // 1. 尝试从线程本地缓存获取（每实例TLS缓存）
+        auto& thread_cache = getThreadCache();
+        Block* block = thread_cache.getBlock();
+        // 防御性检查：若缓存中遗留了已失效页面的块（如收缩后），丢弃该块
+        while (block && !isFromThisPool(block)) {
+            block = thread_cache.getBlock();
+        }
         if (block) {
-            cache_hits_.fetch_add(1); // 缓存命中
+            updateBatchStats(true); // 缓存命中
         } else {
-            cache_misses_.fetch_add(1); // 缓存未命中
+            updateBatchStats(false); // 缓存未命中
             
             // 2. 如果本地缓存为空，从全局栈获取
             block = global_free_stack_.pop();
@@ -234,9 +287,13 @@ public:
         }
         
         // 6. 动态调整检查（定期执行，避免在持有锁时调用）
-        if (total_allocs % SHRINK_CHECK_INTERVAL == 0) {
+        if (total_allocs % config_.shrink_check_interval == 0 && !is_destroying_.load(std::memory_order_acquire)) {
             // 使用异步方式执行动态调整，避免死锁
             std::thread([this]() {
+                // 再次检查析构状态
+                if (is_destroying_.load(std::memory_order_acquire)) {
+                    return; // 已在析构，直接退出
+                }
                 try {
                     performDynamicAdjustment();
                 } catch (const std::exception& e) {
@@ -244,6 +301,11 @@ public:
                 }
             }).detach();
         }
+        
+#ifdef _DEBUG
+        // 调试模式下跟踪分配
+        trackAllocation(obj);
+#endif
         
         return obj;
     }
@@ -256,17 +318,29 @@ public:
     void deallocate(T* obj) {
         if (!obj) return;
         
-        // 1. 调用析构函数
-        if constexpr (!std::is_trivially_destructible_v<T>) {
-            obj->~T();
+        // 先验证指针是否来自这个池
+        if (!isFromThisPool(obj)) {
+            // 不是来自池的指针，抛出异常让调用者知道
+            throw std::invalid_argument("Pointer not allocated from this pool");
         }
+        
+#ifdef _DEBUG
+        // 调试模式下跟踪释放（只对池内指针）
+        trackDeallocation(obj);
+#endif
         
         Block* block = reinterpret_cast<Block*>(obj);
         
+        // 1. 调用析构函数（只有在确认属于本池后再析构）
+        if constexpr (!std::is_trivially_destructible_v<T>) {
+            obj->~T();
+        }
+
         // 2. 尝试放入线程本地缓存
-        if (!thread_cache_.returnBlock(block)) {
+        auto& thread_cache = getThreadCache();
+        if (!thread_cache.returnBlock(block)) {
             // 3. 本地缓存已满，刷新部分到全局栈，然后放入全局栈
-            thread_cache_.flushToGlobal(global_free_stack_);
+            thread_cache.flushToGlobal(global_free_stack_);
             global_free_stack_.push(block);
         }
         
@@ -344,22 +418,43 @@ public:
      * @brief 执行动态调整策略
      */
     void performDynamicAdjustment() {
+        // 检查析构状态
+        if (is_destroying_.load(std::memory_order_acquire)) {
+            return; // 已在析构，直接退出
+        }
+        
         size_t current = current_usage_.load();
-        size_t total_capacity = pages_.size() * PoolSize;
+        size_t total_capacity = 0;
+        {
+            std::lock_guard<std::mutex> lock(pages_mutex_);
+            total_capacity = pages_.size() * PoolSize;
+        }
         
         if (total_capacity == 0) return;
         
         double usage_ratio = static_cast<double>(current) / total_capacity;
         
         // 低使用率时收缩
-        if (usage_ratio < LOW_USAGE_THRESHOLD && pages_.size() > 1) {
+        if (usage_ratio < config_.shrink_threshold && !is_destroying_.load()) {
             FASTEXCEL_LOG_DEBUG("Pool usage low ({:.2f}%), attempting shrink", usage_ratio * 100);
             shrink();
         }
         // 高使用率时预分配
-        else if (usage_ratio > HIGH_USAGE_THRESHOLD) {
+        else if (usage_ratio > config_.high_usage_threshold && !is_destroying_.load()) {
             FASTEXCEL_LOG_DEBUG("Pool usage high ({:.2f}%), pre-allocating page", usage_ratio * 100);
-            preAllocate(1);
+            // 检查是否达到最大页面限制
+            size_t current_pages = 0;
+            {
+                std::lock_guard<std::mutex> lock(pages_mutex_);
+                current_pages = pages_.size();
+            }
+            
+            if (current_pages < config_.max_pages) {
+                preAllocate(1);
+            } else {
+                FASTEXCEL_LOG_WARN("Pool reached maximum pages limit ({}), cannot pre-allocate", 
+                                   config_.max_pages);
+            }
         }
         
         last_shrink_check_.store(total_allocated_.load());
@@ -496,6 +591,71 @@ public:
             FASTEXCEL_LOG_INFO("Memory pool warm-up completed (page pre-allocation only)");
         }
     }
+    
+#ifdef _DEBUG
+    /**
+     * @brief 获取内存泄漏报告
+     */
+    std::vector<void*> getLeakedPointers() const {
+        std::lock_guard<std::mutex> lock(debug_mutex_);
+        return std::vector<void*>(allocated_pointers_.begin(), allocated_pointers_.end());
+    }
+    
+    /**
+     * @brief 打印内存泄漏报告
+     */
+    void printLeakReport() const {
+        std::lock_guard<std::mutex> lock(debug_mutex_);
+        if (allocated_pointers_.empty()) {
+            FASTEXCEL_LOG_INFO("No memory leaks detected in pool");
+            return;
+        }
+        
+        FASTEXCEL_LOG_ERROR("Memory leak detected! {} objects not freed:", allocated_pointers_.size());
+        FASTEXCEL_LOG_ERROR("Total allocations: {}, Total deallocations: {}", 
+                           total_debug_allocations_.load(), total_debug_deallocations_.load());
+        
+        size_t count = 0;
+        for (void* ptr : allocated_pointers_) {
+            if (++count <= 10) { // 只显示前10个泄漏的指针
+                FASTEXCEL_LOG_ERROR("  Leaked pointer: {}", ptr);
+            }
+        }
+        
+        if (allocated_pointers_.size() > 10) {
+            FASTEXCEL_LOG_ERROR("  ... and {} more leaked pointers", 
+                               allocated_pointers_.size() - 10);
+        }
+    }
+#endif
+    
+    /**
+     * @brief 获取当前配置
+     */
+    const PoolConfig& getConfig() const { return config_; }
+    
+    /**
+     * @brief 更新配置（某些配置需要重启才能生效）
+     */
+    void updateConfig(const PoolConfig& new_config) {
+        if (!new_config.isValid()) {
+            throw std::invalid_argument("Invalid pool configuration");
+        }
+        
+        PoolConfig old_config = config_;
+        config_ = new_config;
+        
+        FASTEXCEL_LOG_INFO("Pool configuration updated. Some changes may require restart to take effect.");
+        
+        // 记录配置变化
+        if (old_config.max_pages != new_config.max_pages) {
+            FASTEXCEL_LOG_INFO("Max pages changed: {} -> {}", old_config.max_pages, new_config.max_pages);
+        }
+        if (old_config.shrink_threshold != new_config.shrink_threshold) {
+            FASTEXCEL_LOG_INFO("Shrink threshold changed: {:.2f} -> {:.2f}", 
+                               old_config.shrink_threshold, new_config.shrink_threshold);
+        }
+    }
 
     // IMemoryPool 原始接口实现
     void* allocate(std::size_t size, std::size_t alignment = alignof(std::max_align_t)) override {
@@ -526,7 +686,12 @@ public:
                !peak_usage_.compare_exchange_weak(expected_peak, current)) {
             // 重试直到成功
         }
-        
+
+#ifdef _DEBUG
+        // 调试模式下跟踪分配（通过IMemoryPool接口的分配也要跟踪）
+        trackAllocation(reinterpret_cast<void*>(block));
+#endif
+
         return reinterpret_cast<void*>(block);
     }
 
@@ -535,7 +700,12 @@ public:
 
         // 判断指针是否来自本池的页面
         if (isFromThisPool(ptr)) {
+            // 先调用析构（IMemoryPool 接口不知道T，只能按原始指针释放；对于固定大小池，T已知，因此无此路径）
             Block* block = reinterpret_cast<Block*>(ptr);
+#ifdef _DEBUG
+            // 调试模式下对IMemoryPool接口的释放也进行跟踪
+            trackDeallocation(ptr);
+#endif
             global_free_stack_.push(block);
             current_usage_.fetch_sub(1);
         } else {
@@ -557,12 +727,18 @@ private:
     // 全局无锁空闲块栈
     AtomicStack global_free_stack_;
     
+    // 配置对象
+    PoolConfig config_;
+    
     // 页面管理（仍需要锁保护）
     mutable std::mutex pages_mutex_;
     std::vector<std::unique_ptr<Page>> pages_;
     
-    // 线程本地缓存
-    thread_local static ThreadLocalCache thread_cache_;
+    // 获取每实例的线程本地缓存（以 this 作为键）
+    ThreadLocalCache& getThreadCache() const {
+        static thread_local std::unordered_map<const void*, ThreadLocalCache> tls_caches;
+        return tls_caches[this];
+    }
     
     // 统计信息（原子操作）
     std::atomic<size_t> current_usage_{0};
@@ -577,9 +753,43 @@ private:
     
     // 动态调整参数
     std::atomic<size_t> last_shrink_check_{0}; // 上次收缩检查时间
-    static constexpr size_t SHRINK_CHECK_INTERVAL = 10000; // 检查间隔（分配次数）
-    static constexpr double LOW_USAGE_THRESHOLD = 0.1;     // 低使用率阈值
-    static constexpr double HIGH_USAGE_THRESHOLD = 0.8;    // 高使用率阈值
+    std::atomic<bool> is_destroying_{false};   // 析构状态标志
+    
+#ifdef _DEBUG
+    // 调试模式下的内存泄漏检测
+    mutable std::mutex debug_mutex_;
+    std::unordered_set<void*> allocated_pointers_;
+    std::atomic<size_t> total_debug_allocations_{0};
+    std::atomic<size_t> total_debug_deallocations_{0};
+    
+    void trackAllocation(void* ptr) {
+        if (!ptr) return;
+        std::lock_guard<std::mutex> lock(debug_mutex_);
+        allocated_pointers_.insert(ptr);
+        total_debug_allocations_.fetch_add(1);
+        FASTEXCEL_LOG_DEBUG("Tracked allocation: {}, total active: {}", 
+                           ptr, allocated_pointers_.size());
+    }
+    
+    void trackDeallocation(void* ptr) {
+        if (!ptr) return;
+        std::lock_guard<std::mutex> lock(debug_mutex_);
+        auto it = allocated_pointers_.find(ptr);
+        if (it == allocated_pointers_.end()) {
+            // 指针未被跟踪，可能是:
+            // 1. 在调试模式启用前分配的
+            // 2. 来自其他池或系统的分配
+            // 3. warmup期间的对象
+            // 我们只记录调试信息，不抛出异常
+            FASTEXCEL_LOG_DEBUG("Deallocating untracked pointer: {} (likely pre-debug allocation)", ptr);
+            return;  // 静默处理，让释放继续进行
+        }
+        allocated_pointers_.erase(it);
+        total_debug_deallocations_.fetch_add(1);
+        FASTEXCEL_LOG_DEBUG("Tracked deallocation: {}, total active: {}", 
+                           ptr, allocated_pointers_.size());
+    }
+#endif
     
     // 分配新页面的方法
     void allocateNewPage() {
@@ -602,10 +812,8 @@ private:
     // 清理所有资源的内部方法
     void cleanup() noexcept {
         try {
-            // 清空线程本地缓存
-            while (Block* block = thread_cache_.getBlock()) {
-                // 这些块会自动随页面释放而释放
-            }
+            // 在清理其他资源前，先清空全局栈和释放页面
+            // 避免在析构过程中访问thread_local缓存
             
             // 清空全局栈
             while (Block* block = global_free_stack_.pop()) {
@@ -613,12 +821,44 @@ private:
             }
             
             // 释放所有页面
-            std::lock_guard<std::mutex> lock(pages_mutex_);
-            pages_.clear();
+            {
+                std::lock_guard<std::mutex> lock(pages_mutex_);
+                pages_.clear();
+            }
+            
+            // 注意：我们不再在cleanup中访问线程本地缓存
+            // 因为在析构时访问thread_local可能导致未定义行为
+            // thread_local缓存会随着线程结束而自动清理
             
         } catch (const std::exception& e) {
             // 记录其他异常但不抛出（析构函数中调用）
             FASTEXCEL_LOG_ERROR("Exception during FixedSizePool cleanup: {}", e.what());
+        }
+    }
+
+    // 批量统计更新 - 减少原子操作开销
+    void updateBatchStats(bool cache_hit) {
+        // 如果正在析构，跳过统计更新以避免访问thread_local
+        if (is_destroying_.load(std::memory_order_acquire)) {
+            return;
+        }
+        
+        static thread_local size_t local_hits = 0;
+        static thread_local size_t local_misses = 0;
+        const size_t batch_size = config_.batch_stats_size; // 使用配置值
+        
+        if (cache_hit) {
+            ++local_hits;
+            if (local_hits >= batch_size) {
+                cache_hits_.fetch_add(batch_size, std::memory_order_relaxed);
+                local_hits = 0;
+            }
+        } else {
+            ++local_misses;
+            if (local_misses >= batch_size) {
+                cache_misses_.fetch_add(batch_size, std::memory_order_relaxed);
+                local_misses = 0;
+            }
         }
     }
 
@@ -637,9 +877,6 @@ private:
     }
 };
 
-// 线程本地缓存的定义
-template<typename T, size_t PoolSize>
-thread_local typename FixedSizePool<T, PoolSize>::ThreadLocalCache 
-    FixedSizePool<T, PoolSize>::thread_cache_;
+// 线程本地缓存：已改为每实例TLS映射，不再需要单一的模板级TLS实例
 
 }} // namespace fastexcel::memory

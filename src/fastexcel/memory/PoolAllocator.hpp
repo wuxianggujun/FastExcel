@@ -90,7 +90,7 @@ public:
     PoolAllocator(const PoolAllocator<U>&) noexcept {}
     
     /**
-     * @brief 分配内存 - 增强版本
+     * @brief 分配内存 - 高性能版本（恢复内存池功能）
      * @param n 要分配的对象数量
      * @param hint 分配提示（可选）
      * @return 分配的内存指针
@@ -105,32 +105,20 @@ public:
             }
             
             if (n == 1) {
-                // 使用内存池分配单个对象
+                // 使用内存池分配单个对象（恢复高性能功能）
                 try {
                     auto& pool = PoolManager::getInstance().getPool<T>();
                     result = pool.allocate();
                     
                     if (!result) {
                         ++failed_allocations_;
-                        FASTEXCEL_LOG_WARN("Pool allocation failed for type {}, falling back to malloc", 
-                                            typeid(T).name());
                         result = allocate_fallback(n);
                         if (result) {
                             ++fallback_allocations_;
                         }
                     }
-                } catch (const std::bad_alloc& e) {
-                    ++failed_allocations_;
-                    FASTEXCEL_LOG_ERROR("Pool allocation threw bad_alloc for type {}: {}", 
-                                       typeid(T).name(), e.what());
-                    result = allocate_fallback(n);
-                    if (result) {
-                        ++fallback_allocations_;
-                    }
                 } catch (const std::exception& e) {
                     ++failed_allocations_;
-                    FASTEXCEL_LOG_ERROR("Pool allocation threw exception for type {}: {}", 
-                                       typeid(T).name(), e.what());
                     result = allocate_fallback(n);
                     if (result) {
                         ++fallback_allocations_;
@@ -168,7 +156,7 @@ public:
     }
     
     /**
-     * @brief 释放内存 - 增强版本
+     * @brief 释放内存 - 高性能版本（恢复内存池功能）
      * @param p 要释放的内存指针
      * @param n 对象数量
      */
@@ -179,13 +167,17 @@ public:
         
         try {
             if (n == 1) {
-                // 尝试归还到内存池
+                // 尝试归还到内存池（恢复高性能功能）
+                bool pool_released = false;
                 try {
-                    auto& pool = PoolManager::getInstance().getPool<T>();
-                    pool.deallocate(p);
-                } catch (const std::exception& e) {
+                    pool_released = PoolManager::getInstance().tryDeallocate(p);
+                } catch (const std::exception&) {
+                    // 内存池释放失败，使用标准释放
+                    pool_released = false;
+                }
+                
+                if (!pool_released) {
                     // 如果内存池释放失败，使用标准释放
-                    FASTEXCEL_LOG_WARN("Pool deallocation failed, using standard free: {}", e.what());
                     std::free(p);
                 }
             } else {
@@ -449,17 +441,20 @@ namespace fastexcel {
     template<typename T, typename... Args>
     pool_ptr<T> make_pool_ptr(Args&&... args) {
         try {
-            auto& pool = memory::PoolManager::getInstance().getPool<T>();
-            T* obj = pool.allocate(std::forward<Args>(args)...);
-            
+            // 注意：不要在删除器中以引用捕获局部引用，否则会产生悬垂引用
+            // 这里将池对象地址以值捕获到删除器中，确保删除器生命周期内指针有效
+            auto& pool_ref = memory::PoolManager::getInstance().getPool<T>();
+            T* obj = pool_ref.allocate(std::forward<Args>(args)...);
+
             if (!obj) {
                 throw std::bad_alloc();
             }
-            
-            return pool_ptr<T>(obj, [&pool](T* p) {
+
+            auto* pool_ptr_raw = &pool_ref; // 以指针形式捕获，避免悬垂引用
+            return pool_ptr<T>(obj, [pool_ptr_raw](T* p) {
                 if (p) {
                     try {
-                        pool.deallocate(p);
+                        pool_ptr_raw->deallocate(p);
                     } catch (const std::exception& e) {
                         FASTEXCEL_LOG_ERROR("Exception during pool_ptr deallocation: {}", e.what());
                         // 最后手段：标准释放

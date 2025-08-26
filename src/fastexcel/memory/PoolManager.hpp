@@ -13,6 +13,10 @@
 #include <memory>
 #include <typeinfo>
 #include <functional>
+#include <atomic>
+#include <cstdlib>
+#include <thread>
+#include <chrono>
 
 namespace fastexcel {
 namespace memory {
@@ -38,9 +42,20 @@ public:
      */
     template<typename T>
     FixedSizePool<T>& getPool() {
+        // 如果正在关闭，抛出异常
+        if (is_shutting_down_.load(std::memory_order_acquire)) {
+            throw std::runtime_error("PoolManager is shutting down");
+        }
+        
         // 首先尝试查找现有池
         {
             std::lock_guard<std::mutex> lock(mutex_);
+            
+            // 在锁内再次检查关闭状态
+            if (is_shutting_down_.load(std::memory_order_acquire)) {
+                throw std::runtime_error("PoolManager is shutting down");
+            }
+            
             size_t type_hash = typeid(T).hash_code();
             auto it = pools_.find(type_hash);
             
@@ -56,6 +71,12 @@ public:
         // 再次获取锁并插入新池
         {
             std::lock_guard<std::mutex> lock(mutex_);
+            
+            // 在锁内再次检查关闭状态
+            if (is_shutting_down_.load(std::memory_order_acquire)) {
+                throw std::runtime_error("PoolManager is shutting down");
+            }
+            
             size_t type_hash = typeid(T).hash_code();
             auto it = pools_.find(type_hash);
             
@@ -64,12 +85,21 @@ public:
                 return *static_cast<FixedSizePool<T>*>(it->second.get());
             }
             
-            // 使用删除器函数正确删除池
+            // 使用删除器函数正确删除池（添加异常保护）
+            auto deleter = [](void* ptr) {
+                try {
+                    if (ptr) {
+                        delete static_cast<FixedSizePool<T>*>(ptr);
+                    }
+                } catch (const std::exception& e) {
+                    // 在deleter中不能抛出异常，只能记录
+                    // 但此时Logger可能不可用
+                }
+            };
+            
             std::unique_ptr<void, void(*)(void*)> void_ptr(
                 new_pool.release(),
-                [](void* ptr) {
-                    delete static_cast<FixedSizePool<T>*>(ptr);
-                }
+                deleter
             );
             
             // 使用emplace避免默认构造
@@ -124,16 +154,94 @@ public:
         (getPool<Types>(), ...);
         FASTEXCEL_LOG_DEBUG("Prewarmed {} memory pools", sizeof...(Types));
     }
+    
+    /**
+     * @brief 尝试释放指针到正确的池
+     * @param ptr 要释放的指针
+     * @return 如果成功释放到某个池返回true，否则返回false
+     */
+    template<typename T>
+    bool tryDeallocate(T* ptr) {
+        if (!ptr) return false;
+        
+        // 如果正在关闭，不试图访问内存池
+        if (is_shutting_down_.load(std::memory_order_acquire)) {
+            return false; // 让调用者使用标准释放
+        }
+        
+        try {
+            std::lock_guard<std::mutex> lock(mutex_);
+            
+            // 再次检查是否正在关闭（双重检查）
+            if (is_shutting_down_.load(std::memory_order_acquire)) {
+                return false;
+            }
+            
+            size_t type_hash = typeid(T).hash_code();
+            auto it = pools_.find(type_hash);
+            
+            if (it != pools_.end()) {
+                auto* pool = static_cast<FixedSizePool<T>*>(it->second.get());
+                try {
+                    pool->deallocate(ptr);
+                    return true; // 成功释放
+                } catch (const std::invalid_argument&) {
+                    // 指针不属于这个池，这是正常情况
+                    return false;
+                } catch (const std::exception&) {
+                    // 其他异常（可能是池已析构）
+                    return false;
+                }
+            }
+        } catch (const std::exception&) {
+            // 锁获取失败或其他问题，直接返回
+            return false;
+        }
+        
+        return false; // 没有找到对应类型的池
+    }
 
 private:
     PoolManager() = default;
     ~PoolManager() {
-        cleanup();
+        try {
+            // 设置全局销毁标志，阻止新的操作
+            is_shutting_down_.store(true, std::memory_order_release);
+            
+            // 等待所有正在进行的操作完成
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            
+            // 在析构时先停止所有正在进行的操作
+            std::lock_guard<std::mutex> lock(mutex_);
+            
+            // 逐个安全地清理池，避免同时析构多个池
+            for (auto it = pools_.begin(); it != pools_.end();) {
+                try {
+                    auto current = it++;
+                    // 安全地重置单个池
+                    current->second.reset();
+                } catch (const std::exception&) {
+                    // 忽略单个池清理失败，继续清理其他池
+                }
+                
+                // 给其他线程一些时间
+                std::this_thread::sleep_for(std::chrono::microseconds(1));
+            }
+            
+            // 最后清空映射表
+            pools_.clear();
+            
+        } catch (const std::exception& e) {
+            // 在析构函数中不能抛出异常
+            // 只能记录错误，但无法输出（Logger可能已析构）
+            // FASTEXCEL_LOG_ERROR("清理PoolManager时出错: {}", e.what());
+        }
     }
     
     mutable std::mutex mutex_;
     std::unordered_map<size_t, std::unique_ptr<void, void(*)(void*)>> pools_;
     MultiSizePool multi_size_pool_;
+    std::atomic<bool> is_shutting_down_{false};  // 添加销毁标志
     
     // 禁用拷贝和移动
     PoolManager(const PoolManager&) = delete;
