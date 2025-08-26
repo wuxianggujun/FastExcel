@@ -16,25 +16,66 @@
 namespace fastexcel {
 namespace reader {
 
+// 数据结构定义 - 必须在类定义之前
+struct FontInfo {
+    std::string name = "Calibri";
+    double size = 11.0;
+    bool bold = false;
+    bool italic = false;
+    bool underline = false;
+    bool strikeout = false;
+    core::Color color;
+};
+
+struct FillInfo {
+    std::string pattern_type = "none";
+    core::Color fg_color;
+    core::Color bg_color;
+};
+
+struct BorderSide {
+    std::string style = "none";
+    core::Color color;
+};
+
+struct BorderInfo {
+    BorderSide left, right, top, bottom, diagonal;
+};
+
+struct CellXf {
+    int num_fmt_id = 0;
+    int font_id = 0;
+    int fill_id = 0;
+    int border_id = 0;
+    bool apply_number_format = false;
+    bool apply_font = false;
+    bool apply_fill = false;
+    bool apply_border = false;
+    bool apply_alignment = false;
+    bool apply_protection = false;
+    
+    // 对齐属性
+    std::string horizontal_alignment = "general";
+    std::string vertical_alignment = "bottom";
+    int text_rotation = 0;
+    bool wrap_text = false;
+    int indent = 0;
+    bool shrink_to_fit = false;
+};
+
 /**
- * @brief 高性能样式解析器 - 基于SAX流式解析
+ * @brief 极高性能混合架构样式解析器
  * 
- * 负责解析Excel文件中的styles.xml文件，
- * 使用BaseSAXParser提供的高性能SAX解析能力，
- * 完全消除字符串查找操作，大幅提升样式解析性能。
+ * 混合架构策略：
+ * 1. SAX处理顶级区域切换 (numFmts, fonts, fills, borders, cellXfs)
+ * 2. 指针扫描处理区域内部复杂嵌套 (避免深层回调风暴)
+ * 3. 批量构建样式对象，减少内存分配
  * 
  * 性能优化：
- * - 零字符串查找：基于SAX事件驱动
- * - 流式解析：不需要多次find/substr操作
- * - 状态机驱动：智能处理嵌套XML结构
- * - 内存效率：最小化临时对象创建
- * 
- * 支持完整的Excel样式：
- * - 数字格式 (numFmts)
- * - 字体样式 (fonts) 
- * - 填充样式 (fills)
- * - 边框样式 (borders)
- * - 单元格格式 (cellXfs)
+ * - 零字符串查找：基于指针扫描
+ * - 减少SAX回调：从数千次减少到数十次
+ * - 内存效率：预分配和批量处理
+ * - 保持完整功能：支持所有Excel样式特性
  */
 class StylesParser : public BaseSAXParser {
 public:
@@ -62,128 +103,73 @@ public:
      * @brief 获取解析的格式数量
      * @return 格式数量
      */
+    /**
+     * @brief 获取默认字体信息（通常是cellXfs中第一个字体）
+     * @return 默认字体信息，包含name和size
+     */
+    std::pair<std::string, double> getDefaultFontInfo() const {
+        // 通常第一个cellXf对应Normal样式，使用其fontId
+        if (!cell_xfs_.empty()) {
+            int font_id = cell_xfs_[0].font_id;
+            if (font_id >= 0 && font_id < static_cast<int>(fonts_.size())) {
+                const auto& font = fonts_[font_id];
+                return {font.name, font.size};
+            }
+        }
+        
+        // 如果有字体但cellXfs为空，使用第一个字体
+        if (!fonts_.empty()) {
+            const auto& font = fonts_[0];
+            return {font.name, font.size};
+        }
+        
+        // 默认值
+        return {"Calibri", 11.0};
+    }
+    
+    /**
+     * @brief 获取字体列表
+     * @return 字体信息列表
+     */
+    const std::vector<FontInfo>& getFonts() const { return fonts_; }
+    
     size_t getFormatCount() const { return cell_xfs_.size(); }
 
 private:
-    // 前向声明
-    struct FontInfo;
-    struct FillInfo;
-    struct BorderInfo;
-    struct BorderSide;
-    struct CellXf;
-
-    // 解析状态机 - 管理复杂的嵌套XML结构
+    // 简化的解析状态 - 只跟踪区域级别
     struct ParseState {
-        enum class Context {
+        enum class Region {
             None,
-            NumFmts,        // <numFmts>
-            Fonts,          // <fonts>
-            Fills,          // <fills> 
-            Borders,        // <borders>
-            CellXfs,        // <cellXfs>
-            
-            // 字体子上下文
-            Font,           // <font>
-            FontName,       // <name>
-            FontSize,       // <sz>
-            FontColor,      // <color>
-            
-            // 填充子上下文  
-            Fill,           // <fill>
-            PatternFill,    // <patternFill>
-            FgColor,        // <fgColor>
-            BgColor,        // <bgColor>
-            
-            // 边框子上下文
-            Border,         // <border>
-            BorderLeft,     // <left>
-            BorderRight,    // <right>
-            BorderTop,      // <top>
-            BorderBottom,   // <bottom>
-            BorderDiagonal, // <diagonal>
-            BorderColor     // 边框颜色
+            NumFmts,    // 收集 <numFmts>...</numFmts>
+            Fonts,      // 收集 <fonts>...</fonts>  
+            Fills,      // 收集 <fills>...</fills>
+            Borders,    // 收集 <borders>...</borders>
+            CellXfs     // 收集 <cellXfs>...</cellXfs>
         };
         
-        std::vector<Context> context_stack;
+        Region current_region = Region::None;
+        std::string region_xml_buffer;  // 收集当前区域的完整XML
+        bool collecting_region = false;
+        int region_depth = 0;
         
-        // 当前正在构建的对象
-        FontInfo* current_font = nullptr;
-        FillInfo* current_fill = nullptr; 
-        BorderInfo* current_border = nullptr;
-        CellXf* current_xf = nullptr;
+        void startRegion(Region region) {
+            current_region = region;
+            collecting_region = true;
+            region_xml_buffer.clear();
+            region_depth = 0;
+        }
         
-        // 当前边框边指针
-        BorderSide* current_border_side = nullptr;
+        void endRegion() {
+            current_region = Region::None;
+            collecting_region = false;
+            region_xml_buffer.clear();
+            region_depth = 0;
+        }
         
         void reset() {
-            context_stack.clear();
-            current_font = nullptr;
-            current_fill = nullptr;
-            current_border = nullptr;
-            current_xf = nullptr;
-            current_border_side = nullptr;
+            endRegion();
         }
-        
-        Context getCurrentContext() const {
-            return context_stack.empty() ? Context::None : context_stack.back();
-        }
-        
-        void pushContext(Context ctx) {
-            context_stack.push_back(ctx);
-        }
-        
-        void popContext() {
-            if (!context_stack.empty()) {
-                context_stack.pop_back();
-            }
-        }
-    } parse_state_;
-    
-    // 字体信息结构
-    struct FontInfo {
-        std::string name = "Calibri";
-        double size = 11.0;
-        bool bold = false;
-        bool italic = false;
-        bool underline = false;
-        bool strikeout = false;
-        core::Color color;
-    };
-    
-    // 填充信息结构
-    struct FillInfo {
-        std::string pattern_type = "none";
-        core::Color fg_color;
-        core::Color bg_color;
-    };
-    
-    // 边框边信息结构
-    struct BorderSide {
-        std::string style;
-        core::Color color;
-    };
-    
-    // 边框信息结构
-    struct BorderInfo {
-        BorderSide left;
-        BorderSide right;
-        BorderSide top;
-        BorderSide bottom;
-        BorderSide diagonal;
-    };
-    
-    // 单元格XF信息结构
-    struct CellXf {
-        int num_fmt_id = -1;
-        int font_id = -1;
-        int fill_id = -1;
-        int border_id = -1;
-        std::string horizontal_alignment;
-        std::string vertical_alignment;
-        bool wrap_text = false;
-        int indent = 0;
-        int text_rotation = 0;
-    };
+    } state_;
     
     // 解析后的数据
     std::vector<FontInfo> fonts_;
@@ -192,10 +178,23 @@ private:
     std::vector<CellXf> cell_xfs_;
     std::unordered_map<int, std::string> number_formats_;
     
-    // 重写基类虚函数
+    // 混合架构实现
     void onStartElement(const std::string& name, const std::vector<xml::XMLAttribute>& attributes, int depth) override;
     void onEndElement(const std::string& name, int depth) override;
     void onText(const std::string& text, int depth) override;
+    
+    // 区域处理方法 - 使用指针扫描
+    void processNumFmtsRegion(std::string_view region_xml);
+    void processFontsRegion(std::string_view region_xml);
+    void processFillsRegion(std::string_view region_xml);
+    void processBordersRegion(std::string_view region_xml);
+    void processCellXfsRegion(std::string_view region_xml);
+    
+    // 指针扫描工具方法
+    static void parseColorAttribute(const char*& p, const char* end, core::Color& color);
+    static std::string_view extractElementContent(const char* xml, const char* element_name);
+    static bool findAttributeInElement(const char* element_start, const char* element_end, 
+                                     const char* attr_name, std::string& out_value);
     
     // 清理数据
     void clear() {
@@ -204,16 +203,14 @@ private:
         borders_.clear();
         cell_xfs_.clear();
         number_formats_.clear();
-        parse_state_.reset();
+        state_.reset();
     }
     
-    // 枚举转换方法
+    // 枚举转换方法保持不变 - 确保完整功能
     core::HorizontalAlign getAlignment(const std::string& alignment) const;
     core::VerticalAlign getVerticalAlignment(const std::string& alignment) const;
     core::BorderStyle getBorderStyle(const std::string& style) const;
     core::PatternType getPatternType(const std::string& pattern) const;
-    
-    // 内置数字格式
     std::string getBuiltinNumberFormat(int format_id) const;
 };
 

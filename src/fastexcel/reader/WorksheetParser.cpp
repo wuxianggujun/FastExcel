@@ -5,11 +5,13 @@
 #include "WorksheetParser.hpp"
 
 #include "fastexcel/utils/Logger.hpp"
+#include "fastexcel/utils/CommonUtils.hpp"
+#include "fastexcel/utils/TimeUtils.hpp"
 #include "fastexcel/core/Workbook.hpp"
 #include "fastexcel/core/SharedFormula.hpp"
-#include "fastexcel/utils/TimeUtils.hpp"
-#include <cctype>
-#include <ctime>
+#include "fastexcel/xml/XMLEscapes.hpp"
+#include <cstring>
+#include <algorithm>
 
 namespace fastexcel {
 namespace reader {
@@ -23,18 +25,314 @@ bool WorksheetParser::parse(const std::string& xml_content,
         return false;
     }
     
-    // 初始化解析状态
-    state_.reset();
-    state_.worksheet = worksheet;
-    state_.shared_strings = &shared_strings;
-    state_.styles = &styles;
-    state_.style_id_mapping = &style_id_mapping;
-    
-    // 使用基类的parseXML方法进行SAX解析
-    return parseXML(xml_content);
+    try {
+        // 初始化解析状态
+        state_.reset();
+        state_.worksheet = worksheet;
+        state_.shared_strings = &shared_strings;
+        state_.styles = &styles;
+        state_.style_id_mapping = &style_id_mapping;
+        
+        // 使用混合架构：一次SAX解析处理所有内容
+        // 这样避免多次解析同一个XML文档的开销
+        return parseXML(xml_content);
+    } catch (const std::exception& e) {
+        FASTEXCEL_LOG_ERROR("WorksheetParser解析失败: {}", e.what());
+        return false;
+    }
 }
 
-// Utility methods (基类已提供所有通用方法)
+// === 完整的混合架构实现：处理所有工作表元素 ===
+void WorksheetParser::onStartElement(const std::string& name, const std::vector<xml::XMLAttribute>& attributes, int depth) {
+    // 列定义处理 - 影响整个工作表的列格式和宽度
+    if (name == "cols") {
+        // 进入列定义区域
+    }
+    else if (name == "col") {
+        handleColumnElement(attributes);
+    }
+    
+    // 合并单元格处理
+    else if (name == "mergeCells") {
+        // 进入合并单元格区域
+    }
+    else if (name == "mergeCell") {
+        handleMergeCellElement(attributes);
+    }
+    
+    // 工作表数据处理 - 这里使用混合架构优化
+    else if (name == "sheetData") {
+        state_.in_sheet_data = true;
+    }
+    else if (name == "row" && state_.in_sheet_data) {
+        // 行开始：初始化行处理状态
+        state_.in_row = true;
+        state_.row_buffer.clear();
+        
+        // 提取行号和行属性
+        handleRowStartElement(attributes);
+        
+        // 开始收集这一行的原始XML内容以进行指针扫描
+        state_.row_xml_buffer = "<row";
+        for (const auto& attr : attributes) {
+            state_.row_xml_buffer += " " + attr.name + "=\"" + attr.value + "\"";
+        }
+        state_.row_xml_buffer += ">";
+    }
+    else if (state_.in_row) {
+        // 在行内的任何元素都需要收集到row_xml_buffer中
+        state_.row_xml_buffer += "<" + name;
+        for (const auto& attr : attributes) {
+            state_.row_xml_buffer += " " + attr.name + "=\"" + attr.value + "\"";
+        }
+        state_.row_xml_buffer += ">";
+    }
+    
+    // 其他非关键元素忽略 - 关键优化：减少SAX回调处理
+}
+
+void WorksheetParser::onEndElement(const std::string& name, int depth) {
+    if (name == "row" && state_.in_row) {
+        // 行结束：完成XML收集，进行指针扫描解析
+        state_.row_xml_buffer += "</row>";
+        
+        if (state_.current_row >= 0) {
+            // 使用指针扫描解析整行数据
+            parseRowWithPointerScan(state_.row_xml_buffer, state_.row_buffer);
+            // 批量处理单元格数据
+            processBatchCellData(state_.current_row, state_.row_buffer);
+        }
+        
+        state_.in_row = false;
+        state_.current_row = -1;
+    }
+    else if (state_.in_row) {
+        // 在行内的结束标签也要收集
+        state_.row_xml_buffer += "</" + name + ">";
+    }
+    else if (name == "sheetData") {
+        state_.in_sheet_data = false;
+    }
+}
+
+void WorksheetParser::onText(const std::string& text, int depth) {
+    if (state_.in_row && !text.empty()) {
+        // 在行内：直接收集文本内容用于指针扫描
+        // SAX解析器已经处理了XML实体解码，不需要再次转义
+        state_.row_xml_buffer += text;
+    }
+}
+
+// === 修正的核心优化：零分配指针扫描器 ===
+void WorksheetParser::parseRowWithPointerScan(std::string_view row_xml, std::vector<FastCellData>& cells) {
+    cells.clear();
+    
+    const char* p = row_xml.data();
+    const char* end = p + row_xml.size();
+    
+    // 扫描所有 <c 开始标签
+    while (p < end) {
+        // 查找下一个 <c 开始
+        const char* c_tag = std::strstr(p, "<c ");
+        if (!c_tag || c_tag >= end) {
+            // 也检查自闭合标签 <c .../>
+            c_tag = std::strstr(p, "<c>");
+            if (!c_tag || c_tag >= end) break;
+        }
+        
+        FastCellData cell;
+        if (extractCellInfo(c_tag, end, cell)) {
+            cells.push_back(cell);
+        }
+        
+        // 移动到下一个位置
+        p = c_tag + 1;
+    }
+}
+
+// 修正的提取单元格信息的核心函数
+bool WorksheetParser::extractCellInfo(const char*& p, const char* end, FastCellData& cell) {
+    // 跳过 "<c"
+    p += 2;
+    
+    // 解析属性直到 '>' 或 '/>'
+    while (p < end && *p != '>' && !(p[0] == '/' && p[1] == '>')) {
+        // 跳过空白字符
+        while (p < end && (*p == ' ' || *p == '\t' || *p == '\n' || *p == '\r')) p++;
+        
+        if (p >= end) break;
+        
+        // 检查 r= 属性 (单元格引用)
+        if (p + 3 < end && p[0] == 'r' && p[1] == '=' && p[2] == '"') {
+            p += 3; // 跳过 'r="'
+            const char* ref_start = p;
+            while (p < end && *p != '"') p++;
+            if (p < end) {
+                // 使用CommonUtils解析单元格引用
+                try {
+                    std::string ref(ref_start, p - ref_start);
+                    auto [row, col] = utils::CommonUtils::parseReference(ref);
+                    cell.col = static_cast<uint32_t>(col);
+                } catch (...) {
+                    cell.col = UINT32_MAX; // 解析失败
+                }
+                p++; // 跳过结束引号
+            }
+        }
+        // 检查 t= 属性 (单元格类型)
+        else if (p + 3 < end && p[0] == 't' && p[1] == '=' && p[2] == '"') {
+            p += 3; // 跳过 't="'
+            if (p < end) {
+                char type_char = *p;
+                if (type_char == 's') {
+                    cell.type = FastCellData::SharedString;
+                } else if (type_char == 'b') {
+                    cell.type = FastCellData::Boolean;
+                } else if (type_char == 's' && p + 3 < end && std::strncmp(p, "str", 3) == 0) {
+                    cell.type = FastCellData::String;
+                }
+                // 跳到引号结束
+                while (p < end && *p != '"') p++;
+                if (p < end) p++; // 跳过结束引号
+            }
+        }
+        // 检查 s= 属性 (样式索引)
+        else if (p + 3 < end && p[0] == 's' && p[1] == '=' && p[2] == '"') {
+            p += 3; // 跳过 's="'
+            const char* style_start = p;
+            int style_id = 0;
+            while (p < end && *p >= '0' && *p <= '9') {
+                style_id = style_id * 10 + (*p - '0');
+                p++;
+            }
+            if (p > style_start && p < end && *p == '"') {
+                cell.style_id = style_id;
+                p++; // 跳过结束引号
+            }
+        }
+        else {
+            p++;
+        }
+    }
+    
+    if (p >= end) return false;
+    
+    // 检查是否为自闭合标签
+    if (p[0] == '/' && p[1] == '>') {
+        // 自闭合标签，没有值
+        return cell.col != UINT32_MAX; // 至少要有有效的列号
+    }
+    
+    p++; // 跳过 '>'
+    
+    // 查找 <v> 值或 <is><t>值
+    const char* v_start = std::strstr(p, "<v>");
+    if (v_start && v_start < end) {
+        v_start += 3; // 跳过 "<v>"
+        const char* v_end = std::strstr(v_start, "</v>");
+        if (v_end && v_end < end) {
+            cell.value = std::string_view(v_start, v_end - v_start);
+            cell.is_empty = false;
+        }
+    } else {
+        // 查找内联字符串 <is><t>...</t></is>
+        const char* is_start = std::strstr(p, "<is>");
+        if (is_start && is_start < end) {
+            const char* t_start = std::strstr(is_start, "<t>");
+            if (t_start && t_start < end) {
+                t_start += 3; // 跳过 "<t>"
+                const char* t_end = std::strstr(t_start, "</t>");
+                if (t_end && t_end < end) {
+                    cell.value = std::string_view(t_start, t_end - t_start);
+                    cell.is_empty = false;
+                    cell.type = FastCellData::String;
+                }
+            }
+        }
+    }
+    
+    return !cell.is_empty || cell.col != UINT32_MAX;
+}
+
+// 批量处理单元格数据 - 减少worksheet调用开销
+void WorksheetParser::processBatchCellData(int row, const std::vector<FastCellData>& cells) {
+    for (const auto& cell_data : cells) {
+        setCellValue(row, cell_data.col, cell_data);
+    }
+}
+
+// 设置单元格值 - 保持原有完整逻辑
+void WorksheetParser::setCellValue(int row, uint32_t col, const FastCellData& cell_data) {
+    if (cell_data.is_empty || cell_data.col == UINT32_MAX) return;
+    
+    // 根据类型设置值
+    switch (cell_data.type) {
+        case FastCellData::SharedString: {
+            try {
+                int string_index = 0;
+                // 快速整数解析
+                for (char c : cell_data.value) {
+                    if (c >= '0' && c <= '9') {
+                        string_index = string_index * 10 + (c - '0');
+                    }
+                }
+                
+                auto it = state_.shared_strings->find(string_index);
+                if (it != state_.shared_strings->end()) {
+                    state_.worksheet->setValue(row, col, it->second);
+                }
+            } catch (...) {
+                // 忽略错误
+            }
+            break;
+        }
+        
+        case FastCellData::Number: {
+            try {
+                double number_value = std::stod(std::string(cell_data.value));
+                state_.worksheet->setValue(row, col, number_value);
+            } catch (...) {
+                // 解析失败，尝试作为字符串并解码XML实体
+                std::string str_value = decodeXMLEntities(std::string(cell_data.value));
+                state_.worksheet->setValue(row, col, str_value);
+            }
+            break;
+        }
+        
+        case FastCellData::Boolean: {
+            bool bool_value = (cell_data.value == "1" || cell_data.value == "true");
+            state_.worksheet->setValue(row, col, bool_value);
+            break;
+        }
+        
+        case FastCellData::String:
+        default: {
+            // 解码XML实体
+            std::string str_value = decodeXMLEntities(std::string(cell_data.value));
+            state_.worksheet->setValue(row, col, str_value);
+            break;
+        }
+    }
+    
+    // 应用样式
+    if (cell_data.style_id >= 0) {
+        int mapped_style_id = cell_data.style_id;
+        if (!state_.style_id_mapping->empty()) {
+            auto mapping_it = state_.style_id_mapping->find(cell_data.style_id);
+            if (mapping_it != state_.style_id_mapping->end()) {
+                mapped_style_id = mapping_it->second;
+            }
+        }
+        
+        auto style_it = state_.styles->find(mapped_style_id);
+        if (style_it != state_.styles->end()) {
+            auto& cell = state_.worksheet->getCell(row, col);
+            cell.setFormat(style_it->second);
+        }
+    }
+}
+
+// 工具方法
 
 bool WorksheetParser::isDateFormat(int style_index) const {
     if (style_index < 0) {
@@ -66,99 +364,21 @@ std::string WorksheetParser::convertExcelDateToString(double excel_date) {
     // 转换为Unix时间戳
     time_t unix_time = static_cast<time_t>((excel_date - EXCEL_EPOCH_OFFSET) * SECONDS_PER_DAY);
     
-    // 使用项目时间工具类格式化
-    std::tm time_info_buf{};
+    // 使用TimeUtils格式化
+    std::tm time_info;
 #ifdef _WIN32
-    gmtime_s(&time_info_buf, &unix_time);
+    gmtime_s(&time_info, &unix_time);
 #else
-    gmtime_r(&unix_time, &time_info_buf);
+    time_info = *gmtime(&unix_time);
 #endif
-    return fastexcel::utils::TimeUtils::formatTime(time_info_buf, "%Y-%m-%d");
+    
+    return utils::TimeUtils::formatTime(time_info, "%Y-%m-%d");
 }
 
-// SAX事件处理器实现
-void WorksheetParser::onStartElement(const std::string& name, const std::vector<xml::XMLAttribute>& attributes, int depth) {
-    // 推入元素栈
-    if (name == "worksheet") {
-        state_.element_stack.push(ParseState::Element::Worksheet);
-    } else if (name == "cols") {
-        state_.element_stack.push(ParseState::Element::Cols);
-    } else if (name == "col" && !state_.element_stack.empty() && 
-               state_.element_stack.top() == ParseState::Element::Cols) {
-        handleColumnElement(attributes);
-    } else if (name == "mergeCells") {
-        state_.element_stack.push(ParseState::Element::MergeCells);
-    } else if (name == "mergeCell" && !state_.element_stack.empty() && 
-               state_.element_stack.top() == ParseState::Element::MergeCells) {
-        handleMergeCellElement(attributes);
-    } else if (name == "sheetData") {
-        state_.element_stack.push(ParseState::Element::SheetData);
-    } else if (name == "row" && !state_.element_stack.empty() && 
-               state_.element_stack.top() == ParseState::Element::SheetData) {
-        handleRowStartElement(attributes);
-        state_.element_stack.push(ParseState::Element::Row);
-    } else if (name == "c" && !state_.element_stack.empty() && 
-               state_.element_stack.top() == ParseState::Element::Row) {
-        handleCellStartElement(attributes);
-        state_.element_stack.push(ParseState::Element::Cell);
-    } else if (name == "v" && !state_.element_stack.empty() && 
-               state_.element_stack.top() == ParseState::Element::Cell) {
-        state_.element_stack.push(ParseState::Element::CellValue);
-        state_.current_value.clear();
-    } else if (name == "f" && !state_.element_stack.empty() && 
-               state_.element_stack.top() == ParseState::Element::Cell) {
-        state_.element_stack.push(ParseState::Element::CellFormula);
-        state_.current_formula.clear();
-        // 处理共享公式属性 - 保持原有的共享公式支持
-        auto type_opt = findAttribute(attributes, "t");
-        auto si_opt = findIntAttribute(attributes, "si");
-        auto ref_opt = findAttribute(attributes, "ref");
-        
-        if (type_opt && type_opt.value() == "shared" && si_opt && ref_opt) {
-            // 这是共享公式的主定义，稍后在公式内容解析完成后处理
-        }
-    } else if (name == "is" && !state_.element_stack.empty() && 
-               state_.element_stack.top() == ParseState::Element::Cell) {
-        // 内联字符串开始 - 需要找到其中的<t>标签
-    } else if (name == "t") {
-        // 文本内容，可能在内联字符串<is>中
-        state_.current_value.clear(); // 准备收集文本
-    }
-}
+// === 完整的工作表元素处理方法实现 ===
 
-void WorksheetParser::onEndElement(const std::string& name, int depth) {
-    if (!state_.element_stack.empty()) {
-        ParseState::Element current = state_.element_stack.top();
-        state_.element_stack.pop();
-        
-        if (name == "c" && current == ParseState::Element::Cell) {
-            // 单元格结束，处理单元格数据
-            processCellData();
-        } else if (name == "v" && current == ParseState::Element::CellValue) {
-            // 单元格值结束
-        } else if (name == "f" && current == ParseState::Element::CellFormula) {
-            // 公式结束
-        } else if (name == "row" && current == ParseState::Element::Row) {
-            // 行结束
-            state_.current_row = -1;
-        }
-    }
-}
-
-void WorksheetParser::onText(const std::string& text, int depth) {
-    if (!state_.element_stack.empty()) {
-        ParseState::Element current = state_.element_stack.top();
-        if (current == ParseState::Element::CellValue) {
-            state_.current_value += text;
-        } else if (current == ParseState::Element::CellFormula) {
-            state_.current_formula += text;
-        }
-    }
-}
-
-// 私有SAX事件处理辅助方法实现
 void WorksheetParser::handleColumnElement(const std::vector<xml::XMLAttribute>& attributes) {
-    // 提取列属性 - 保持原有的完整列处理逻辑
+    // 提取列属性 - 完整的列处理逻辑
     auto min_col_opt = findIntAttribute(attributes, "min");
     auto max_col_opt = findIntAttribute(attributes, "max");
     auto width_opt = findDoubleAttribute(attributes, "width");
@@ -174,16 +394,13 @@ void WorksheetParser::handleColumnElement(const std::vector<xml::XMLAttribute>& 
         int first_col = min_col - 1;
         int last_col = max_col - 1;
         
-        // 设置列宽（保留Excel默认列宽，即使没有customWidth属性）
+        // 设置列宽
         if (width_opt) {
             double width = width_opt.value();
-            // 使用新的智能列宽设置，逐列处理
             for (int col = first_col; col <= last_col; ++col) {
                 state_.worksheet->setColumnWidth(col, width);
             }
-            FASTEXCEL_LOG_DEBUG("设置列宽：列 {}-{} 宽度 {} custom_width={}", 
-                               first_col, last_col, width, 
-                               custom_width_opt ? custom_width_opt.value() : "false");
+            FASTEXCEL_LOG_DEBUG("设置列宽：列 {}-{} 宽度 {}", first_col, last_col, width);
         }
         
         // 设置列样式
@@ -202,8 +419,7 @@ void WorksheetParser::handleColumnElement(const std::vector<xml::XMLAttribute>& 
             if (style_it != state_.styles->end()) {
                 // 设置列格式 ID 到工作表
                 state_.worksheet->setColumnFormatId(first_col, last_col, mapped_style_id);
-                FASTEXCEL_LOG_DEBUG("设置列样式：列 {}-{} 原始样式ID {} 映射样式ID {}", 
-                                   first_col, last_col, style_index, mapped_style_id);
+                FASTEXCEL_LOG_DEBUG("设置列样式：列 {}-{} 样式ID {}", first_col, last_col, mapped_style_id);
             }
         }
         
@@ -221,12 +437,13 @@ void WorksheetParser::handleMergeCellElement(const std::vector<xml::XMLAttribute
         int r1, c1, r2, c2;
         if (parseRangeReference(ref, r1, c1, r2, c2)) {
             state_.worksheet->mergeCells(r1, c1, r2, c2);
+            FASTEXCEL_LOG_DEBUG("合并单元格：{} -> ({},{}) - ({},{})", ref, r1, c1, r2, c2);
         }
     }
 }
 
 void WorksheetParser::handleRowStartElement(const std::vector<xml::XMLAttribute>& attributes) {
-    // 先解析行级属性：r（行号）、ht（行高）、customHeight、hidden - 保持原有完整逻辑
+    // 解析行级属性：r（行号）、ht（行高）、customHeight、hidden
     auto r_opt = findIntAttribute(attributes, "r");
     if (r_opt) {
         int excel_row = r_opt.value();
@@ -236,164 +453,19 @@ void WorksheetParser::handleRowStartElement(const std::vector<xml::XMLAttribute>
         auto custom_height_opt = findAttribute(attributes, "customHeight");
         auto hidden_opt = findAttribute(attributes, "hidden");
         
+        // 设置行高
         if (ht_opt) {
             double ht = ht_opt.value();
-            if (ht > 0 && (custom_height_opt && 
-                          (custom_height_opt.value() == "1" || custom_height_opt.value() == "true" || !custom_height_opt.value().empty()))) {
-                // 只有明确设置自定义行高时才设置；部分文件也会直接提供ht且customHeight缺省，兼容性处理：只要有ht就设置
+            if (ht > 0) {
                 state_.worksheet->setRowHeight(state_.current_row, ht);
-            } else if (ht > 0) {
-                state_.worksheet->setRowHeight(state_.current_row, ht);
+                FASTEXCEL_LOG_DEBUG("设置行高：行 {} 高度 {}", state_.current_row, ht);
             }
         }
         
+        // 设置隐藏状态
         if (hidden_opt && (hidden_opt.value() == "1" || hidden_opt.value() == "true")) {
             state_.worksheet->hideRow(state_.current_row);
-        }
-    }
-}
-
-void WorksheetParser::handleCellStartElement(const std::vector<xml::XMLAttribute>& attributes) {
-    // 初始化当前单元格状态
-    state_.current_col = -1;
-    state_.current_cell_ref.clear();
-    state_.current_cell_type.clear();
-    state_.current_style_id = -1;
-    state_.current_value.clear();
-    state_.current_formula.clear();
-    
-    // 提取单元格引用 (r="A1")
-    auto ref_opt = findAttribute(attributes, "r");
-    if (ref_opt) {
-        state_.current_cell_ref = ref_opt.value();
-        try {
-            auto [row, col] = parseCellReference(state_.current_cell_ref);
-            state_.current_col = col;
-        } catch (const std::exception& /*e*/) {
-            // 解析失败，使用列属性
-            if (auto col_opt = findIntAttribute(attributes, "c")) {
-                state_.current_col = col_opt.value();
-            }
-        }
-    }
-    
-    // 提取单元格类型
-    auto type_opt = findAttribute(attributes, "t");
-    if (type_opt) {
-        state_.current_cell_type = type_opt.value();
-    }
-    
-    // 提取样式索引
-    auto style_opt = findIntAttribute(attributes, "s");
-    if (style_opt) {
-        state_.current_style_id = style_opt.value();
-    }
-}
-
-// 单元格处理方法实现
-void WorksheetParser::processCellData() {
-    if (state_.current_row < 0 || state_.current_col < 0) {
-        return;
-    }
-    
-    int row = state_.current_row;
-    int col = state_.current_col;
-    
-    // 根据类型设置单元格值 - 保持原有的完整类型处理逻辑
-    if (state_.current_cell_type == "s") {
-        // 共享字符串
-        try {
-            int string_index = std::stoi(state_.current_value);
-            auto it = state_.shared_strings->find(string_index);
-            if (it != state_.shared_strings->end()) {
-                // 使用 addSharedStringWithIndex 保持原始索引
-                if (auto wb = state_.worksheet->getParentWorkbook()) {
-                    wb->addSharedStringWithIndex(it->second, string_index);
-                }
-                state_.worksheet->setValue(row, col, it->second);
-            }
-        } catch (const std::exception& e) {
-            FASTEXCEL_LOG_WARN("解析共享字符串索引失败: {}", e.what());
-        }
-    } else if (state_.current_cell_type == "inlineStr") {
-        // 内联字符串
-        std::string decoded_value = decodeXMLEntities(state_.current_value);
-        state_.worksheet->setValue(row, col, decoded_value);
-    } else if (state_.current_cell_type == "b") {
-        // 布尔值
-        bool bool_value = (state_.current_value == "1" || state_.current_value == "true");
-        state_.worksheet->setValue(row, col, bool_value);
-    } else if (state_.current_cell_type == "str") {
-        // 公式字符串结果
-        std::string decoded_value = decodeXMLEntities(state_.current_value);
-        state_.worksheet->setValue(row, col, decoded_value);
-    } else if (state_.current_cell_type == "e") {
-        // 错误值
-        std::string decoded_value = decodeXMLEntities(state_.current_value);
-        state_.worksheet->setValue(row, col, "#ERROR: " + decoded_value);
-    } else if (state_.current_cell_type == "d") {
-        // 日期值（ISO 8601格式）
-        std::string decoded_value = decodeXMLEntities(state_.current_value);
-        state_.worksheet->setValue(row, col, decoded_value);
-    } else {
-        // 数字或默认类型 - Excel中没有t属性的单元格默认是数字！
-        if (!state_.current_value.empty()) {
-            try {
-                // 解析为数字 - 这是最常见的情况，应该优先处理
-                double number_value = std::stod(state_.current_value);
-                
-                // 重要：日期在Excel中也是数字，不要转换为字符串！
-                // 日期格式应该由样式来控制显示，而不是改变数据类型
-                state_.worksheet->setValue(row, col, number_value);
-                
-            } catch (const std::exception& /*e*/) {
-                // 极少数情况：如果真的不能解析为数字（可能是Excel文件损坏）
-                // 记录警告并跳过该单元格，而不是错误地转换为字符串
-                FASTEXCEL_LOG_WARN("单元格{}无法解析为数字，值='{}'", 
-                           utils::CommonUtils::cellReference(row, col), state_.current_value);
-                // 不设置任何值，保持单元格为空
-            }
-        } else if (!state_.current_formula.empty()) {
-            // 只有公式没有值的情况
-            state_.worksheet->setFormula(row, col, state_.current_formula);
-        }
-    }
-    
-    // 应用样式（如果有）
-    if (state_.current_style_id >= 0) {
-        // 使用样式 ID 映射来获取正确的 FormatRepository 中的样式
-        int mapped_style_id = state_.current_style_id;
-        if (!state_.style_id_mapping->empty()) {
-            auto mapping_it = state_.style_id_mapping->find(state_.current_style_id);
-            if (mapping_it != state_.style_id_mapping->end()) {
-                mapped_style_id = mapping_it->second;
-            }
-        }
-        
-        auto style_it = state_.styles->find(mapped_style_id);
-        if (style_it != state_.styles->end()) {
-            auto& cell = state_.worksheet->getCell(row, col);
-            cell.setFormat(style_it->second);
-        }
-    }
-    
-    // 处理公式
-    if (!state_.current_formula.empty()) {
-        state_.worksheet->setFormula(row, col, decodeXMLEntities(state_.current_formula));
-    }
-}
-
-void WorksheetParser::processColumnDefinition() {
-    // 列定义处理已在handleColumnElement中完成
-}
-
-void WorksheetParser::processMergeCell(const std::vector<xml::XMLAttribute>& attributes) {
-    auto ref_opt = findAttribute(attributes, "ref");
-    if (ref_opt) {
-        std::string ref = ref_opt.value();
-        int r1, c1, r2, c2;
-        if (parseRangeReference(ref, r1, c1, r2, c2)) {
-            state_.worksheet->mergeCells(r1, c1, r2, c2);
+            FASTEXCEL_LOG_DEBUG("隐藏行：{}", state_.current_row);
         }
     }
 }

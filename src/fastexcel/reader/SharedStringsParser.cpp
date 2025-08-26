@@ -28,13 +28,12 @@ void SharedStringsParser::onStartElement(const std::string& name, const std::vec
 void SharedStringsParser::onEndElement(const std::string& name, int depth) {
     if (name == "si") {
         // 结束共享字符串项，保存收集到的文本
-        std::string final_text = parse_state_.current_text;
-        if (!final_text.empty()) {
+        if (!parse_state_.current_text.empty()) {
             // 解码XML实体
-            final_text = decodeXMLEntities(final_text);
+            parse_state_.current_text = decodeXMLEntities(parse_state_.current_text);
         }
         
-        strings_[parse_state_.current_string_index++] = std::move(final_text);
+        strings_[parse_state_.current_string_index++] = std::move(parse_state_.current_text);
         parse_state_.endString();
     }
     else if (name == "t") {

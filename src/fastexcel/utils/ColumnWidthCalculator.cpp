@@ -1,29 +1,48 @@
 #include "fastexcel/utils/ColumnWidthCalculator.hpp"
-#include "fastexcel/utils/StylesParser.hpp"
+#include "fastexcel/reader/StylesParser.hpp"
+#include <fstream>
+#include <filesystem>
 
 namespace fastexcel {
 namespace utils {
 
 int ColumnWidthCalculator::parseRealMDW(const std::string& styles_xml_path) {
-    auto font_info = StylesParser::parseDefaultFont(styles_xml_path);
-    
-    if (font_info.is_parsed) {
-        return font_info.mdw;
+    try {
+        // 读取styles.xml文件
+        std::ifstream file(styles_xml_path);
+        if (!file.is_open()) {
+            return 7; // 默认Calibri 11pt的MDW
+        }
+        
+        std::string xml_content((std::istreambuf_iterator<char>(file)),
+                               std::istreambuf_iterator<char>());
+        
+        // 使用高性能StylesParser解析
+        reader::StylesParser parser;
+        if (!parser.parse(xml_content)) {
+            return 7; // 解析失败，返回默认值
+        }
+        
+        // 获取默认字体信息
+        auto [font_name, font_size] = parser.getDefaultFontInfo();
+        
+        // 使用estimateMDW方法计算MDW
+        return estimateMDW(font_name, font_size);
+        
+    } catch (const std::exception&) {
+        // 发生异常，返回默认值
+        return 7;
     }
-    
-    // 解析失败，返回默认值
-    return 7; // Calibri 11pt的默认MDW
 }
 
 int ColumnWidthCalculator::parseRealMDWFromWorkbook(const std::string& workbook_dir) {
-    auto font_info = StylesParser::parseFromWorkbook(workbook_dir);
+    std::filesystem::path styles_path = std::filesystem::path(workbook_dir) / "xl" / "styles.xml";
     
-    if (font_info.is_parsed) {
-        return font_info.mdw;
+    if (std::filesystem::exists(styles_path)) {
+        return parseRealMDW(styles_path.string());
     }
     
-    // 解析失败，返回默认值
-    return 7; // Calibri 11pt的默认MDW
+    return 7; // 默认Calibri 11pt的MDW
 }
 
 }} // namespace fastexcel::utils

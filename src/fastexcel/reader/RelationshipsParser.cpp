@@ -15,18 +15,19 @@ void RelationshipsParser::onStartElement(const std::string& name, const std::vec
         
         // 验证必需属性
         if (id && type && target && !id->empty() && !type->empty() && !target->empty()) {
-            Relationship rel;
-            rel.id = *id;
-            rel.type = *type;
-            rel.target = *target;
-            rel.target_mode = target_mode ? *target_mode : "Internal";  // 默认值
-            
-            // 添加到集合并建立ID索引
+            // 使用emplace_back直接在容器中构造对象
             size_t index = relationships_.size();
-            relationships_.push_back(std::move(rel));
-            id_index_[*id] = index;
+            relationships_.emplace_back();
+            auto& rel = relationships_.back();
+            rel.id = std::move(*id);
+            rel.type = std::move(*type);
+            rel.target = std::move(*target);
+            rel.target_mode = target_mode ? std::move(*target_mode) : "Internal";
             
-            FASTEXCEL_LOG_DEBUG("Parsed relationship: {} -> {} ({})", *id, *target, *type);
+            // 建立ID索引
+            id_index_[rel.id] = index;
+            
+            FASTEXCEL_LOG_DEBUG("Parsed relationship: {} -> {} ({})", rel.id, rel.target, rel.type);
         } else {
             FASTEXCEL_LOG_WARN("Skipping incomplete relationship: id='{}', type='{}', target='{}'", 
                      id ? *id : "", type ? *type : "", target ? *target : "");

@@ -11,11 +11,11 @@ void ContentTypesParser::onStartElement(const std::string& name, const std::vect
         auto content_type = findAttribute(attributes, "ContentType");
         
         if (extension && content_type && !extension->empty() && !content_type->empty()) {
-            DefaultType defaultType;
-            defaultType.extension = *extension;
-            defaultType.content_type = *content_type;
+            defaults_.emplace_back();
+            auto& defaultType = defaults_.back();
+            defaultType.extension = std::move(*extension);
+            defaultType.content_type = std::move(*content_type);
             
-            defaults_.push_back(defaultType);
             // 同步构建索引，避免后续重建
             default_index_[defaultType.extension] = defaultType.content_type;
             
@@ -31,11 +31,11 @@ void ContentTypesParser::onStartElement(const std::string& name, const std::vect
         auto content_type = findAttribute(attributes, "ContentType");
         
         if (part_name && content_type && !part_name->empty() && !content_type->empty()) {
-            OverrideType overrideType;
-            overrideType.part_name = *part_name;
-            overrideType.content_type = *content_type;
+            overrides_.emplace_back();
+            auto& overrideType = overrides_.back();
+            overrideType.part_name = std::move(*part_name);
+            overrideType.content_type = std::move(*content_type);
             
-            overrides_.push_back(overrideType);
             // 同步构建索引，避免后续重建
             override_index_[overrideType.part_name] = overrideType.content_type;
             
@@ -65,18 +65,18 @@ std::string ContentTypesParser::findOverrideType(const std::string& part_name) c
 
 std::string ContentTypesParser::getContentType(const std::string& part_name) const {
     // 优先检查覆盖类型
-    std::string override_type = findOverrideType(part_name);
-    if (!override_type.empty()) {
-        return override_type;
+    auto override_it = override_index_.find(part_name);
+    if (override_it != override_index_.end()) {
+        return override_it->second;
     }
     
     // 检查默认类型（根据扩展名）
     size_t last_dot = part_name.find_last_of('.');
     if (last_dot != std::string::npos) {
         std::string extension = part_name.substr(last_dot + 1);
-        std::string default_type = findDefaultType(extension);
-        if (!default_type.empty()) {
-            return default_type;
+        auto default_it = default_index_.find(extension);
+        if (default_it != default_index_.end()) {
+            return default_it->second;
         }
     }
     
