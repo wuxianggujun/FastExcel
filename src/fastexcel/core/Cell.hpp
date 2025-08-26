@@ -81,7 +81,7 @@ private:
     
 public:
     Cell();
-    virtual ~Cell();  // Make destructor virtual for memory pool compatibility
+    ~Cell();
     
     // 便利构造函数
     explicit Cell(const std::string& value);

@@ -27,10 +27,11 @@ namespace core {
  */
 class BlockSparseMatrix {
 public:
-    // 块大小设置 - 64x64是经过优化的平衡值
-    // 太小：块数量多，管理开销大
-    // 太大：内存浪费多，局部性差
-    static constexpr int BLOCK_SIZE = 64;
+    // 块大小设置 - 将默认 64x64 调整为 16x16 以降低稀疏场景的内存占用
+    // 说明：对极稀疏且分布离散的大表，64x64 会导致每命中一个块就预分配 4096 个 Cell，
+    //       单块内存(含 bitset)约数百 KB，易引发 GB 级峰值。改为 16x16 后单块仅 256 个 Cell，
+    //       稀疏分布下显著降低总内存。若后续需在密集场景优化，可再引入自适应或配置项。
+    static constexpr int BLOCK_SIZE = 16;
     static constexpr int CELLS_PER_BLOCK = BLOCK_SIZE * BLOCK_SIZE;
     
 private:
