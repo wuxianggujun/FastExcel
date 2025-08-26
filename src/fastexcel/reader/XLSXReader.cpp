@@ -581,20 +581,23 @@ core::ErrorCode XLSXReader::parseSharedStringsXML() {
         return core::ErrorCode::FileNotFound;
     }
     
+    if (!zip_archive_ || !zip_archive_->getReader()) {
+        FASTEXCEL_LOG_ERROR("ZIP存档或读取器不可用");
+        return core::ErrorCode::InternalError;
+    }
+    
     try {
         SharedStringsParser parser;
-        // 使用流式解析，避免一次性吸入上百MB
-        if (zip_archive_ && zip_archive_->getReader()) {
-            auto* zr = zip_archive_->getReader();
-            if (parser.parseStream(zr, "xl/sharedStrings.xml")) {
-                shared_strings_ = parser.getStrings();
-                FASTEXCEL_LOG_DEBUG("成功流式解析 {} 个共享字符串", shared_strings_.size());
-                return core::ErrorCode::Ok;
-            }
+        auto* zr = zip_archive_->getReader();
+        
+        if (!parser.parseStream(zr, "xl/sharedStrings.xml")) {
+            FASTEXCEL_LOG_ERROR("共享字符串流式解析失败");
+            return core::ErrorCode::XmlParseError;
         }
         
-        FASTEXCEL_LOG_ERROR("共享字符串流式解析失败");
-        return core::ErrorCode::XmlParseError;
+        shared_strings_ = parser.getStrings();
+        FASTEXCEL_LOG_DEBUG("成功流式解析 {} 个共享字符串", shared_strings_.size());
+        return core::ErrorCode::Ok;
         
     } catch (const std::exception& e) {
         FASTEXCEL_LOG_ERROR("解析共享字符串时发生异常: {}", e.what());
