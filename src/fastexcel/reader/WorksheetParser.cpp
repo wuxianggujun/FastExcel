@@ -72,18 +72,34 @@ void WorksheetParser::onStartElement(std::string_view name, span<const xml::XMLA
         // 提取行号和行属性
         handleRowStartElement(attributes);
         
-        // 开始收集这一行的原始XML内容以进行指针扫描
-        state_.row_xml_buffer = "<row";
+        // 高性能XML重构：使用预分配缓冲区避免重分配
+        state_.format_buffer.clear();
+        state_.format_buffer.reserve(512); // 预估单行XML大小
+        
+        state_.format_buffer = "<row";
         for (const auto& attr : attributes) {
-            state_.row_xml_buffer += " " + std::string(attr.name) + "=\"" + std::string(attr.value) + "\"";
+            state_.format_buffer += " ";
+            state_.format_buffer.append(attr.name.data(), attr.name.size());
+            state_.format_buffer += "=\"";
+            state_.format_buffer.append(attr.value.data(), attr.value.size());
+            state_.format_buffer += "\"";
         }
-        state_.row_xml_buffer += ">";
+        state_.format_buffer += ">";
+        
+        // 移动语义避免拷贝
+        state_.row_xml_buffer = std::move(state_.format_buffer);
     }
     else if (state_.in_row) {
-        // 在行内的任何元素都需要收集到row_xml_buffer中
-        state_.row_xml_buffer += "<" + std::string(name);
+        // 在行内的任何元素：优化字符串拼接
+        state_.row_xml_buffer += "<";
+        state_.row_xml_buffer.append(name.data(), name.size());
+        
         for (const auto& attr : attributes) {
-            state_.row_xml_buffer += " " + std::string(attr.name) + "=\"" + std::string(attr.value) + "\"";
+            state_.row_xml_buffer += " ";
+            state_.row_xml_buffer.append(attr.name.data(), attr.name.size());
+            state_.row_xml_buffer += "=\"";
+            state_.row_xml_buffer.append(attr.value.data(), attr.value.size());
+            state_.row_xml_buffer += "\"";
         }
         state_.row_xml_buffer += ">";
     }
@@ -107,8 +123,10 @@ void WorksheetParser::onEndElement(std::string_view name, int depth) {
         state_.current_row = -1;
     }
     else if (state_.in_row) {
-        // 在行内的结束标签也要收集
-        state_.row_xml_buffer += "</" + std::string(name) + ">";
+        // 在行内的结束标签也要收集：优化拼接
+        state_.row_xml_buffer += "</";
+        state_.row_xml_buffer.append(name.data(), name.size());
+        state_.row_xml_buffer += ">";
     }
     else if (name == "sheetData") {
         state_.in_sheet_data = false;
@@ -117,9 +135,8 @@ void WorksheetParser::onEndElement(std::string_view name, int depth) {
 
 void WorksheetParser::onText(std::string_view text, int depth) {
     if (state_.in_row && !text.empty()) {
-        // 在行内：直接收集文本内容用于指针扫描
-        // SAX解析器已经处理了XML实体解码，不需要再次转义
-        state_.row_xml_buffer += std::string(text);
+        // 在行内：直接收集文本内容用于指针扫描，避免拷贝
+        state_.row_xml_buffer.append(text.data(), text.size());
     }
 }
 

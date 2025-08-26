@@ -83,6 +83,9 @@ private:
         std::vector<FastCellData> row_buffer;
         std::string row_xml_buffer;  // 收集完整行XML
         
+        // 高性能格式化缓冲区
+        mutable std::string format_buffer;  // 复用的格式化缓冲区
+        
         void reset() {
             current_row = -1;
             in_sheet_data = false;
