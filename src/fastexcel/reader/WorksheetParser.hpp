@@ -8,6 +8,7 @@
 #include "fastexcel/core/Worksheet.hpp"
 #include "fastexcel/core/Cell.hpp"
 #include "fastexcel/core/FormatDescriptor.hpp"
+#include "fastexcel/archive/ZipReader.hpp"
 #include "fastexcel/utils/Logger.hpp"
 #include "fastexcel/core/span.hpp"
 #include <string>
@@ -52,6 +53,23 @@ public:
                const std::unordered_map<int, std::string>& shared_strings,
                const std::unordered_map<int, std::shared_ptr<core::FormatDescriptor>>& styles,
                const std::unordered_map<int, int>& style_id_mapping = {});
+
+    /**
+     * @brief 流式解析工作表XML内容（避免一次性读入大字符串）
+     * @param zip_reader ZIP读取器
+     * @param internal_path ZIP内部路径，如"xl/worksheets/sheet1.xml"
+     * @param worksheet 目标工作表对象
+     * @param shared_strings 共享字符串映射
+     * @param styles 样式映射
+     * @param style_id_mapping 样式ID映射（原始ID -> FormatRepository ID）
+     * @return 是否解析成功
+     */
+    bool parseStream(archive::ZipReader* zip_reader,
+                     const std::string& internal_path,
+                     core::Worksheet* worksheet,
+                     const std::unordered_map<int, std::string>& shared_strings,
+                     const std::unordered_map<int, std::shared_ptr<core::FormatDescriptor>>& styles,
+                     const std::unordered_map<int, int>& style_id_mapping = {});
 
 private:
     // 高性能单元格数据结构（避免Cell对象开销）

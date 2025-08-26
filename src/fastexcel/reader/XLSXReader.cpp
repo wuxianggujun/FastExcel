@@ -512,21 +512,19 @@ core::ErrorCode XLSXReader::parseWorksheetXML(const std::string& path, core::Wor
         return core::ErrorCode::InvalidArgument;
     }
     
-    std::string xml_content = extractXMLFromZip(path);
-    if (xml_content.empty()) {
-        FASTEXCEL_LOG_ERROR("无法提取工作表XML: {}", path);
-        return core::ErrorCode::FileNotFound;
-    }
-    
     try {
         WorksheetParser parser;
-        if (!parser.parse(xml_content, worksheet, shared_strings_, styles_, style_id_mapping_)) {
-            FASTEXCEL_LOG_ERROR("解析工作表XML失败: {}", path);
-            return core::ErrorCode::XmlParseError;
+        // 使用流式解析以避免一次性加载巨大的XML
+        if (zip_archive_ && zip_archive_->getReader()) {
+            auto* zr = zip_archive_->getReader();
+            if (parser.parseStream(zr, path, worksheet, shared_strings_, styles_, style_id_mapping_)) {
+                FASTEXCEL_LOG_DEBUG("成功以流式解析工作表: {}", worksheet->getName());
+                return core::ErrorCode::Ok;
+            }
         }
         
-        FASTEXCEL_LOG_DEBUG("成功解析工作表: {}", worksheet->getName());
-        return core::ErrorCode::Ok;
+        FASTEXCEL_LOG_ERROR("流式解析工作表失败: {}", path);
+        return core::ErrorCode::XmlParseError;
         
     } catch (const std::exception& e) {
         FASTEXCEL_LOG_ERROR("解析工作表时发生异常: {}", e.what());
@@ -580,23 +578,20 @@ core::ErrorCode XLSXReader::parseSharedStringsXML() {
         return core::ErrorCode::FileNotFound;
     }
     
-    std::string xml_content = extractXMLFromZip("xl/sharedStrings.xml");
-    if (xml_content.empty()) {
-        return core::ErrorCode::Ok; // 文件为空也是正常的
-    }
-    
     try {
         SharedStringsParser parser;
-        if (!parser.parse(xml_content)) {
-            FASTEXCEL_LOG_ERROR("解析共享字符串XML失败");
-            return core::ErrorCode::XmlParseError;
+        // 使用流式解析，避免一次性吸入上百MB
+        if (zip_archive_ && zip_archive_->getReader()) {
+            auto* zr = zip_archive_->getReader();
+            if (parser.parseStream(zr, "xl/sharedStrings.xml")) {
+                shared_strings_ = parser.getStrings();
+                FASTEXCEL_LOG_DEBUG("成功流式解析 {} 个共享字符串", shared_strings_.size());
+                return core::ErrorCode::Ok;
+            }
         }
         
-        // 将解析结果复制到成员变量
-        shared_strings_ = parser.getStrings();
-
-        FASTEXCEL_LOG_DEBUG("成功解析 {} 个共享字符串", shared_strings_.size());
-        return core::ErrorCode::Ok;
+        FASTEXCEL_LOG_ERROR("共享字符串流式解析失败");
+        return core::ErrorCode::XmlParseError;
         
     } catch (const std::exception& e) {
         FASTEXCEL_LOG_ERROR("解析共享字符串时发生异常: {}", e.what());

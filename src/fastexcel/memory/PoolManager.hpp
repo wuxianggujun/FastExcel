@@ -91,7 +91,7 @@ public:
                     if (ptr) {
                         delete static_cast<FixedSizePool<T>*>(ptr);
                     }
-                } catch (const std::exception& e) {
+                } catch (const std::exception& /*e*/) {
                     // 在deleter中不能抛出异常，只能记录
                     // 但此时Logger可能不可用
                 }
@@ -231,7 +231,7 @@ private:
             // 最后清空映射表
             pools_.clear();
             
-        } catch (const std::exception& e) {
+        } catch (const std::exception& /*e*/) {
             // 在析构函数中不能抛出异常
             // 只能记录错误，但无法输出（Logger可能已析构）
             // FASTEXCEL_LOG_ERROR("清理PoolManager时出错: {}", e.what());

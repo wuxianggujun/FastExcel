@@ -10,6 +10,8 @@
 #include "fastexcel/core/Workbook.hpp"
 #include "fastexcel/core/SharedFormula.hpp"
 #include "fastexcel/xml/XMLEscapes.hpp"
+#include "fastexcel/xml/XMLStreamReader.hpp"
+#include "fastexcel/archive/ZipArchive.hpp"
 #include <cstring>
 #include <algorithm>
 
@@ -42,8 +44,67 @@ bool WorksheetParser::parse(const std::string& xml_content,
     }
 }
 
+// 流式解析实现：使用 XMLStreamReader 的回调收集行级 XML，从 ZipReader 逐块喂给解析器
+bool WorksheetParser::parseStream(archive::ZipReader* zip_reader,
+                                  const std::string& internal_path,
+                                  core::Worksheet* worksheet,
+                                  const std::unordered_map<int, std::string>& shared_strings,
+                                  const std::unordered_map<int, std::shared_ptr<core::FormatDescriptor>>& styles,
+                                  const std::unordered_map<int, int>& style_id_mapping) {
+    if (!zip_reader || !worksheet) {
+        return false;
+    }
+
+    // 初始化解析状态
+    state_.reset();
+    state_.worksheet = worksheet;
+    state_.shared_strings = &shared_strings;
+    state_.styles = &styles;
+    state_.style_id_mapping = &style_id_mapping;
+
+    xml::XMLStreamReader reader;
+
+    reader.setStartElementCallback([this](std::string_view name, span<const xml::XMLAttribute> attributes, int depth) {
+        this->handleStartElement(name, attributes, depth);
+    });
+    reader.setEndElementCallback([this](std::string_view name, int depth) {
+        this->handleEndElement(name, depth);
+    });
+    reader.setTextCallback([this](std::string_view text, int depth) {
+        this->handleText(text, depth);
+    });
+    reader.setErrorCallback([this](xml::XMLParseError /*err*/, const std::string& msg, int line, int col) {
+        FASTEXCEL_LOG_ERROR("Worksheet stream parse error at {}:{} -> {}", line, col, msg);
+    });
+
+    if (reader.beginParsing() != xml::XMLParseError::Ok) {
+        return false;
+    }
+
+    auto err = zip_reader->streamFile(internal_path,
+        [&reader](const uint8_t* data, size_t size) -> bool {
+            if (reader.feedData(reinterpret_cast<const char*>(data), size) != xml::XMLParseError::Ok) {
+                return false;
+            }
+            return true;
+        },
+        1 << 16 // 64KB
+    );
+
+    if (archive::isError(err)) {
+        FASTEXCEL_LOG_ERROR("Zip stream failed: {}", internal_path);
+        return false;
+    }
+
+    if (reader.endParsing() != xml::XMLParseError::Ok) {
+        return false;
+    }
+
+    return true;
+}
+
 // === 完整的混合架构实现：处理所有工作表元素 ===
-void WorksheetParser::onStartElement(std::string_view name, span<const xml::XMLAttribute> attributes, int depth) {
+void WorksheetParser::onStartElement(std::string_view name, span<const xml::XMLAttribute> attributes, int /*depth*/) {
     // 列定义处理 - 影响整个工作表的列格式和宽度
     if (name == "cols") {
         // 进入列定义区域
@@ -107,7 +168,7 @@ void WorksheetParser::onStartElement(std::string_view name, span<const xml::XMLA
     // 其他非关键元素忽略 - 关键优化：减少SAX回调处理
 }
 
-void WorksheetParser::onEndElement(std::string_view name, int depth) {
+void WorksheetParser::onEndElement(std::string_view name, int /*depth*/) {
     if (name == "row" && state_.in_row) {
         // 行结束：完成XML收集，进行指针扫描解析
         state_.row_xml_buffer += "</row>";
@@ -133,7 +194,7 @@ void WorksheetParser::onEndElement(std::string_view name, int depth) {
     }
 }
 
-void WorksheetParser::onText(std::string_view text, int depth) {
+void WorksheetParser::onText(std::string_view text, int /*depth*/) {
     if (state_.in_row && !text.empty()) {
         // 在行内：直接收集文本内容用于指针扫描，避免拷贝
         state_.row_xml_buffer.append(text.data(), text.size());

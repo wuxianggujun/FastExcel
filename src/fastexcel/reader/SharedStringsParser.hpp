@@ -5,6 +5,7 @@
 #pragma once
 
 #include "BaseSAXParser.hpp"
+#include "fastexcel/archive/ZipReader.hpp"
 #include "fastexcel/core/span.hpp"
 #include <string>
 #include <unordered_map>
@@ -41,6 +42,11 @@ public:
         clear();
         return parseXML(xml_content);
     }
+
+    /**
+     * @brief 流式解析共享字符串XML内容，避免一次性读入全部文本
+     */
+    bool parseStream(archive::ZipReader* zip_reader, const std::string& internal_path);
     
     /**
      * @brief 根据索引获取字符串
