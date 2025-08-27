@@ -202,6 +202,12 @@ if (FASTEXCEL_HIGHWAY_TARGET AND NOT FASTEXCEL_HIGHWAY_TARGET STREQUAL "")
     message(STATUS "FastExcel: Linking with Highway SIMD target: ${FASTEXCEL_HIGHWAY_TARGET}")
 endif ()
 
+# 链接 fast_float 库（如果可用）
+if (FASTEXCEL_FASTFLOAT_TARGET AND NOT FASTEXCEL_FASTFLOAT_TARGET STREQUAL "")
+    target_link_libraries(fastexcel PRIVATE ${FASTEXCEL_FASTFLOAT_TARGET})
+    message(STATUS "FastExcel: Linking with fast_float target: ${FASTEXCEL_FASTFLOAT_TARGET}")
+endif ()
+
 # =============================================================================
 # 宏定义配置
 # =============================================================================

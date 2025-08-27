@@ -5,6 +5,7 @@
 
 #include "ReadOnlyWorksheetParser.hpp"
 #include "fastexcel/utils/Logger.hpp"
+#include <fast_float/fast_float.h>
 #include <algorithm>
 #include <stdexcept>
 
@@ -53,11 +54,15 @@ void ReadOnlyWorksheetParser::processCellValue() {
     
     try {
         if (current_cell_type_ == "s") {
-            // 共享字符串
-            int sst_index = std::stoi(current_cell_value_);
-            storage_->setValue(static_cast<uint32_t>(current_row_), current_col_, 
-                             static_cast<uint32_t>(sst_index));
-            cells_processed_++;
+            // 共享字符串 - 使用 fast_float 解析整数索引
+            uint32_t sst_index;
+            auto result = fast_float::from_chars(current_cell_value_.data(),
+                                               current_cell_value_.data() + current_cell_value_.size(),
+                                               sst_index);
+            if (result.ec == std::errc{}) {
+                storage_->setValue(static_cast<uint32_t>(current_row_), current_col_, sst_index);
+                cells_processed_++;
+            }
         } else if (current_cell_type_ == "b") {
             // 布尔值
             bool bool_value = (current_cell_value_ == "1");
@@ -68,10 +73,15 @@ void ReadOnlyWorksheetParser::processCellValue() {
             storage_->setError(static_cast<uint32_t>(current_row_), current_col_, current_cell_value_);
             cells_processed_++;
         } else {
-            // 数值（默认）或者空类型
-            double numeric_value = std::stod(current_cell_value_);
-            storage_->setValue(static_cast<uint32_t>(current_row_), current_col_, numeric_value);
-            cells_processed_++;
+            // 数值（默认）或者空类型 - 使用 fast_float 高性能解析
+            double numeric_value;
+            auto result = fast_float::from_chars(current_cell_value_.data(),
+                                               current_cell_value_.data() + current_cell_value_.size(),
+                                               numeric_value);
+            if (result.ec == std::errc{}) {
+                storage_->setValue(static_cast<uint32_t>(current_row_), current_col_, numeric_value);
+                cells_processed_++;
+            }
         }
     } catch (const std::exception& e) {
         FASTEXCEL_LOG_DEBUG("解析单元格值失败: {} (type: {}, value: {})", 

@@ -197,6 +197,21 @@ else()
 endif()
 
 # =============================================================================
+# fast_float 配置 (header-only library)
+# =============================================================================
+# fast_float 是一个 header-only 库，用于高性能数值解析
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/fast_float/include/fast_float/fast_float.h")
+    add_library(fast_float INTERFACE)
+    target_include_directories(fast_float INTERFACE 
+        ${CMAKE_CURRENT_SOURCE_DIR}/fast_float/include)
+    set(FASTFLOAT_TARGET fast_float)
+    message(STATUS "FastExcel: Using fast_float library for high-performance number parsing")
+else()
+    message(WARNING "FastExcel: fast_float library not found, falling back to standard parsing")
+    set(FASTFLOAT_TARGET "")
+endif()
+
+# =============================================================================
 # GoogleTest 配置 (仅在需要测试时)
 # =============================================================================
 if(ENABLE_TESTS OR ENABLE_UNIT_TESTS OR FASTEXCEL_BUILD_TESTS)
@@ -248,6 +263,11 @@ if(DEFINED HIGHWAY_TARGET)
     set(FASTEXCEL_HIGHWAY_TARGET ${HIGHWAY_TARGET} PARENT_SCOPE)
 endif()
 
+# 导出 fast_float 目标
+if(DEFINED FASTFLOAT_TARGET)
+    set(FASTEXCEL_FASTFLOAT_TARGET ${FASTFLOAT_TARGET} PARENT_SCOPE)
+endif()
+
 if(DEFINED GTEST_TARGETS)
     set(FASTEXCEL_GTEST_TARGETS ${GTEST_TARGETS} PARENT_SCOPE)
 endif()
@@ -260,6 +280,7 @@ set(FASTEXCEL_THIRD_PARTY_INCLUDE_DIRS
     ${CMAKE_CURRENT_BINARY_DIR}/ZlibMinizipBundle/third_party/zlib-ng
     ${CMAKE_CURRENT_SOURCE_DIR}/ZlibMinizipBundle/third_party/minizip-ng
     ${CMAKE_CURRENT_SOURCE_DIR}/utfcpp/source
+    ${CMAKE_CURRENT_SOURCE_DIR}/fast_float/include
     PARENT_SCOPE
 )
 

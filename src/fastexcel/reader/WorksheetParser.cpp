@@ -8,6 +8,7 @@
 #include "fastexcel/utils/CommonUtils.hpp"
 #include "fastexcel/utils/TimeUtils.hpp"
 #include "fastexcel/core/Workbook.hpp"
+#include <fast_float/fast_float.h>
 #include "fastexcel/core/SharedFormula.hpp"
 #include "fastexcel/xml/XMLEscapes.hpp"
 #include "fastexcel/xml/XMLStreamReader.hpp"
@@ -378,9 +379,19 @@ void WorksheetParser::setCellValue(int row, uint32_t col, const FastCellData& ce
         
         case FastCellData::Number: {
             try {
-                double number_value = std::stod(std::string(cell_data.value));
-                // 使用setValue设置数值
-                state_.worksheet->setValue(row, col, number_value);
+                // 使用 fast_float 高性能解析数值
+                double number_value;
+                auto result = fast_float::from_chars(cell_data.value.data(),
+                                                   cell_data.value.data() + cell_data.value.size(),
+                                                   number_value);
+                if (result.ec == std::errc{}) {
+                    // 使用setValue设置数值
+                    state_.worksheet->setValue(row, col, number_value);
+                } else {
+                    // 解析失败，设置为错误值
+                    std::string error_value = "#VALUE!";
+                    state_.worksheet->setValue(row, col, error_value);
+                }
             } catch (...) {
                 // 解析失败，设置为字符串
                 std::string error_value = "#VALUE!";
