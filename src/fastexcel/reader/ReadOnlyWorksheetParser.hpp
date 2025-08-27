@@ -87,7 +87,7 @@ public:
         in_value_ = false;
         current_row_ = 0;
         current_col_ = 0;
-        current_cell_type_.clear();
+        current_cell_type_ = std::string_view{};
         current_cell_value_.clear();
         cells_processed_ = 0;
     }
