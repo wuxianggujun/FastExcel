@@ -7,7 +7,7 @@
 #include "BaseSAXParser.hpp"
 #include "fastexcel/archive/ZipReader.hpp"
 #include "fastexcel/core/span.hpp"
-#include "fastexcel/utils/StringPool.hpp"
+#include "fastexcel/core/StringPool.hpp"
 #include <string>
 #include <unordered_map>
 
@@ -105,7 +105,7 @@ private:
     } parse_state_;
     
     std::unordered_map<int, std::string_view> string_views_;  // 索引 -> 字符串视图（高性能）
-    utils::StringPool string_pool_;  // 字符串内存池，替代原始缓冲区
+    core::StringPool string_pool_;  // 字符串内存池，替代原始缓冲区
     
     // 重写基类虚函数
     void onStartElement(std::string_view name, span<const xml::XMLAttribute> attributes, int depth) override;

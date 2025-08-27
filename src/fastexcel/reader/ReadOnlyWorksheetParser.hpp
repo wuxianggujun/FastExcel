@@ -36,14 +36,14 @@ private:
     // 当前解析的数据
     int current_row_ = 0;
     uint32_t current_col_ = 0;
-    std::string current_cell_type_;
+    std::string_view current_cell_type_;
     std::string current_cell_value_;
     
     // 统计信息
     size_t cells_processed_ = 0;
     
     // 辅助方法
-    uint32_t parseColumnReference(const std::string& cell_ref);
+    uint32_t parseColumnReference(std::string_view cell_ref);
     void processCellValue();
     bool shouldSkipCell(uint32_t row, uint32_t col) const;
     

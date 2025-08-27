@@ -80,6 +80,7 @@ set(FASTEXCEL_SOURCES
         src/fastexcel/core/RangeFormatter.cpp
         src/fastexcel/core/QuickFormat.cpp
         src/fastexcel/core/FormatUtils.cpp
+        src/fastexcel/core/StringPool.cpp
         src/fastexcel/reader/XLSXReader.cpp
         src/fastexcel/reader/WorkbookParser.cpp
         src/fastexcel/reader/ReadOnlyXLSXReader.cpp
@@ -94,7 +95,6 @@ set(FASTEXCEL_SOURCES
         src/fastexcel/utils/Logger.cpp
         src/fastexcel/utils/ColumnWidthCalculator.cpp
         src/fastexcel/utils/ColumnReferenceUtils.cpp
-        src/fastexcel/utils/StringPool.cpp
         src/fastexcel/xml/ContentTypes.cpp
         src/fastexcel/xml/Relationships.cpp
         src/fastexcel/xml/SharedStrings.cpp

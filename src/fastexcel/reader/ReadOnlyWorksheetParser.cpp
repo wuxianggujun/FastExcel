@@ -13,7 +13,7 @@
 namespace fastexcel {
 namespace reader {
 
-uint32_t ReadOnlyWorksheetParser::parseColumnReference(const std::string& cell_ref) {
+uint32_t ReadOnlyWorksheetParser::parseColumnReference(std::string_view cell_ref) {
     // 使用高性能预计算查找表
     return utils::ColumnReferenceUtils::parseColumnFast(cell_ref);
 }
@@ -85,64 +85,68 @@ void ReadOnlyWorksheetParser::processCellValue() {
 
 void ReadOnlyWorksheetParser::onStartElement(std::string_view name, 
                                             span<const xml::XMLAttribute> attributes, int depth) {
-    std::string element_name(name);
     
-    if (element_name == "sheetData") {
+    if (name == "sheetData") {
         in_sheet_data_ = true;
         FASTEXCEL_LOG_DEBUG("开始解析工作表数据");
-    } else if (element_name == "row" && in_sheet_data_) {
+    } else if (name == "row" && in_sheet_data_) {
         in_row_ = true;
         
-        // 提取行号
+        // 提取行号 - 使用 fast_float 高性能解析
         for (const auto& attr : attributes) {
             if (attr.name == "r") {
                 try {
-                    current_row_ = std::stoi(std::string(attr.value));
+                    uint32_t row_number;
+                    auto result = fast_float::from_chars(attr.value.data(),
+                                                       attr.value.data() + attr.value.size(),
+                                                       row_number);
+                    if (result.ec == std::errc{}) {
+                        current_row_ = static_cast<int>(row_number);
+                    }
                 } catch (const std::exception&) {
-                    FASTEXCEL_LOG_DEBUG("无效的行号: {}", std::string(attr.value));
+                    FASTEXCEL_LOG_DEBUG("无效的行号: {}", attr.value);
                     current_row_ = 0;
                 }
                 break;
             }
         }
-    } else if (element_name == "c" && in_row_) {
+    } else if (name == "c" && in_row_) {
         in_cell_ = true;
         
-        // 提取单元格引用和类型
+        // 提取单元格引用和类型 - 避免临时string创建
         for (const auto& attr : attributes) {
             if (attr.name == "r") {
-                current_col_ = parseColumnReference(std::string(attr.value));
+                current_col_ = parseColumnReference(attr.value);
             } else if (attr.name == "t") {
-                current_cell_type_ = std::string(attr.value);
+                current_cell_type_ = attr.value;
             }
         }
         
         current_cell_value_.clear();
-    } else if (element_name == "v" && in_cell_) {
+    } else if (name == "v" && in_cell_) {
         in_value_ = true;
         current_cell_value_.clear();
     }
 }
 
 void ReadOnlyWorksheetParser::onEndElement(std::string_view name, int depth) {
-    std::string element_name(name);
     
-    if (element_name == "sheetData") {
+    if (name == "sheetData") {
         in_sheet_data_ = false;
         FASTEXCEL_LOG_INFO("完成工作表数据解析，处理了 {} 个单元格", cells_processed_);
-    } else if (element_name == "row") {
+    } else if (name == "row") {
         in_row_ = false;
         current_row_ = 0;
-    } else if (element_name == "c") {
+    } else if (name == "c") {
         in_cell_ = false;
         // 单元格结束时处理数据
         if (!current_cell_value_.empty()) {
             processCellValue();
         }
         current_col_ = 0;
-        current_cell_type_.clear();
+        current_cell_type_ = std::string_view{};
         current_cell_value_.clear();
-    } else if (element_name == "v") {
+    } else if (name == "v") {
         in_value_ = false;
         // 值已经在onText中收集
     }
