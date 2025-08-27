@@ -6,6 +6,7 @@
 #pragma once
 #include "fastexcel/core/FormatDescriptor.hpp"
 #include "fastexcel/core/Worksheet.hpp"
+#include "fastexcel/core/WorkbookTypes.hpp"  // 添加WorkbookOptions支持
 #include "fastexcel/core/Path.hpp"
 #include "fastexcel/core/ErrorCode.hpp"
 #include "fastexcel/archive/ZipArchive.hpp"
@@ -48,6 +49,10 @@ public:
   core::ErrorCode loadWorkbook(std::unique_ptr<core::Workbook>& workbook);
   core::ErrorCode close();
 
+  // 设置工作簿选项（用于列式存储等优化）
+  void setWorkbookOptions(const core::WorkbookOptions& options) { options_ = options; }
+  const core::WorkbookOptions& getWorkbookOptions() const { return options_; }
+
   core::ErrorCode loadWorksheet(const std::string& name, std::shared_ptr<core::Worksheet>& worksheet);
   core::ErrorCode getSheetNames(std::vector<std::string>& names);
   
@@ -73,6 +78,9 @@ private:
     std::string filename_;
     std::unique_ptr<archive::ZipArchive> zip_archive_;
     bool is_open_;
+    
+    // 工作簿选项（用于列式存储等优化）
+    core::WorkbookOptions options_;
     
     // 解析后的数据
     WorkbookMetadata metadata_;

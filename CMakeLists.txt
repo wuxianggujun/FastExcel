@@ -60,6 +60,7 @@ set(FASTEXCEL_SOURCES
         src/fastexcel/core/Workbook.cpp
         src/fastexcel/core/Worksheet.cpp
         src/fastexcel/core/WorksheetChain.cpp
+        src/fastexcel/core/ColumnarStorageManager.cpp
         src/fastexcel/core/ColumnWidthManager.cpp
         src/fastexcel/core/Image.cpp
         src/fastexcel/core/CSVProcessor.cpp
@@ -113,17 +114,6 @@ set(FASTEXCEL_SOURCES
         src/fastexcel/core/managers/WorkbookDocumentManager.cpp
         src/fastexcel/core/managers/WorkbookSecurityManager.cpp
         src/fastexcel/core/managers/WorkbookDataManager.cpp
-        
-        # Columnar Storage Architecture (Read-Only Mode)
-        src/fastexcel/core/columnar/ColumnTypes.cpp
-        src/fastexcel/core/columnar/ColumnImplementations.cpp
-        src/fastexcel/core/columnar/ColumnStorage.cpp
-        src/fastexcel/core/columnar/ReadOnlyWorksheet.cpp
-        src/fastexcel/core/columnar/ReadOnlyWorkbook.cpp
-        
-        # Columnar Parsers
-        src/fastexcel/reader/ColumnarXLSXReader.cpp
-        src/fastexcel/reader/ColumnarWorksheetParser.cpp
         
 )
 

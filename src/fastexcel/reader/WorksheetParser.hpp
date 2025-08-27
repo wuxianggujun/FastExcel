@@ -8,12 +8,14 @@
 #include "fastexcel/core/Worksheet.hpp"
 #include "fastexcel/core/Cell.hpp"
 #include "fastexcel/core/FormatDescriptor.hpp"
+#include "fastexcel/core/WorkbookTypes.hpp"  // 添加WorkbookOptions支持
 #include "fastexcel/archive/ZipReader.hpp"
 #include "fastexcel/utils/Logger.hpp"
 #include "fastexcel/core/span.hpp"
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <unordered_set>  // 添加unordered_set支持
 #include <memory>
 #include <vector>
 #include <optional>
@@ -62,6 +64,7 @@ public:
      * @param shared_strings 共享字符串映射
      * @param styles 样式映射
      * @param style_id_mapping 样式ID映射（原始ID -> FormatRepository ID）
+     * @param options 工作簿选项（用于列式优化等）
      * @return 是否解析成功
      */
     bool parseStream(archive::ZipReader* zip_reader,
@@ -69,7 +72,8 @@ public:
                      core::Worksheet* worksheet,
                      const std::unordered_map<int, std::string>& shared_strings,
                      const std::unordered_map<int, std::shared_ptr<core::FormatDescriptor>>& styles,
-                     const std::unordered_map<int, int>& style_id_mapping = {});
+                     const std::unordered_map<int, int>& style_id_mapping = {},
+                     const core::WorkbookOptions* options = nullptr);
 
 private:
     // 高性能单元格数据结构（避免Cell对象开销）
@@ -91,11 +95,18 @@ private:
         const std::unordered_map<int, std::string>* shared_strings = nullptr;
         const std::unordered_map<int, std::shared_ptr<core::FormatDescriptor>>* styles = nullptr;
         const std::unordered_map<int, int>* style_id_mapping = nullptr;
+        const core::WorkbookOptions* options = nullptr;  // 列式优化选项
         
         // 当前行状态
         int current_row = -1;
         bool in_sheet_data = false;
         bool in_row = false;
+        
+        // 列式优化过滤器
+        bool has_column_filter = false;
+        bool has_row_limit = false;
+        std::unordered_set<uint32_t> projected_columns;
+        uint32_t max_rows = 0;
         
         // 行级缓冲区（批量处理）
         std::vector<FastCellData> row_buffer;
@@ -110,6 +121,31 @@ private:
             in_row = false;
             row_buffer.clear();
             row_xml_buffer.clear();
+            // 列式优化过滤器不重置，因为它们在整个解析过程中保持不变
+        }
+        
+        void setupColumnarOptions() {
+            if (options && options->enable_columnar_storage) {
+                if (!options->projected_columns.empty()) {
+                    has_column_filter = true;
+                    for (uint32_t col : options->projected_columns) {
+                        projected_columns.insert(col);
+                    }
+                }
+                
+                if (options->max_rows > 0) {
+                    has_row_limit = true;
+                    max_rows = options->max_rows;
+                }
+            }
+        }
+        
+        bool shouldSkipColumn(uint32_t col) const {
+            return has_column_filter && projected_columns.find(col) == projected_columns.end();
+        }
+        
+        bool shouldSkipRow(int row) const {
+            return has_row_limit && row >= static_cast<int>(max_rows);
         }
     } state_;
     

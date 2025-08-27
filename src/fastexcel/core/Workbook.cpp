@@ -105,6 +105,48 @@ std::unique_ptr<Workbook> Workbook::openReadOnly(const std::string& filepath) {
     }
 }
 
+std::unique_ptr<Workbook> Workbook::openReadOnly(const std::string& filepath, const WorkbookOptions& options) {
+    try {
+        Path path(filepath);
+        if (!path.exists()) {
+            FASTEXCEL_LOG_ERROR("File not found for read-only access: {}", filepath);
+            return nullptr;
+        }
+        
+        // 使用XLSXReader读取现有文件
+        reader::XLSXReader reader(path);
+        reader.setWorkbookOptions(options);  // 设置优化选项
+        
+        auto result = reader.open();
+        if (result != core::ErrorCode::Ok) {
+            FASTEXCEL_LOG_ERROR("Failed to open XLSX file for reading: {}, error code: {}", filepath, static_cast<int>(result));
+            return nullptr;
+        }
+        
+        // 加载工作簿
+        std::unique_ptr<core::Workbook> loaded_workbook;
+        result = reader.loadWorkbook(loaded_workbook);
+        reader.close();
+        
+        if (result != core::ErrorCode::Ok) {
+            FASTEXCEL_LOG_ERROR("Failed to load workbook from file: {}, error code: {}", filepath, static_cast<int>(result));
+            return nullptr;
+        }
+        
+        // 设置读取模式相关标志
+        loaded_workbook->file_source_ = FileSource::EXISTING_FILE;
+        loaded_workbook->transitionToState(WorkbookState::READING, "Workbook::openReadOnly with options");
+        loaded_workbook->original_package_path_ = filepath;
+        loaded_workbook->setOptions(options);  // 将选项保存到工作簿中
+        
+        return loaded_workbook;
+        
+    } catch (const std::exception& e) {
+        FASTEXCEL_LOG_ERROR("Exception while loading workbook for reading with options: {}, error: {}", filepath, e.what());
+        return nullptr;
+    }
+}
+
 std::unique_ptr<Workbook> Workbook::openEditable(const std::string& filepath) {
     try {
         Path path(filepath);

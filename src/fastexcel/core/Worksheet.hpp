@@ -13,6 +13,7 @@
 #include "fastexcel/core/managers/CellDataProcessor.hpp"
 // WorksheetLayoutManager和WorksheetImageManager功能已直接集成到Worksheet类中
 #include "fastexcel/core/managers/WorksheetCSVHandler.hpp"
+#include "fastexcel/core/ColumnarStorageManager.hpp"  // 列式存储管理器
 #include "fastexcel/utils/CommonUtils.hpp"
 #include "fastexcel/utils/AddressParser.hpp"
 #include "fastexcel/utils/ColumnWidthCalculator.hpp"
@@ -113,12 +114,47 @@ public:
     void setFormula(int row, int col, const std::string& formula, double result = 0.0);
     void setFormula(const Address& address, const std::string& formula, double result = 0.0);
     int createSharedFormula(int first_row, int first_col, int last_row, int last_col, const std::string& formula);
+    
+    // === 列式存储接口 (通过ColumnarStorageManager) ===
+    void enableColumnarMode(const WorkbookOptions* options = nullptr);
+    bool isColumnarMode() const;
+    
+    // 直接存储到列式系统（完全绕过Cell创建）
+    void setColumnarValue(uint32_t row, uint32_t col, double value);
+    void setColumnarValue(uint32_t row, uint32_t col, uint32_t sst_index);  // SST索引
+    void setColumnarValue(uint32_t row, uint32_t col, bool value);
+    void setColumnarValue(uint32_t row, uint32_t col, const std::tm& datetime);
+    void setColumnarFormula(uint32_t row, uint32_t col, uint32_t formula_index, double result);
+    void setColumnarError(uint32_t row, uint32_t col, const std::string& error_code);
+    
+    // 高效列式数据访问（委托给管理器）
+    bool hasColumnarValue(uint32_t row, uint32_t col) const;
+    using ColumnarValueVariant = std::variant<std::monostate, double, uint32_t, bool, 
+                                            ColumnarStorageManager::FormulaValue, std::string>;
+    ColumnarValueVariant getColumnarValue(uint32_t row, uint32_t col) const;
+    void forEachInColumn(uint32_t col, std::function<void(uint32_t row, const ColumnarValueVariant& value)> callback) const;
+    
+    // 类型化列访问
+    std::unordered_map<uint32_t, double> getNumberColumn(uint32_t col) const;
+    std::unordered_map<uint32_t, uint32_t> getStringColumn(uint32_t col) const;
+    std::unordered_map<uint32_t, bool> getBooleanColumn(uint32_t col) const;
+    std::unordered_map<uint32_t, double> getDateTimeColumn(uint32_t col) const;
+    std::unordered_map<uint32_t, ColumnarStorageManager::FormulaValue> getFormulaColumn(uint32_t col) const;
+    std::unordered_map<uint32_t, std::string> getErrorColumn(uint32_t col) const;
+    
+    // 列式存储统计信息
+    size_t getColumnarDataCount() const;
+    size_t getColumnarMemoryUsage() const;
+    void clearColumnarData();
 
 private:
     std::string name_;
-    BlockSparseMatrix cells_; // 优化的分块稀疏矩阵存储
+    BlockSparseMatrix cells_; // 传统的分块稀疏矩阵存储
     std::shared_ptr<Workbook> parent_workbook_;
     int sheet_id_;
+    
+    // === 列式存储系统 (委托给专门的管理器) ===
+    std::unique_ptr<ColumnarStorageManager> columnar_storage_;  // 列式存储管理器
     
     // 优化组件
     SharedStringTable* sst_ = nullptr;

@@ -50,7 +50,8 @@ bool WorksheetParser::parseStream(archive::ZipReader* zip_reader,
                                   core::Worksheet* worksheet,
                                   const std::unordered_map<int, std::string>& shared_strings,
                                   const std::unordered_map<int, std::shared_ptr<core::FormatDescriptor>>& styles,
-                                  const std::unordered_map<int, int>& style_id_mapping) {
+                                  const std::unordered_map<int, int>& style_id_mapping,
+                                  const core::WorkbookOptions* options) {
     if (!zip_reader || !worksheet) {
         return false;
     }
@@ -61,6 +62,10 @@ bool WorksheetParser::parseStream(archive::ZipReader* zip_reader,
     state_.shared_strings = &shared_strings;
     state_.styles = &styles;
     state_.style_id_mapping = &style_id_mapping;
+    state_.options = options;
+    
+    // 设置列式优化选项
+    state_.setupColumnarOptions();
 
     xml::XMLStreamReader reader;
 
@@ -334,21 +339,83 @@ bool WorksheetParser::extractCellInfo(const char*& p, const char* end, FastCellD
 
 // 批量处理单元格数据 - 减少worksheet调用开销
 void WorksheetParser::processBatchCellData(int row, const std::vector<FastCellData>& cells) {
+    // 列式优化：行过滤
+    if (state_.shouldSkipRow(row)) {
+        FASTEXCEL_LOG_DEBUG("Skipping row {} due to row limit", row);
+        return;
+    }
+    
     for (const auto& cell_data : cells) {
+        // 列式优化：列过滤
+        if (state_.shouldSkipColumn(cell_data.col)) {
+            continue;
+        }
         setCellValue(row, cell_data.col, cell_data);
     }
 }
 
-// 设置单元格值 - 保持原有完整逻辑
+// 设置单元格值 - 根据模式选择存储方式
 void WorksheetParser::setCellValue(int row, uint32_t col, const FastCellData& cell_data) {
     if (cell_data.is_empty || cell_data.col == UINT32_MAX) return;
     
-    // 根据类型设置值
+    // **关键优化：检查是否为列式模式**
+    if (state_.options && state_.options->enable_columnar_storage) {
+        // 列式模式：直接存储到列式系统，完全绕过Cell对象创建！
+        switch (cell_data.type) {
+            case FastCellData::SharedString: {
+                try {
+                    int string_index = 0;
+                    for (char c : cell_data.value) {
+                        if (c >= '0' && c <= '9') {
+                            string_index = string_index * 10 + (c - '0');
+                        }
+                    }
+                    // 直接存储SST索引，不创建Cell对象
+                    state_.worksheet->setColumnarValue(row, col, static_cast<uint32_t>(string_index));
+                } catch (...) {
+                    // 忽略错误
+                }
+                break;
+            }
+            
+            case FastCellData::Number: {
+                try {
+                    double number_value = std::stod(std::string(cell_data.value));
+                    // 直接存储数值，不创建Cell对象
+                    state_.worksheet->setColumnarValue(row, col, number_value);
+                } catch (...) {
+                    // 解析失败，存储为错误值
+                    state_.worksheet->setColumnarError(row, col, "#VALUE!");
+                }
+                break;
+            }
+            
+            case FastCellData::Boolean: {
+                bool bool_value = (cell_data.value == "1" || cell_data.value == "true");
+                // 直接存储布尔值，不创建Cell对象
+                state_.worksheet->setColumnarValue(row, col, bool_value);
+                break;
+            }
+            
+            case FastCellData::String:
+            default: {
+                // 内联字符串应该添加到 SST 或存储为错误类型
+                // 暂时存储为错误值，表示未处理的内联字符串
+                std::string str_value = decodeXMLEntities(std::string(cell_data.value));
+                state_.worksheet->setColumnarError(row, col, str_value);
+                break;
+            }
+        }
+        
+        // 列式模式下跳过样式设置（避免getCell调用）
+        return;
+    }
+    
+    // === 传统模式：保持原有逻辑（会创建Cell对象）===
     switch (cell_data.type) {
         case FastCellData::SharedString: {
             try {
                 int string_index = 0;
-                // 快速整数解析
                 for (char c : cell_data.value) {
                     if (c >= '0' && c <= '9') {
                         string_index = string_index * 10 + (c - '0');
@@ -370,7 +437,6 @@ void WorksheetParser::setCellValue(int row, uint32_t col, const FastCellData& ce
                 double number_value = std::stod(std::string(cell_data.value));
                 state_.worksheet->setValue(row, col, number_value);
             } catch (...) {
-                // 解析失败，尝试作为字符串并解码XML实体
                 std::string str_value = decodeXMLEntities(std::string(cell_data.value));
                 state_.worksheet->setValue(row, col, str_value);
             }
@@ -385,14 +451,13 @@ void WorksheetParser::setCellValue(int row, uint32_t col, const FastCellData& ce
         
         case FastCellData::String:
         default: {
-            // 解码XML实体
             std::string str_value = decodeXMLEntities(std::string(cell_data.value));
             state_.worksheet->setValue(row, col, str_value);
             break;
         }
     }
     
-    // 应用样式
+    // 应用样式（传统模式）
     if (cell_data.style_id >= 0) {
         int mapped_style_id = cell_data.style_id;
         if (!state_.style_id_mapping->empty()) {

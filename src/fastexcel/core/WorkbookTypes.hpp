@@ -3,6 +3,8 @@
 #include "WorkbookModeSelector.hpp"
 #include <string>
 #include <cstddef>
+#include <vector>
+#include <cstdint>
 
 namespace fastexcel {
 namespace core {
@@ -55,10 +57,15 @@ struct WorkbookOptions {
     
     // 性能优化选项
     bool use_shared_strings = true;   // 使用共享字符串（默认启用以匹配Excel格式）
+    bool enable_columnar_storage = false;  // 启用列式存储模式（只读优化）
     WorkbookMode mode = WorkbookMode::AUTO;  // 工作簿模式（默认自动选择）
     size_t row_buffer_size = 5000;    // 行缓冲大小（默认较大缓冲）
     int compression_level = 6;        // ZIP压缩级别（默认平衡压缩）
     size_t xml_buffer_size = 4 * 1024 * 1024; // XML缓冲区大小（4MB）
+    
+    // 列式存储选项（仅在enable_columnar_storage=true时生效）
+    std::vector<uint32_t> projected_columns;  // 投影列（空表示全部）
+    uint32_t max_rows = 0;           // 最大读取行数（0表示全部）
     
     // 自动模式阈值
     size_t auto_mode_cell_threshold = 1000000;     // 100万单元格

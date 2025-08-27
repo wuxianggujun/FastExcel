@@ -521,7 +521,7 @@ core::ErrorCode XLSXReader::parseWorksheetXML(const std::string& path, core::Wor
         WorksheetParser parser;
         auto* zr = zip_archive_->getReader();
         
-        if (!parser.parseStream(zr, path, worksheet, shared_strings_, styles_, style_id_mapping_)) {
+        if (!parser.parseStream(zr, path, worksheet, shared_strings_, styles_, style_id_mapping_, &options_)) {
             FASTEXCEL_LOG_ERROR("流式解析工作表失败: {}", path);
             return core::ErrorCode::XmlParseError;
         }

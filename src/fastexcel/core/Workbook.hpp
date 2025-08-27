@@ -126,6 +126,7 @@ public:
 
     static std::unique_ptr<Workbook> create(const std::string& filepath);
     static std::unique_ptr<Workbook> openReadOnly(const std::string& filepath);
+    static std::unique_ptr<Workbook> openReadOnly(const std::string& filepath, const WorkbookOptions& options);
     static std::unique_ptr<Workbook> openEditable(const std::string& filepath);
     
 
