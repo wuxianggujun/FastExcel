@@ -8,16 +8,11 @@ set(EXAMPLE_SOURCES
         formatting_features_demo.cpp
         image_insertion_demo.cpp
         performance_demo.cpp
-        debug_test.cpp
         simd_test_demo.cpp
-        minimal_test.cpp
-        step_test.cpp
-        debug_xml_generation.cpp
-        advanced_features_isolation.cpp
-        integrated_optimization_demo.cpp
         memory_pool_advanced_demo.cpp
         minimal_destructor_test.cpp
         large_file_reading_demo.cpp
+        readonly_memory_optimization_demo.cpp
 )
 
 # 为每个示例创建可执行文件

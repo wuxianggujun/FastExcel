@@ -59,10 +59,10 @@ set(FASTEXCEL_SOURCES
         src/fastexcel/core/Path.cpp
         src/fastexcel/core/Workbook.cpp
         src/fastexcel/core/Worksheet.cpp
-        src/fastexcel/core/WorksheetChain.cpp  # 🚀 新增：链式调用助手类
-        src/fastexcel/core/ColumnWidthManager.cpp  # 🚀 新增：列宽管理架构
-        src/fastexcel/core/Image.cpp  # 🚀 新增：图片支持
-        src/fastexcel/core/CSVProcessor.cpp  # 🚀 新增：CSV处理支持
+        src/fastexcel/core/WorksheetChain.cpp
+        src/fastexcel/core/ColumnWidthManager.cpp
+        src/fastexcel/core/Image.cpp
+        src/fastexcel/core/CSVProcessor.cpp
         src/fastexcel/core/SharedStringTable.cpp
         src/fastexcel/core/SharedFormula.cpp
         src/fastexcel/core/FormatRepository.cpp
@@ -70,12 +70,10 @@ set(FASTEXCEL_SOURCES
         src/fastexcel/core/ErrorCode.cpp
         src/fastexcel/core/ThreadPool.cpp
         src/fastexcel/core/StyleTransferContext.cpp
-        # Unified XML generation pipeline and writers
         src/fastexcel/core/ExcelStructureGenerator.cpp
         src/fastexcel/core/BatchFileWriter.cpp
         src/fastexcel/core/StreamingFileWriter.cpp
         src/fastexcel/core/StyleBuilder.cpp
-        # Enhanced Format API (v2.1.0)
         src/fastexcel/core/RangeFormatter.cpp
         src/fastexcel/core/QuickFormat.cpp
         src/fastexcel/core/FormatUtils.cpp
@@ -83,10 +81,10 @@ set(FASTEXCEL_SOURCES
         src/fastexcel/reader/StylesParser.cpp
         src/fastexcel/reader/SharedStringsParser.cpp
         src/fastexcel/reader/WorksheetParser.cpp
-        src/fastexcel/reader/RelationshipsParser.cpp  # 新增：专门的关系解析器，遵循单一职责原则
-        src/fastexcel/reader/ContentTypesParser.cpp   # 新增：专门的内容类型解析器，提高复用性
+        src/fastexcel/reader/RelationshipsParser.cpp
+        src/fastexcel/reader/ContentTypesParser.cpp
         src/fastexcel/utils/Logger.cpp
-        src/fastexcel/utils/ColumnWidthCalculator.cpp  # 🚀 新增：列宽计算器
+        src/fastexcel/utils/ColumnWidthCalculator.cpp
         src/fastexcel/xml/ContentTypes.cpp
         src/fastexcel/xml/Relationships.cpp
         src/fastexcel/xml/SharedStrings.cpp
@@ -97,31 +95,35 @@ set(FASTEXCEL_SOURCES
         src/fastexcel/xml/PartGenerators.cpp
         src/fastexcel/xml/WorksheetXMLGenerator.cpp
         src/fastexcel/xml/DocPropsXMLGenerator.cpp
-        src/fastexcel/xml/DrawingXMLGenerator.cpp  # 🚀 新增：绘图XML生成器
-        src/fastexcel/xml/XMLEscapeSIMD.cpp  # 🚀 新增：SIMD优化的XML转义处理
+        src/fastexcel/xml/DrawingXMLGenerator.cpp
+        src/fastexcel/xml/XMLEscapeSIMD.cpp
         src/fastexcel/theme/Theme.cpp
-         src/fastexcel/theme/ThemeParser.cpp
-        # OPC Repack Architecture (New)
+        src/fastexcel/theme/ThemeParser.cpp
         src/fastexcel/opc/PackageEditor.cpp
         src/fastexcel/opc/PackageEditorManager.cpp
         src/fastexcel/opc/ZipRepackWriter.cpp
         src/fastexcel/opc/PartGraph.cpp
-        # Tracking services
         src/fastexcel/tracking/StandardChangeTracker.cpp
-        # New Architecture Components (Refactoring)
         src/fastexcel/core/ResourceManager.cpp
         src/fastexcel/core/WorkbookCoordinator.cpp
         src/fastexcel/core/WorksheetManager.cpp
         src/fastexcel/core/SharedStringCollector.cpp
-        
-        # Worksheet Responsibility Separation (Manager Classes)
         src/fastexcel/core/managers/CellDataProcessor.cpp
         src/fastexcel/core/managers/WorksheetCSVHandler.cpp
-        
-        # Workbook Responsibility Separation (Manager Classes)
         src/fastexcel/core/managers/WorkbookDocumentManager.cpp
         src/fastexcel/core/managers/WorkbookSecurityManager.cpp
         src/fastexcel/core/managers/WorkbookDataManager.cpp
+        
+        # Columnar Storage Architecture (Read-Only Mode)
+        src/fastexcel/core/columnar/ColumnTypes.cpp
+        src/fastexcel/core/columnar/ColumnImplementations.cpp
+        src/fastexcel/core/columnar/ColumnStorage.cpp
+        src/fastexcel/core/columnar/ReadOnlyWorksheet.cpp
+        src/fastexcel/core/columnar/ReadOnlyWorkbook.cpp
+        
+        # Columnar Parsers
+        src/fastexcel/reader/ColumnarXLSXReader.cpp
+        src/fastexcel/reader/ColumnarWorksheetParser.cpp
         
 )
 
@@ -171,8 +173,8 @@ target_include_directories(fastexcel INTERFACE
 target_include_directories(fastexcel PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/third_party/libexpat/expat/lib
         ${CMAKE_CURRENT_SOURCE_DIR}/third_party/fmt/include
-        ${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb  # 🚀 新增：stb_image头文件路径
-        ${CMAKE_CURRENT_SOURCE_DIR}/third_party/utfcpp/source  # UTF8-CPP头文件路径
+        ${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb
+        ${CMAKE_CURRENT_SOURCE_DIR}/third_party/utfcpp/source
 )
 
 # =============================================================================
@@ -218,9 +220,7 @@ if(FASTEXCEL_USE_HIGHWAY AND FASTEXCEL_HAS_HIGHWAY)
     message(STATUS "FastExcel: FASTEXCEL_HAS_HIGHWAY macro defined")
 endif()
 
-# 🚀 新增：图片支持宏定义
 target_compile_definitions(fastexcel PRIVATE FASTEXCEL_HAS_IMAGE_SUPPORT=1)
-message(STATUS "FastExcel: FASTEXCEL_HAS_IMAGE_SUPPORT macro defined")
 
 
 # =============================================================================
