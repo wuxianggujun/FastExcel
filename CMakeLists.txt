@@ -61,6 +61,8 @@ set(FASTEXCEL_SOURCES
         src/fastexcel/core/Worksheet.cpp
         src/fastexcel/core/WorksheetChain.cpp
         src/fastexcel/core/ColumnarStorageManager.cpp
+        src/fastexcel/core/ReadOnlyWorkbook.cpp
+        src/fastexcel/core/ReadOnlyWorksheet.cpp
         src/fastexcel/core/ColumnWidthManager.cpp
         src/fastexcel/core/Image.cpp
         src/fastexcel/core/CSVProcessor.cpp
@@ -79,11 +81,16 @@ set(FASTEXCEL_SOURCES
         src/fastexcel/core/QuickFormat.cpp
         src/fastexcel/core/FormatUtils.cpp
         src/fastexcel/reader/XLSXReader.cpp
+        src/fastexcel/reader/WorkbookParser.cpp
+        src/fastexcel/reader/ReadOnlyXLSXReader.cpp
+        src/fastexcel/reader/ReadOnlyWorkbookParser.cpp
+        src/fastexcel/reader/ReadOnlyWorksheetParser.cpp
         src/fastexcel/reader/StylesParser.cpp
         src/fastexcel/reader/SharedStringsParser.cpp
         src/fastexcel/reader/WorksheetParser.cpp
         src/fastexcel/reader/RelationshipsParser.cpp
         src/fastexcel/reader/ContentTypesParser.cpp
+        src/fastexcel/reader/DocPropsParser.cpp
         src/fastexcel/utils/Logger.cpp
         src/fastexcel/utils/ColumnWidthCalculator.cpp
         src/fastexcel/xml/ContentTypes.cpp

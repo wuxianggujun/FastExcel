@@ -5,8 +5,12 @@
 
 #include "XLSXReader.hpp"
 #include "SharedStringsParser.hpp"
+#include "RelationshipsParser.hpp"
+#include "ContentTypesParser.hpp"
+#include "WorkbookParser.hpp"
 #include "StylesParser.hpp"
 #include "WorksheetParser.hpp"
+#include "DocPropsParser.hpp"
 #include "fastexcel/archive/ZipArchive.hpp"
 #include "fastexcel/core/ErrorCode.hpp"
 #include "fastexcel/core/Exception.hpp"
@@ -398,7 +402,7 @@ std::string XLSXReader::extractXMLFromZip(const std::string& path) {
     return content;
 }
 
-// 验证XLSX文件结构
+// 验证XLSX文件结构 - 使用ContentTypesParser
 bool XLSXReader::validateXLSXStructure() {
     // 检查必需的文件是否存在
     std::vector<std::string> required_files = {
@@ -415,10 +419,28 @@ bool XLSXReader::validateXLSXStructure() {
         }
     }
     
+    // 使用ContentTypesParser验证内容类型定义
+    std::string content_types_xml = extractXMLFromZip("[Content_Types].xml");
+    if (!content_types_xml.empty()) {
+        ContentTypesParser parser;
+        if (parser.parse(content_types_xml)) {
+            // 验证必需的内容类型是否存在
+            std::string workbook_type = parser.getContentType("/xl/workbook.xml");
+            bool has_workbook = !workbook_type.empty();
+            if (!has_workbook) {
+                FASTEXCEL_LOG_WARN("Content_Types.xml中缺少工作簿内容类型定义");
+            }
+            FASTEXCEL_LOG_DEBUG("成功解析Content_Types.xml，包含{}个默认类型和{}个重写类型", 
+                              parser.getDefaultCount(), parser.getOverrideCount());
+        } else {
+            FASTEXCEL_LOG_WARN("Content_Types.xml解析失败，但文件验证将继续");
+        }
+    }
+    
     return true;
 }
 
-// 解析工作簿XML - 系统层ErrorCode版本
+// 解析工作簿XML - 使用WorkbookParser
 core::ErrorCode XLSXReader::parseWorkbookXML() {
     std::string xml_content = extractXMLFromZip("xl/workbook.xml");
     if (xml_content.empty()) {
@@ -431,71 +453,44 @@ core::ErrorCode XLSXReader::parseWorkbookXML() {
         worksheet_paths_.clear();
         defined_names_.clear();
         
-        // 首先解析关系文件来获取工作表的实际路径
+        // 1. 首先使用RelationshipsParser解析关系文件
         std::unordered_map<std::string, std::string> relationships;
-        if (!parseWorkbookRelationships(relationships)) {
-            FASTEXCEL_LOG_WARN("无法解析工作簿关系文件，使用默认路径");
-        }
-        
-        // 解析工作表信息
-        size_t sheets_start = xml_content.find("<sheets");
-        if (sheets_start == std::string::npos) {
-            FASTEXCEL_LOG_ERROR("未找到工作表定义");
-            return core::ErrorCode::XmlMissingElement;
-        }
-        
-        size_t sheets_end = xml_content.find("</sheets>", sheets_start);
-        if (sheets_end == std::string::npos) {
-            FASTEXCEL_LOG_ERROR("工作表定义格式错误");
-            return core::ErrorCode::XmlInvalidFormat;
-        }
-        
-        std::string sheets_content = xml_content.substr(sheets_start, sheets_end - sheets_start);
-        
-        // 解析每个工作表
-        size_t pos = 0;
-        while ((pos = sheets_content.find("<sheet ", pos)) != std::string::npos) {
-            size_t sheet_end = sheets_content.find("/>", pos);
-            if (sheet_end == std::string::npos) {
-                sheet_end = sheets_content.find("</sheet>", pos);
-                if (sheet_end == std::string::npos) {
-                    break;
+        std::string rels_content = extractXMLFromZip("xl/_rels/workbook.xml.rels");
+        if (!rels_content.empty()) {
+            RelationshipsParser rels_parser;
+            if (rels_parser.parse(rels_content)) {
+                // 提取工作表相关的关系
+                for (const auto& rel : rels_parser.getRelationships()) {
+                    if (rel.type.find("worksheet") != std::string::npos) {
+                        relationships[rel.id] = rel.target;
+                    }
                 }
-                sheet_end += 8; // 包含 </sheet>
+                FASTEXCEL_LOG_DEBUG("解析到 {} 个工作表关系", relationships.size());
             } else {
-                sheet_end += 2; // 包含 />
+                FASTEXCEL_LOG_WARN("无法解析工作簿关系文件，使用默认路径");
             }
-            
-            std::string sheet_xml = sheets_content.substr(pos, sheet_end - pos);
-            
-            // 提取工作表属性
-            std::string sheet_name = extractAttribute(sheet_xml, "name");
-            std::string sheet_id = extractAttribute(sheet_xml, "sheetId");
-            std::string rel_id = extractAttribute(sheet_xml, "r:id");
-            
-            if (!sheet_name.empty()) {
-                worksheet_names_.push_back(sheet_name);
-                
-                // 确定工作表文件路径
-                std::string sheet_path;
-                if (!rel_id.empty() && relationships.find(rel_id) != relationships.end()) {
-                    sheet_path = "xl/" + relationships[rel_id];
-                } else if (!sheet_id.empty()) {
-                    // 回退到默认路径
-                    sheet_path = "xl/worksheets/sheet" + sheet_id + ".xml";
-                } else {
-                    FASTEXCEL_LOG_ERROR("无法确定工作表 {} 的路径", sheet_name);
-                    continue;
-                }
-                
-                worksheet_paths_[sheet_name] = sheet_path;
-            }
-            
-            pos = sheet_end;
         }
         
-        // 解析定义名称
-        parseDefinedNames(xml_content);
+        // 2. 使用WorkbookParser解析工作簿XML
+        WorkbookParser workbook_parser;
+        workbook_parser.setRelationships(std::move(relationships));
+        
+        if (!workbook_parser.parseXML(xml_content)) {
+            FASTEXCEL_LOG_ERROR("工作簿XML解析失败");
+            return core::ErrorCode::XmlParseError;
+        }
+        
+        // 3. 提取解析结果
+        auto worksheets = workbook_parser.takeWorksheets();
+        for (const auto& ws : worksheets) {
+            worksheet_names_.push_back(ws.name);
+            worksheet_paths_[ws.name] = ws.worksheet_path;
+        }
+        
+        defined_names_ = workbook_parser.getDefinedNameStrings();
+        
+        FASTEXCEL_LOG_INFO("成功解析工作簿: {} 个工作表, {} 个定义名称", 
+                          worksheet_names_.size(), defined_names_.size());
         
         return worksheet_names_.empty() ? core::ErrorCode::XmlMissingElement : core::ErrorCode::Ok;
         
@@ -606,160 +601,56 @@ core::ErrorCode XLSXReader::parseSharedStringsXML() {
 }
 
 core::ErrorCode XLSXReader::parseDocPropsXML() {
-    // 尝试解析核心文档属性
-    auto error = zip_archive_->fileExists("docProps/core.xml");
-    if (archive::isSuccess(error)) {
-        std::string xml_content = extractXMLFromZip("docProps/core.xml");
-        if (!xml_content.empty()) {
-            // 简单解析标题和作者信息
-            size_t title_start = xml_content.find("<dc:title>");
-            if (title_start != std::string::npos) {
-                title_start += 10; // 跳过 <dc:title>
-                size_t title_end = xml_content.find("</dc:title>", title_start);
-                if (title_end != std::string::npos) {
-                    metadata_.title = xml_content.substr(title_start, title_end - title_start);
-                }
-            }
-            
-            size_t author_start = xml_content.find("<dc:creator>");
-            if (author_start != std::string::npos) {
-                author_start += 12; // 跳过 <dc:creator>
-                size_t author_end = xml_content.find("</dc:creator>", author_start);
-                if (author_end != std::string::npos) {
-                    metadata_.author = xml_content.substr(author_start, author_end - author_start);
-                }
-            }
-            
-            size_t subject_start = xml_content.find("<dc:subject>");
-            if (subject_start != std::string::npos) {
-                subject_start += 12; // 跳过 <dc:subject>
-                size_t subject_end = xml_content.find("</dc:subject>", subject_start);
-                if (subject_end != std::string::npos) {
-                    metadata_.subject = xml_content.substr(subject_start, subject_end - subject_start);
-                }
-            }
-        }
-    }
-    
-    // 尝试解析应用程序属性
-    error = zip_archive_->fileExists("docProps/app.xml");
-    if (archive::isSuccess(error)) {
-        std::string xml_content = extractXMLFromZip("docProps/app.xml");
-        if (!xml_content.empty()) {
-            size_t company_start = xml_content.find("<Company>");
-            if (company_start != std::string::npos) {
-                company_start += 9; // 跳过 <Company>
-                size_t company_end = xml_content.find("</Company>", company_start);
-                if (company_end != std::string::npos) {
-                    metadata_.company = xml_content.substr(company_start, company_end - company_start);
-                }
-            }
-            
-            size_t app_start = xml_content.find("<Application>");
-            if (app_start != std::string::npos) {
-                app_start += 13; // 跳过 <Application>
-                size_t app_end = xml_content.find("</Application>", app_start);
-                if (app_end != std::string::npos) {
-                    metadata_.application = xml_content.substr(app_start, app_end - app_start);
-                }
-            }
-        }
-    }
-    
-    return core::ErrorCode::Ok;
-}
-
-// 新增的辅助方法
-std::string XLSXReader::extractAttribute(const std::string& xml, const std::string& attr_name) {
-    std::string search_pattern = attr_name + "=\"";
-    size_t attr_start = xml.find(search_pattern);
-    if (attr_start == std::string::npos) {
-        return "";
-    }
-    
-    attr_start += search_pattern.length();
-    size_t attr_end = xml.find("\"", attr_start);
-    if (attr_end == std::string::npos) {
-        return "";
-    }
-    
-    return xml.substr(attr_start, attr_end - attr_start);
-}
-
-bool XLSXReader::parseWorkbookRelationships(std::unordered_map<std::string, std::string>& relationships) {
-    std::string xml_content = extractXMLFromZip("xl/_rels/workbook.xml.rels");
-    if (xml_content.empty()) {
-        return false;
-    }
-    
     try {
-        size_t pos = 0;
-        while ((pos = xml_content.find("<Relationship ", pos)) != std::string::npos) {
-            size_t rel_end = xml_content.find("/>", pos);
-            if (rel_end == std::string::npos) {
-                rel_end = xml_content.find("</Relationship>", pos);
-                if (rel_end == std::string::npos) {
-                    break;
+        DocPropsParser parser;
+        
+        // 尝试解析核心文档属性 (docProps/core.xml)
+        auto error = zip_archive_->fileExists("docProps/core.xml");
+        if (archive::isSuccess(error)) {
+            std::string xml_content = extractXMLFromZip("docProps/core.xml");
+            if (!xml_content.empty()) {
+                if (!parser.parseCoreProps(xml_content)) {
+                    FASTEXCEL_LOG_WARN("解析核心文档属性失败");
+                } else {
+                    FASTEXCEL_LOG_DEBUG("成功解析核心文档属性");
                 }
-                rel_end += 15;
-            } else {
-                rel_end += 2;
             }
-            
-            std::string rel_xml = xml_content.substr(pos, rel_end - pos);
-            
-            std::string id = extractAttribute(rel_xml, "Id");
-            std::string target = extractAttribute(rel_xml, "Target");
-            std::string type = extractAttribute(rel_xml, "Type");
-            
-            // 只处理工作表关系
-            if (!id.empty() && !target.empty() &&
-                type.find("worksheet") != std::string::npos) {
-                relationships[id] = target;
-            }
-            
-            pos = rel_end;
         }
         
-        return !relationships.empty();
+        // 尝试解析应用程序属性 (docProps/app.xml)
+        error = zip_archive_->fileExists("docProps/app.xml");
+        if (archive::isSuccess(error)) {
+            std::string xml_content = extractXMLFromZip("docProps/app.xml");
+            if (!xml_content.empty()) {
+                if (!parser.parseAppProps(xml_content)) {
+                    FASTEXCEL_LOG_WARN("解析应用程序属性失败");
+                } else {
+                    FASTEXCEL_LOG_DEBUG("成功解析应用程序属性");
+                }
+            }
+        }
+        
+        // 获取解析结果并设置到元数据中
+        const auto& doc_props = parser.getDocProps();
+        metadata_.title = doc_props.title;
+        metadata_.subject = doc_props.subject;
+        metadata_.author = doc_props.author;
+        metadata_.company = doc_props.company;
+        metadata_.application = doc_props.application;
+        metadata_.app_version = doc_props.app_version;
+        metadata_.manager = doc_props.manager;
+        metadata_.category = doc_props.category;
+        metadata_.keywords = doc_props.keywords;
+        metadata_.created_time = doc_props.created;
+        metadata_.modified_time = doc_props.modified;
+        
+        FASTEXCEL_LOG_DEBUG("文档属性解析完成");
+        return core::ErrorCode::Ok;
         
     } catch (const std::exception& e) {
-        FASTEXCEL_LOG_ERROR("解析关系文件时发生异常: {}", e.what());
-        return false;
+        FASTEXCEL_LOG_ERROR("解析文档属性时发生异常: {}", e.what());
+        return core::ErrorCode::XmlParseError;
     }
-}
-
-bool XLSXReader::parseDefinedNames(const std::string& xml_content) {
-    size_t names_start = xml_content.find("<definedNames");
-    if (names_start == std::string::npos) {
-        return true; // 没有定义名称是正常的
-    }
-    
-    size_t names_end = xml_content.find("</definedNames>", names_start);
-    if (names_end == std::string::npos) {
-        return false;
-    }
-    
-    std::string names_content = xml_content.substr(names_start, names_end - names_start);
-    
-    size_t pos = 0;
-    while ((pos = names_content.find("<definedName ", pos)) != std::string::npos) {
-        size_t name_end = names_content.find("</definedName>", pos);
-        if (name_end == std::string::npos) {
-            break;
-        }
-        
-        std::string name_xml = names_content.substr(pos, name_end - pos);
-        std::string name = extractAttribute(name_xml, "name");
-        
-        if (!name.empty()) {
-            defined_names_.push_back(name);
-        }
-        
-        pos = name_end + 14; // 跳过 </definedName>
-    }
-    
-    return true;
 }
 
 core::ErrorCode XLSXReader::parseThemeXML() {

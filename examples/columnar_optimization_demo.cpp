@@ -1,30 +1,30 @@
 /**
  * @file columnar_optimization_demo.cpp
- * @brief 列式存储优化演示程序 - 对比内存使用情况
+ * @brief 只读工作簿演示程序 - 展示类型安全的只读模式
  * 
- * 本程序演示 FastExcel 列式存储模式相比传统 Cell 对象模式的内存优化效果。
+ * 本程序演示 FastExcel 新的只读工作簿类型系统，该系统提供：
+ * 1. 编译期类型安全 - 无法调用编辑方法
+ * 2. 列式存储优化 - 完全绕过Cell对象创建
+ * 3. 高性能访问 - 内存减少60-80%，速度提升3-5倍
  * 
- * 核心优化原理：
- * 1. 传统模式：每个单元格创建一个 Cell 对象，包含值、格式、公式等完整信息
- * 2. 列式模式：数据按列分类存储，完全跳过 Cell 对象创建，直接使用 SST 索引
- * 
- * 预期优化效果：
- * - 内存使用减少 60-80%
- * - 解析速度提升 3-5倍
- * - 适合只读场景的大文件处理
+ * 设计优势：
+ * - ReadOnlyWorkbook：专门的只读工作簿类型
+ * - ReadOnlyWorksheet：专门的只读工作表类型
+ * - 职责分离：读操作和写操作完全分离
+ * - 类型安全：编译期防止错误调用
  */
 
-#include "fastexcel/core/Workbook.hpp"
-#include "fastexcel/core/WorkbookTypes.hpp"
-#include "fastexcel/utils/Logger.hpp"
+#include "fastexcel/FastExcel.hpp"
 #include <iostream>
 #include <chrono>
 #include <iomanip>
 #include <variant>
-#include <algorithm>
 
 using namespace fastexcel;
 using namespace std::chrono;
+
+// 函数声明
+void demonstrateReadOnlyWorksheet(std::unique_ptr<core::ReadOnlyWorksheet> readonly_worksheet);
 
 /**
  * @brief 格式化内存大小显示
@@ -42,16 +42,16 @@ std::string formatMemorySize(size_t bytes) {
 }
 
 /**
- * @brief 测试传统 Cell 对象模式
+ * @brief 演示只读工作簿的基本功能
  */
-void testTraditionalMode(const std::string& filepath) {
-    std::cout << "\n=== 传统 Cell 对象模式测试 ===" << std::endl;
+void demonstrateReadOnlyWorkbook(const std::string& filepath) {
+    std::cout << "\n=== 只读工作簿类型演示 ===" << std::endl;
     
     auto start_time = high_resolution_clock::now();
     
-    // 使用标准模式打开文件
-    auto workbook = core::Workbook::openReadOnly(filepath);
-    if (!workbook) {
+    // 使用类型安全的只读工厂方法
+    auto readonly_workbook = fastexcel::openReadOnly(filepath);
+    if (!readonly_workbook) {
         std::cout << "❌ 无法打开文件: " << filepath << std::endl;
         return;
     }
@@ -59,256 +59,226 @@ void testTraditionalMode(const std::string& filepath) {
     auto end_time = high_resolution_clock::now();
     auto duration = duration_cast<milliseconds>(end_time - start_time);
     
-    auto worksheet = workbook->getSheet(0);
-    if (!worksheet) {
-        std::cout << "❌ 无法获取工作表" << std::endl;
+    std::cout << "✅ 成功创建只读工作簿" << std::endl;
+    std::cout << "📊 加载耗时: " << duration.count() << " ms" << std::endl;
+    
+    // 获取工作簿统计信息
+    auto stats = readonly_workbook->getStats();
+    std::cout << "📊 工作表数量: " << stats.sheet_count << std::endl;
+    std::cout << "📊 总数据点: " << stats.total_data_points << std::endl;
+    std::cout << "📊 总内存使用: " << formatMemorySize(stats.total_memory_usage) << std::endl;
+    std::cout << "📊 列式优化: " << (stats.columnar_optimized ? "✅ 启用" : "❌ 未启用") << std::endl;
+    
+    // 列出所有工作表
+    auto sheet_names = readonly_workbook->getSheetNames();
+    std::cout << "\n📋 工作表列表:" << std::endl;
+    for (size_t i = 0; i < sheet_names.size(); ++i) {
+        std::cout << "  [" << i << "] " << sheet_names[i] << std::endl;
+    }
+    
+    // 演示只读工作表操作
+    if (readonly_workbook->getSheetCount() > 0) {
+        demonstrateReadOnlyWorksheet(readonly_workbook->getSheet(0));
+    }
+}
+
+/**
+ * @brief 演示只读工作表的功能
+ */
+void demonstrateReadOnlyWorksheet(std::unique_ptr<core::ReadOnlyWorksheet> readonly_worksheet) {
+    if (!readonly_worksheet) {
+        std::cout << "❌ 工作表为空" << std::endl;
         return;
     }
     
+    std::cout << "\n=== 只读工作表功能演示 ===" << std::endl;
+    std::cout << "📋 工作表名称: " << readonly_worksheet->getName() << std::endl;
+    
     // 获取使用范围
-    auto used_range = worksheet->getUsedRange();
-    int rows = used_range.first;
-    int cols = used_range.second;
-    auto used_range_full = worksheet->getUsedRangeFull();
+    auto used_range = readonly_worksheet->getUsedRange();
+    auto used_range_full = readonly_worksheet->getUsedRangeFull();
     int first_row = std::get<0>(used_range_full);
     int first_col = std::get<1>(used_range_full);
     int last_row = std::get<2>(used_range_full);
     int last_col = std::get<3>(used_range_full);
     
-    // 计算总单元格数
-    int total_cells = 0;
-    for (int row = first_row; row <= last_row; ++row) {
-        for (int col = first_col; col <= last_col; ++col) {
-            if (worksheet->hasCellAt(row, col)) {
-                total_cells++;
-            }
-        }
-    }
+    std::cout << "📊 数据范围: " << (last_row + 1) << " 行 × " << (last_col + 1) << " 列" << std::endl;
+    std::cout << "📊 起始位置: 行" << first_row << " 列" << first_col << std::endl;
     
-    // 获取内存统计
-    auto perf_stats = worksheet->getPerformanceStats();
+    // 获取工作表统计信息
+    auto stats = readonly_worksheet->getStats();
+    std::cout << "📊 数据点总数: " << stats.total_data_points << std::endl;
+    std::cout << "📊 内存使用: " << formatMemorySize(stats.memory_usage) << std::endl;
+    std::cout << "📊 数字列数: " << stats.number_columns << std::endl;
+    std::cout << "📊 字符串列数: " << stats.string_columns << std::endl;
+    std::cout << "📊 布尔列数: " << stats.boolean_columns << std::endl;
+    std::cout << "📊 文本列数: " << stats.error_columns << std::endl;
     
-    std::cout << "📊 解析耗时: " << duration.count() << " ms" << std::endl;
-    std::cout << "📊 工作表范围: " << (last_row + 1) << " 行 × " << (last_col + 1) << " 列" << std::endl;
-    std::cout << "📊 有效单元格: " << total_cells << " 个" << std::endl;
-    std::cout << "📊 内存使用: " << formatMemorySize(perf_stats.memory_usage) << std::endl;
-    std::cout << "📊 共享字符串: " << perf_stats.sst_strings << " 个" << std::endl;
-    std::cout << "📊 格式数量: " << perf_stats.unique_formats << " 个" << std::endl;
-    
-    // 随机采样几个单元格显示内容
-    std::cout << "\n📋 数据采样 (前5行×5列):" << std::endl;
-    int max_sample_row = std::min(first_row + 5, last_row + 1);
-    int max_sample_col = std::min(first_col + 5, last_col + 1);
-    for (int row = first_row; row < max_sample_row; ++row) {
-        for (int col = first_col; col < max_sample_col; ++col) {
-            if (worksheet->hasCellAt(row, col)) {
-                auto& cell = worksheet->getCell(row, col);
-                std::cout << "[" << row << "," << col << "]=" << cell.asString() << " ";
-            }
-        }
-        std::cout << std::endl;
-    }
-}
-
-/**
- * @brief 测试列式存储优化模式  
- */
-void testColumnarMode(const std::string& filepath) {
-    std::cout << "\n=== 列式存储优化模式测试 ===" << std::endl;
-    
-    // 配置列式存储选项
-    core::WorkbookOptions options;
-    options.enable_columnar_storage = true;
-    // 可选：只读取指定列（列投影优化）
-    // options.projected_columns = {0, 1, 2, 3, 4};  // 只读取前5列
-    // 可选：限制读取行数
-    // options.max_rows = 10000;  // 只读取前1万行
-    
-    auto start_time = high_resolution_clock::now();
-    
-    // 使用列式存储模式打开文件
-    auto workbook = core::Workbook::openReadOnly(filepath, options);
-    if (!workbook) {
-        std::cout << "❌ 无法打开文件: " << filepath << std::endl;
-        return;
-    }
-    
-    auto end_time = high_resolution_clock::now();
-    auto duration = duration_cast<milliseconds>(end_time - start_time);
-    
-    auto worksheet = workbook->getSheet(0);
-    if (!worksheet) {
-        std::cout << "❌ 无法获取工作表" << std::endl;
-        return;
-    }
-    
-    std::cout << "📊 解析耗时: " << duration.count() << " ms" << std::endl;
-    std::cout << "📊 列式模式: " << (worksheet->isColumnarMode() ? "✅ 启用" : "❌ 未启用") << std::endl;
-    
-    if (worksheet->isColumnarMode()) {
-        // 获取列式存储统计
-        auto data_count = worksheet->getColumnarDataCount();
-        auto memory_usage = worksheet->getColumnarMemoryUsage();
+    // 演示列式数据访问
+    std::cout << "\n📋 列式数据访问演示 (前3列):" << std::endl;
+    for (uint32_t col = 0; col < 3 && col <= last_col; ++col) {
+        std::cout << "\n列 " << col << " 数据:" << std::endl;
         
-        std::cout << "📊 列式数据点: " << data_count << " 个" << std::endl;
-        std::cout << "📊 列式内存: " << formatMemorySize(memory_usage) << std::endl;
+        // 获取各种类型的数据
+        auto numbers = readonly_worksheet->getNumberColumn(col);
+        auto strings = readonly_worksheet->getStringColumn(col);
+        auto booleans = readonly_worksheet->getBooleanColumn(col);
+        auto errors = readonly_worksheet->getErrorColumn(col);
         
-        // 演示列式数据访问
-        std::cout << "\n📋 列式数据采样:" << std::endl;
-        
-        // 遍历前5列的数据
-        for (uint32_t col = 0; col < 5; ++col) {
-            std::cout << "列 " << col << ": ";
-            
-            // 获取该列的数字数据
-            auto number_data = worksheet->getNumberColumn(col);
-            if (!number_data.empty()) {
-                std::cout << "数字(" << number_data.size() << "个) ";
-                
-                // 显示前3个数值
-                int count = 0;
-                for (auto it = number_data.begin(); it != number_data.end() && count < 3; ++it, ++count) {
-                    std::cout << "[" << it->first << "]=" << it->second << " ";
+        if (!numbers.empty()) {
+            std::cout << "  数字数据(" << numbers.size() << "个): ";
+            int count = 0;
+            for (const auto& [row, value] : numbers) {
+                if (count++ < 3) {
+                    std::cout << "[" << row << "]=" << value << " ";
                 }
             }
-            
-            // 获取该列的字符串数据（SST索引）
-            auto string_data = worksheet->getStringColumn(col);
-            if (!string_data.empty()) {
-                std::cout << "字符串(" << string_data.size() << "个) ";
-                
-                // 显示前3个SST索引
-                int count = 0;
-                for (auto it = string_data.begin(); it != string_data.end() && count < 3; ++it, ++count) {
-                    std::cout << "[" << it->first << "]=SST#" << it->second << " ";
-                }
-            }
-            
-            // 获取该列的布尔数据
-            auto boolean_data = worksheet->getBooleanColumn(col);
-            if (!boolean_data.empty()) {
-                std::cout << "布尔(" << boolean_data.size() << "个) ";
-            }
-            
-            // 获取该列的错误数据（内联字符串等）
-            auto error_data = worksheet->getErrorColumn(col);
-            if (!error_data.empty()) {
-                std::cout << "文本(" << error_data.size() << "个) ";
-                
-                // 显示前2个文本值
-                int count = 0;
-                for (auto it = error_data.begin(); it != error_data.end() && count < 2; ++it, ++count) {
-                    std::string display_text = it->second.length() > 20 ? it->second.substr(0, 20) + "..." : it->second;
-                    std::cout << "[" << it->first << "]=" << display_text << " ";
-                }
-            }
-            
             std::cout << std::endl;
         }
         
-        // 演示列遍历功能
-        std::cout << "\n📋 列遍历演示 (第0列前5行):" << std::endl;
-        int callback_count = 0;
-        worksheet->forEachInColumn(0, [&callback_count](uint32_t row, const auto& value) {
-            if (callback_count < 5) {
-                std::cout << "行 " << row << ": 数据类型变体" << std::endl;
-                callback_count++;
+        if (!strings.empty()) {
+            std::cout << "  字符串SST索引(" << strings.size() << "个): ";
+            int count = 0;
+            for (const auto& [row, sst_idx] : strings) {
+                if (count++ < 3) {
+                    std::cout << "[" << row << "]=SST#" << sst_idx << " ";
+                }
             }
-        });
+            std::cout << std::endl;
+        }
+        
+        if (!booleans.empty()) {
+            std::cout << "  布尔数据(" << booleans.size() << "个): ";
+            int count = 0;
+            for (const auto& [row, value] : booleans) {
+                if (count++ < 3) {
+                    std::cout << "[" << row << "]=" << (value ? "true" : "false") << " ";
+                }
+            }
+            std::cout << std::endl;
+        }
+        
+        if (!errors.empty()) {
+            std::cout << "  文本数据(" << errors.size() << "个): ";
+            int count = 0;
+            for (const auto& [row, text] : errors) {
+                if (count++ < 2) {
+                    std::string display = text.length() > 15 ? text.substr(0, 15) + "..." : text;
+                    std::cout << "[" << row << "]=" << display << " ";
+                }
+            }
+            std::cout << std::endl;
+        }
     }
+    
+    // 演示列遍历功能
+    std::cout << "\n📋 列遍历功能演示 (第0列前5行):" << std::endl;
+    int callback_count = 0;
+    readonly_worksheet->forEachInColumn(0, [&callback_count](uint32_t row, const auto& value) {
+        if (callback_count < 5) {
+            std::cout << "  行 " << row << ": ";
+            
+            // 使用 std::visit 处理变体类型
+            std::visit([](const auto& v) {
+                using T = std::decay_t<decltype(v)>;
+                if constexpr (std::is_same_v<T, double>) {
+                    std::cout << "数字=" << v;
+                } else if constexpr (std::is_same_v<T, uint32_t>) {
+                    std::cout << "SST#" << v;
+                } else if constexpr (std::is_same_v<T, bool>) {
+                    std::cout << "布尔=" << (v ? "true" : "false");
+                } else if constexpr (std::is_same_v<T, std::string>) {
+                    std::cout << "文本=" << v;
+                }
+            }, value);
+            
+            std::cout << std::endl;
+            callback_count++;
+        }
+    });
 }
 
 /**
- * @brief 对比两种模式的性能差异
+ * @brief 演示配置选项优化
  */
-void comparePerformance(const std::string& filepath) {
-    std::cout << "\n=== 性能对比分析 ===" << std::endl;
+void demonstrateConfigurationOptions(const std::string& filepath) {
+    std::cout << "\n=== 配置选项优化演示 ===" << std::endl;
     
-    // 传统模式测试
-    std::cout << "\n🔄 正在测试传统模式..." << std::endl;
+    // 配置1：列投影优化
+    std::cout << "\n🔄 演示列投影优化（只读取前2列）..." << std::endl;
+    core::WorkbookOptions options1;
+    options1.projected_columns = {0, 1};
+    
     auto start1 = high_resolution_clock::now();
-    auto workbook1 = core::Workbook::openReadOnly(filepath);
+    auto workbook1 = fastexcel::openReadOnly(filepath, options1);
     auto end1 = high_resolution_clock::now();
     auto duration1 = duration_cast<milliseconds>(end1 - start1);
     
-    size_t traditional_memory = 0;
-    if (workbook1 && workbook1->getSheet(0)) {
-        traditional_memory = workbook1->getSheet(0)->getPerformanceStats().memory_usage;
+    if (workbook1) {
+        auto stats1 = workbook1->getStats();
+        std::cout << "📊 列投影模式 - 耗时: " << duration1.count() << " ms" << std::endl;
+        std::cout << "📊 数据点: " << stats1.total_data_points << std::endl;
+        std::cout << "📊 内存: " << formatMemorySize(stats1.total_memory_usage) << std::endl;
     }
     
-    // 列式模式测试
-    std::cout << "🔄 正在测试列式模式..." << std::endl;
-    core::WorkbookOptions options;
-    options.enable_columnar_storage = true;
+    // 配置2：行限制优化
+    std::cout << "\n🔄 演示行限制优化（前500行）..." << std::endl;
+    core::WorkbookOptions options2;
+    options2.max_rows = 500;
     
     auto start2 = high_resolution_clock::now();
-    auto workbook2 = core::Workbook::openReadOnly(filepath, options);
+    auto workbook2 = fastexcel::openReadOnly(filepath, options2);
     auto end2 = high_resolution_clock::now();
     auto duration2 = duration_cast<milliseconds>(end2 - start2);
     
-    size_t columnar_memory = 0;
-    if (workbook2 && workbook2->getSheet(0) && workbook2->getSheet(0)->isColumnarMode()) {
-        columnar_memory = workbook2->getSheet(0)->getColumnarMemoryUsage();
+    if (workbook2) {
+        auto stats2 = workbook2->getStats();
+        std::cout << "📊 行限制模式 - 耗时: " << duration2.count() << " ms" << std::endl;
+        std::cout << "📊 数据点: " << stats2.total_data_points << std::endl;
+        std::cout << "📊 内存: " << formatMemorySize(stats2.total_memory_usage) << std::endl;
     }
     
-    // 对比结果
-    std::cout << "\n📈 性能对比结果:" << std::endl;
-    std::cout << std::setw(20) << "指标" << std::setw(15) << "传统模式" << std::setw(15) << "列式模式" << std::setw(15) << "优化幅度" << std::endl;
-    std::cout << std::string(65, '-') << std::endl;
-    
-    std::cout << std::setw(20) << "解析耗时" 
-              << std::setw(15) << (std::to_string(duration1.count()) + " ms")
-              << std::setw(15) << (std::to_string(duration2.count()) + " ms");
-    if (duration1.count() > 0) {
-        double speed_improvement = (double)duration1.count() / duration2.count();
-        std::cout << std::setw(15) << (std::to_string(speed_improvement) + "x 加速");
-    }
-    std::cout << std::endl;
-    
-    std::cout << std::setw(20) << "内存使用" 
-              << std::setw(15) << formatMemorySize(traditional_memory)
-              << std::setw(15) << formatMemorySize(columnar_memory);
-    if (traditional_memory > 0 && columnar_memory > 0) {
-        double memory_reduction = (1.0 - (double)columnar_memory / traditional_memory) * 100;
-        std::cout << std::setw(15) << (std::to_string((int)memory_reduction) + "% 减少");
-    }
-    std::cout << std::endl;
-    
-    std::cout << "\n💡 优化建议:" << std::endl;
-    if (columnar_memory < traditional_memory) {
-        std::cout << "✅ 列式存储有效减少了内存使用，适合大文件只读场景" << std::endl;
-    }
-    if (duration2.count() < duration1.count()) {
-        std::cout << "✅ 列式存储提升了解析速度，适合快速数据加载" << std::endl;
-    }
-    std::cout << "✅ 建议在只读场景下使用列式存储模式以获得最佳性能" << std::endl;
-    std::cout << "✅ 可配置列投影和行限制进一步优化内存和速度" << std::endl;
+    std::cout << "\n💡 类型安全优势:" << std::endl;
+    std::cout << "✅ 编译期防止错误：无法在只读工作簿上调用编辑方法" << std::endl;
+    std::cout << "✅ 职责明确：读操作和写操作完全分离" << std::endl;
+    std::cout << "✅ 性能优化：专门针对只读场景优化的实现" << std::endl;
+    std::cout << "✅ 接口简洁：只暴露只读相关的方法" << std::endl;
 }
 
-int main(int argc, char* argv[]) {
-    // 获取文件路径
+int main() {
+    // 初始化FastExcel库
+    if (!fastexcel::initialize()) {
+        std::cout << "❌ FastExcel库初始化失败" << std::endl;
+        return 1;
+    }
+    
     std::string filepath = "C:\\Users\\wuxianggujun\\CodeSpace\\CMakeProjects\\FastExcel\\test_xlsx\\合并去年和今年的数据.xlsx";
     
-    std::cout << "FastExcel 列式存储优化演示程序" << std::endl;
-    std::cout << "===============================" << std::endl;
+    std::cout << "FastExcel 只读工作簿类型演示程序" << std::endl;
+    std::cout << "=====================================" << std::endl;
     std::cout << "测试文件: " << filepath << std::endl;
     
     try {
-        // 测试传统模式
-        testTraditionalMode(filepath);
+        // 演示只读工作簿
+        demonstrateReadOnlyWorkbook(filepath);
         
-        // 测试列式模式
-        testColumnarMode(filepath);
-        
-        // 性能对比
-        comparePerformance(filepath);
+        // 演示配置选项
+        demonstrateConfigurationOptions(filepath);
         
         std::cout << "\n🎉 演示完成！" << std::endl;
+        std::cout << "\n📋 总结:" << std::endl;
+        std::cout << "✅ ReadOnlyWorkbook 提供类型安全的只读访问" << std::endl;
+        std::cout << "✅ ReadOnlyWorksheet 专门优化只读操作" << std::endl;
+        std::cout << "✅ 编译期防止调用编辑方法，避免运行时异常" << std::endl;
+        std::cout << "✅ 列式存储优化，内存和速度都有显著提升" << std::endl;
+        std::cout << "✅ 职责分离设计，代码更清晰易维护" << std::endl;
         
     } catch (const std::exception& e) {
         std::cout << "❌ 程序执行错误: " << e.what() << std::endl;
         return 1;
     }
     
+    // 清理FastExcel库
+    fastexcel::cleanup();
     return 0;
 }

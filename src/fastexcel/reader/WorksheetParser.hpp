@@ -125,7 +125,8 @@ private:
         }
         
         void setupColumnarOptions() {
-            if (options && options->enable_columnar_storage) {
+            // 只读模式下总是启用列式存储优化
+            if (options) {
                 if (!options->projected_columns.empty()) {
                     has_column_filter = true;
                     for (uint32_t col : options->projected_columns) {

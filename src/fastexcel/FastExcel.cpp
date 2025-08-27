@@ -3,6 +3,7 @@
 // 实际实现的头文件包含（仅在.cpp中）
 #include "fastexcel/core/Workbook.hpp"
 #include "fastexcel/core/Worksheet.hpp"
+#include "fastexcel/core/ReadOnlyWorkbook.hpp"
 #include "fastexcel/core/StyleBuilder.hpp"
 #include "fastexcel/core/FormatDescriptor.hpp"
 #include "fastexcel/core/FormatRepository.hpp"
@@ -45,6 +46,27 @@ FASTEXCEL_API void cleanup() {
     }
 }
 
+// === 新的类型安全工厂方法 ===
+
+FASTEXCEL_API std::unique_ptr<core::Workbook> createWorkbook(const std::string& filename) {
+    return core::Workbook::create(filename);
+}
+
+FASTEXCEL_API std::unique_ptr<core::ReadOnlyWorkbook> openReadOnly(const std::string& filename) {
+    return core::ReadOnlyWorkbook::fromFile(filename);
+}
+
+FASTEXCEL_API std::unique_ptr<core::ReadOnlyWorkbook> openReadOnly(const std::string& filename, 
+                                                                   const core::WorkbookOptions& options) {
+    return core::ReadOnlyWorkbook::fromFile(filename, options);
+}
+
+FASTEXCEL_API std::unique_ptr<core::Workbook> openEditable(const std::string& filename) {
+    return core::Workbook::openEditable(filename);
+}
+
+// === 已废弃的旧方法（为了向后兼容，但建议使用新方法）===
+// 注意：这个方法不再推荐使用，请改用 openEditable() 或 openReadOnly()
 
 FASTEXCEL_API std::unique_ptr<core::Workbook> openWorkbook(const std::string& filename) {
     try {

@@ -29,6 +29,7 @@ void ColumnarStorageManager::setValue(uint32_t row, uint32_t col, double value) 
     }
     
     data_->number_columns[col][row] = value;
+    updateDataRange(row, col);
 }
 
 void ColumnarStorageManager::setValue(uint32_t row, uint32_t col, uint32_t sst_index) {
@@ -41,6 +42,7 @@ void ColumnarStorageManager::setValue(uint32_t row, uint32_t col, uint32_t sst_i
     }
     
     data_->string_columns[col][row] = sst_index;
+    updateDataRange(row, col);
 }
 
 void ColumnarStorageManager::setValue(uint32_t row, uint32_t col, bool value) {
@@ -53,6 +55,7 @@ void ColumnarStorageManager::setValue(uint32_t row, uint32_t col, bool value) {
     }
     
     data_->boolean_columns[col][row] = value;
+    updateDataRange(row, col);
 }
 
 void ColumnarStorageManager::setValue(uint32_t row, uint32_t col, const std::tm& datetime) {
@@ -67,6 +70,7 @@ void ColumnarStorageManager::setValue(uint32_t row, uint32_t col, const std::tm&
     // 将日期时间转换为Excel序列号存储
     double excel_serial = utils::TimeUtils::toExcelSerialNumber(datetime);
     data_->datetime_columns[col][row] = excel_serial;
+    updateDataRange(row, col);
 }
 
 void ColumnarStorageManager::setFormula(uint32_t row, uint32_t col, uint32_t formula_index, double result) {
@@ -79,6 +83,7 @@ void ColumnarStorageManager::setFormula(uint32_t row, uint32_t col, uint32_t for
     }
     
     data_->formula_columns[col][row] = {formula_index, result};
+    updateDataRange(row, col);
 }
 
 void ColumnarStorageManager::setError(uint32_t row, uint32_t col, const std::string& error_code) {
@@ -91,6 +96,7 @@ void ColumnarStorageManager::setError(uint32_t row, uint32_t col, const std::str
     }
     
     data_->error_columns[col][row] = error_code;
+    updateDataRange(row, col);
 }
 
 bool ColumnarStorageManager::hasValue(uint32_t row, uint32_t col) const {
@@ -412,12 +418,15 @@ void ColumnarStorageManager::clearData() {
     if (data_) {
         data_.reset();
         options_ = nullptr;
+        // 重置数据范围
+        first_row_ = last_row_ = first_col_ = last_col_ = 0;
+        has_data_ = false;
         FASTEXCEL_LOG_INFO("清除列式存储管理器数据");
     }
 }
 
 bool ColumnarStorageManager::shouldSkipColumn(uint32_t col) const {
-    if (!options_ || !options_->enable_columnar_storage) {
+    if (!options_) {
         return false;
     }
     
@@ -429,6 +438,21 @@ bool ColumnarStorageManager::shouldSkipColumn(uint32_t col) const {
     }
     
     return false;
+}
+
+void ColumnarStorageManager::updateDataRange(uint32_t row, uint32_t col) {
+    if (!has_data_) {
+        // 第一个数据点
+        first_row_ = last_row_ = row;
+        first_col_ = last_col_ = col;
+        has_data_ = true;
+    } else {
+        // 更新范围
+        if (row < first_row_) first_row_ = row;
+        if (row > last_row_) last_row_ = row;
+        if (col < first_col_) first_col_ = col;
+        if (col > last_col_) last_col_ = col;
+    }
 }
 
 } // namespace core

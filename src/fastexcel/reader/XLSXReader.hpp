@@ -105,10 +105,6 @@ private:
     std::string extractXMLFromZip(const std::string& path);
     bool validateXLSXStructure();
     
-    // 字符串解析辅助方法
-    std::string extractAttribute(const std::string& xml, const std::string& attr_name);
-    bool parseWorkbookRelationships(std::unordered_map<std::string, std::string>& relationships);
-    bool parseDefinedNames(const std::string& xml_content);
 private:
 };
 } // namespace reader

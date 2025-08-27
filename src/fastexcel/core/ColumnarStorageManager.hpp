@@ -114,11 +114,30 @@ public:
     size_t getMemoryUsage() const;
     void clearData();
     
+    // 数据范围接口
+    uint32_t getFirstRow() const { return first_row_; }
+    uint32_t getLastRow() const { return last_row_; }
+    uint32_t getFirstColumn() const { return first_col_; }
+    uint32_t getLastColumn() const { return last_col_; }
+    bool hasData() const { return has_data_; }
+    
 private:
     /**
      * @brief 检查列是否应该被过滤
      */
     bool shouldSkipColumn(uint32_t col) const;
+    
+    /**
+     * @brief 更新数据范围
+     */
+    void updateDataRange(uint32_t row, uint32_t col);
+    
+    // 数据范围跟踪
+    uint32_t first_row_ = 0;
+    uint32_t last_row_ = 0;
+    uint32_t first_col_ = 0;
+    uint32_t last_col_ = 0;
+    bool has_data_ = false;
 };
 
 } // namespace core
