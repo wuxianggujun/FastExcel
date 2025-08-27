@@ -1,4 +1,5 @@
 #include "fastexcel/core/Path.hpp"
+#include "fastexcel/utils/Logger.hpp"
 #include <fstream>
 #include <cstdio>
 
@@ -102,10 +103,10 @@ uintmax_t Path::fileSize() const {
     try {
         return std::filesystem::file_size(utf8_path_);
     } catch (const std::filesystem::filesystem_error& e) {
-        FASTEXCEL_LOG_DEBUG("Filesystem error getting file size '{}': {}", utf8_path_.string(), e.what());
+        FASTEXCEL_LOG_DEBUG("Filesystem error getting file size '{}': {}", utf8_path_, e.what());
         return 0;
     } catch (const std::exception& e) {
-        FASTEXCEL_LOG_DEBUG("Exception getting file size '{}': {}", utf8_path_.string(), e.what());
+        FASTEXCEL_LOG_DEBUG("Exception getting file size '{}': {}", utf8_path_, e.what());
         return 0;
     }
 #endif
@@ -121,10 +122,10 @@ bool Path::remove() const {
     try {
         return std::filesystem::remove(utf8_path_);
     } catch (const std::filesystem::filesystem_error& e) {
-        FASTEXCEL_LOG_DEBUG("Filesystem error removing file '{}': {}", utf8_path_.string(), e.what());
+        FASTEXCEL_LOG_DEBUG("Filesystem error removing file '{}': {}", utf8_path_, e.what());
         return false;
     } catch (const std::exception& e) {
-        FASTEXCEL_LOG_DEBUG("Exception removing file '{}': {}", utf8_path_.string(), e.what());
+        FASTEXCEL_LOG_DEBUG("Exception removing file '{}': {}", utf8_path_, e.what());
         return false;
     }
 #endif
@@ -146,11 +147,11 @@ bool Path::copyTo(const Path& target, bool overwrite) const {
         return true;
     } catch (const std::filesystem::filesystem_error& e) {
         FASTEXCEL_LOG_DEBUG("Filesystem error copying file '{}' to '{}': {}", 
-                           utf8_path_.string(), target.utf8_path_.string(), e.what());
+                           utf8_path_, target.utf8_path_, e.what());
         return false;
     } catch (const std::exception& e) {
         FASTEXCEL_LOG_DEBUG("Exception copying file '{}' to '{}': {}", 
-                           utf8_path_.string(), target.utf8_path_.string(), e.what());
+                           utf8_path_, target.utf8_path_, e.what());
         return false;
     }
 #endif
@@ -169,11 +170,11 @@ bool Path::moveTo(const Path& target) const {
         return true;
     } catch (const std::filesystem::filesystem_error& e) {
         FASTEXCEL_LOG_DEBUG("Filesystem error moving file '{}' to '{}': {}", 
-                           utf8_path_.string(), target.utf8_path_.string(), e.what());
+                           utf8_path_, target.utf8_path_, e.what());
         return false;
     } catch (const std::exception& e) {
         FASTEXCEL_LOG_DEBUG("Exception moving file '{}' to '{}': {}", 
-                           utf8_path_.string(), target.utf8_path_.string(), e.what());
+                           utf8_path_, target.utf8_path_, e.what());
         return false;
     }
 #endif

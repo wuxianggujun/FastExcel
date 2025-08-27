@@ -19,6 +19,7 @@
 #include <chrono>
 #include <iomanip>
 #include <variant>
+#include <thread>
 
 using namespace fastexcel;
 using namespace std::chrono;
@@ -236,6 +237,22 @@ void demonstrateConfigurationOptions(const std::string& filepath) {
         std::cout << "📊 行限制模式 - 耗时: " << duration2.count() << " ms" << std::endl;
         std::cout << "📊 数据点: " << stats2.total_data_points << std::endl;
         std::cout << "📊 内存: " << formatMemorySize(stats2.total_memory_usage) << std::endl;
+    }
+
+    // 配置3：多工作表并行（示例演示参数，需多表文件才有收益）
+    std::cout << "\n🔄 演示多工作表并行（如文件含多表）..." << std::endl;
+    core::WorkbookOptions options3;
+    options3.parallel_sheets = true;
+    options3.parse_threads = std::max(2u, std::thread::hardware_concurrency() ? std::thread::hardware_concurrency() / 2 : 2u);
+    auto start3 = high_resolution_clock::now();
+    auto workbook3 = fastexcel::openReadOnly(filepath, options3);
+    auto end3 = high_resolution_clock::now();
+    auto duration3 = duration_cast<milliseconds>(end3 - start3);
+    if (workbook3) {
+        auto stats3 = workbook3->getStats();
+        std::cout << "📊 并行多表模式 - 耗时: " << duration3.count() << " ms" << std::endl;
+        std::cout << "📊 工作表数量: " << stats3.sheet_count << std::endl;
+        std::cout << "📊 总数据点: " << stats3.total_data_points << std::endl;
     }
     
     std::cout << "\n💡 类型安全优势:" << std::endl;

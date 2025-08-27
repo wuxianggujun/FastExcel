@@ -6,6 +6,8 @@
 #include <memory>
 #include <cstdint>
 #include <type_traits>
+// 使用日志宏需要包含 Logger 定义
+#include "fastexcel/utils/Logger.hpp"
 
 namespace fastexcel {
 namespace xml {

@@ -272,6 +272,52 @@ if(DEFINED GTEST_TARGETS)
     set(FASTEXCEL_GTEST_TARGETS ${GTEST_TARGETS} PARENT_SCOPE)
 endif()
 
+# =============================================================================
+# Google Benchmark 配置（用于性能测试）
+# =============================================================================
+option(FASTEXCEL_ENABLE_BENCHMARK "Enable Google Benchmark for performance tests" ON)
+
+if(FASTEXCEL_ENABLE_BENCHMARK)
+    # 优先使用本地 vendored 源码，其次系统库，最后 FetchContent
+    set(BENCHMARK_TARGET "")
+    set(LOCAL_BENCHMARK_DIR ${CMAKE_CURRENT_SOURCE_DIR}/benchmark)
+    if(EXISTS "${LOCAL_BENCHMARK_DIR}/CMakeLists.txt")
+        # 关闭不必要的子目标，避免拉取GTest
+        set(BENCHMARK_ENABLE_TESTING OFF CACHE BOOL "" FORCE)
+        set(BENCHMARK_ENABLE_GTEST_TESTS OFF CACHE BOOL "" FORCE)
+        set(BENCHMARK_ENABLE_INSTALL OFF CACHE BOOL "" FORCE)
+        add_subdirectory(${LOCAL_BENCHMARK_DIR} ${CMAKE_BINARY_DIR}/third_party/benchmark)
+        set(BENCHMARK_TARGET benchmark::benchmark)
+        message(STATUS "FastExcel: Using vendored Google Benchmark")
+    else()
+        if(FASTEXCEL_USE_SYSTEM_LIBS)
+            find_package(benchmark QUIET)
+        endif()
+        if(benchmark_FOUND)
+            set(BENCHMARK_TARGET benchmark::benchmark)
+            message(STATUS "FastExcel: Using system Google Benchmark")
+        else()
+            include(FetchContent)
+            set(BENCHMARK_ENABLE_TESTING OFF CACHE BOOL "" FORCE)
+            set(BENCHMARK_ENABLE_GTEST_TESTS OFF CACHE BOOL "" FORCE)
+            set(BENCHMARK_ENABLE_INSTALL OFF CACHE BOOL "" FORCE)
+            set(BENCHMARK_DOWNLOAD_DEPENDENCIES OFF CACHE BOOL "" FORCE)
+            FetchContent_Declare(
+                google_benchmark
+                GIT_REPOSITORY https://github.com/google/benchmark.git
+                GIT_TAG v1.8.4
+            )
+            FetchContent_MakeAvailable(google_benchmark)
+            set(BENCHMARK_TARGET benchmark::benchmark)
+            message(STATUS "FastExcel: Using Google Benchmark via FetchContent")
+        endif()
+    endif()
+
+    if(BENCHMARK_TARGET)
+        set(FASTEXCEL_BENCHMARK_TARGET ${BENCHMARK_TARGET} PARENT_SCOPE)
+    endif()
+endif()
+
 # 导出包含目录
 set(FASTEXCEL_THIRD_PARTY_INCLUDE_DIRS
     ${CMAKE_CURRENT_SOURCE_DIR}/libexpat/expat/lib
