@@ -5,6 +5,7 @@
 
 #include "ReadOnlyWorksheetParser.hpp"
 #include "fastexcel/utils/Logger.hpp"
+#include "fastexcel/utils/ColumnReferenceUtils.hpp"
 #include <fast_float/fast_float.h>
 #include <algorithm>
 #include <stdexcept>
@@ -13,16 +14,8 @@ namespace fastexcel {
 namespace reader {
 
 uint32_t ReadOnlyWorksheetParser::parseColumnReference(const std::string& cell_ref) {
-    uint32_t col = 0;
-    for (char c : cell_ref) {
-        if (c >= 'A' && c <= 'Z') {
-            col = col * 26 + (c - 'A' + 1);
-        } else {
-            // 遇到数字就停止（行号部分）
-            break;
-        }
-    }
-    return col;
+    // 使用高性能预计算查找表
+    return utils::ColumnReferenceUtils::parseColumnFast(cell_ref);
 }
 
 bool ReadOnlyWorksheetParser::shouldSkipCell(uint32_t row, uint32_t col) const {

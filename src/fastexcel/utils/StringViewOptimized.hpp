@@ -439,46 +439,6 @@ public:
     }
 };
 
-/**
- * @brief 字符串池，用于避免重复字符串的内存分配
- */
-class StringPool {
-public:
-    /**
-     * @brief 获取或创建字符串
-     * @param str 输入字符串视图
-     * @return 指向池中字符串的指针
-     */
-    const std::string* intern(std::string_view str) {
-        // Convert string_view to string for the find operation
-        std::string str_copy(str);
-        auto it = pool_.find(str_copy);
-        if (it != pool_.end()) {
-            return &(*it);
-        }
-        
-        // 插入新字符串
-        auto [inserted_it, success] = pool_.insert(std::move(str_copy));
-        return &(*inserted_it);
-    }
-    
-    /**
-     * @brief 清空字符串池
-     */
-    void clear() {
-        pool_.clear();
-    }
-    
-    /**
-     * @brief 获取池大小
-     */
-    size_t size() const noexcept {
-        return pool_.size();
-    }
-    
-private:
-    std::unordered_set<std::string> pool_;
-};
 
 } // namespace utils
 } // namespace fastexcel

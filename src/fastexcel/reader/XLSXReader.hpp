@@ -87,7 +87,7 @@ private:
     std::vector<std::string> worksheet_names_;
     std::vector<std::string> defined_names_;
     std::unordered_map<std::string, std::string> worksheet_paths_;  // name -> path
-    std::unordered_map<int, std::string> shared_strings_;           // index -> string
+    std::unordered_map<int, std::string_view> shared_strings_;           // index -> string_view
     std::unordered_map<int, std::shared_ptr<core::FormatDescriptor>> styles_; // index -> format descriptor
     std::unordered_map<int, int> style_id_mapping_; // 原始样式ID -> FormatRepository中的ID
     std::string theme_xml_; // 原始主题文件内容

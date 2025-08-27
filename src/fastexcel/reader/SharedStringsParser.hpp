@@ -7,6 +7,7 @@
 #include "BaseSAXParser.hpp"
 #include "fastexcel/archive/ZipReader.hpp"
 #include "fastexcel/core/span.hpp"
+#include "fastexcel/utils/StringPool.hpp"
 #include <string>
 #include <unordered_map>
 
@@ -49,23 +50,23 @@ public:
     bool parseStream(archive::ZipReader* zip_reader, const std::string& internal_path);
     
     /**
-     * @brief 根据索引获取字符串
+     * @brief 根据索引获取字符串视图（高性能，无复制）
      * @param index 字符串索引
-     * @return 字符串内容，如果索引无效返回空字符串
+     * @return 字符串视图，如果索引无效返回空视图
      */
-    std::string getString(int index) const;
+    std::string_view getString(int index) const;
     
     /**
      * @brief 获取字符串总数
      * @return 字符串总数
      */
-    size_t getStringCount() const { return strings_.size(); }
+    size_t getStringCount() const { return string_views_.size(); }
     
     /**
-     * @brief 获取所有字符串的映射
-     * @return 索引到字符串的映射
+     * @brief 获取所有字符串视图的映射
+     * @return 索引到字符串视图的映射
      */
-    const std::unordered_map<int, std::string>& getStrings() const { return strings_; }
+    const std::unordered_map<int, std::string_view>& getStringViews() const { return string_views_; }
     
     /**
      * @brief 清空解析结果
@@ -103,7 +104,8 @@ private:
         }
     } parse_state_;
     
-    std::unordered_map<int, std::string> strings_;  // 索引 -> 字符串
+    std::unordered_map<int, std::string_view> string_views_;  // 索引 -> 字符串视图（高性能）
+    utils::StringPool string_pool_;  // 字符串内存池，替代原始缓冲区
     
     // 重写基类虚函数
     void onStartElement(std::string_view name, span<const xml::XMLAttribute> attributes, int depth) override;

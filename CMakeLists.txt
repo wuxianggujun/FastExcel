@@ -93,6 +93,8 @@ set(FASTEXCEL_SOURCES
         src/fastexcel/reader/DocPropsParser.cpp
         src/fastexcel/utils/Logger.cpp
         src/fastexcel/utils/ColumnWidthCalculator.cpp
+        src/fastexcel/utils/ColumnReferenceUtils.cpp
+        src/fastexcel/utils/StringPool.cpp
         src/fastexcel/xml/ContentTypes.cpp
         src/fastexcel/xml/Relationships.cpp
         src/fastexcel/xml/SharedStrings.cpp

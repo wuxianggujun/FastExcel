@@ -24,7 +24,7 @@ namespace reader {
 class ReadOnlyWorksheetParser : public BaseSAXParser {
 private:
     std::shared_ptr<core::ColumnarStorageManager> storage_;
-    const std::unordered_map<int, std::string>* shared_strings_;
+    const std::unordered_map<int, std::string_view>* shared_strings_;
     const core::WorkbookOptions* options_;
     
     // 解析状态
@@ -62,7 +62,7 @@ public:
      * @brief 设置解析参数
      */
     void configure(std::shared_ptr<core::ColumnarStorageManager> storage,
-                  const std::unordered_map<int, std::string>* shared_strings,
+                  const std::unordered_map<int, std::string_view>* shared_strings,
                   const core::WorkbookOptions* options) {
         storage_ = storage;
         shared_strings_ = shared_strings;

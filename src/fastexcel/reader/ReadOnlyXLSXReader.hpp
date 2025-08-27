@@ -45,7 +45,7 @@ private:
     core::Path path_;
     const core::WorkbookOptions* options_;
     std::unique_ptr<archive::ZipArchive> zip_archive_;
-    std::unordered_map<int, std::string> shared_strings_;  // 使用与XLSXReader相同的格式
+    std::unordered_map<int, std::string_view> shared_strings_;  // 使用 string_view 提升性能
     std::vector<ReadOnlyWorksheetInfo> worksheet_infos_;
     
     // 内部解析方法
@@ -90,7 +90,7 @@ public:
     /**
      * @brief 获取共享字符串表
      */
-    const std::unordered_map<int, std::string>& getSharedStrings() const {
+    const std::unordered_map<int, std::string_view>& getSharedStrings() const {
         return shared_strings_;
     }
 };

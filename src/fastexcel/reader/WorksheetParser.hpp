@@ -52,7 +52,7 @@ public:
      */
     bool parse(const std::string& xml_content,
                core::Worksheet* worksheet,
-               const std::unordered_map<int, std::string>& shared_strings,
+               const std::unordered_map<int, std::string_view>& shared_strings,
                const std::unordered_map<int, std::shared_ptr<core::FormatDescriptor>>& styles,
                const std::unordered_map<int, int>& style_id_mapping = {});
 
@@ -70,7 +70,7 @@ public:
     bool parseStream(archive::ZipReader* zip_reader,
                      const std::string& internal_path,
                      core::Worksheet* worksheet,
-                     const std::unordered_map<int, std::string>& shared_strings,
+                     const std::unordered_map<int, std::string_view>& shared_strings,
                      const std::unordered_map<int, std::shared_ptr<core::FormatDescriptor>>& styles,
                      const std::unordered_map<int, int>& style_id_mapping = {},
                      const core::WorkbookOptions* options = nullptr);
@@ -92,7 +92,7 @@ private:
     // 解析状态（简化版，只关注关键信息）
     struct ParseState {
         core::Worksheet* worksheet = nullptr;
-        const std::unordered_map<int, std::string>* shared_strings = nullptr;
+        const std::unordered_map<int, std::string_view>* shared_strings = nullptr;
         const std::unordered_map<int, std::shared_ptr<core::FormatDescriptor>>* styles = nullptr;
         const std::unordered_map<int, int>* style_id_mapping = nullptr;
         const core::WorkbookOptions* options = nullptr;  // 列式优化选项

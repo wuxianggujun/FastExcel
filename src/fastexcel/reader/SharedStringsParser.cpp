@@ -35,7 +35,13 @@ void SharedStringsParser::onEndElement(std::string_view name, int /*depth*/) {
             parse_state_.current_text = decodeXMLEntities(parse_state_.current_text);
         }
         
-        strings_[parse_state_.current_string_index++] = std::move(parse_state_.current_text);
+        // 将字符串添加到内存池
+        std::string_view string_view = string_pool_.addString(std::move(parse_state_.current_text));
+        
+        // 创建索引映射
+        string_views_[parse_state_.current_string_index] = string_view;
+        
+        parse_state_.current_string_index++;
         parse_state_.endString();
     }
     else if (name == "t") {
@@ -52,16 +58,17 @@ void SharedStringsParser::onEndElement(std::string_view name, int /*depth*/) {
     }
 }
 
-std::string SharedStringsParser::getString(int index) const {
-    auto it = strings_.find(index);
-    if (it != strings_.end()) {
+std::string_view SharedStringsParser::getString(int index) const {
+    auto it = string_views_.find(index);
+    if (it != string_views_.end()) {
         return it->second;
     }
-    return "";
+    return std::string_view{};
 }
 
 void SharedStringsParser::clear() {
-    strings_.clear();
+    string_views_.clear();
+    string_pool_.clear();
     parse_state_.reset();
 }
 

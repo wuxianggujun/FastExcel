@@ -103,7 +103,7 @@ core::ErrorCode ReadOnlyXLSXReader::parseSharedStrings() {
             return core::ErrorCode::XmlParseError;
         }
         
-        shared_strings_ = parser.getStrings();
+        shared_strings_ = parser.getStringViews();
         FASTEXCEL_LOG_INFO("Loaded {} shared strings", shared_strings_.size());
         return core::ErrorCode::Ok;
         

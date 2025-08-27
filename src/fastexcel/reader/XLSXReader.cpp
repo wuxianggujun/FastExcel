@@ -590,7 +590,7 @@ core::ErrorCode XLSXReader::parseSharedStringsXML() {
             return core::ErrorCode::XmlParseError;
         }
         
-        shared_strings_ = parser.getStrings();
+        shared_strings_ = parser.getStringViews();
         FASTEXCEL_LOG_DEBUG("成功流式解析 {} 个共享字符串", shared_strings_.size());
         return core::ErrorCode::Ok;
         

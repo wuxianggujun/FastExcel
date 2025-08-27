@@ -21,7 +21,7 @@ namespace reader {
 
 bool WorksheetParser::parse(const std::string& xml_content, 
                            core::Worksheet* worksheet,
-                           const std::unordered_map<int, std::string>& shared_strings,
+                           const std::unordered_map<int, std::string_view>& shared_strings,
                            const std::unordered_map<int, std::shared_ptr<core::FormatDescriptor>>& styles,
                            const std::unordered_map<int, int>& style_id_mapping) {
     if (xml_content.empty() || !worksheet) {
@@ -49,7 +49,7 @@ bool WorksheetParser::parse(const std::string& xml_content,
 bool WorksheetParser::parseStream(archive::ZipReader* zip_reader,
                                   const std::string& internal_path,
                                   core::Worksheet* worksheet,
-                                  const std::unordered_map<int, std::string>& shared_strings,
+                                  const std::unordered_map<int, std::string_view>& shared_strings,
                                   const std::unordered_map<int, std::shared_ptr<core::FormatDescriptor>>& styles,
                                   const std::unordered_map<int, int>& style_id_mapping,
                                   const core::WorkbookOptions* options) {
