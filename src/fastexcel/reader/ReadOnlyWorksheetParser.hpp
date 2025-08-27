@@ -39,12 +39,30 @@ private:
     std::string_view current_cell_type_;
     std::string current_cell_value_;
     
+    // 批量处理优化
+    struct BatchCellData {
+        uint32_t row, col;
+        std::string value;
+        std::string_view type;
+        
+        BatchCellData(uint32_t r, uint32_t c, std::string&& v, std::string_view t)
+            : row(r), col(c), value(std::move(v)), type(t) {}
+    };
+    std::vector<BatchCellData> row_batch_;
+    static constexpr size_t BATCH_SIZE = 1000; // 每1000个单元格批量处理一次
+    
     // 统计信息
     size_t cells_processed_ = 0;
     
     // 辅助方法
     uint32_t parseColumnReference(std::string_view cell_ref);
     void processCellValue();
+    void processBatch(); // 批量处理单元格
+    void processBatchStandard(); // 标准批量处理
+#ifdef FASTEXCEL_HAS_HIGHWAY
+    void processBatchSIMD(); // SIMD优化批量处理
+#endif
+    void flushBatch();   // 强制处理剩余批量数据
     bool shouldSkipCell(uint32_t row, uint32_t col) const;
     
 protected:
@@ -67,6 +85,9 @@ public:
         storage_ = storage;
         shared_strings_ = shared_strings;
         options_ = options;
+        
+        // 预分配内存优化
+        current_cell_value_.reserve(256); // 预分配单元格值缓冲区
     }
     
     /**
@@ -90,6 +111,8 @@ public:
         current_cell_type_ = std::string_view{};
         current_cell_value_.clear();
         cells_processed_ = 0;
+        row_batch_.clear();
+        row_batch_.reserve(BATCH_SIZE); // 预分配批量缓冲区
     }
 };
 
