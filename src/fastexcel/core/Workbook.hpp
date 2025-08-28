@@ -215,8 +215,8 @@ public:
         return getSheet(name);
     }
     
-    size_t getSheetCount() const { return worksheets_.size(); }
-    bool isEmpty() const { return worksheets_.empty(); }
+    size_t getSheetCount() const { return worksheet_manager_->count(); }
+    bool isEmpty() const { return worksheet_manager_->empty(); }
     
     /**
      * @brief 获取第一个工作表
@@ -378,10 +378,10 @@ public:
     template<typename T>
     std::optional<T> tryGetValue(size_t sheet_index, const Address& address) const noexcept {
         try {
-            if (sheet_index >= worksheets_.size()) {
+            if (sheet_index >= worksheet_manager_->count()) {
                 return std::nullopt;
             }
-            auto worksheet = worksheets_[sheet_index];
+            auto worksheet = worksheet_manager_->getByIndex(sheet_index);
             if (!worksheet) {
                 return std::nullopt;
             }
@@ -946,25 +946,21 @@ public:
      */
     void setCellValue(int row, int col, const std::string& value) {
         // 确保至少存在一个工作表
-        size_t sheet_count = worksheet_manager_ ? worksheet_manager_->count() : worksheets_.size();
-        if (sheet_count == 0) {
+        if (worksheet_manager_->count() == 0) {
             addSheet("Sheet1");
         }
         // 获取第一个工作表
-        auto sheet = worksheet_manager_ ? worksheet_manager_->getByIndex(0)
-                                        : (worksheets_.empty() ? nullptr : worksheets_[0]);
+        auto sheet = worksheet_manager_->getByIndex(0);
         if (sheet) {
             sheet->setCellValue(core::Address(row, col), value);
         }
     }
     
     void setCellValue(int row, int col, double value) {
-        size_t sheet_count = worksheet_manager_ ? worksheet_manager_->count() : worksheets_.size();
-        if (sheet_count == 0) {
+        if (worksheet_manager_->count() == 0) {
             addSheet("Sheet1");
         }
-        auto sheet = worksheet_manager_ ? worksheet_manager_->getByIndex(0)
-                                        : (worksheets_.empty() ? nullptr : worksheets_[0]);
+        auto sheet = worksheet_manager_->getByIndex(0);
         if (sheet) {
             sheet->setCellValue(core::Address(row, col), value);
         }
@@ -975,12 +971,10 @@ public:
     }
     
     void setCellValue(int row, int col, bool value) {
-        size_t sheet_count = worksheet_manager_ ? worksheet_manager_->count() : worksheets_.size();
-        if (sheet_count == 0) {
+        if (worksheet_manager_->count() == 0) {
             addSheet("Sheet1");
         }
-        auto sheet = worksheet_manager_ ? worksheet_manager_->getByIndex(0)
-                                        : (worksheets_.empty() ? nullptr : worksheets_[0]);
+        auto sheet = worksheet_manager_->getByIndex(0);
         if (sheet) {
             sheet->setCellValue(core::Address(row, col), value);
         }
@@ -1108,11 +1102,6 @@ private:
     WorkbookOptions options_;
     bool preserve_unknown_parts_ = true;
     
-    // 兼容性保留
-    std::vector<std::shared_ptr<Worksheet>> worksheets_;    // 暂时保留以兼容
-    std::unique_ptr<archive::FileManager> file_manager_;    // 暂时保留以兼容
-    int next_sheet_id_ = 1;                                // 迁移到WorksheetManager
-    size_t active_worksheet_index_ = 0;                    // 迁移到WorksheetManager
     
 
 };

@@ -310,11 +310,16 @@ public:
     Configuration& getConfiguration() { return config_; }
     const Configuration& getConfiguration() const { return config_; }
 
+    /**
+     * @brief 获取下一个可用的工作表ID
+     * @return 下一个可用ID
+     */
+    size_t getNextAvailableId();
+
 private:
     void updateIndexes(size_t start_index = 0);
     void removeFromIndexes(const WorksheetPtr& worksheet);
     bool isValidIndex(size_t index) const { return index < worksheets_.size(); }
-    size_t getNextAvailableId();
 };
 
 }} // namespace fastexcel::core

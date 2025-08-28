@@ -88,14 +88,15 @@ std::unique_ptr<Workbook> Workbook::openEditable(const std::string& filepath) {
             loaded_workbook->original_package_path_ = filepath;
             loaded_workbook->file_source_ = FileSource::EXISTING_FILE;
             
-            // 为编辑模式准备FileManager（但不立即打开写入，避免覆盖原文件）
+            // 为编辑模式准备ResourceManager（但不立即打开写入，避免覆盖原文件）
             loaded_workbook->filename_ = filepath;
-            loaded_workbook->file_manager_ = std::make_unique<archive::FileManager>(path);
+            // 初始化资源管理器替换file_manager_
+            loaded_workbook->resource_manager_ = std::make_unique<ResourceManager>(path, ResourceManager::Mode::EDIT_EXISTING);
             
             // ⚠️ 重要修复：编辑模式不应该立即覆盖原文件！
-            // 只有在调用save()或saveAs()时才打开FileManager进行写入
-            // if (!loaded_workbook->file_manager_->open(true)) {
-            //     FASTEXCEL_LOG_ERROR("Failed to open FileManager for editing: {}", filepath);
+            // 只有在调用save()或saveAs()时才打开ResourceManager进行写入
+            // if (!loaded_workbook->resource_manager_->open(true)) {
+            //     FASTEXCEL_LOG_ERROR("Failed to open ResourceManager for editing: {}", filepath);
             //     return nullptr;
             // }
         }
@@ -116,13 +117,13 @@ Workbook::Workbook(const Path& path) : filename_(path.string()) {
     try {
         // 检查是否为内存模式（任何以::memory::开头的路径）
         if (path.string().find("::memory::") == 0) {
-            // 内存模式：不创建FileManager，保持纯内存操作
-            file_manager_ = nullptr;
+            // 内存模式：不创建ResourceManager，保持纯内存操作
+            resource_manager_ = nullptr;
             FASTEXCEL_LOG_DEBUG("Created workbook in memory mode: {}", filename_);
         } else {
-            // 文件模式：创建FileManager处理文件操作
-            file_manager_ = std::make_unique<archive::FileManager>(path);
-            resource_manager.addResource(file_manager_);
+            // 文件模式：创建ResourceManager处理文件操作
+            resource_manager_ = std::make_unique<ResourceManager>(path, ResourceManager::Mode::WRITE_NEW);
+            resource_manager.addResource(resource_manager_);
         }
         
         format_repo_ = std::make_unique<FormatRepository>();
@@ -162,7 +163,7 @@ Workbook::Workbook(const Path& path) : filename_(path.string()) {
         
         FASTEXCEL_LOG_DEBUG("Workbook constructed with memory optimizations: {}", filename_);
         
-    } catch (const std::bad_alloc& e) {
+    } catch (const std::bad_alloc&) {
         // resource_manager会自动清理已分配的资源
         FASTEXCEL_LOG_ERROR("Out of memory while constructing Workbook: {}", path.string());
         throw std::runtime_error("Failed to construct Workbook: out of memory");
@@ -198,13 +199,13 @@ Workbook::~Workbook() {
 
 bool Workbook::open() {
     // 内存模式无需文件操作
-    if (!file_manager_) {
+    if (!resource_manager_) {
         FASTEXCEL_LOG_DEBUG("Memory workbook opened: {}", filename_);
         return true;
     }
     
-    // 文件模式需要打开FileManager
-    bool success = file_manager_->open(true);
+    // 文件模式需要打开ResourceManager
+    bool success = resource_manager_->open(true);
     if (success) {
         FASTEXCEL_LOG_INFO("Workbook opened: {}", filename_);
     }
@@ -217,8 +218,8 @@ bool Workbook::save() {
     ensureEditable("save");
     
     // 检查关键组件是否存在
-    if (!file_manager_) {
-        FASTEXCEL_LOG_ERROR("Cannot save: FileManager is null");
+    if (!resource_manager_) {
+        FASTEXCEL_LOG_ERROR("Cannot save: ResourceManager is null");
         return false;
     }
     
@@ -228,24 +229,24 @@ bool Workbook::save() {
             document_manager_->updateModifiedTime();
         }
         
-        // 确保FileManager已打开，如果没有则打开它
-        if (file_manager_ && !file_manager_->isOpen()) {
-            FASTEXCEL_LOG_DEBUG("FileManager not open, opening for save operation");
-            if (!file_manager_->open(true)) {
-                FASTEXCEL_LOG_ERROR("Failed to open FileManager for save operation");
+        // 确保ResourceManager已打开，如果没有则打开它
+        if (resource_manager_ && !resource_manager_->isOpen()) {
+            FASTEXCEL_LOG_DEBUG("ResourceManager not open, opening for save operation");
+            if (!resource_manager_->open(true)) {
+                FASTEXCEL_LOG_ERROR("Failed to open ResourceManager for save operation");
                 return false;
             }
         }
         
         // 设置ZIP压缩级别 (添加空指针检查)
-        if (file_manager_ && file_manager_->isOpen()) {
-            if (!file_manager_->setCompressionLevel(options_.compression_level)) {
+        if (resource_manager_ && resource_manager_->isOpen()) {
+            if (!resource_manager_->setCompressionLevel(options_.compression_level)) {
                 FASTEXCEL_LOG_WARN("Failed to set compression level to {}", options_.compression_level);
             } else {
                 FASTEXCEL_LOG_DEBUG("Set ZIP compression level to {}", options_.compression_level);
             }
         } else {
-            FASTEXCEL_LOG_ERROR("Cannot save: FileManager is not open");
+            FASTEXCEL_LOG_ERROR("Cannot save: ResourceManager is not open");
             return false;
         }
         
@@ -268,7 +269,7 @@ bool Workbook::save() {
         
         // 编辑模式下，先将原包中未被我们生成的条目拷贝过来（绘图、图片、打印设置等）
         // 检查是否是保存到同一文件，避免文件锁定问题
-        if (isPassThroughEditMode() && !original_package_path_.empty() && file_manager_ && file_manager_->isOpen()) {
+        if (isPassThroughEditMode() && !original_package_path_.empty() && resource_manager_ && resource_manager_->isOpen()) {
             // 检查是否保存到同一文件
             bool is_same_file = (original_package_path_ == filename_);
             
@@ -281,8 +282,8 @@ bool Workbook::save() {
                 core::Path temp_path(temp_backup);
                 
                 try {
-                    // 关闭当前FileManager以释放文件锁定
-                    file_manager_->close();
+                    // 关闭当前ResourceManager以释放文件锁定
+                    resource_manager_->close();
                     
                     // 复制原文件到临时位置
                     if (temp_path.exists()) {
@@ -290,9 +291,9 @@ bool Workbook::save() {
                     }
                     source_path.copyTo(temp_path);
                     
-                    // 重新打开FileManager用于写入
-                    if (!file_manager_->open(true)) {
-                        FASTEXCEL_LOG_ERROR("Failed to reopen FileManager after backup creation");
+                    // 重新打开ResourceManager用于写入
+                    if (!resource_manager_->open(true)) {
+                        FASTEXCEL_LOG_ERROR("Failed to reopen ResourceManager after backup creation");
                         // 清理临时文件
                         if (temp_path.exists()) temp_path.remove();
                         return false;
@@ -310,7 +311,7 @@ bool Workbook::save() {
                         "xl/theme/",
                         "docProps/"  // 文档属性也重新生成
                     };
-                    file_manager_->copyFromExistingPackage(temp_path, skip_prefixes);
+                    resource_manager_->copyFromOriginalPackage(temp_path, skip_prefixes);
                     
                     // 清理临时文件
                     if (temp_path.exists()) {
@@ -322,8 +323,8 @@ bool Workbook::save() {
                     FASTEXCEL_LOG_ERROR("Failed to handle same-file save: {}", e.what());
                     // 清理临时文件
                     if (temp_path.exists()) temp_path.remove();
-                    // 尝试重新打开FileManager
-                    file_manager_->open(true);
+                    // 尝试重新打开ResourceManager
+                    resource_manager_->open(true);
                     // 继续执行，不复制原内容
                 }
             } else {
@@ -339,7 +340,7 @@ bool Workbook::save() {
                     "xl/theme/",
                     "docProps/"  // 文档属性也重新生成
                 };
-                file_manager_->copyFromExistingPackage(core::Path(original_package_path_), skip_prefixes);
+                resource_manager_->copyFromOriginalPackage(core::Path(original_package_path_), skip_prefixes);
             }
         }
 
@@ -393,13 +394,13 @@ bool Workbook::saveAs(const std::string& filename) {
 
     filename_ = filename;
     
-    // 重新创建文件管理器
-    file_manager_ = std::make_unique<archive::FileManager>(core::Path(filename));
+    // 重新创建ResourceManager
+    resource_manager_ = std::make_unique<ResourceManager>(core::Path(filename), ResourceManager::Mode::WRITE_NEW);
     
-    if (!file_manager_->open(true)) {
+    if (!resource_manager_->open(true)) {
         // 恢复原文件名
         filename_ = old_filename;
-        file_manager_ = std::make_unique<archive::FileManager>(core::Path(old_filename));
+        resource_manager_ = std::make_unique<ResourceManager>(core::Path(old_filename), ResourceManager::Mode::EDIT_EXISTING);
         
         // 如果创建了临时文件，删除它
         if (is_same_file && original_package_path_.find(".tmp_backup") != std::string::npos) {
@@ -445,11 +446,11 @@ bool Workbook::close() {
     }
     
     // 内存模式只需要重置状态
-    if (!file_manager_) {
+    if (!resource_manager_) {
         FASTEXCEL_LOG_DEBUG("Memory workbook closed: {}", filename_);
     } else {
-        // 文件模式需要关闭FileManager
-        file_manager_->close();
+        // 文件模式需要关闭ResourceManager
+        resource_manager_->close();
         FASTEXCEL_LOG_INFO("Workbook closed: {}", filename_);
     }
     
@@ -502,19 +503,19 @@ std::shared_ptr<Worksheet> Workbook::addSheet(const std::string& name) {
         return nullptr;
     }
     
-    auto worksheet = std::make_shared<Worksheet>(sheet_name, std::shared_ptr<Workbook>(this, [](Workbook*){}), next_sheet_id_++);
+    auto worksheet = std::make_shared<Worksheet>(sheet_name, std::shared_ptr<Workbook>(this, [](Workbook*){}), static_cast<int>(worksheet_manager_->getNextAvailableId()));
     
     // 设置 FormatRepository，启用列宽管理功能
     if (format_repo_) {
         worksheet->setFormatRepository(format_repo_.get());
     }
     
-    worksheets_.push_back(worksheet);
+    worksheet_manager_->addWorksheet(worksheet);
     
     // 如果这是第一个工作表，自动设置为激活状态
-    if (worksheets_.size() == 1) {
+    if (worksheet_manager_->count() == 1) {
         worksheet->setTabSelected(true);
-        active_worksheet_index_ = 0;
+        worksheet_manager_->setActive(0);
         FASTEXCEL_LOG_DEBUG("Added worksheet: {} (activated as first sheet)", sheet_name);
     } else {
         FASTEXCEL_LOG_DEBUG("Added worksheet: {}", sheet_name);
@@ -527,8 +528,8 @@ std::shared_ptr<Worksheet> Workbook::insertSheet(size_t index, const std::string
     // 运行时检查：只读模式不能插入工作表
     ensureEditable("insertSheet");
     
-    if (index > worksheets_.size()) {
-        index = worksheets_.size();
+    if (index > worksheet_manager_->count()) {
+        index = worksheet_manager_->count();
     }
     
     std::string sheet_name = name.empty() ? generateUniqueSheetName("Sheet1") : name;
@@ -538,14 +539,25 @@ std::shared_ptr<Worksheet> Workbook::insertSheet(size_t index, const std::string
         return nullptr;
     }
     
-    auto worksheet = std::make_shared<Worksheet>(sheet_name, std::shared_ptr<Workbook>(this, [](Workbook*){}), next_sheet_id_++);
+    auto worksheet = std::make_shared<Worksheet>(sheet_name, std::shared_ptr<Workbook>(this, [](Workbook*){}), static_cast<int>(worksheet_manager_->getNextAvailableId()));
     
     // 设置 FormatRepository，启用列宽管理功能
     if (format_repo_) {
         worksheet->setFormatRepository(format_repo_.get());
     }
     
-    worksheets_.insert(worksheets_.begin() + index, worksheet);
+    // 使用WorksheetManager插入工作表（在指定位置）
+    // 注意：WorksheetManager可能没有insertAtIndex方法，所以先添加再移动
+    if (!worksheet_manager_->addWorksheet(worksheet)) {
+        FASTEXCEL_LOG_ERROR("Failed to add worksheet to manager: {}", sheet_name);
+        return nullptr;
+    }
+    
+    // 如果不是最后一个位置，需要移动到指定位置
+    size_t current_last_index = worksheet_manager_->count() - 1;
+    if (index < current_last_index) {
+        worksheet_manager_->move(current_last_index, index);
+    }
     
     FASTEXCEL_LOG_DEBUG("Inserted worksheet: {} at index {}", sheet_name, index);
     return worksheet;
@@ -555,97 +567,38 @@ bool Workbook::removeSheet(const std::string& name) {
     // 运行时检查：只读模式不能删除工作表
     ensureEditable("removeSheet");
     
-    auto it = std::find_if(worksheets_.begin(), worksheets_.end(),
-                          [&name](const std::shared_ptr<Worksheet>& ws) {
-                              return ws->getName() == name;
-                          });
-    
-    if (it != worksheets_.end()) {
-        worksheets_.erase(it);
-        FASTEXCEL_LOG_DEBUG("Removed worksheet: {}", name);
-        return true;
-    }
-    
-    return false;
+    return worksheet_manager_->removeByName(name);
 }
 
 bool Workbook::removeSheet(size_t index) {
     // 运行时检查：只读模式不能删除工作表
     ensureEditable("removeSheet");
     
-    if (index < worksheets_.size()) {
-        std::string name = worksheets_[index]->getName();
-        worksheets_.erase(worksheets_.begin() + index);
-        
-        // 更新活动工作表索引
-        if (active_worksheet_index_ == index) {
-            // 如果删除的是当前活动工作表
-            if (worksheets_.empty()) {
-                active_worksheet_index_ = 0;  // 没有工作表了
-            } else if (active_worksheet_index_ >= worksheets_.size()) {
-                active_worksheet_index_ = worksheets_.size() - 1;  // 设置为最后一个
-                worksheets_[active_worksheet_index_]->setTabSelected(true);
-            } else {
-                // 保持当前索引，激活新的工作表
-                worksheets_[active_worksheet_index_]->setTabSelected(true);
-            }
-        } else if (active_worksheet_index_ > index) {
-            // 如果删除的工作表在活动工作表之前，索引需要减1
-            active_worksheet_index_--;
-        }
-        
-        FASTEXCEL_LOG_DEBUG("Removed worksheet: {} at index {}", name, index);
-        return true;
-    }
-    
-    return false;
+    return worksheet_manager_->removeByIndex(index);
 }
 
 std::shared_ptr<Worksheet> Workbook::getSheet(const std::string& name) {
-    auto it = std::find_if(worksheets_.begin(), worksheets_.end(), 
-                          [&name](const std::shared_ptr<Worksheet>& ws) {
-                              return ws->getName() == name;
-                          });
-    
-    if (it != worksheets_.end()) {
-        return *it;
-    }
-    
-    return nullptr;
+    return worksheet_manager_->getByName(name);
 }
 
 std::shared_ptr<Worksheet> Workbook::getSheet(size_t index) {
-    if (index < worksheets_.size()) {
-        return worksheets_[index];
-    }
-    return nullptr;
+    return worksheet_manager_->getByIndex(index);
 }
 
 std::shared_ptr<const Worksheet> Workbook::getSheet(const std::string& name) const {
-    auto it = std::find_if(worksheets_.begin(), worksheets_.end(),
-                          [&name](const std::shared_ptr<Worksheet>& ws) {
-                              return ws->getName() == name;
-                          });
-    
-    if (it != worksheets_.end()) {
-        return *it;
-    }
-    
-    return nullptr;
+    return worksheet_manager_->getByName(name);
 }
 
 std::shared_ptr<const Worksheet> Workbook::getSheet(size_t index) const {
-    if (index < worksheets_.size()) {
-        return worksheets_[index];
-    }
-    return nullptr;
+    return worksheet_manager_->getByIndex(index);
 }
 
 std::vector<std::string> Workbook::getSheetNames() const {
     std::vector<std::string> names;
-    names.reserve(worksheets_.size());
+    auto worksheets = worksheet_manager_->getAll();
+    names.reserve(worksheets.size());
     
-    for (const auto& worksheet : worksheets_) {
+    for (const auto& worksheet : worksheets) {
         names.push_back(worksheet->getName());
     }
     
@@ -654,141 +607,65 @@ std::vector<std::string> Workbook::getSheetNames() const {
 
 // 便捷的工作表查找方法
 bool Workbook::hasSheet(const std::string& name) const {
-    auto it = std::find_if(worksheets_.begin(), worksheets_.end(),
-                          [&name](const std::shared_ptr<Worksheet>& ws) {
-                              return ws->getName() == name;
-                          });
-    return it != worksheets_.end();
+    return worksheet_manager_->exists(name);
 }
 
 std::shared_ptr<Worksheet> Workbook::findSheet(const std::string& name) {
-    auto it = std::find_if(worksheets_.begin(), worksheets_.end(),
-                          [&name](const std::shared_ptr<Worksheet>& ws) {
-                              return ws->getName() == name;
-                          });
-    
-    if (it != worksheets_.end()) {
-        return *it;
-    }
-    
-    return nullptr;
+    return worksheet_manager_->getByName(name);
 }
 
 std::shared_ptr<const Worksheet> Workbook::findSheet(const std::string& name) const {
-    auto it = std::find_if(worksheets_.begin(), worksheets_.end(),
-                          [&name](const std::shared_ptr<Worksheet>& ws) {
-                              return ws->getName() == name;
-                          });
-    
-    if (it != worksheets_.end()) {
-        return *it;
-    }
-    
-    return nullptr;
+    return worksheet_manager_->getByName(name);
 }
 
 std::vector<std::shared_ptr<Worksheet>> Workbook::getAllSheets() {
-    std::vector<std::shared_ptr<Worksheet>> sheets;
-    sheets.reserve(worksheets_.size());
-    
-    for (auto& worksheet : worksheets_) {
-        sheets.push_back(worksheet);
-    }
-    
-    return sheets;
+    return worksheet_manager_->getAll();
 }
 
 std::vector<std::shared_ptr<const Worksheet>> Workbook::getAllSheets() const {
-    std::vector<std::shared_ptr<const Worksheet>> sheets;
-    sheets.reserve(worksheets_.size());
-    
-    for (const auto& worksheet : worksheets_) {
-        sheets.push_back(worksheet);
+    auto worksheets = worksheet_manager_->getAll();
+    std::vector<std::shared_ptr<const Worksheet>> const_worksheets;
+    const_worksheets.reserve(worksheets.size());
+    for (const auto& worksheet : worksheets) {
+        const_worksheets.push_back(worksheet);
     }
-    
-    return sheets;
+    return const_worksheets;
 }
 
 int Workbook::clearAllSheets() {
     ensureEditable("clearAllSheets");
     
-    int count = static_cast<int>(worksheets_.size());
-    worksheets_.clear();
-    
-    // 重置工作表ID计数器
-    next_sheet_id_ = 1;
-    
-    // 重置活动工作表索引
-    active_worksheet_index_ = 0;
+    size_t count = worksheet_manager_->clear();
     
     FASTEXCEL_LOG_DEBUG("Cleared all worksheets, removed {} sheets", count);
     
-    return count;
+    return static_cast<int>(count);
 }
 
 std::shared_ptr<Worksheet> Workbook::getFirstSheet() {
-    if (!worksheets_.empty()) {
-        return worksheets_.front();
-    }
-    return nullptr;
+    return worksheet_manager_->getByIndex(0);
 }
 
 std::shared_ptr<const Worksheet> Workbook::getFirstSheet() const {
-    if (!worksheets_.empty()) {
-        return worksheets_.front();
-    }
-    return nullptr;
+    return worksheet_manager_->getByIndex(0);
 }
 
 std::shared_ptr<Worksheet> Workbook::getLastSheet() {
-    if (!worksheets_.empty()) {
-        return worksheets_.back();
-    }
-    return nullptr;
+    size_t count = worksheet_manager_->count();
+    return count > 0 ? worksheet_manager_->getByIndex(count - 1) : nullptr;
 }
 
 std::shared_ptr<const Worksheet> Workbook::getLastSheet() const {
-    if (!worksheets_.empty()) {
-        return worksheets_.back();
-    }
-    return nullptr;
+    size_t count = worksheet_manager_->count();
+    return count > 0 ? worksheet_manager_->getByIndex(count - 1) : nullptr;
 }
 
 bool Workbook::renameSheet(const std::string& old_name, const std::string& new_name) {
-    auto worksheet = getSheet(old_name);
-    if (!worksheet) {
-        return false;
-    }
-    
-    if (!validateSheetName(new_name)) {
-        return false;
-    }
-    
-    worksheet->setName(new_name);
-    FASTEXCEL_LOG_DEBUG("Renamed worksheet: {} -> {}", old_name, new_name);
-    return true;
+    return worksheet_manager_->rename(old_name, new_name);
 }
 
 bool Workbook::moveSheet(size_t from_index, size_t to_index) {
-    if (from_index >= worksheets_.size() || to_index >= worksheets_.size()) {
-        return false;
-    }
-    
-    if (from_index == to_index) {
-        return true;
-    }
-    
-    auto worksheet = worksheets_[from_index];
-    worksheets_.erase(worksheets_.begin() + from_index);
-    
-    if (to_index > from_index) {
-        to_index--;
-    }
-    
-    worksheets_.insert(worksheets_.begin() + to_index, worksheet);
-    
-    FASTEXCEL_LOG_DEBUG("Moved worksheet from index {} to {}", from_index, to_index);
-    return true;
+    return worksheet_manager_->move(from_index, to_index);
 }
 
 std::shared_ptr<Worksheet> Workbook::copyWorksheet(const std::string& source_name, const std::string& new_name) {
@@ -802,7 +679,7 @@ std::shared_ptr<Worksheet> Workbook::copyWorksheet(const std::string& source_nam
     }
     
     // 创建新工作表
-    auto new_worksheet = std::make_shared<Worksheet>(new_name, std::shared_ptr<Workbook>(this, [](Workbook*){}), next_sheet_id_++);
+    auto new_worksheet = std::make_shared<Worksheet>(new_name, std::shared_ptr<Workbook>(this, [](Workbook*){}), static_cast<int>(worksheet_manager_->getNextAvailableId()));
     
     // 实现深拷贝逻辑：复制所有单元格、格式、设置等
     try {
@@ -855,48 +732,22 @@ std::shared_ptr<Worksheet> Workbook::copyWorksheet(const std::string& source_nam
         FASTEXCEL_LOG_ERROR("Failed to copy worksheet content: {}", e.what());
     }
     
-    worksheets_.push_back(new_worksheet);
+    worksheet_manager_->addWorksheet(new_worksheet);
     
     FASTEXCEL_LOG_DEBUG("Copied worksheet: {} -> {}", source_name, new_name);
     return new_worksheet;
 }
 
 void Workbook::setActiveWorksheet(size_t index) {
-    // 取消所有工作表的选中状态
-    for (auto& worksheet : worksheets_) {
-        worksheet->setTabSelected(false);
-    }
-    
-    // 设置指定工作表为活动状态
-    if (index < worksheets_.size()) {
-        worksheets_[index]->setTabSelected(true);
-        active_worksheet_index_ = index;  // 更新活动工作表索引
-    }
+    worksheet_manager_->setActive(index);
 }
 
 std::shared_ptr<Worksheet> Workbook::getActiveWorksheet() {
-    if (worksheets_.empty()) {
-        return nullptr;
-    }
-    
-    // 确保活动工作表索引在有效范围内
-    if (active_worksheet_index_ >= worksheets_.size()) {
-        active_worksheet_index_ = 0;
-    }
-    
-    return worksheets_[active_worksheet_index_];
+    return worksheet_manager_->getActive();
 }
 
 std::shared_ptr<const Worksheet> Workbook::getActiveWorksheet() const {
-    if (worksheets_.empty()) {
-        return nullptr;
-    }
-    
-    // 确保活动工作表索引在有效范围内
-    size_t safe_index = (active_worksheet_index_ < worksheets_.size()) ? 
-                        active_worksheet_index_ : 0;
-    
-    return worksheets_[safe_index];
+    return worksheet_manager_->getActive();
 }
 
 // 样式管理
@@ -1284,7 +1135,7 @@ void Workbook::collectSharedStrings() {
         shared_string_table_->clear();
     }
     
-    for (const auto& worksheet : worksheets_) {
+    for (const auto& worksheet : worksheet_manager_->getAll()) {
         // 这里需要访问工作表的单元格来收集字符串
         // 简化版本，实际实现需要遍历所有字符串单元格
         auto [max_row, max_col] = worksheet->getUsedRange();
@@ -1426,7 +1277,7 @@ bool Workbook::refresh() {
         }
         
         // 替换当前内容
-        worksheets_ = std::move(refreshed_workbook->worksheets_);
+        worksheet_manager_ = std::move(refreshed_workbook->worksheet_manager_);
         format_repo_ = std::move(refreshed_workbook->format_repo_);
         
         // 通过管理器复制文档属性
@@ -1484,30 +1335,42 @@ int Workbook::batchRemoveWorksheets(const std::vector<std::string>& worksheet_na
 }
 
 bool Workbook::reorderWorksheets(const std::vector<std::string>& new_order) {
-    if (new_order.size() != worksheets_.size()) {
+    if (new_order.size() != worksheet_manager_->count()) {
         FASTEXCEL_LOG_ERROR("New order size ({}) doesn't match worksheet count ({})",
-                 new_order.size(), worksheets_.size());
+                 new_order.size(), worksheet_manager_->count());
         return false;
     }
     
+    // 使用WorksheetManager的move方法逐个移动工作表到正确位置
     try {
-        std::vector<std::shared_ptr<Worksheet>> reordered_worksheets;
-        reordered_worksheets.reserve(worksheets_.size());
-        
-        // 按新顺序重新排列工作表
-        for (const std::string& name : new_order) {
-            auto worksheet = getSheet(name);
-            if (!worksheet) {
-                FASTEXCEL_LOG_ERROR("Worksheet not found in reorder list: {}", name);
+        for (size_t target_index = 0; target_index < new_order.size(); ++target_index) {
+            const std::string& target_name = new_order[target_index];
+            
+            // 查找当前名称对应的工作表的当前位置
+            size_t current_index = SIZE_MAX;
+            for (size_t i = 0; i < worksheet_manager_->count(); ++i) {
+                auto ws = worksheet_manager_->getByIndex(i);
+                if (ws && ws->getName() == target_name) {
+                    current_index = i;
+                    break;
+                }
+            }
+            
+            if (current_index == SIZE_MAX) {
+                FASTEXCEL_LOG_ERROR("Worksheet not found in reorder list: {}", target_name);
                 return false;
             }
-            reordered_worksheets.push_back(worksheet);
+            
+            // 如果不在目标位置，移动到目标位置
+            if (current_index != target_index) {
+                if (!worksheet_manager_->move(current_index, target_index)) {
+                    FASTEXCEL_LOG_ERROR("Failed to move worksheet {} from index {} to {}", target_name, current_index, target_index);
+                    return false;
+                }
+            }
         }
         
-        // 替换工作表列表
-        worksheets_ = std::move(reordered_worksheets);
-        
-        FASTEXCEL_LOG_INFO("Successfully reordered {} worksheets", worksheets_.size());
+        FASTEXCEL_LOG_INFO("Successfully reordered {} worksheets", worksheet_manager_->count());
         return true;
         
     } catch (const std::exception& e) {
@@ -1520,7 +1383,7 @@ int Workbook::findAndReplaceAll(const std::string& find_text, const std::string&
                          const FindReplaceOptions& options) {
     int total_replacements = 0;
     
-    for (const auto& worksheet : worksheets_) {
+    for (const auto& worksheet : worksheet_manager_->getAll()) {
         // 检查工作表过滤器
         if (!options.worksheet_filter.empty()) {
             bool found = std::find(options.worksheet_filter.begin(), options.worksheet_filter.end(),
@@ -1552,7 +1415,7 @@ std::vector<std::tuple<std::string, int, int>> Workbook::findAll(const std::stri
                                                            const FindReplaceOptions& options) {
     std::vector<std::tuple<std::string, int, int>> results;
     
-    for (const auto& worksheet : worksheets_) {
+    for (const auto& worksheet : worksheet_manager_->getAll()) {
         // 检查工作表过滤器
         if (!options.worksheet_filter.empty()) {
             bool found = std::find(options.worksheet_filter.begin(), options.worksheet_filter.end(),
@@ -1585,11 +1448,11 @@ std::vector<std::tuple<std::string, int, int>> Workbook::findAll(const std::stri
 Workbook::WorkbookStats Workbook::getStatistics() const {
     WorkbookStats stats;
     
-    stats.total_worksheets = worksheets_.size();
+    stats.total_worksheets = worksheet_manager_->count();
     stats.total_formats = format_repo_->getFormatCount();
     
     // 计算总单元格数和内存使用
-    for (const auto& worksheet : worksheets_) {
+    for (const auto& worksheet : worksheet_manager_->getAll()) {
         size_t cell_count = worksheet->getCellCount();
         stats.total_cells += cell_count;
         stats.worksheet_cell_counts[worksheet->getName()] = cell_count;
@@ -1601,7 +1464,7 @@ Workbook::WorkbookStats Workbook::getStatistics() const {
     
     // 估算工作簿本身的内存使用
     stats.memory_usage += sizeof(Workbook);
-    stats.memory_usage += worksheets_.capacity() * sizeof(std::shared_ptr<Worksheet>);
+    // WorksheetManager的内存使用由其自身统计
     stats.memory_usage += format_repo_->getMemoryUsage();
     
     // 估算管理器的内存使用量
@@ -1618,7 +1481,7 @@ size_t Workbook::estimateMemoryUsage() const {
     size_t total_memory = 0;
     
     // 估算工作表内存使用
-    for (const auto& worksheet : worksheets_) {
+    for (const auto& worksheet : worksheet_manager_->getAll()) {
         if (worksheet->isOptimizeMode()) {
             total_memory += worksheet->getMemoryUsage();
         } else {
@@ -1648,7 +1511,7 @@ size_t Workbook::estimateMemoryUsage() const {
 size_t Workbook::getTotalCellCount() const {
     size_t total_cells = 0;
     
-    for (const auto& worksheet : worksheets_) {
+    for (const auto& worksheet : worksheet_manager_->getAll()) {
         if (worksheet->isOptimizeMode()) {
             total_cells += worksheet->getCellCount();
         } else {
@@ -1677,7 +1540,7 @@ size_t Workbook::getEstimatedSize() const {
     size_t estimated = 10 * 1024; // 基础XML文件大約10KB
     
     // 每个工作表的估计大小
-    for (const auto& sheet : worksheets_) {
+    for (const auto& sheet : worksheet_manager_->getAll()) {
         if (sheet) {
             // 每个单元格平均约50字节（XML格式）
             estimated += sheet->getCellCount() * 50;
@@ -1734,15 +1597,15 @@ FormatRepository::DeduplicationStats Workbook::getStyleStats() const {
 }
 
 bool Workbook::generateWithGenerator(bool use_streaming_writer) {
-    if (!file_manager_) {
-        FASTEXCEL_LOG_ERROR("FileManager is null - cannot write workbook");
+    if (!resource_manager_) {
+        FASTEXCEL_LOG_ERROR("ResourceManager is null - cannot write workbook");
         return false;
     }
     std::unique_ptr<IFileWriter> writer;
     if (use_streaming_writer) {
-        writer = std::make_unique<StreamingFileWriter>(file_manager_.get());
+        writer = std::make_unique<StreamingFileWriter>(resource_manager_->getFileManager());
     } else {
-        writer = std::make_unique<BatchFileWriter>(file_manager_.get());
+        writer = std::make_unique<BatchFileWriter>(resource_manager_->getFileManager());
     }
     ExcelStructureGenerator generator(this, std::move(writer));
     return generator.generate();
@@ -1761,7 +1624,7 @@ bool Workbook::isModified() const {
     }
     
     // 检查工作表是否有修改（如果有hasChanges方法）
-    for (const auto& worksheet : worksheets_) {
+    for (const auto& worksheet : worksheet_manager_->getAll()) {
         if (worksheet) {
             // TODO: 检查Worksheet是否有hasChanges或类似方法
             // if (worksheet->hasChanges()) {
