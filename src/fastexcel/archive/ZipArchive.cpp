@@ -2,6 +2,8 @@
 #include "fastexcel/archive/ZipArchive.hpp"
 #include <stdexcept>
 #include <iostream>
+#include <sstream>
+#include <thread>
 
 namespace fastexcel {
 namespace archive {
@@ -12,6 +14,9 @@ ZipArchive::ZipArchive(const core::Path& path)
     : filepath_(path)
     , reader_(nullptr)
     , writer_(nullptr)
+    , parallel_reader_(nullptr)
+    , thread_pool_(nullptr)
+    , parallel_config_()
     , is_open_(false)
     , mode_(Mode::None) {
 }
@@ -46,6 +51,12 @@ bool ZipArchive::open(bool create) {
             if (reader_->open()) {
                 mode_ = Mode::Read;
                 is_open_ = true;
+                
+                // 初始化并行读取器
+                if (initializeParallelReader() != ZipError::Ok) {
+                    FASTEXCEL_LOG_WARN("[ARCH] Failed to initialize parallel reader, continuing with sequential reading");
+                }
+                
                 return true;
             }
         }
@@ -56,6 +67,8 @@ bool ZipArchive::open(bool create) {
     // 打开失败，清理
     reader_.reset();
     writer_.reset();
+    parallel_reader_.reset();
+    thread_pool_.reset();
     mode_ = Mode::None;
     is_open_ = false;
     return false;
@@ -67,6 +80,10 @@ bool ZipArchive::close() {
     }
     
     bool success = true;
+    
+    // 关闭并行组件
+    parallel_reader_.reset();
+    thread_pool_.reset();
     
     // 关闭reader
     if (reader_) {
@@ -215,6 +232,145 @@ ZipError ZipArchive::setCompressionLevel(int level) {
     
     writer_->setCompressionLevel(level);
     return ZipError::Ok;
+}
+
+// 并行配置方法
+
+ZipError ZipArchive::setParallelConfig(const ParallelConfig& config) {
+    parallel_config_ = config;
+    
+    // 如果并行读取器已经初始化，重新创建它
+    if (parallel_reader_ && isReadable()) {
+        return initializeParallelReader();
+    }
+    
+    return ZipError::Ok;
+}
+
+// 并行读取方法实现
+
+std::future<std::unordered_map<std::string, std::vector<uint8_t>>>
+ZipArchive::extractFilesParallel(const std::vector<std::string>& paths) {
+    if (!isParallelReadingAvailable()) {
+        // 回退到单线程模式
+        return std::async(std::launch::async, [this, paths]() {
+            std::unordered_map<std::string, std::vector<uint8_t>> result;
+            for (const auto& path : paths) {
+                std::vector<uint8_t> data;
+                if (extractFile(path, data) == ZipError::Ok) {
+                    result[path] = std::move(data);
+                }
+            }
+            return result;
+        });
+    }
+    
+    return std::async(std::launch::async, [this, paths]() {
+        return parallel_reader_->extractFilesParallel(paths);
+    });
+}
+
+std::future<std::vector<uint8_t>> ZipArchive::extractFileAsync(std::string_view internal_path) {
+    if (!isParallelReadingAvailable()) {
+        // 回退到单线程异步模式
+        return std::async(std::launch::async, [this, path = std::string(internal_path)]() {
+            std::vector<uint8_t> data;
+            extractFile(path, data);
+            return data;
+        });
+    }
+    
+    return parallel_reader_->extractFileAsync(std::string(internal_path));
+}
+
+std::future<void> ZipArchive::processFilesParallel(
+    const std::vector<std::string>& paths,
+    std::function<void(const std::string&, const std::vector<uint8_t>&)> processor,
+    size_t chunk_size) {
+    
+    if (!isParallelReadingAvailable()) {
+        // 回退到单线程处理
+        return std::async(std::launch::async, [this, paths, processor]() {
+            for (const auto& path : paths) {
+                std::vector<uint8_t> data;
+                if (extractFile(path, data) == ZipError::Ok) {
+                    processor(path, data);
+                }
+            }
+        });
+    }
+    
+    return std::async(std::launch::async, [this, paths, processor, chunk_size]() {
+        parallel_reader_->processFilesInParallel(paths, processor);
+    });
+}
+
+std::future<void> ZipArchive::streamProcessFilesParallel(
+    const std::vector<std::string>& paths,
+    std::function<void(const std::string&, std::istream&)> processor,
+    size_t max_concurrent) {
+    
+    return std::async(std::launch::async, [this, paths, processor, max_concurrent]() {
+        // 创建工作线程池
+        if (!thread_pool_) {
+            thread_pool_ = std::make_unique<core::ThreadPool>(max_concurrent);
+        }
+        
+        std::vector<std::future<void>> futures;
+        
+        for (const auto& path : paths) {
+            auto future = thread_pool_->enqueue([this, path, processor]() {
+                std::vector<uint8_t> data;
+                if (extractFile(path, data) == ZipError::Ok) {
+                    std::stringstream ss(std::string(data.begin(), data.end()));
+                    processor(path, ss);
+                }
+            });
+            
+            futures.push_back(std::move(future));
+        }
+        
+        // 等待所有任务完成
+        for (auto& future : futures) {
+            future.wait();
+        }
+    });
+}
+
+ZipError ZipArchive::prefetchFiles(const std::vector<std::string>& paths) {
+    if (!isParallelReadingAvailable()) {
+        return ZipError::NotOpen;
+    }
+    
+    parallel_reader_->prefetchFiles(paths);
+    return ZipError::Ok;
+}
+
+// 私有辅助方法
+
+ZipError ZipArchive::initializeParallelReader() {
+    try {
+        // 创建并行配置
+        parallel::ParallelZipReader::Config config;
+        config.thread_count = parallel_config_.thread_count;
+        config.prefetch_size = parallel_config_.prefetch_size;
+        config.enable_cache = parallel_config_.enable_cache;
+        config.cache_size_limit = parallel_config_.cache_size_limit;
+        
+        // 创建并行读取器
+        parallel_reader_ = std::make_unique<parallel::ParallelZipReader>(filepath_, config);
+        
+        // 创建线程池
+        if (!thread_pool_) {
+            thread_pool_ = std::make_unique<core::ThreadPool>(parallel_config_.thread_count);
+        }
+        
+        return ZipError::Ok;
+    } catch (const std::exception& e) {
+        FASTEXCEL_LOG_ERROR("[ARCH] Failed to initialize parallel reader: {}", e.what());
+        parallel_reader_.reset();
+        return ZipError::InternalError;
+    }
 }
 
 }} // namespace fastexcel::archive
