@@ -12,6 +12,8 @@
 
 #include "fastexcel/FastExcel.hpp"
 #include "fastexcel/core/Workbook.hpp"
+#include "fastexcel/core/ReadOnlyWorkbook.hpp"
+#include "fastexcel/core/ReadOnlyWorksheet.hpp"
 #include "fastexcel/core/Path.hpp"
 #include "fastexcel/memory/PoolManager.hpp"
 #include "fastexcel/utils/Logger.hpp"
@@ -154,12 +156,12 @@ void readLargeFile(const std::string& filepath) {
     // 步骤2: 预热内存池
     prewarmMemoryPools();
     
-    std::unique_ptr<Workbook> workbook;
+    std::unique_ptr<ReadOnlyWorkbook> workbook;
     
     // 步骤3: 打开文件
     {
         PerformanceTimer timer("文件打开");
-        workbook = Workbook::openReadOnly(Path(filepath));
+        workbook = fastexcel::openReadOnly(filepath);
         
         if (!workbook) {
             std::cout << "❌ 无法打开Excel文件: " << filepath << "\n";
@@ -181,15 +183,6 @@ void readLargeFile(const std::string& filepath) {
         // 显示工作表名称
         for (size_t i = 0; i < sheet_names.size(); ++i) {
             std::cout << "    " << (i + 1) << ". " << sheet_names[i] << "\n";
-        }
-        
-        // 获取文档属性
-        const auto& doc_props = workbook->getDocumentProperties();
-        if (!doc_props.author.empty()) {
-            std::cout << "  作者: " << doc_props.author << "\n";
-        }
-        if (!doc_props.company.empty()) {
-            std::cout << "  公司: " << doc_props.company << "\n";
         }
     }
     
@@ -219,88 +212,30 @@ void readLargeFile(const std::string& filepath) {
             continue;
         }
         
-        // 流式读取大文件数据
+        // 获取工作表统计信息（使用ReadOnlyWorksheet的优化统计方法）
         {
-            PerformanceTimer timer("流式数据分析 - " + sheet_name);
+            PerformanceTimer timer("列式数据分析 - " + sheet_name);
             
-            // 统计信息
-            size_t empty_cells = 0;
-            size_t string_cells = 0;
-            size_t number_cells = 0;
-            size_t boolean_cells = 0;
-            size_t formula_cells = 0;
-            size_t processed_cells = 0;
+            auto stats = worksheet->getStats();
             
-            const int SAMPLE_BATCH_SIZE = 1000; // 每次处理1000行
-            const int PROGRESS_INTERVAL = 15000; // 每15000行显示进度（减少频率）
-            
-            for (int batch_start = 0; batch_start < total_rows; batch_start += SAMPLE_BATCH_SIZE) {
-                int batch_end = std::min(batch_start + SAMPLE_BATCH_SIZE, total_rows);
-                
-                // 处理当前批次
-                for (int row = batch_start; row < batch_end; ++row) {
-                    for (int col = 0; col < total_cols; ++col) {
-                        if (worksheet->hasCellAt(row, col)) {
-                            const auto& cell = worksheet->getCell(row, col);
-                            processed_cells++;
-                            
-                            switch (cell.getType()) {
-                                case CellType::String:
-                                    string_cells++;
-                                    break;
-                                case CellType::Number:
-                                    number_cells++;
-                                    break;
-                                case CellType::Boolean:
-                                    boolean_cells++;
-                                    break;
-                                case CellType::Formula:
-                                    formula_cells++;
-                                    break;
-                                default:
-                                    empty_cells++;
-                                    break;
-                            }
-                        } else {
-                            empty_cells++;
-                        }
-                    }
-                    
-                    // 显示进度（每15000行）
-                    if ((row + 1) % PROGRESS_INTERVAL == 0) {
-                        double progress = static_cast<double>(row + 1) / total_rows * 100.0;
-                        std::cout << "  🔄 进度: " << std::fixed << std::setprecision(1) 
-                                  << progress << "% (" << (row + 1) << "/" << total_rows << " 行)\n";
-                        
-                        // 减少内存监控频率，仅在关键进度点检查
-                        if (progress >= 50.0 && progress < 55.0) {
-                            memory_monitor.printCurrentUsage("数据读取进度 50%");
-                        }
-                    }
-                }
-                
-                // 给系统一点喘息时间，避免过度占用CPU
-                if (batch_start > 0 && batch_start % (SAMPLE_BATCH_SIZE * 10) == 0) {
-                    std::this_thread::sleep_for(std::chrono::milliseconds(10));
-                }
-            }
-            
-            // 输出统计结果
             std::cout << "\n📈 数据统计 (" << sheet_name << "):\n";
-            std::cout << "  总单元格数: " << (total_rows * total_cols) << "\n";
-            std::cout << "  已处理单元格: " << processed_cells << "\n";
-            std::cout << "  字符串单元格: " << string_cells << " (" 
-                      << std::fixed << std::setprecision(1) 
-                      << (double)string_cells/processed_cells*100 << "%)\n";
-            std::cout << "  数字单元格: " << number_cells << " (" 
-                      << std::fixed << std::setprecision(1) 
-                      << (double)number_cells/processed_cells*100 << "%)\n";
-            std::cout << "  布尔单元格: " << boolean_cells << "\n";
-            std::cout << "  公式单元格: " << formula_cells << "\n";
-            std::cout << "  空单元格: " << empty_cells << "\n";
+            std::cout << "  总数据点数: " << stats.total_data_points << "\n";
+            std::cout << "  内存使用: " << stats.memory_usage / 1024 << " KB\n";
+            std::cout << "  数字列数: " << stats.number_columns << "\n";
+            std::cout << "  字符串列数: " << stats.string_columns << "\n";
+            std::cout << "  布尔列数: " << stats.boolean_columns << "\n";
+            std::cout << "  错误/文本列数: " << stats.error_columns << "\n";
+            
+            if (stats.total_data_points > 0) {
+                std::cout << "  数据类型分布:\n";
+                double number_pct = (double)stats.number_columns / (stats.number_columns + stats.string_columns + stats.boolean_columns + stats.error_columns) * 100;
+                double string_pct = (double)stats.string_columns / (stats.number_columns + stats.string_columns + stats.boolean_columns + stats.error_columns) * 100;
+                std::cout << "    数字列: " << std::fixed << std::setprecision(1) << number_pct << "%\n";
+                std::cout << "    字符串列: " << std::fixed << std::setprecision(1) << string_pct << "%\n";
+            }
         }
         
-        // 显示数据样例（前5行×5列）
+        // 显示数据样例（使用列式存储API）
         std::cout << "\n📝 数据样例 (前5行×5列):\n";
         std::cout << std::setw(8) << "行\\列";
         for (int col = 0; col < std::min(5, total_cols); ++col) {
@@ -308,47 +243,41 @@ void readLargeFile(const std::string& filepath) {
         }
         std::cout << "\n";
         
-        for (int row = 0; row < std::min(5, total_rows); ++row) {
+        // 获取前5行的数据范围
+        int sample_rows = std::min(5, total_rows);
+        int sample_cols = std::min(5, total_cols);
+        
+        auto sample_data = worksheet->getRowRangeData(0, sample_rows - 1);
+        
+        for (int row = 0; row < sample_rows; ++row) {
             std::cout << std::setw(8) << ("行" + std::to_string(row + 1));
             
-            for (int col = 0; col < std::min(5, total_cols); ++col) {
+            for (int col = 0; col < sample_cols; ++col) {
                 std::string cell_value = "(空)";
                 
-                if (worksheet->hasCellAt(row, col)) {
-                    const auto& cell = worksheet->getCell(row, col);
-                    
-                    try {
-                        switch (cell.getType()) {
-                            case CellType::String: {
-                                std::string value = cell.getValue<std::string>();
-                                if (value.length() > 12) {
-                                    value = value.substr(0, 9) + "...";
-                                }
-                                cell_value = "\"" + value + "\"";
-                                break;
-                            }
-                            case CellType::Number: {
-                                double value = cell.getValue<double>();
+                auto row_it = sample_data.find(row);
+                if (row_it != sample_data.end()) {
+                    auto col_it = row_it->second.find(col);
+                    if (col_it != row_it->second.end()) {
+                        // 处理CellValue变体类型
+                        std::visit([&cell_value](const auto& value) {
+                            using T = std::decay_t<decltype(value)>;
+                            if constexpr (std::is_same_v<T, double>) {
                                 std::ostringstream oss;
                                 oss << std::fixed << std::setprecision(2) << value;
                                 cell_value = oss.str();
-                                break;
-                            }
-                            case CellType::Boolean:
-                                cell_value = cell.getValue<bool>() ? "TRUE" : "FALSE";
-                                break;
-                            case CellType::Formula:
-                                cell_value = "=" + cell.getFormula();
-                                if (cell_value.length() > 12) {
-                                    cell_value = cell_value.substr(0, 9) + "...";
+                            } else if constexpr (std::is_same_v<T, uint32_t>) {
+                                cell_value = std::to_string(value);
+                            } else if constexpr (std::is_same_v<T, bool>) {
+                                cell_value = value ? "TRUE" : "FALSE";
+                            } else if constexpr (std::is_same_v<T, std::string>) {
+                                std::string str_value = value;
+                                if (str_value.length() > 12) {
+                                    str_value = str_value.substr(0, 9) + "...";
                                 }
-                                break;
-                            default:
-                                cell_value = "(未知)";
-                                break;
-                        }
-                    } catch (const std::exception& e) {
-                        cell_value = "(错误)";
+                                cell_value = "\"" + str_value + "\"";
+                            }
+                        }, col_it->second);
                     }
                 }
                 
@@ -362,12 +291,13 @@ void readLargeFile(const std::string& filepath) {
     {
         PerformanceTimer timer("整体统计计算");
         
-        auto stats = workbook->getStatistics();
+        auto stats = workbook->getStats();
         std::cout << "\n📊 工作簿整体统计:\n";
-        std::cout << "  总工作表数: " << stats.total_worksheets << "\n";
-        std::cout << "  总单元格数: " << stats.total_cells << "\n";
-        std::cout << "  总格式数: " << stats.total_formats << "\n";
-        std::cout << "  内存使用: " << stats.memory_usage / 1024 / 1024 << " MB\n";
+        std::cout << "  总工作表数: " << stats.sheet_count << "\n";
+        std::cout << "  总数据点数: " << stats.total_data_points << "\n";
+        std::cout << "  内存使用: " << stats.total_memory_usage / 1024 / 1024 << " MB\n";
+        std::cout << "  共享字符串数: " << stats.sst_string_count << "\n";
+        std::cout << "  列式存储优化: " << (stats.columnar_optimized ? "启用" : "禁用") << "\n";
     }
     
     // 步骤7: 内存池统计
@@ -384,7 +314,7 @@ void readLargeFile(const std::string& filepath) {
     // 步骤8: 关闭文件
     {
         PerformanceTimer timer("文件关闭");
-        workbook->close();
+        // ReadOnlyWorkbook 会在析构时自动清理，无需显式关闭
         workbook.reset();
     }
     
@@ -408,7 +338,7 @@ void performBenchmark(const std::string& filepath) {
         MemoryMonitor monitor;
         PerformanceTimer timer("完整读取测试 #" + std::to_string(run + 1));
         
-        auto workbook = Workbook::openReadOnly(Path(filepath));
+        auto workbook = fastexcel::openReadOnly(filepath);
         if (!workbook) {
             std::cout << "❌ 文件打开失败\n";
             continue;
@@ -423,11 +353,11 @@ void performBenchmark(const std::string& filepath) {
             }
         }
         
-        auto stats = workbook->getStatistics();
+        auto stats = workbook->getStats();
         open_times.push_back(timer.getElapsedMs());
         memory_usage.push_back(monitor.getCurrentMemoryUsage());
         
-        workbook->close();
+        // ReadOnlyWorkbook 会在析构时自动清理
     }
     
     // 计算平均值

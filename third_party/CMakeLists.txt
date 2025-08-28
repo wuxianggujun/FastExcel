@@ -327,6 +327,7 @@ set(FASTEXCEL_THIRD_PARTY_INCLUDE_DIRS
     ${CMAKE_CURRENT_SOURCE_DIR}/ZlibMinizipBundle/third_party/minizip-ng
     ${CMAKE_CURRENT_SOURCE_DIR}/utfcpp/source
     ${CMAKE_CURRENT_SOURCE_DIR}/fast_float/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/stb
     PARENT_SCOPE
 )
 

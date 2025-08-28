@@ -27,6 +27,12 @@ foreach (SOURCE ${EXAMPLE_SOURCES})
     # 确保示例程序能访问第三方库的头文件
     target_include_directories(${EXEC_NAME} PRIVATE
             ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/fmt/include
+            ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/libexpat/expat/lib
+            ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/ZlibMinizipBundle/third_party/zlib-ng
+            ${CMAKE_CURRENT_BINARY_DIR}/../third_party/ZlibMinizipBundle/third_party/zlib-ng
+            ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/ZlibMinizipBundle/third_party/minizip-ng
+            ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/utfcpp/source
+            ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/stb
             ${FASTEXCEL_THIRD_PARTY_INCLUDE_DIRS}
     )
 

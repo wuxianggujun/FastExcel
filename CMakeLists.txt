@@ -31,9 +31,9 @@ if (NOT CMAKE_BUILD_TYPE)
 endif ()
 
 # 设置输出目录
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
-set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
-set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
 
 # =============================================================================
 # 第三方库配置
@@ -174,6 +174,9 @@ target_include_directories(fastexcel PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/third_party/fmt/include
         ${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb
         ${CMAKE_CURRENT_SOURCE_DIR}/third_party/utfcpp/source
+        ${CMAKE_CURRENT_SOURCE_DIR}/third_party/ZlibMinizipBundle/third_party/zlib-ng
+        ${CMAKE_CURRENT_BINARY_DIR}/third_party/ZlibMinizipBundle/third_party/zlib-ng
+        ${CMAKE_CURRENT_SOURCE_DIR}/third_party/ZlibMinizipBundle/third_party/minizip-ng
 )
 
 # =============================================================================
@@ -184,8 +187,11 @@ target_link_libraries(fastexcel PRIVATE
         ${FASTEXCEL_EXPAT_TARGET}
 )
 
-# 只有当 minizip 目标存在时才链接
-if (FASTEXCEL_MINIZIP_TARGET AND NOT FASTEXCEL_MINIZIP_TARGET STREQUAL "")
+# 链接ZlibMinizipBundle（包含zlib和minizip-ng）
+if (FASTEXCEL_ZLIBMINIZIPBUNDLE_TARGET AND NOT FASTEXCEL_ZLIBMINIZIPBUNDLE_TARGET STREQUAL "")
+    target_link_libraries(fastexcel PRIVATE ${FASTEXCEL_ZLIBMINIZIPBUNDLE_TARGET})
+    message(STATUS "FastExcel: Linking with ZlibMinizipBundle target: ${FASTEXCEL_ZLIBMINIZIPBUNDLE_TARGET}")
+elseif (FASTEXCEL_MINIZIP_TARGET AND NOT FASTEXCEL_MINIZIP_TARGET STREQUAL "")
     target_link_libraries(fastexcel PRIVATE ${FASTEXCEL_MINIZIP_TARGET})
     message(STATUS "FastExcel: Linking with minizip target: ${FASTEXCEL_MINIZIP_TARGET}")
 else ()
