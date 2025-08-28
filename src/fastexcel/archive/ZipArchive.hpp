@@ -73,13 +73,7 @@ public:
     
     // 并行读取操作
     
-    /**
-     * @brief 并行提取多个文件
-     * @param paths 文件路径列表
-     * @return 文件内容映射 (路径 -> 数据)
-     */
-    std::future<std::unordered_map<std::string, std::vector<uint8_t>>>
-    extractFilesParallel(const std::vector<std::string>& paths);
+
     
     /**
      * @brief 异步提取单个文件

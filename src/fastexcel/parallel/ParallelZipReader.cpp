@@ -43,27 +43,7 @@ ParallelZipReader::~ParallelZipReader() {
     }
 }
 
-std::unordered_map<std::string, std::vector<uint8_t>> 
-ParallelZipReader::extractFilesParallel(const std::vector<std::string>& paths) {
-    std::unordered_map<std::string, std::vector<uint8_t>> results;
-    std::vector<std::future<std::vector<uint8_t>>> futures;
-    
-    // Submit all tasks
-    for (const auto& path : paths) {
-        futures.push_back(extractFileAsync(path));
-    }
-    
-    // Collect results
-    for (size_t i = 0; i < paths.size(); ++i) {
-        try {
-            results[paths[i]] = futures[i].get();
-        } catch (const std::exception& e) {
-            FASTEXCEL_LOG_ERROR("Failed to extract file {}: {}", paths[i], e.what());
-        }
-    }
-    
-    return results;
-}
+
 
 std::future<std::vector<uint8_t>> 
 ParallelZipReader::extractFileAsync(const std::string& path) {
@@ -331,23 +311,33 @@ ParallelWorksheetLoader::loadWorksheetsParallel(
         paths.push_back(pair.second);
     }
     
-    auto files_data = zip_reader.extractFilesParallel(paths);
+    // Use streaming API instead of batch processing
     std::vector<WorksheetData> results;
+    std::mutex results_mutex;
     results.reserve(worksheet_paths.size());
     
+    // Create name-to-index mapping for ordering results
+    std::unordered_map<std::string, size_t> path_to_index;
     for (size_t i = 0; i < worksheet_paths.size(); ++i) {
-        const auto& [name, path] = worksheet_paths[i];
-        auto it = files_data.find(path);
-        if (it != files_data.end()) {
-            WorksheetData data;
-            data.name = name;
-            data.path = path;
-            data.content = std::move(it->second);
-            data.row_count = 0; // Will be filled by parser
-            data.col_count = 0; // Will be filled by parser
-            results.push_back(std::move(data));
-        }
+        path_to_index[worksheet_paths[i].second] = i;
     }
+    results.resize(worksheet_paths.size());
+    
+    zip_reader.processFilesInParallel(paths, 
+        [&](const std::string& path, const std::vector<uint8_t>& data) {
+            auto it = path_to_index.find(path);
+            if (it != path_to_index.end()) {
+                size_t index = it->second;
+                const auto& [name, _] = worksheet_paths[index];
+                
+                std::lock_guard<std::mutex> lock(results_mutex);
+                results[index].name = name;
+                results[index].path = path;
+                results[index].content = data;
+                results[index].row_count = 0; // Will be filled by parser
+                results[index].col_count = 0; // Will be filled by parser
+            }
+        });
     
     return results;
 }

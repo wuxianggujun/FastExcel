@@ -249,26 +249,7 @@ ZipError ZipArchive::setParallelConfig(const ParallelConfig& config) {
 
 // 并行读取方法实现
 
-std::future<std::unordered_map<std::string, std::vector<uint8_t>>>
-ZipArchive::extractFilesParallel(const std::vector<std::string>& paths) {
-    if (!isParallelReadingAvailable()) {
-        // 回退到单线程模式
-        return std::async(std::launch::async, [this, paths]() {
-            std::unordered_map<std::string, std::vector<uint8_t>> result;
-            for (const auto& path : paths) {
-                std::vector<uint8_t> data;
-                if (extractFile(path, data) == ZipError::Ok) {
-                    result[path] = std::move(data);
-                }
-            }
-            return result;
-        });
-    }
-    
-    return std::async(std::launch::async, [this, paths]() {
-        return parallel_reader_->extractFilesParallel(paths);
-    });
-}
+
 
 std::future<std::vector<uint8_t>> ZipArchive::extractFileAsync(std::string_view internal_path) {
     if (!isParallelReadingAvailable()) {

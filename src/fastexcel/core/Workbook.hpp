@@ -17,6 +17,7 @@
 #include "fastexcel/archive/FileManager.hpp"
 #include "fastexcel/utils/CommonUtils.hpp"
 #include "fastexcel/utils/AddressParser.hpp"
+#include "fastexcel/core/CellAddress.hpp"
 #include "fastexcel/theme/Theme.hpp"
 #include "FormatDescriptor.hpp"
 #include "FormatRepository.hpp"
@@ -944,7 +945,7 @@ public:
     /**
      * @brief 基础单元格值设置方法
      */
-    void setCellValue(int row, int col, const std::string& value) {
+    void setCellValue(const Address& address, const std::string& value) {
         // 确保至少存在一个工作表
         if (worksheet_manager_->count() == 0) {
             addSheet("Sheet1");
@@ -952,38 +953,38 @@ public:
         // 获取第一个工作表
         auto sheet = worksheet_manager_->getByIndex(0);
         if (sheet) {
-            sheet->setCellValue(core::Address(row, col), value);
+            sheet->setCellValue(address, value);
         }
     }
     
-    void setCellValue(int row, int col, double value) {
+    void setCellValue(const Address& address, double value) {
         if (worksheet_manager_->count() == 0) {
             addSheet("Sheet1");
         }
         auto sheet = worksheet_manager_->getByIndex(0);
         if (sheet) {
-            sheet->setCellValue(core::Address(row, col), value);
+            sheet->setCellValue(address, value);
         }
     }
     
-    void setCellValue(int row, int col, int value) {
-        setCellValue(row, col, static_cast<double>(value));
+    void setCellValue(const Address& address, int value) {
+        setCellValue(address, static_cast<double>(value));
     }
     
-    void setCellValue(int row, int col, bool value) {
+    void setCellValue(const Address& address, bool value) {
         if (worksheet_manager_->count() == 0) {
             addSheet("Sheet1");
         }
         auto sheet = worksheet_manager_->getByIndex(0);
         if (sheet) {
-            sheet->setCellValue(core::Address(row, col), value);
+            sheet->setCellValue(address, value);
         }
     }
     
     /**
      * @brief 使用StringJoiner优化的复合值设置
      */
-    void setCellComplexValue(int row, int col, 
+    void setCellComplexValue(const Address& address, 
                            const std::vector<std::string_view>& parts,
                            std::string_view separator = " ") {
         std::string result;
@@ -995,16 +996,16 @@ public:
             result += part;
             first = false;
         }
-        setCellValue(row, col, result);
+        setCellValue(address, result);
     }
     
     /**
      * @brief 使用StringBuilder优化的格式化值设置
      */
     template<typename... Args>
-    void setCellFormattedValue(int row, int col, const char* format, Args&&... args) {
+    void setCellFormattedValue(const Address& address, const char* format, Args&&... args) {
         std::string formatted = utils::StringViewOptimized::format(format, std::forward<Args>(args)...);
-        setCellValue(row, col, formatted);
+        setCellValue(address, formatted);
     }
 
 public:

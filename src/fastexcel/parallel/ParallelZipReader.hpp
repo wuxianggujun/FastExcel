@@ -48,13 +48,7 @@ public:
     ParallelZipReader(const core::Path& zip_path, const Config& config = Config());
     ~ParallelZipReader();
     
-    /**
-     * @brief 并行提取多个文件
-     * @param paths 文件路径列表
-     * @return 文件内容映射
-     */
-    std::unordered_map<std::string, std::vector<uint8_t>> 
-    extractFilesParallel(const std::vector<std::string>& paths);
+
     
     /**
      * @brief 异步提取文件
