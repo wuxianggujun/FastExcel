@@ -74,59 +74,9 @@ class Workbook {
     friend class ::fastexcel::opc::PackageEditor;  // 让PackageEditor能访问私有方法
     friend class ::fastexcel::reader::XLSXReader;  // 让XLSXReader能访问私有open方法
     friend class ::fastexcel::xml::DocPropsXMLGenerator;  // 让XML生成器能访问私有方法
-private:
-    // 核心架构组件
-    std::string filename_;
-    std::unique_ptr<WorkbookCoordinator> coordinator_;
-    std::unique_ptr<WorksheetManager> worksheet_manager_;
-    std::unique_ptr<ResourceManager> resource_manager_;
-    
-    // 样式和格式管理
-    std::unique_ptr<FormatRepository> format_repo_;
-    std::unique_ptr<SharedStringTable> shared_string_table_;
-    std::unique_ptr<SharedStringCollector> string_collector_;
-    
-    // 主题管理
-    std::unique_ptr<theme::Theme> theme_;
-    std::string theme_xml_;
-    std::string theme_xml_original_;
-    bool theme_dirty_ = false;
-    
-    // 状态管理
-    WorkbookState state_ = WorkbookState::CLOSED;
-    FileSource file_source_ = FileSource::NEW_FILE;
-    std::string original_package_path_;
-    
-    // 专门管理器（职责分离）
-    std::unique_ptr<WorkbookDocumentManager> document_manager_;
-    std::unique_ptr<WorkbookSecurityManager> security_manager_;
-    
-    // 统一内存管理器 - 暂时禁用直到实现
-    // std::unique_ptr<memory::WorkbookMemoryManager> memory_manager_;
-    
-    // 性能统计（已移除）：改用各内存池自身统计
-    std::unique_ptr<WorkbookDataManager> data_manager_;
-    
-    // 配置选项
-    WorkbookOptions options_;
-    bool preserve_unknown_parts_ = true;
-    
-    // 兼容性保留
-    std::vector<std::shared_ptr<Worksheet>> worksheets_;    // 暂时保留以兼容
-    std::unique_ptr<archive::FileManager> file_manager_;    // 暂时保留以兼容
-    int next_sheet_id_ = 1;                                // 迁移到WorksheetManager
-    size_t active_worksheet_index_ = 0;                    // 迁移到WorksheetManager
 
 public:
-    void setOptions(const WorkbookOptions& opts) {
-        options_ = opts;
-    }
-
-    static std::unique_ptr<Workbook> create(const std::string& filepath);
-    static std::unique_ptr<Workbook> openEditable(const std::string& filepath);
-    
-
-    
+    // ====================== 构造与析构 ======================
     explicit Workbook(const Path& path);
     ~Workbook();
     
@@ -137,10 +87,22 @@ public:
     // 允许移动构造和赋值
     Workbook(Workbook&&) = default;
     Workbook& operator=(Workbook&&) = default;
+
+    // ====================== 静态工厂方法 ======================
+    static std::unique_ptr<Workbook> create(const std::string& filepath);
+    static std::unique_ptr<Workbook> openEditable(const std::string& filepath);
+    static std::unique_ptr<Workbook> open(const Path& path);
+    static std::unique_ptr<Workbook> open(const std::string& filepath);
     
-    // 文件操作
+    // ====================== 文件操作 ======================
     bool save();
     bool saveAs(const std::string& filename);
+    bool close();
+    bool refresh();
+    bool isOpen() const;
+    void setOptions(const WorkbookOptions& opts) {
+        options_ = opts;
+    }
     
     // CSV功能
     
@@ -221,14 +183,11 @@ public:
         return WorkbookDataManager::isCSVFile(filepath);
     }
     
-    bool isOpen() const;
-    bool close();
-    
     // 编辑模式/保真写回配置
     void setPreserveUnknownParts(bool enable) { preserve_unknown_parts_ = enable; }
     bool getPreserveUnknownParts() const { return preserve_unknown_parts_; }
 
-    // 工作表管理
+    // ====================== 工作表管理 ======================
     std::shared_ptr<Worksheet> addSheet(const std::string& name = "");
     std::shared_ptr<Worksheet> insertSheet(size_t index, const std::string& name = "");
     bool removeSheet(const std::string& name);
@@ -290,7 +249,7 @@ public:
     std::shared_ptr<Worksheet> getActiveWorksheet();
     std::shared_ptr<const Worksheet> getActiveWorksheet() const;
     
-    // 便捷的单元格访问方法（跨工作表）
+    // ====================== 单元格访问方法（跨工作表） ======================
     /**
      * @brief 通过工作表索引和单元格坐标获取值
      * @tparam T 返回值类型
@@ -506,7 +465,7 @@ public:
         worksheet->setValue<T>(Address(row, col), value);
     }
     
-    // 样式管理
+    // ====================== 样式管理 ======================
     
     /**
      * @brief 添加样式到工作簿
@@ -639,7 +598,7 @@ public:
      */
     FormatRepository::DeduplicationStats getStyleStats() const;
     
-    // 文档属性
+    // ====================== 文档属性 ======================
     
     /**
      * @brief 设置文档标题
@@ -713,7 +672,7 @@ public:
     
     void setApplication(const std::string& application);
     
-    // 自定义属性
+    // ====================== 自定义属性 ======================
     
     /**
      * @brief 添加自定义属性（字符串）
@@ -758,7 +717,7 @@ public:
         return document_manager_ ? document_manager_->getAllCustomProperties() : std::unordered_map<std::string, std::string>();
     }
     
-    // 定义名称
+    // ====================== 定义名称 ======================
     void defineName(const std::string& name, const std::string& formula, const std::string& scope = "") {
         if (document_manager_) document_manager_->defineName(name, formula, scope);
     }
@@ -771,7 +730,7 @@ public:
         return document_manager_ ? document_manager_->removeDefinedName(name, scope) : false;
     }
     
-    // VBA项目
+    // ====================== VBA项目 ======================
     bool addVbaProject(const std::string& vba_project_path) {
         return security_manager_ ? security_manager_->addVbaProject(vba_project_path) : false;
     }
@@ -780,7 +739,7 @@ public:
         return security_manager_ ? security_manager_->hasVbaProject() : false;
     }
     
-    // 工作簿保护
+    // ====================== 工作簿保护 ======================
     void protect(const std::string& password = "", bool lock_structure = true, bool lock_windows = false) {
         if (security_manager_) {
             WorkbookSecurityManager::ProtectionOptions options;
@@ -799,7 +758,7 @@ public:
         return security_manager_ ? security_manager_->isProtected() : false;
     }
     
-    // 工作簿选项
+    // ====================== 工作簿选项 ======================
     
     /**
      * @brief 设置常量内存模式
@@ -840,9 +799,9 @@ public:
     void setXMLBufferSize(size_t size) { options_.xml_buffer_size = size; }
     void setHighPerformanceMode(bool enable);
     
-    // 获取状态
+    // ====================== 状态获取 ======================
 
-    // 管理器访问器（获取管理器实例）
+    // ====================== 管理器访问器 ======================
     WorkbookDocumentManager* getDocumentManager() { return document_manager_.get(); }
     const WorkbookDocumentManager* getDocumentManager() const { return document_manager_.get(); }
     
@@ -889,7 +848,7 @@ public:
     WorkbookOptions& getOptions() { return options_; }
     const WorkbookOptions& getOptions() const { return options_; }
     
-    // 共享字符串管理
+    // ====================== 共享字符串管理 ======================
     int addSharedString(const std::string& str);
     int addSharedStringWithIndex(const std::string& str, int original_index);
     int getSharedStringIndex(const std::string& str) const;
@@ -902,53 +861,7 @@ public:
     size_t getEstimatedSize() const;
 
     
-    // 工作簿编辑功能
-    
-    /**
-     * @brief 打开现有文件进行编辑（直接可用，无需再调用open）
-     * @param path 文件路径
-     * @return 工作簿智能指针，失败返回nullptr
-     */
-    static std::unique_ptr<Workbook> open(const Path& path);
-    
-    /**
-     * @brief 打开现有文件进行编辑（字符串重载版本）
-     * @param filepath 文件路径字符串
-     * @return 工作簿智能指针，失败返回nullptr
-     */
-    static std::unique_ptr<Workbook> open(const std::string& filepath);
-    
-    /**
-     * @brief 刷新工作簿（重新读取文件内容）
-     * @return 是否成功
-     */
-    bool refresh();
-    
-    /**
-     * @brief 合并另一个工作簿的内容
-     * @param other_workbook 其他工作簿
-     * @param merge_options 合并选项
-     * @return 是否成功
-     */
-    struct MergeOptions {
-        bool merge_worksheets = true;      // 合并工作表
-        bool merge_formats = true;         // 合并格式
-        bool merge_properties = false;     // 合并文档属性
-        bool overwrite_existing = false;   // 覆盖现有内容
-        std::string name_prefix;           // 工作表名称前缀
-    };
-    bool mergeWorkbook(const std::unique_ptr<Workbook>& other_workbook, const MergeOptions& options);
-    // 便捷重载：默认选项
-    bool mergeWorkbook(const std::unique_ptr<Workbook>& other_workbook);
-    
-    /**
-     * @brief 导出工作表到新工作簿
-     * @param worksheet_names 要导出的工作表名称列表
-     * @param output_filename 输出文件名
-     * @return 是否成功
-     */
-    bool exportWorksheets(const std::vector<std::string>& worksheet_names, const std::string& output_filename);
-    
+    // ====================== 工作簿编辑功能 ======================
     /**
      * @brief 批量重命名工作表
      * @param rename_map 重命名映射 (旧名称 -> 新名称)
@@ -1028,35 +941,6 @@ public:
      */
     size_t optimize();
     
-    /*
-    // 内存池优化方法 - 暂时禁用直到实现
-    template<typename... Args>
-    ::fastexcel::pool_ptr<Cell> createOptimizedCell(Args&&... args) {
-        if (!memory_manager_) {
-            memory_manager_ = std::make_unique<memory::WorkbookMemoryManager>();
-        }
-        
-        return memory_manager_->createOptimizedCell(std::forward<Args>(args)...);
-    }
-    
-    template<typename... Args>
-    ::fastexcel::pool_ptr<FormatDescriptor> createOptimizedFormat(Args&&... args) {
-        if (!memory_manager_) {
-            memory_manager_ = std::make_unique<memory::WorkbookMemoryManager>();
-        }
-        
-        return memory_manager_->createOptimizedFormat(std::forward<Args>(args)...);
-    }
-    
-    ::fastexcel::pool_ptr<FormatDescriptor> createDefaultFormat() {
-        if (!memory_manager_) {
-            memory_manager_ = std::make_unique<memory::WorkbookMemoryManager>();
-        }
-        
-        return memory_manager_->createDefaultFormat();
-    }
-    */
-    
     /**
      * @brief 基础单元格值设置方法
      */
@@ -1102,8 +986,6 @@ public:
         }
     }
     
-    // 已移除：显式“优化版”接口；优化已深度集成到 setCellValue
-    
     /**
      * @brief 使用StringJoiner优化的复合值设置
      */
@@ -1130,23 +1012,9 @@ public:
         std::string formatted = utils::StringViewOptimized::format(format, std::forward<Args>(args)...);
         setCellValue(row, col, formatted);
     }
-    
-    // 已移除：Workbook 级别内存使用统计接口（统一使用内存池统计）
-    
-    /**
-     * @brief 内存收缩（释放未使用的内存）- 暂时禁用
-     */
-    void shrinkMemory() {
-        // 暂时禁用内存管理器功能
-        // if (memory_manager_) {
-        //     memory_manager_->shrinkAll();
-        //     FASTEXCEL_LOG_DEBUG("Memory shrinking completed for Workbook");
-        // }
-    }
 
-private:
-    // 文档属性通过 WorkbookDocumentManager 管理
-    // 内部方法
+public:
+    // ====================== 辅助函数 ======================
     
     /**
      * @brief 内部方法：打开工作簿文件管理器
@@ -1159,11 +1027,6 @@ private:
     bool generateWithGenerator(bool use_streaming_writer);
 
     // DirtyManager 访问（由 WorkbookDocumentManager 持有）
-public:
-    // 注意：避免重复声明 getDirtyManager（MSVC C2535）
-    
-    
-    // 辅助函数
     std::string generateUniqueSheetName(const std::string& base_name) const;
     bool validateSheetName(const std::string& name) const;
     void collectSharedStrings();
@@ -1176,13 +1039,11 @@ public:
     std::string getWorksheetPath(int sheet_id) const;
     std::string getWorksheetRelPath(int sheet_id) const;
     
-    
-    
     // 智能模式选择辅助方法
     size_t estimateMemoryUsage() const;
     size_t getTotalCellCount() const;
 
-    // 状态验证和转换辅助方法
+    // ====================== 状态验证和转换 ======================
     /**
      * @brief 检查当前状态是否允许指定操作
      * @param required_state 要求的最低状态
@@ -1211,6 +1072,48 @@ public:
     
     // 内部：根据编辑/透传状态返回"是否在编辑模式下且启用透传"
     bool isPassThroughEditMode() const { return file_source_ == FileSource::EXISTING_FILE && preserve_unknown_parts_; }
+
+private:
+    // ====================== 私有成员变量 ======================
+    // 核心架构组件
+    std::string filename_;
+    std::unique_ptr<WorkbookCoordinator> coordinator_;
+    std::unique_ptr<WorksheetManager> worksheet_manager_;
+    std::unique_ptr<ResourceManager> resource_manager_;
+    
+    // 样式和格式管理
+    std::unique_ptr<FormatRepository> format_repo_;
+    std::unique_ptr<SharedStringTable> shared_string_table_;
+    std::unique_ptr<SharedStringCollector> string_collector_;
+    
+    // 主题管理
+    std::unique_ptr<theme::Theme> theme_;
+    std::string theme_xml_;
+    std::string theme_xml_original_;
+    bool theme_dirty_ = false;
+    
+    // 状态管理
+    WorkbookState state_ = WorkbookState::CLOSED;
+    FileSource file_source_ = FileSource::NEW_FILE;
+    std::string original_package_path_;
+    
+    // 专门管理器（职责分离）
+    std::unique_ptr<WorkbookDocumentManager> document_manager_;
+    std::unique_ptr<WorkbookSecurityManager> security_manager_;
+    
+    // 性能统计（已移除）：改用各内存池自身统计
+    std::unique_ptr<WorkbookDataManager> data_manager_;
+    
+    // 配置选项
+    WorkbookOptions options_;
+    bool preserve_unknown_parts_ = true;
+    
+    // 兼容性保留
+    std::vector<std::shared_ptr<Worksheet>> worksheets_;    // 暂时保留以兼容
+    std::unique_ptr<archive::FileManager> file_manager_;    // 暂时保留以兼容
+    int next_sheet_id_ = 1;                                // 迁移到WorksheetManager
+    size_t active_worksheet_index_ = 0;                    // 迁移到WorksheetManager
+    
 
 };
 

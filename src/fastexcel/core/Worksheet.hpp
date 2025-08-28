@@ -304,7 +304,6 @@ public:
         }
     }
     
-private:
     template<typename T>
     std::optional<T> tryGetValue(const core::Address& address) const noexcept {
         if (!hasCellAt(address)) {
