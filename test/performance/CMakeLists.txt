@@ -13,7 +13,7 @@ else()
     endif()
 endif()
 
-if(BENCHMARK_AVAILABLE)
+#[[if(BENCHMARK_AVAILABLE)
     message(STATUS "Found Google Benchmark library")
     
     # 创建性能基准测试可执行程序
@@ -82,41 +82,4 @@ else()
     message(STATUS "  vcpkg: vcpkg install benchmark")
     message(STATUS "  Ubuntu: sudo apt-get install libbenchmark-dev")
     message(STATUS "  macOS: brew install google-benchmark")
-endif()
-
-# 创建简化版性能测试（不依赖Google Benchmark）
-add_executable(simple_performance_test 
-    simple_performance_test.cpp
-)
-
-target_link_libraries(simple_performance_test 
-    PRIVATE 
-    fastexcel
-)
-
-target_include_directories(simple_performance_test 
-    PRIVATE 
-    ${CMAKE_SOURCE_DIR}/src
-)
-
-if(WIN32)
-    target_link_libraries(simple_performance_test PRIVATE psapi)
-endif()
-
-target_compile_features(simple_performance_test PRIVATE cxx_std_17)
-
-if(MSVC)
-    target_compile_options(simple_performance_test PRIVATE
-        /W4 /WX- /wd4251 /wd4275 /utf-8
-        $<$<CONFIG:Release>:/O2>
-        $<$<CONFIG:RelWithDebInfo>:/O2>
-    )
-else()
-    target_compile_options(simple_performance_test PRIVATE
-        -Wall -Wextra -Wpedantic -O2
-    )
-endif()
-
-set_target_properties(simple_performance_test PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
-)
+endif()]]

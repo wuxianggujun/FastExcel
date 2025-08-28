@@ -52,7 +52,7 @@ CSVParseInfo WorksheetCSVHandler::loadFromCSV(const std::string& filepath, const
     // 将数据写入worksheet
     for (size_t row = 0; row < data.size(); ++row) {
         for (size_t col = 0; col < data[row].size(); ++col) {
-            worksheet_.setValue(static_cast<int>(row), static_cast<int>(col), data[row][col]);
+            worksheet_.setValue(core::Address(static_cast<int>(row), static_cast<int>(col)), data[row][col]);
         }
     }
     
@@ -79,7 +79,7 @@ CSVParseInfo WorksheetCSVHandler::loadFromCSVString(const std::string& csv_conte
     // 将数据写入worksheet
     for (size_t row = 0; row < data.size(); ++row) {
         for (size_t col = 0; col < data[row].size(); ++col) {
-            worksheet_.setValue(static_cast<int>(row), static_cast<int>(col), data[row][col]);
+            worksheet_.setValue(core::Address(static_cast<int>(row), static_cast<int>(col)), data[row][col]);
         }
     }
     
@@ -226,11 +226,11 @@ std::string WorksheetCSVHandler::getCellDisplayValue(int row, int col) const {
             return "";
         }
         
-        if (!worksheet_.hasCellAt(row, col)) {
+        if (!worksheet_.hasCellAt(core::Address(row, col))) {
             return "";
         }
         
-        const auto& cell = worksheet_.getCell(row, col);
+        const auto& cell = worksheet_.getCell(core::Address(row, col));
         
         switch (cell.getType()) {
             case CellType::Empty:

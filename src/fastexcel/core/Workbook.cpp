@@ -1,7 +1,6 @@
 #include "fastexcel/utils/Logger.hpp"
 #include "fastexcel/core/Workbook.hpp"
 #include "fastexcel/core/BatchFileWriter.hpp"
-#include "fastexcel/core/CustomPropertyManager.hpp"
 #include "fastexcel/core/DefinedNameManager.hpp"
 #include "fastexcel/core/managers/WorkbookDocumentManager.hpp"
 #include "fastexcel/core/managers/WorkbookSecurityManager.hpp"
@@ -183,10 +182,7 @@ Workbook::~Workbook() {
         
         close();
         
-        // 清理内存池（统一内存管理器会自动处理）
-        if (memory_manager_) {
-            memory_manager_->clear();
-        }
+        // 清理资源已经由各组件的析构函数处理
         
     } catch (const std::exception& e) {
         // 析构函数中不抛出异常，但记录详细错误信息
@@ -815,12 +811,13 @@ std::shared_ptr<Worksheet> Workbook::copyWorksheet(const std::string& source_nam
         // 复制所有单元格和格式
         for (int row = 0; row <= max_row; ++row) {
             for (int col = 0; col <= max_col; ++col) {
-                if (source_worksheet->hasCellAt(row, col)) {
+                core::Address addr(row, col);
+                if (source_worksheet->hasCellAt(addr)) {
                     // 使用copyCell方法复制单元格及其格式
-                    source_worksheet->copyCell(row, col, row, col, true, false);
+                    source_worksheet->copyCell(addr, addr, true, false);
                     // 将复制的内容设置到新工作表
-                    const auto& source_cell = source_worksheet->getCell(row, col);
-                    auto& new_cell = new_worksheet->getCell(row, col);
+                    const auto& source_cell = source_worksheet->getCell(addr);
+                    auto& new_cell = new_worksheet->getCell(addr);
                     
                     // 复制单元格值
                     new_cell = source_cell;
@@ -828,7 +825,7 @@ std::shared_ptr<Worksheet> Workbook::copyWorksheet(const std::string& source_nam
                     // 复制格式
                     auto format = source_cell.getFormatDescriptor();
                     if (format) {
-                        new_worksheet->setCellFormat(row, col, format);
+                        new_worksheet->setCellFormat(addr, format);
                     }
                 }
             }
@@ -1294,8 +1291,9 @@ void Workbook::collectSharedStrings() {
         
         for (int row = 0; row <= max_row; ++row) {
             for (int col = 0; col <= max_col; ++col) {
-                if (worksheet->hasCellAt(row, col)) {
-                    const auto& cell = worksheet->getCell(row, col);
+                core::Address addr(row, col);
+                if (worksheet->hasCellAt(addr)) {
+                    const auto& cell = worksheet->getCell(addr);
                     if (cell.isString()) {
                         addSharedString(cell.getStringValue());
                     }
@@ -1493,9 +1491,10 @@ bool Workbook::mergeWorkbook(const std::unique_ptr<Workbook>& other_workbook, co
                         // 复制所有单元格和格式
                         for (int row = 0; row <= max_row; ++row) {
                             for (int col = 0; col <= max_col; ++col) {
-                                if (other_worksheet->hasCellAt(row, col)) {
-                                    const auto& source_cell = other_worksheet->getCell(row, col);
-                                    auto& new_cell = new_worksheet->getCell(row, col);
+                                core::Address addr(row, col);
+                                if (other_worksheet->hasCellAt(addr)) {
+                                    const auto& source_cell = other_worksheet->getCell(addr);
+                                    auto& new_cell = new_worksheet->getCell(addr);
                                     
                                     // 复制单元格值
                                     new_cell = source_cell;
@@ -1503,7 +1502,7 @@ bool Workbook::mergeWorkbook(const std::unique_ptr<Workbook>& other_workbook, co
                                     // 复制格式
                                     auto format = source_cell.getFormatDescriptor();
                                     if (format) {
-                                        new_worksheet->setCellFormat(row, col, format);
+                                        new_worksheet->setCellFormat(addr, format);
                                     }
                                 }
                             }
@@ -1852,7 +1851,8 @@ size_t Workbook::getTotalCellCount() const {
                 size_t estimated_cells = 0;
                 for (int row = 0; row <= max_row; ++row) {
                     for (int col = 0; col <= max_col; ++col) {
-                        if (worksheet->hasCellAt(row, col)) {
+                        core::Address addr(row, col);
+                        if (worksheet->hasCellAt(addr)) {
                             estimated_cells++;
                         }
                     }

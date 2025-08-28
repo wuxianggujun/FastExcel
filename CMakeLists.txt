@@ -123,6 +123,7 @@ set(FASTEXCEL_SOURCES
         src/fastexcel/core/managers/WorkbookDocumentManager.cpp
         src/fastexcel/core/managers/WorkbookSecurityManager.cpp
         src/fastexcel/core/managers/WorkbookDataManager.cpp
+        src/fastexcel/parallel/ParallelZipReader.cpp
         
 )
 

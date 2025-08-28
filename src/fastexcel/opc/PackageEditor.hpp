@@ -4,7 +4,7 @@
 #include "fastexcel/core/Path.hpp"
 #include "fastexcel/utils/Logger.hpp"
 #include "fastexcel/archive/ZipReader.hpp"
-#include "fastexcel/opc/PackageManagerService.hpp"
+
 #include "fastexcel/opc/IPackageManager.hpp"
 #include "fastexcel/tracking/IChangeTracker.hpp"
 #include "fastexcel/xml/UnifiedXMLGenerator.hpp"

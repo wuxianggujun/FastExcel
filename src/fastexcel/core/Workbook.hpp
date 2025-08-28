@@ -5,7 +5,6 @@
 #include "fastexcel/core/WorkbookModeSelector.hpp"
 #include "fastexcel/core/WorkbookTypes.hpp"
 #include "fastexcel/core/Path.hpp"
-#include "fastexcel/core/CustomPropertyManager.hpp"
 #include "fastexcel/core/DefinedNameManager.hpp"
 #include "fastexcel/core/DirtyManager.hpp"
 #include "fastexcel/core/WorkbookCoordinator.hpp"
@@ -25,7 +24,6 @@
 #include "StyleBuilder.hpp"
 #include "SharedStringTable.hpp"
 // 内存管理组件
-#include "fastexcel/memory/WorkbookMemoryManager.hpp"
 #include "fastexcel/utils/SafeConstruction.hpp"
 #include "fastexcel/utils/StringViewOptimized.hpp"
 #include <string>
@@ -103,8 +101,8 @@ private:
     std::unique_ptr<WorkbookDocumentManager> document_manager_;
     std::unique_ptr<WorkbookSecurityManager> security_manager_;
     
-    // 统一内存管理器
-    std::unique_ptr<memory::WorkbookMemoryManager> memory_manager_;
+    // 统一内存管理器 - 暂时禁用直到实现
+    // std::unique_ptr<memory::WorkbookMemoryManager> memory_manager_;
     
     // 性能统计（已移除）：改用各内存池自身统计
     std::unique_ptr<WorkbookDataManager> data_manager_;
@@ -1030,9 +1028,8 @@ public:
      */
     size_t optimize();
     
-    /**
-     * @brief 内存池优化的Cell创建
-     */
+    /*
+    // 内存池优化方法 - 暂时禁用直到实现
     template<typename... Args>
     ::fastexcel::pool_ptr<Cell> createOptimizedCell(Args&&... args) {
         if (!memory_manager_) {
@@ -1042,9 +1039,6 @@ public:
         return memory_manager_->createOptimizedCell(std::forward<Args>(args)...);
     }
     
-    /**
-     * @brief 内存池优化的FormatDescriptor创建
-     */
     template<typename... Args>
     ::fastexcel::pool_ptr<FormatDescriptor> createOptimizedFormat(Args&&... args) {
         if (!memory_manager_) {
@@ -1054,9 +1048,6 @@ public:
         return memory_manager_->createOptimizedFormat(std::forward<Args>(args)...);
     }
     
-    /**
-     * @brief 创建默认格式的FormatDescriptor对象
-     */
     ::fastexcel::pool_ptr<FormatDescriptor> createDefaultFormat() {
         if (!memory_manager_) {
             memory_manager_ = std::make_unique<memory::WorkbookMemoryManager>();
@@ -1064,6 +1055,7 @@ public:
         
         return memory_manager_->createDefaultFormat();
     }
+    */
     
     /**
      * @brief 基础单元格值设置方法
@@ -1078,7 +1070,7 @@ public:
         auto sheet = worksheet_manager_ ? worksheet_manager_->getByIndex(0)
                                         : (worksheets_.empty() ? nullptr : worksheets_[0]);
         if (sheet) {
-            sheet->setCellValue(row, col, value);
+            sheet->setCellValue(core::Address(row, col), value);
         }
     }
     
@@ -1090,7 +1082,7 @@ public:
         auto sheet = worksheet_manager_ ? worksheet_manager_->getByIndex(0)
                                         : (worksheets_.empty() ? nullptr : worksheets_[0]);
         if (sheet) {
-            sheet->setCellValue(row, col, value);
+            sheet->setCellValue(core::Address(row, col), value);
         }
     }
     
@@ -1106,7 +1098,7 @@ public:
         auto sheet = worksheet_manager_ ? worksheet_manager_->getByIndex(0)
                                         : (worksheets_.empty() ? nullptr : worksheets_[0]);
         if (sheet) {
-            sheet->setCellValue(row, col, value);
+            sheet->setCellValue(core::Address(row, col), value);
         }
     }
     
@@ -1142,13 +1134,14 @@ public:
     // 已移除：Workbook 级别内存使用统计接口（统一使用内存池统计）
     
     /**
-     * @brief 内存收缩（释放未使用的内存）
+     * @brief 内存收缩（释放未使用的内存）- 暂时禁用
      */
     void shrinkMemory() {
-        if (memory_manager_) {
-            memory_manager_->shrinkAll();
-            FASTEXCEL_LOG_DEBUG("Memory shrinking completed for Workbook");
-        }
+        // 暂时禁用内存管理器功能
+        // if (memory_manager_) {
+        //     memory_manager_->shrinkAll();
+        //     FASTEXCEL_LOG_DEBUG("Memory shrinking completed for Workbook");
+        // }
     }
 
 private:

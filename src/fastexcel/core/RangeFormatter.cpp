@@ -334,7 +334,7 @@ void RangeFormatter::applyFormatToRange() {
     // 批量设置格式，利用智能API
     for (int row = start_row_; row <= end_row_; ++row) {
         for (int col = start_col_; col <= end_col_; ++col) {
-            worksheet_->setCellFormat(row, col, *pending_format_);
+            worksheet_->setCellFormat(core::Address(row, col), *pending_format_);
         }
     }
 }
@@ -378,7 +378,7 @@ void RangeFormatter::applyBordersToRange() {
                     continue;
             }
             
-            worksheet_->setCellFormat(row, col, builder);
+            worksheet_->setCellFormat(core::Address(row, col), builder);
         }
     }
 }
@@ -407,13 +407,13 @@ void RangeFormatter::applyTableStyle() {
         for (int col = start_col_; col <= end_col_; ++col) {
             if (has_headers_ && row == start_row_) {
                 // 标题行样式
-                worksheet_->setCellFormat(row, col, header_style);
+                worksheet_->setCellFormat(core::Address(row, col), header_style);
             } else if (row_banding_ && (row - start_row_ - (has_headers_ ? 1 : 0)) % 2 == 1) {
                 // 交替行样式
-                worksheet_->setCellFormat(row, col, alt_row_style);
+                worksheet_->setCellFormat(core::Address(row, col), alt_row_style);
             } else {
                 // 普通数据行样式
-                worksheet_->setCellFormat(row, col, data_style);
+                worksheet_->setCellFormat(core::Address(row, col), data_style);
             }
         }
     }
@@ -434,11 +434,11 @@ int RangeFormatter::columnLetterToNumber(const std::string& col_str) {
 
 // 获取当前单元格格式
 std::shared_ptr<const FormatDescriptor> RangeFormatter::getCellFormatDescriptor(int row, int col) const {
-    if (!worksheet_ || !worksheet_->hasCellAt(row, col)) {
+    if (!worksheet_ || !worksheet_->hasCellAt(core::Address(row, col))) {
         return nullptr;
     }
     
-    const auto& cell = worksheet_->getCell(row, col);
+    const auto& cell = worksheet_->getCell(core::Address(row, col));
     return cell.getFormatDescriptor();
 }
 

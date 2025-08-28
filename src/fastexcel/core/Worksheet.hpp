@@ -76,14 +76,14 @@ public:
     std::pair<int, int> getUsedRange() const;
     std::tuple<int, int, int, int> getUsedRangeFull() const;
     
-    bool hasCellAt(int row, int col) const;
+    bool hasCellAt(const core::Address& address) const;
     
-    Cell& getCell(int row, int col);
-    const Cell& getCell(int row, int col) const;
+    Cell& getCell(const core::Address& address);
+    const Cell& getCell(const core::Address& address) const;
     
-    void setCellFormat(int row, int col, const core::FormatDescriptor& format);
-    void setCellFormat(int row, int col, std::shared_ptr<const core::FormatDescriptor> format);
-    void setCellFormat(int row, int col, const core::StyleBuilder& builder);
+    void setCellFormat(const core::Address& address, const core::FormatDescriptor& format);
+    void setCellFormat(const core::Address& address, std::shared_ptr<const core::FormatDescriptor> format);
+    void setCellFormat(const core::Address& address, const core::StyleBuilder& builder);
     
     const std::string& getName() const { return name_; }
     void setName(const std::string& name) { name_ = name; }
@@ -104,15 +104,12 @@ public:
     int getColumnCount() const;
     bool isTabSelected() const { return sheet_view_.tab_selected; }
     
-    void copyCell(int src_row, int src_col, int dst_row, int dst_col, bool copy_format = true, bool copy_row_height = false);
-    void copyRange(int src_first_row, int src_first_col, int src_last_row, int src_last_col,
-                   int dst_row, int dst_col, bool copy_format = true);
-    void sortRange(int first_row, int first_col, int last_row, int last_col,
-                   int sort_column = 0, bool ascending = true, bool has_header = false);
+    void copyCell(const core::Address& src_address, const core::Address& dst_address, bool copy_format = true, bool copy_row_height = false);
+    void copyRange(const core::CellRange& src_range, const core::Address& dst_address, bool copy_format = true);
+    void sortRange(const core::CellRange& range, int sort_column = 0, bool ascending = true, bool has_header = false);
     
-    void setFormula(int row, int col, const std::string& formula, double result = 0.0);
-    void setFormula(const Address& address, const std::string& formula, double result = 0.0);
-    int createSharedFormula(int first_row, int first_col, int last_row, int last_col, const std::string& formula);
+    void setFormula(const core::Address& address, const std::string& formula, double result = 0.0);
+    int createSharedFormula(const core::CellRange& range, const std::string& formula);
 
 private:
     std::string name_;
@@ -190,8 +187,8 @@ private:
     double getWorkbookDefaultFontSize() const;
     
     // 内部辅助方法（从Manager类移过来）
-    void validateCellPosition(int row, int col) const;
-    void validateRange(int first_row, int first_col, int last_row, int last_col) const;
+    void validateCellPosition(const core::Address& address) const;
+    void validateRange(const core::CellRange& range) const;
     std::string generateNextImageId();
 
 public:
@@ -238,55 +235,37 @@ public:
 
 public:
     
-    Cell& getCell(const core::Address& address);
-    const Cell& getCell(const core::Address& address) const;
-    
-    template<typename T>
-    T getValue(int row, int col) const {
-        return getCell(row, col).getValue<T>();
-    }
-    
     template<typename T>
     T getValue(const core::Address& address) const {
-        return getValue<T>(address.getRow(), address.getCol());
-    }
-    
-    template<typename T>
-    void setValue(int row, int col, const T& value) {
-        cell_processor_->setValue(row, col, value);
+        return getCell(address).getValue<T>();
     }
     
     template<typename T>
     void setValue(const core::Address& address, const T& value) {
-        setValue<T>(address.getRow(), address.getCol(), value);
+        cell_processor_->setValue(address.getRow(), address.getCol(), value);
     }
     
     template<typename T>
-    void setCellValue(int row, int col, const T& value) {
-        setValue<T>(row, col, value);
+    void setCellValue(const core::Address& address, const T& value) {
+        setValue<T>(address, value);
     }
     
-    void setCellFormat(const core::Address& address, const core::FormatDescriptor& format);
-    void setCellFormat(const core::Address& address, std::shared_ptr<const core::FormatDescriptor> format);
-    void setCellFormat(const core::Address& address, const core::StyleBuilder& builder);
     
     RangeFormatter rangeFormatter(const std::string& range);
-    
-private:
-    RangeFormatter rangeFormatter(int start_row, int start_col, int end_row, int end_col);
-public:
-    
     RangeFormatter rangeFormatter(const core::CellRange& range) {
         return rangeFormatter(range.getStartRow(), range.getStartCol(), range.getEndRow(), range.getEndCol());
     }
+
+private:
+    RangeFormatter rangeFormatter(int start_row, int start_col, int end_row, int end_col);
     
 private:
-    std::optional<std::shared_ptr<const FormatDescriptor>> tryGetCellFormat(int row, int col) const noexcept {
+    std::optional<std::shared_ptr<const FormatDescriptor>> tryGetCellFormat(const core::Address& address) const noexcept {
         try {
-            if (!hasCellAt(row, col)) {
+            if (!hasCellAt(address)) {
                 return std::nullopt;
             }
-            const auto& cell = getCell(row, col);
+            const auto& cell = getCell(address);
             auto format = cell.getFormatDescriptor();
             return format ? std::make_optional(format) : std::nullopt;
         } catch (...) {
@@ -327,55 +306,38 @@ public:
     
 private:
     template<typename T>
-    std::optional<T> tryGetValue(int row, int col) const noexcept {
-        if (!hasCellAt(row, col)) {
+    std::optional<T> tryGetValue(const core::Address& address) const noexcept {
+        if (!hasCellAt(address)) {
             return std::nullopt;
         }
-        return getCell(row, col).tryGetValue<T>();
-    }
-public:
-    
-    template<typename T>
-    std::optional<T> tryGetValue(const core::Address& address) const noexcept {
-        return tryGetValue<T>(address.getRow(), address.getCol());
-    }
-    
-    template<typename T>
-    T getValueOr(int row, int col, const T& default_value) const noexcept {
-        if (!hasCellAt(row, col)) {
-            return default_value;
-        }
-        return getCell(row, col).getValueOr<T>(default_value);
+        return getCell(address).tryGetValue<T>();
     }
     
     template<typename T>
     T getValueOr(const core::Address& address, const T& default_value) const noexcept {
-        return getValueOr<T>(address.getRow(), address.getCol(), default_value);
+        if (!hasCellAt(address)) {
+            return default_value;
+        }
+        return getCell(address).getValueOr<T>(default_value);
     }
-    
-private:
-    void writeDateTime(int row, int col, const std::tm& datetime);
 public:
-    
     void writeDateTime(const core::Address& address, const std::tm& datetime);
-    
-private:
-    void writeUrl(int row, int col, const std::string& url, const std::string& string = "");
-public:
     
     void writeUrl(const core::Address& address, const std::string& url, const std::string& string = "");
 
     // 视图与窗格（统一地址接口）
     void freezePanes(const core::Address& split_cell);
     void freezePanes(const core::Address& split_cell, const core::Address& top_left_cell);
-    
-    void freezePanes(int row, int col);
-    void freezePanes(int row, int col, int top_left_row, int top_left_col);
     void splitPanes(const core::Address& split_cell);
     
     template<typename T>
-    std::vector<std::vector<T>> getRange(int start_row, int start_col, int end_row, int end_col) const {
+    std::vector<std::vector<T>> getRange(const core::CellRange& range) const {
         std::vector<std::vector<T>> result;
+        int start_row = range.getStartRow();
+        int start_col = range.getStartCol();
+        int end_row = range.getEndRow();
+        int end_col = range.getEndCol();
+        
         result.reserve(end_row - start_row + 1);
         
         for (int row = start_row; row <= end_row; ++row) {
@@ -383,8 +345,9 @@ public:
             row_data.reserve(end_col - start_col + 1);
             
             for (int col = start_col; col <= end_col; ++col) {
-                if (hasCellAt(row, col)) {
-                    row_data.push_back(getCell(row, col).getValue<T>());
+                core::Address addr(row, col);
+                if (hasCellAt(addr)) {
+                    row_data.push_back(getCell(addr).getValue<T>());
                 } else {
                     // 空单元格返回默认值
                     if constexpr (std::is_same_v<T, std::string>) {
@@ -402,36 +365,29 @@ public:
     }
     
     template<typename T>
-    std::vector<std::vector<T>> getRange(const core::CellRange& range) const {
-        return getRange<T>(range.getStartRow(), range.getStartCol(), range.getEndRow(), range.getEndCol());
-    }
-    
-    template<typename T>
     std::vector<std::vector<T>> getRange(const std::string& range) const {
         auto [sheet, start_row, start_col, end_row, end_col] = utils::AddressParser::parseRange(range);
         return getRange<T>(start_row, start_col, end_row, end_col);
     }
     
     template<typename T>
-    void setRange(int start_row, int start_col, const std::vector<std::vector<T>>& data) {
+    void setRange(const core::CellRange& range, const std::vector<std::vector<T>>& data) {
+        int start_row = range.getStartRow();
+        int start_col = range.getStartCol();
+        
         for (size_t row_idx = 0; row_idx < data.size(); ++row_idx) {
             for (size_t col_idx = 0; col_idx < data[row_idx].size(); ++col_idx) {
-                int target_row = static_cast<int>(start_row + row_idx);
-                int target_col = static_cast<int>(start_col + col_idx);
-                setValue<T>(target_row, target_col, data[row_idx][col_idx]);
+                core::Address target_addr(start_row + static_cast<int>(row_idx), start_col + static_cast<int>(col_idx));
+                setValue<T>(target_addr, data[row_idx][col_idx]);
             }
         }
     }
     
     template<typename T>
-    void setRange(const core::CellRange& range, const std::vector<std::vector<T>>& data) {
-        setRange<T>(range.getStartRow(), range.getStartCol(), data);
-    }
-    
-    template<typename T>
     void setRange(const std::string& range, const std::vector<std::vector<T>>& data) {
         auto [sheet, start_row, start_col, end_row, end_col] = utils::AddressParser::parseRange(range);
-        setRange<T>(start_row, start_col, data);
+        core::CellRange cellRange(start_row, start_col, start_row + static_cast<int>(data.size()) - 1, start_col + static_cast<int>(data[0].size()) - 1);
+        setRange<T>(cellRange, data);
     }
     
     WorksheetChain chain();
@@ -476,16 +432,10 @@ public:
     void setRowFormat(int row, std::shared_ptr<const core::FormatDescriptor> format);
     void hideRow(int row);
     void hideRow(int first_row, int last_row);
-    void mergeCells(int first_row, int first_col, int last_row, int last_col);
-    void mergeCells(const core::CellRange& range) {
-        mergeCells(range.getStartRow(), range.getStartCol(), range.getEndRow(), range.getEndCol());
-    }
+    void mergeCells(const core::CellRange& range);
     
     
-    void setAutoFilter(int first_row, int first_col, int last_row, int last_col);
-    void setAutoFilter(const core::CellRange& range) {
-        setAutoFilter(range.getStartRow(), range.getStartCol(), range.getEndRow(), range.getEndCol());
-    }
+    void setAutoFilter(const core::CellRange& range);
     
     void removeAutoFilter();
     void protect(const std::string& password = "");
@@ -500,29 +450,15 @@ public:
 private:
     
     void setActiveCell(const core::Address& address);
-    std::string insertImage(const core::Address& address, const std::string& image_path) {
-        return insertImage(address.getRow(), address.getCol(), image_path);
-    }
-    std::string insertImage(const core::Address& address, std::unique_ptr<Image> image) {
-        return insertImage(address.getRow(), address.getCol(), std::move(image));
-    }
-    std::string insertImage(const core::CellRange& range, const std::string& image_path) {
-        return insertImage(range.getStartRow(), range.getStartCol(), range.getEndRow(), range.getEndCol(), image_path);
-    }
-    void setSelection(int first_row, int first_col, int last_row, int last_col);
-    void setSelection(const core::CellRange& range) {
-        setSelection(range.getStartRow(), range.getStartCol(), range.getEndRow(), range.getEndCol());
-    }
+    std::string insertImage(const core::Address& address, const std::string& image_path);
+    std::string insertImage(const core::Address& address, std::unique_ptr<Image> image);
+    std::string insertImage(const core::CellRange& range, const std::string& image_path);
+    void setSelection(const core::CellRange& range);
     
     bool isEmpty() const { return cells_.empty(); }
     bool hasData() const { return !cells_.empty(); }
     int getCellCountInRow(int row) const;
     int getCellCountInColumn(int col) const;
-    bool hasCellAt(const core::Address& address) const { return hasCellAt(address.getRow(), address.getCol()); }
-    std::optional<std::shared_ptr<const FormatDescriptor>>
-    tryGetCellFormat(const core::Address& address) const noexcept {
-        return tryGetCellFormat(address.getRow(), address.getCol());
-    }
     double getColumnWidth(int col) const;
     double getRowHeight(int row) const;
     std::shared_ptr<const core::FormatDescriptor> getColumnFormat(int col) const;
@@ -545,37 +481,20 @@ private:
     const std::string& getSelection() const { return selection_; }
     void generateXML(const std::function<void(const std::string&)>& callback) const;
     void clear();
-    void clearRange(int first_row, int first_col, int last_row, int last_col);
+    void clearRange(const core::CellRange& range);
     void insertRows(int row, int count = 1);
     void insertColumns(int col, int count = 1);
     void deleteRows(int row, int count = 1);
     void deleteColumns(int col, int count = 1);
-    void editCellValue(int row, int col, const std::string& value, bool preserve_format = true);
-    void editCellValue(int row, int col, double value, bool preserve_format = true);
-    void editCellValue(int row, int col, bool value, bool preserve_format = true);
-    void editCellValue(const core::Address& address, const std::string& value, bool preserve_format = true) {
-        editCellValue(address.getRow(), address.getCol(), value, preserve_format);
-    }
-    void editCellValue(const core::Address& address, double value, bool preserve_format = true) {
-        editCellValue(address.getRow(), address.getCol(), value, preserve_format);
-    }
-    void editCellValue(const core::Address& address, bool value, bool preserve_format = true) {
-        editCellValue(address.getRow(), address.getCol(), value, preserve_format);
-    }
-    void editCellFormat(int row, int col, const core::FormatDescriptor& format);
-    void editCellFormat(int row, int col, std::shared_ptr<const core::FormatDescriptor> format);
-    void editCellFormat(const core::Address& address, const core::FormatDescriptor& format) {
-        editCellFormat(address.getRow(), address.getCol(), format);
-    }
-    void editCellFormat(const core::Address& address, std::shared_ptr<const core::FormatDescriptor> format) {
-        editCellFormat(address.getRow(), address.getCol(), format);
-    }
+    void editCellValue(const core::Address& address, const std::string& value, bool preserve_format = true);
+    void editCellValue(const core::Address& address, double value, bool preserve_format = true);
+    void editCellValue(const core::Address& address, bool value, bool preserve_format = true);
+    void editCellFormat(const core::Address& address, const core::FormatDescriptor& format);
+    void editCellFormat(const core::Address& address, std::shared_ptr<const core::FormatDescriptor> format);
     [[deprecated("Use FormatDescriptor version instead")]]
-    void editCellFormat(int row, int col, std::shared_ptr<Format> format);
-    void moveCell(int src_row, int src_col, int dst_row, int dst_col);
-    void moveRange(int src_first_row, int src_first_col, int src_last_row, int src_last_col,
-                   int dst_row, int dst_col);
-    int createSharedFormula(const CellRange& range, const std::string& formula);
+    void editCellFormat(const core::Address& address, std::shared_ptr<Format> format);
+    void moveCell(const core::Address& src_address, const core::Address& dst_address);
+    void moveRange(const core::CellRange& src_range, const core::Address& dst_address);
     const SharedFormulaManager* getSharedFormulaManager() const { return shared_formula_manager_.get(); }
     template<typename T>
     int appendRow(const std::vector<T>& data) {
@@ -583,7 +502,7 @@ private:
         int new_row = max_row + 1;
         
         for (size_t i = 0; i < data.size(); ++i) {
-            setValue(new_row, static_cast<int>(i), data[i]);
+            setValue(core::Address(new_row, static_cast<int>(i)), data[i]);
         }
         
         return new_row;
@@ -594,8 +513,8 @@ private:
         auto [max_row, max_col] = getUsedRange();
         
         for (int col = 0; col <= max_col; ++col) {
-            if (hasCellAt(row, col)) {
-                result.push_back(getValue<T>(row, col));
+            if (hasCellAt(core::Address(row, col))) {
+                result.push_back(getValue<T>(core::Address(row, col)));
             } else {
                 result.push_back(T{});
             }
@@ -609,8 +528,8 @@ private:
         auto [max_row, max_col] = getUsedRange();
         
         for (int row = 0; row <= max_row; ++row) {
-            if (hasCellAt(row, col)) {
-                result.push_back(getValue<T>(row, col));
+            if (hasCellAt(core::Address(row, col))) {
+                result.push_back(getValue<T>(core::Address(row, col)));
             } else {
                 result.push_back(T{});
             }
@@ -624,21 +543,16 @@ private:
     template<typename T>
     void setRowData(int row, const std::vector<T>& data, int start_col = 0) {
         for (size_t i = 0; i < data.size(); ++i) {
-            setValue(row, start_col + static_cast<int>(i), data[i]);
+            setValue(core::Address(row, start_col + static_cast<int>(i)), data[i]);
         }
     }
     template<typename T>
     void setColumnData(int col, const std::vector<T>& data, int start_row = 0) {
         for (size_t i = 0; i < data.size(); ++i) {
-            setValue(start_row + static_cast<int>(i), col, data[i]);
+            setValue(core::Address(start_row + static_cast<int>(i), col), data[i]);
         }
     }
-    std::string insertImage(int row, int col, const std::string& image_path);
-    std::string insertImage(int row, int col, std::unique_ptr<Image> image);
-    std::string insertImage(int from_row, int from_col, int to_row, int to_col,
-                           const std::string& image_path);
-    std::string insertImage(int from_row, int from_col, int to_row, int to_col,
-                           std::unique_ptr<Image> image);
+    std::string insertImage(const core::CellRange& range, std::unique_ptr<Image> image);
     std::string insertImageAt(double x, double y, double width, double height,
                              const std::string& image_path);
     std::string insertImageAt(double x, double y, double width, double height,
@@ -665,30 +579,27 @@ private:
     bool saveAsCSV(const std::string& filepath,
                    const CSVOptions& options = CSVOptions::standard()) const;
     std::string toCSVString(const CSVOptions& options = CSVOptions::standard()) const;
-    std::string rangeToCSVString(int start_row, int start_col, int end_row, int end_col,
+    std::string rangeToCSVString(const core::CellRange& range,
                                const CSVOptions& options = CSVOptions::standard()) const;
     static CSVParseInfo previewCSV(const std::string& filepath,
                                   const CSVOptions& options = CSVOptions::standard());
     static CSVOptions detectCSVOptions(const std::string& filepath);
     static bool isCSVFile(const std::string& filepath);
-    std::string getCellDisplayValue(int row, int col) const;
-    std::string getCellDisplayValue(const core::Address& address) const {
-        return getCellDisplayValue(address.getRow(), address.getCol());
-    }
+    std::string getCellDisplayValue(const core::Address& address) const;
 
 private:
     // 模板化的单元格操作辅助方法
     template<typename T>
-    void editCellValueImpl(int row, int col, T&& value, bool preserve_format);
+    void editCellValueImpl(const core::Address& address, T&& value, bool preserve_format);
     
     // 优化相关辅助方法
     void ensureCurrentRow(int row_num);
     void switchToNewRow(int row_num);
-    void writeOptimizedCell(int row, int col, Cell&& cell);
-    void updateUsedRangeOptimized(int row, int col);
+    void writeOptimizedCell(const core::Address& address, Cell&& cell);
+    void updateUsedRangeOptimized(const core::Address& address);
     
     // 内部状态管理
-    void updateUsedRange(int row, int col);
+    void updateUsedRange(const core::Address& address);
     void shiftCellsForRowInsertion(int row, int count);
     void shiftCellsForColumnInsertion(int col, int count);
     void shiftCellsForRowDeletion(int row, int count);

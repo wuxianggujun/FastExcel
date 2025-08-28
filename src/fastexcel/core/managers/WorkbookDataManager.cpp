@@ -200,20 +200,20 @@ WorkbookDataManager::ImportResult WorkbookDataManager::importCSVString(const std
                     if (isNumeric(cell_value)) {
                         try {
                             double num_value = std::stod(cell_value);
-                            worksheet->setValue(static_cast<int>(processed_rows), static_cast<int>(col), num_value);
+                            worksheet->setValue(core::Address(static_cast<int>(processed_rows), static_cast<int>(col)), num_value);
                         } catch (const std::invalid_argument&) {
                             // 数字格式无效，作为字符串处理
-                            worksheet->setValue(static_cast<int>(processed_rows), static_cast<int>(col), cell_value);
+                            worksheet->setValue(core::Address(static_cast<int>(processed_rows), static_cast<int>(col)), cell_value);
                         } catch (const std::out_of_range&) {
                             // 数字超出范围，作为字符串处理
                             FASTEXCEL_LOG_DEBUG("Numeric value out of range, treating as string: {}", cell_value);
-                            worksheet->setValue(static_cast<int>(processed_rows), static_cast<int>(col), cell_value);
+                            worksheet->setValue(core::Address(static_cast<int>(processed_rows), static_cast<int>(col)), cell_value);
                         }
                     } else {
-                        worksheet->setValue(static_cast<int>(processed_rows), static_cast<int>(col), cell_value);
+                        worksheet->setValue(core::Address(static_cast<int>(processed_rows), static_cast<int>(col)), cell_value);
                     }
                 } else {
-                    worksheet->setValue(static_cast<int>(processed_rows), static_cast<int>(col), cell_value);
+                    worksheet->setValue(core::Address(static_cast<int>(processed_rows), static_cast<int>(col)), cell_value);
                 }
             }
             processed_rows++;
@@ -342,7 +342,7 @@ std::string WorkbookDataManager::exportCSVString(const std::string& sheet_name, 
             
             for (int col = first_col; col <= last_col; ++col) {
                 try {
-                    std::string cell_value = worksheet->getValue<std::string>(row, col);
+                    std::string cell_value = worksheet->getValue<std::string>(core::Address(row, col));
                     row_data.push_back(cell_value);
                 } catch (...) {
                     row_data.push_back("");  // 空单元格
@@ -462,7 +462,7 @@ WorkbookDataManager::ExportResult WorkbookDataManager::exportData(std::shared_pt
             std::vector<std::string> row_data;
             for (int col = first_col2; col <= last_col2; ++col) {
                 try {
-                    std::string cell_value = worksheet->getValue<std::string>(row, col);
+                    std::string cell_value = worksheet->getValue<std::string>(core::Address(row, col));
                     row_data.push_back(cell_value);
                 } catch (...) {
                     row_data.push_back("");  // 空单元格

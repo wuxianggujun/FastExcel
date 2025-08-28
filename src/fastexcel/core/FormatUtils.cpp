@@ -24,7 +24,7 @@ bool FormatUtils::copyFormat(Worksheet& worksheet,
         return false; // 源单元格没有格式
     }
     
-    worksheet.setCellFormat(dest_row, dest_col, *src_format);
+    worksheet.setCellFormat(core::Address(dest_row, dest_col), *src_format);
     return true;
 }
 
@@ -76,7 +76,7 @@ int FormatUtils::copyFormatToMultiple(Worksheet& worksheet,
     int copied_count = 0;
     for (const auto& pos : dest_positions) {
         if (isValidCellPosition(pos.first, pos.second)) {
-            worksheet.setCellFormat(pos.first, pos.second, *src_format);
+            worksheet.setCellFormat(core::Address(pos.first, pos.second), *src_format);
             copied_count++;
         }
     }
@@ -119,7 +119,7 @@ int FormatUtils::smartCopyFormat(Worksheet& worksheet,
 void FormatUtils::clearFormat(Worksheet& worksheet, int row, int col) {
     if (isValidCellPosition(row, col)) {
         // 使用nullptr清除格式
-        worksheet.setCellFormat(row, col, std::shared_ptr<const FormatDescriptor>(nullptr));
+        worksheet.setCellFormat(core::Address(row, col), std::shared_ptr<const FormatDescriptor>(nullptr));
     }
 }
 
@@ -208,7 +208,7 @@ int FormatUtils::selectiveClearFormat(Worksheet& worksheet, const std::string& r
                     builder.numberFormat(current_format->getNumberFormat());
                 }
                 
-                worksheet.setCellFormat(row, col, builder.build());
+                worksheet.setCellFormat(core::Address(row, col), builder.build());
                 processed_count++;
             }
         }
@@ -227,7 +227,7 @@ bool FormatUtils::hasFormat(const Worksheet& worksheet, int row, int col) {
     }
     
     try {
-        const auto& cell = worksheet.getCell(row, col);
+        const auto& cell = worksheet.getCell(core::Address(row, col));
         return cell.hasFormat();
     } catch (const std::exception&) {
         return false;
@@ -241,7 +241,7 @@ std::optional<FormatDescriptor> FormatUtils::getFormat(const Worksheet& workshee
     }
     
     try {
-        const auto& cell = worksheet.getCell(row, col);
+        const auto& cell = worksheet.getCell(core::Address(row, col));
         auto format_ptr = cell.getFormatDescriptor();
         if (format_ptr) {
             return *format_ptr;

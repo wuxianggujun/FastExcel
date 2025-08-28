@@ -74,8 +74,8 @@ void WorksheetXMLGenerator::generateRelationships(const std::function<void(const
     auto [max_row, max_col] = worksheet_->getUsedRange();
     for (int row = 0; row <= max_row; ++row) {
         for (int col = 0; col <= max_col; ++col) {
-            if (worksheet_->hasCellAt(row, col)) {
-                const auto& cell = worksheet_->getCell(row, col);
+            if (worksheet_->hasCellAt(core::Address(row, col))) {
+                const auto& cell = worksheet_->getCell(core::Address(row, col));
                 if (cell.hasHyperlink()) {
                     relationships.addAutoRelationship(
                         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink",
@@ -298,7 +298,7 @@ void WorksheetXMLGenerator::generateSheetData(XMLStreamWriter& writer) {
         
         // 检查行是否有数据
         for (int col = 0; col <= max_col; ++col) {
-            if (worksheet_->hasCellAt(row, col)) {
+            if (worksheet_->hasCellAt(core::Address(row, col))) {
                 row_has_data = true;
                 break;
             }
@@ -310,9 +310,9 @@ void WorksheetXMLGenerator::generateSheetData(XMLStreamWriter& writer) {
         writer.writeAttribute("r", row + 1);
         
         for (int col = 0; col <= max_col; ++col) {
-            if (!worksheet_->hasCellAt(row, col)) continue;
+            if (!worksheet_->hasCellAt(core::Address(row, col))) continue;
             
-            const auto& cell = worksheet_->getCell(row, col);
+            const auto& cell = worksheet_->getCell(core::Address(row, col));
             if (cell.isEmpty() && !cell.hasFormat()) continue;
             
             writer.startElement("c");
@@ -534,8 +534,8 @@ void WorksheetXMLGenerator::generateDrawing(XMLStreamWriter& writer) {
     auto [max_row, max_col] = worksheet_->getUsedRange();
     for (int row = 0; row <= max_row; ++row) {
         for (int col = 0; col <= max_col; ++col) {
-            if (worksheet_->hasCellAt(row, col)) {
-                const auto& cell = worksheet_->getCell(row, col);
+            if (worksheet_->hasCellAt(core::Address(row, col))) {
+                const auto& cell = worksheet_->getCell(core::Address(row, col));
                 if (cell.hasHyperlink()) {
                     hyperlink_count++;
                 }
@@ -675,7 +675,7 @@ void WorksheetXMLGenerator::generateSheetDataStreaming(XMLStreamWriter& writer) 
             // 检查这一行是否有数据
             bool has_data = false;
             for (int col = 0; col <= max_col; ++col) {
-                if (worksheet_->hasCellAt(row_num, col)) {
+                if (worksheet_->hasCellAt(core::Address(row_num, col))) {
                     has_data = true;
                     break;
                 }
@@ -689,9 +689,9 @@ void WorksheetXMLGenerator::generateSheetDataStreaming(XMLStreamWriter& writer) 
             
             // 生成单元格数据
             for (int col = 0; col <= max_col; ++col) {
-                if (!worksheet_->hasCellAt(row_num, col)) continue;
+                if (!worksheet_->hasCellAt(core::Address(row_num, col))) continue;
                 
-                const auto& cell = worksheet_->getCell(row_num, col);
+                const auto& cell = worksheet_->getCell(core::Address(row_num, col));
                 if (cell.isEmpty() && !cell.hasFormat()) continue;
                 
                 // 使用优化后的单元格生成方法

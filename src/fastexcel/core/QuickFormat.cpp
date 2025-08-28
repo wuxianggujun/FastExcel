@@ -206,11 +206,11 @@ void QuickFormat::formatAsTitle(Worksheet& worksheet, int row, int col,
                                double font_size) {
     // 如果提供了文本，先设置单元格值
     if (!text.empty()) {
-        worksheet.setCellValue(row, col, text);
+        worksheet.setCellValue(core::Address(row, col), text);
     }
     
     // 应用标题格式
-    worksheet.setCellFormat(row, col, StyleBuilder()
+    worksheet.setCellFormat(core::Address(row, col), StyleBuilder()
         .fontSize(font_size)
         .bold()
         .centerAlign()

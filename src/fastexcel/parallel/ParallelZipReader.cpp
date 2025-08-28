@@ -1,4 +1,6 @@
 #include "fastexcel/parallel/ParallelZipReader.hpp"
+
+#include "fastexcel/archive/ZipError.hpp"
 #include "fastexcel/utils/Logger.hpp"
 #include <algorithm>
 #include <thread>
@@ -136,7 +138,7 @@ void ParallelZipReader::workerThread() {
             try {
                 auto result = extractFileInternal(task->path);
                 task->promise.set_value(std::move(result));
-            } catch (const std::exception& e) {
+            } catch (const std::exception&) {
                 task->promise.set_exception(std::current_exception());
             }
         }

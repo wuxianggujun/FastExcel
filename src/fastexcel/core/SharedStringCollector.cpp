@@ -68,7 +68,7 @@ size_t SharedStringCollector::collectFromWorksheet(const Worksheet* worksheet) {
     
     for (int row = 0; row < static_cast<int>(row_count); ++row) {
         for (int col = 0; col < static_cast<int>(col_count); ++col) {
-            const Cell& cell = worksheet->getCell(row, col);
+            const Cell& cell = worksheet->getCell(core::Address(row, col));
             if (!cell.isEmpty() && collectFromCell(&cell)) {
                 collected_count++;
             }

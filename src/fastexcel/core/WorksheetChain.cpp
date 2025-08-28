@@ -7,7 +7,7 @@ namespace core {
 // 模板方法的显式实例化和实现
 template<typename T>
 WorksheetChain& WorksheetChain::setValue(int row, int col, const T& value) {
-    worksheet_.setValue<T>(row, col, value);
+    worksheet_.setValue<T>(core::Address(row, col), value);
     return *this;
 }
 
@@ -19,7 +19,10 @@ WorksheetChain& WorksheetChain::setValue(const std::string& address, const T& va
 
 template<typename T>
 WorksheetChain& WorksheetChain::setRange(int start_row, int start_col, const std::vector<std::vector<T>>& data) {
-    worksheet_.setRange<T>(start_row, start_col, data);
+    worksheet_.setRange<T>(core::CellRange(start_row, start_col, 
+                                         start_row + static_cast<int>(data.size()) - 1,
+                                         start_col + static_cast<int>(data.empty() ? 0 : data[0].size()) - 1), 
+                          data);
     return *this;
 }
 
@@ -42,7 +45,7 @@ WorksheetChain& WorksheetChain::setRowHeight(int row, double height) {
 }
 
 WorksheetChain& WorksheetChain::mergeCells(int first_row, int first_col, int last_row, int last_col) {
-    worksheet_.mergeCells(first_row, first_col, last_row, last_col);
+    worksheet_.mergeCells(core::CellRange(first_row, first_col, last_row, last_col));
     return *this;
 }
 

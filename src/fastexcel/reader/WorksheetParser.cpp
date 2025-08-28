@@ -370,7 +370,7 @@ void WorksheetParser::setCellValue(int row, uint32_t col, const FastCellData& ce
                     }
                 }
                 // 使用setValue设置SST索引
-                state_.worksheet->setValue(row, col, string_index);
+                state_.worksheet->setValue(core::Address(row, col), string_index);
             } catch (...) {
                 // 忽略错误
             }
@@ -386,16 +386,16 @@ void WorksheetParser::setCellValue(int row, uint32_t col, const FastCellData& ce
                                                    number_value);
                 if (result.ec == std::errc{}) {
                     // 使用setValue设置数值
-                    state_.worksheet->setValue(row, col, number_value);
+                    state_.worksheet->setValue(core::Address(row, col), number_value);
                 } else {
                     // 解析失败，设置为错误值
                     std::string error_value = "#VALUE!";
-                    state_.worksheet->setValue(row, col, error_value);
+                    state_.worksheet->setValue(core::Address(row, col), error_value);
                 }
             } catch (...) {
                 // 解析失败，设置为字符串
                 std::string error_value = "#VALUE!";
-                state_.worksheet->setValue(row, col, error_value);
+                state_.worksheet->setValue(core::Address(row, col), error_value);
             }
             break;
         }
@@ -403,7 +403,7 @@ void WorksheetParser::setCellValue(int row, uint32_t col, const FastCellData& ce
         case FastCellData::Boolean: {
             bool bool_value = (cell_data.value == "1" || cell_data.value == "true");
             // 使用setValue设置布尔值
-            state_.worksheet->setValue(row, col, bool_value);
+            state_.worksheet->setValue(core::Address(row, col), bool_value);
             break;
         }
         
@@ -411,7 +411,7 @@ void WorksheetParser::setCellValue(int row, uint32_t col, const FastCellData& ce
         default: {
             // 内联字符串使用setValue设置
             std::string str_value = decodeXMLEntities(std::string(cell_data.value));
-            state_.worksheet->setValue(row, col, str_value);
+            state_.worksheet->setValue(core::Address(row, col), str_value);
             break;
         }
     }
@@ -523,7 +523,7 @@ void WorksheetParser::handleMergeCellElement(span<const xml::XMLAttribute> attri
         std::string ref = ref_opt.value();
         int r1, c1, r2, c2;
         if (parseRangeReference(ref, r1, c1, r2, c2)) {
-            state_.worksheet->mergeCells(r1, c1, r2, c2);
+            state_.worksheet->mergeCells(core::CellRange(r1, c1, r2, c2));
             FASTEXCEL_LOG_DEBUG("合并单元格：{} -> ({},{}) - ({},{})", ref, r1, c1, r2, c2);
         }
     }

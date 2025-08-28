@@ -2,7 +2,7 @@
 #pragma once
 
 #include "fastexcel/opc/IPackageManager.hpp"
-#include "fastexcel/opc/PackageManagerService.hpp"
+
 #include "fastexcel/archive/ZipReader.hpp"
 #include "fastexcel/opc/ZipRepackWriter.hpp"
 #include "fastexcel/core/Path.hpp"

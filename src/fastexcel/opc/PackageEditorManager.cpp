@@ -1,5 +1,7 @@
-#include "fastexcel/utils/Logger.hpp"
 #include "fastexcel/opc/PackageEditorManager.hpp"
+#include "fastexcel/utils/Logger.hpp"
+
+#include "fastexcel/archive/ZipError.hpp"
 
 namespace fastexcel {
 namespace opc {
