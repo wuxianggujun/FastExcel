@@ -1,5 +1,6 @@
 #pragma once
 
+#include "CellAddress.hpp"
 #include <string>
 #include <vector>
 
@@ -37,70 +38,45 @@ public:
     /**
      * @brief 设置单元格值（链式调用）
      * @tparam T 值类型
-     * @param row 行号
-     * @param col 列号
+     * @param address 单元格地址（支持Address对象、字符串地址或坐标构造）
      * @param value 值
      * @return 链式调用对象
      */
     template<typename T>
-    WorksheetChain& setValue(int row, int col, const T& value);
-    
-    /**
-     * @brief 通过Excel地址设置单元格值（链式调用）
-     * @tparam T 值类型
-     * @param address Excel地址
-     * @param value 值
-     * @return 链式调用对象
-     */
-    template<typename T>
-    WorksheetChain& setValue(const std::string& address, const T& value);
+    WorksheetChain& setValue(const Address& address, const T& value);
     
     /**
      * @brief 设置范围值（链式调用）
      * @tparam T 值类型
-     * @param start_row 开始行
-     * @param start_col 开始列
+     * @param range 单元格范围（支持CellRange对象、字符串范围或坐标构造）
      * @param data 二维数据
      * @return 链式调用对象
      */
     template<typename T>
-    WorksheetChain& setRange(int start_row, int start_col, const std::vector<std::vector<T>>& data);
-    
-    /**
-     * @brief 通过Excel地址设置范围值（链式调用）
-     * @tparam T 值类型
-     * @param range Excel范围地址
-     * @param data 二维数据
-     * @return 链式调用对象
-     */
-    template<typename T>
-    WorksheetChain& setRange(const std::string& range, const std::vector<std::vector<T>>& data);
+    WorksheetChain& setRange(const CellRange& range, const std::vector<std::vector<T>>& data);
     
     /**
      * @brief 设置列宽（链式调用）
-     * @param col 列号
+     * @param col 列号（可以是整数或Address对象）
      * @param width 宽度
      * @return 链式调用对象
      */
-    WorksheetChain& setColumnWidth(int col, double width);
+    WorksheetChain& setColumnWidth(const Address& col, double width);
     
     /**
      * @brief 设置行高（链式调用）
-     * @param row 行号
+     * @param row 行号（可以是整数或Address对象）
      * @param height 高度
      * @return 链式调用对象
      */
-    WorksheetChain& setRowHeight(int row, double height);
+    WorksheetChain& setRowHeight(const Address& row, double height);
     
     /**
      * @brief 合并单元格（链式调用）
-     * @param first_row 起始行
-     * @param first_col 起始列
-     * @param last_row 结束行
-     * @param last_col 结束列
+     * @param range 合并范围（支持CellRange对象、字符串范围或坐标构造）
      * @return 链式调用对象
      */
-    WorksheetChain& mergeCells(int first_row, int first_col, int last_row, int last_col);
+    WorksheetChain& mergeCells(const CellRange& range);
     
     /**
      * @brief 获取原始Worksheet引用

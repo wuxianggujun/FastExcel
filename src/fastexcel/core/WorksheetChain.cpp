@@ -4,68 +4,43 @@
 namespace fastexcel {
 namespace core {
 
-// 模板方法的显式实例化和实现
+// 模板方法的实现
 template<typename T>
-WorksheetChain& WorksheetChain::setValue(int row, int col, const T& value) {
-    worksheet_.setValue<T>(core::Address(row, col), value);
-    return *this;
-}
-
-template<typename T>
-WorksheetChain& WorksheetChain::setValue(const std::string& address, const T& value) {
+WorksheetChain& WorksheetChain::setValue(const Address& address, const T& value) {
     worksheet_.setValue<T>(address, value);
     return *this;
 }
 
 template<typename T>
-WorksheetChain& WorksheetChain::setRange(int start_row, int start_col, const std::vector<std::vector<T>>& data) {
-    worksheet_.setRange<T>(core::CellRange(start_row, start_col, 
-                                         start_row + static_cast<int>(data.size()) - 1,
-                                         start_col + static_cast<int>(data.empty() ? 0 : data[0].size()) - 1), 
-                          data);
-    return *this;
-}
-
-template<typename T>
-WorksheetChain& WorksheetChain::setRange(const std::string& range, const std::vector<std::vector<T>>& data) {
+WorksheetChain& WorksheetChain::setRange(const CellRange& range, const std::vector<std::vector<T>>& data) {
     worksheet_.setRange<T>(range, data);
     return *this;
 }
 
 // 非模板方法的实现
-WorksheetChain& WorksheetChain::setColumnWidth(int col, double width) {
-    // 直接调用简化版本，现在没有重载歧义
-    worksheet_.setColumnWidth(col, width);
+WorksheetChain& WorksheetChain::setColumnWidth(const Address& col, double width) {
+    worksheet_.setColumnWidth(col.getCol(), width);
     return *this;
 }
 
-WorksheetChain& WorksheetChain::setRowHeight(int row, double height) {
-    worksheet_.setRowHeight(row, height);
+WorksheetChain& WorksheetChain::setRowHeight(const Address& row, double height) {
+    worksheet_.setRowHeight(row.getRow(), height);
     return *this;
 }
 
-WorksheetChain& WorksheetChain::mergeCells(int first_row, int first_col, int last_row, int last_col) {
-    worksheet_.mergeCells(core::CellRange(first_row, first_col, last_row, last_col));
+WorksheetChain& WorksheetChain::mergeCells(const CellRange& range) {
+    worksheet_.mergeCells(range);
     return *this;
 }
 
 // 显式实例化常用类型的模板
-template WorksheetChain& WorksheetChain::setValue<std::string>(int, int, const std::string&);
-template WorksheetChain& WorksheetChain::setValue<double>(int, int, const double&);
-template WorksheetChain& WorksheetChain::setValue<int>(int, int, const int&);
-template WorksheetChain& WorksheetChain::setValue<bool>(int, int, const bool&);
+template WorksheetChain& WorksheetChain::setValue<std::string>(const Address&, const std::string&);
+template WorksheetChain& WorksheetChain::setValue<double>(const Address&, const double&);
+template WorksheetChain& WorksheetChain::setValue<int>(const Address&, const int&);
+template WorksheetChain& WorksheetChain::setValue<bool>(const Address&, const bool&);
 
-template WorksheetChain& WorksheetChain::setValue<std::string>(const std::string&, const std::string&);
-template WorksheetChain& WorksheetChain::setValue<double>(const std::string&, const double&);
-template WorksheetChain& WorksheetChain::setValue<int>(const std::string&, const int&);
-template WorksheetChain& WorksheetChain::setValue<bool>(const std::string&, const bool&);
-
-template WorksheetChain& WorksheetChain::setRange<std::string>(int, int, const std::vector<std::vector<std::string>>&);
-template WorksheetChain& WorksheetChain::setRange<double>(int, int, const std::vector<std::vector<double>>&);
-template WorksheetChain& WorksheetChain::setRange<int>(int, int, const std::vector<std::vector<int>>&);
-
-template WorksheetChain& WorksheetChain::setRange<std::string>(const std::string&, const std::vector<std::vector<std::string>>&);
-template WorksheetChain& WorksheetChain::setRange<double>(const std::string&, const std::vector<std::vector<double>>&);
-template WorksheetChain& WorksheetChain::setRange<int>(const std::string&, const std::vector<std::vector<int>>&);
+template WorksheetChain& WorksheetChain::setRange<std::string>(const CellRange&, const std::vector<std::vector<std::string>>&);
+template WorksheetChain& WorksheetChain::setRange<double>(const CellRange&, const std::vector<std::vector<double>>&);
+template WorksheetChain& WorksheetChain::setRange<int>(const CellRange&, const std::vector<std::vector<int>>&);
 
 }} // namespace fastexcel::core
